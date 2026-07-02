@@ -19,7 +19,7 @@ PATH). The laptop stream script `gazefollower_stream.py` lives in the
       .\gradlew.bat assembleDebug
       adb install -r app\build\outputs\apk\debug\app-debug.apk
       ```
-- [ ] Laptop has GazeFollower: `pip install gazefollower` (first run downloads the model).
+- [ ] Laptop has GazeFollower: `python -m pip install -r tools\gazefollower-requirements.txt` (first run downloads the model).
 - [ ] Phone has USB debugging on; `adb devices` shows it as `device`.
 
 ---
@@ -45,7 +45,7 @@ Python), run on the machine with the webcam:
 cd C:\Users\USER\OneDrive\Desktop\gaze-thesis-prototype
 python tools\gazefollower_stream.py --phone-ip <PHONE_IP> --port 5005
 ```
-(Needs `pip install gazefollower` on that machine.)
+(Needs `python -m pip install -r tools\gazefollower-requirements.txt` on that machine.)
 Flow: a camera preview opens (confirm it sees the face; close it) → **laptop
 calibration dots** (participant looks at each) → streaming begins. A `[heartbeat]`
 line should print a sample rate (~/s). Leave this running the whole session.

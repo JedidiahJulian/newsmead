@@ -18,6 +18,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.Navigation
@@ -529,10 +530,15 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         val overlay = GazeOverlayView(requireContext())
         (binding.root as ViewGroup).addView(
             overlay,
-            ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-            )
+            ConstraintLayout.LayoutParams(0, 0).apply {
+                startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+                endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+                topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+                bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+            }
         )
+        overlay.bringToFront()
+        overlay.translationZ = 1000f
         val mapper = LineAoiMapper(binding.tvArticleText)
 
         // Single gaze entry point (full-screen px). Both the touch-validation
@@ -561,16 +567,15 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     /**
      * Live gaze from the WiFiGazeProvider (GazeFollower over WiFi), mapped to the
-     * phone with the saved per-participant calibration. Falls back to touch
-     * validation if there is no calibration yet (run GazeCalibrationActivity
-     * first) or the fit fails. Gaze arrives on a background thread, so hop to the
-     * main thread before touching views.
+     * phone with the saved per-participant calibration. In live mode, do not
+     * silently substitute touch input; missing/invalid calibration must be fixed
+     * before the reading session.
      */
     private fun attachLiveGaze(onGaze: GazeProvider.OnGaze) {
         val samples = CalibrationStore.load(requireContext())
         if (samples == null) {
-            Log.w("GazeAOI", "No calibration found — falling back to touch validation")
-            attachTouchValidation(onGaze)
+            Log.w("GazeAOI", "No calibration found; live gaze not started")
+            Toast.makeText(context, "Run gaze calibration before live reading", Toast.LENGTH_LONG).show()
             return
         }
         try {
@@ -578,9 +583,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             provider.setOnGaze { x, y -> activity?.runOnUiThread { onGaze.onGaze(x, y) } }
             provider.start(viewLifecycleOwner)
             gazeProvider = provider
+            Log.i("GazeAOI", "Live WiFi gaze started with ${samples.size} calibration samples")
         } catch (e: Exception) {
-            Log.e("GazeAOI", "Calibration fit failed — falling back to touch validation", e)
-            attachTouchValidation(onGaze)
+            Log.e("GazeAOI", "Calibration fit failed; live gaze not started", e)
+            Toast.makeText(context, "Gaze calibration is invalid; recalibrate", Toast.LENGTH_LONG).show()
         }
     }
 
