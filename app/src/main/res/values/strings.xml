@@ -4,6 +4,13 @@
     <!-- symbol -->
     <string name="symbol_bullet">•</string>
 
+    <!-- gaze calibration (Stage 4) -->
+    <string name="calib_progress_initial">Calibration</string>
+    <string name="calib_progress">Point %1$d / %2$d — look at the dot</string>
+    <string name="calib_retry">Didn\'t get a clear read — retrying</string>
+    <string name="calib_done">Calibration complete (%1$d / %2$d)</string>
+    <string name="calib_saved">Saved. Press back to return.</string>
+
     <!-- text commons -->
     <string name="commons_category">Category</string>
     <string name="commons_sources">Sources</string>

@@ -54,5 +54,5 @@ object StudyConfig {
      * (build-spec "validate the plumbing before trusting the gaze"). When the
      * live WiFiGazeProvider is wired in a later slice, this flips to false.
      */
-    const val GAZE_TOUCH_VALIDATION = true
+    const val GAZE_TOUCH_VALIDATION = false
 }

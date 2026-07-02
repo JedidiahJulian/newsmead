@@ -29,9 +29,12 @@ import com.newsmead.data.DataHelper
 import com.newsmead.data.DatabaseHelper
 import com.newsmead.data.FirebaseHelper
 import com.newsmead.data.StudyConfig
+import com.newsmead.gaze.CalibrationStore
+import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.GazeOverlayView
 import com.newsmead.gaze.GazeProvider
 import com.newsmead.gaze.LineAoiMapper
+import com.newsmead.gaze.WiFiGazeProvider
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.fragments.layouts.BottomSheetDialogSaveFragment
 import com.newsmead.models.Article
@@ -49,6 +52,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private lateinit var textToSpeech: TextToSpeech
     private var isTranslated = false
     private var language = "english"
+    private var gazeProvider: GazeProvider? = null
     private enum class ColorMode { LIGHT, DARK, SEPIA }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -436,6 +440,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             textToSpeech.stop()
             textToSpeech.shutdown()
         }
+        gazeProvider?.stop() // release the UDP socket / listener thread
         super.onDestroy()
     }
 
@@ -530,8 +535,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         )
         val mapper = LineAoiMapper(binding.tvArticleText)
 
-        // Single gaze entry point (full-screen px). A real GazeProvider plugs in
-        // here later; today it's driven by touch below.
+        // Single gaze entry point (full-screen px). Both the touch-validation
+        // source and the live WiFiGazeProvider feed through here.
         val onGaze = GazeProvider.OnGaze { x, y ->
             overlay.setGazeScreen(x, y)
             val line = mapper.lineAt(y)
@@ -539,11 +544,43 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
 
         if (StudyConfig.GAZE_TOUCH_VALIDATION) {
-            // Finger substitutes for gaze; return false so the article still scrolls.
-            binding.nsvArticleText.setOnTouchListener { _, event ->
-                onGaze.onGaze(event.rawX, event.rawY)
-                false
-            }
+            attachTouchValidation(onGaze)
+        } else {
+            attachLiveGaze(onGaze)
+        }
+    }
+
+    /** Finger substitutes for gaze; returns false so the article still scrolls. */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun attachTouchValidation(onGaze: GazeProvider.OnGaze) {
+        binding.nsvArticleText.setOnTouchListener { _, event ->
+            onGaze.onGaze(event.rawX, event.rawY)
+            false
+        }
+    }
+
+    /**
+     * Live gaze from the WiFiGazeProvider (GazeFollower over WiFi), mapped to the
+     * phone with the saved per-participant calibration. Falls back to touch
+     * validation if there is no calibration yet (run GazeCalibrationActivity
+     * first) or the fit fails. Gaze arrives on a background thread, so hop to the
+     * main thread before touching views.
+     */
+    private fun attachLiveGaze(onGaze: GazeProvider.OnGaze) {
+        val samples = CalibrationStore.load(requireContext())
+        if (samples == null) {
+            Log.w("GazeAOI", "No calibration found — falling back to touch validation")
+            attachTouchValidation(onGaze)
+            return
+        }
+        try {
+            val provider = WiFiGazeProvider(GazeMapper(samples))
+            provider.setOnGaze { x, y -> activity?.runOnUiThread { onGaze.onGaze(x, y) } }
+            provider.start(viewLifecycleOwner)
+            gazeProvider = provider
+        } catch (e: Exception) {
+            Log.e("GazeAOI", "Calibration fit failed — falling back to touch validation", e)
+            attachTouchValidation(onGaze)
         }
     }
 

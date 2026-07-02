@@ -182,12 +182,40 @@ not the integration.
 to touch as the finger moves down the passage (touch-validation gate). Scroll-
 awareness confirmation recommended as a final check.
 
-### Stage 4 slice 3 (NEXT) — live gaze
-Port the calibration *capture* flow (`CalibrationActivity`/`CalibrationView`) from
-the prototype so it writes `calibration_wifi.csv`, then construct
-`WiFiGazeProvider(GazeMapper(CalibrationStore.load(...)))` and set it as the
-article screen's gaze source (`GAZE_TOUCH_VALIDATION = false`). Needs the laptop
-rig + an on-device calibration run to validate.
+## 2026-07-02 — Stage 4 slice 3: live WiFi gaze wired (needs laptop rig to test)
+
+Ported the calibration *capture* screen and wired the live tracker into the
+article screen. Builds (`:app:assembleDebug` OK, JDK 17). **VALIDATED live on the
+A56 (2026-07-02):** full rig run passed — laptop stream → 16-dot phone
+calibration → live gaze on the article view, dot follows gaze and `line=N` tracks
+the read line, scroll-correct. Stage 4 acceptance met.
+- **`GazeCalibrationActivity`** (`com.newsmead.activities`) + `CalibrationView`
+  (`com.newsmead.gaze`) + `activity_gaze_calibration.xml` + `calib_*` strings —
+  full-screen 16-dot calibration, reads UDP gaze via `GazeStream`, robust
+  outlier-rejected median per dot, writes `calibration_wifi.csv` via
+  `CalibrationStore`. Registered in manifest (`exported=false`). Logs the phone
+  IP (`GazeCalib` tag) for the laptop's `--phone-ip`.
+- **`ArticleFragment`**: when `GAZE_TOUCH_VALIDATION = false`, builds
+  `WiFiGazeProvider(GazeMapper(CalibrationStore.load()))`, streams gaze through
+  the same `GazeProvider.OnGaze` entry point (main-thread hop), and stops it in
+  `onDestroy` (releases the UDP socket). Falls back to touch validation if no
+  calibration exists or the fit fails.
+- Flags unchanged (`GAZE_TOUCH_VALIDATION = true`), so current behaviour is still
+  touch validation until the flag is flipped for a live session.
+
+**Launch trigger (decided):** adb, no in-app UI (laptop is always present at a
+session). Launched with
+`adb shell am start -n com.newsmead/.activities.GazeCalibrationActivity`.
+NOTE: `GazeCalibrationActivity` must be `android:exported="true"` — Android 16 /
+One UI on the A56 blocks adb from starting non-exported activities (confirmed:
+`SecurityException: not exported`). Verified launching on-device. Full runbook:
+**SESSION_SETUP.md**.
+
+**End-to-end live test — PASSED (A56, 2026-07-02):** per SESSION_SETUP.md, all
+steps 1–6 confirmed by James (laptop stream → phone calibration → live
+gaze-to-line on the article, scroll-aware, no socket leak on re-entry).
+Manifest fix required along the way: `GazeCalibrationActivity` set
+`exported="true"` (Android 16 blocks adb launching non-exported activities).
 
 ### Build note
 - The project's kapt is **incompatible with JDK 21** (fails with
