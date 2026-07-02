@@ -17,6 +17,15 @@ import com.newsmead.databinding.ActivitySplashBinding
 @Suppress("DEPRECATION")
 class SplashActivity : AppCompatActivity() {
 
+    companion object {
+        // Research-instrument mode: NewsMead is being used as a thesis study
+        // instrument with no real users or accounts. When true, the Firebase
+        // login gate below is bypassed and every session is treated as already
+        // authenticated, so launch goes straight to the home screen.
+        // Set to false to restore the normal login/sign-up flow.
+        const val BYPASS_LOGIN = true
+    }
+
     private lateinit var auth : FirebaseAuth
     private lateinit var sharedPreferences: SharedPreferences
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,7 +38,7 @@ class SplashActivity : AppCompatActivity() {
         setContentView(viewBinding.root)
 
         auth = Firebase.auth
-        if (auth.currentUser != null) {
+        if (BYPASS_LOGIN || auth.currentUser != null) {
             navigateToMainActivity()
         } else {
             // Check shared preferences for signup status
