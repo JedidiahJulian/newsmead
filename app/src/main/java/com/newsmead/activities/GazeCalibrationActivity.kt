@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -53,7 +54,14 @@ class GazeCalibrationActivity : AppCompatActivity() {
         Log.i(TAG, "Phone IP for --phone-ip: ${GazeStream.localIpv4()} (UDP ${GazeStream.DEFAULT_PORT})")
 
         gazeStream = GazeStream { x, y, _ -> runOnUiThread { onSample(x, y) } }.also { it.start() }
-        beginSequenceWhenLaidOut()
+
+        // Wait for the researcher to position the phone in front of the laptop
+        // screen; only start the dot sequence when they tap Start.
+        binding.progressText.setText(com.newsmead.R.string.calib_ready_instruction)
+        binding.startButton.setOnClickListener {
+            binding.startButton.visibility = View.GONE
+            beginSequenceWhenLaidOut()
+        }
     }
 
     /** Start the dot sequence once the view has a size. */

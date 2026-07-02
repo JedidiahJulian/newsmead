@@ -52,14 +52,17 @@ line should print a sample rate (~/s). Leave this running the whole session.
 - Verify-only (no phone): `python gazefollower_stream.py --print --phone-ip 0.0.0.0`
 
 ## 4. Calibrate the phone (per participant)
-With the laptop already streaming, launch the 16-dot phone calibration:
+Launch the 16-dot phone calibration:
 ```
 adb shell am start -n com.newsmead/.activities.GazeCalibrationActivity
 adb logcat -s GazeCalib        # optional: watch pairs + "Saved"
 ```
-Participant looks at each dot. On completion it shows "Saved" and writes
-`calibration_wifi.csv` (app-private). Press back. Re-run this per participant, or
-whenever posture/seating changes.
+The screen opens and **waits on a "Start" button** — it does NOT auto-run, so you
+have time to position the phone in front of the laptop screen and confirm the
+laptop is streaming. When positioned, **tap Start** and have the participant look
+at each dot. On completion it shows "Saved" and writes `calibration_wifi.csv`
+(app-private). Press back. Re-run per participant, or whenever posture/seating
+changes.
 
 ## 5. Run the reading session
 Open NewsMead (already on home — login is bypassed), open a study article, and

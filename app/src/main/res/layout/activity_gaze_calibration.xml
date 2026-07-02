@@ -31,4 +31,11 @@
         android:textSize="16sp"
         android:text="" />
 
+    <Button
+        android:id="@+id/startButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="@string/calib_start_button" />
+
 </FrameLayout>

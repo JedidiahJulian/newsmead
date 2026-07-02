@@ -6,6 +6,8 @@
 
     <!-- gaze calibration (Stage 4) -->
     <string name="calib_progress_initial">Calibration</string>
+    <string name="calib_ready_instruction">Position the phone in front of the laptop screen and sit comfortably.\nTap Start when ready.</string>
+    <string name="calib_start_button">I\'m ready — Start</string>
     <string name="calib_progress">Point %1$d / %2$d — look at the dot</string>
     <string name="calib_retry">Didn\'t get a clear read — retrying</string>
     <string name="calib_done">Calibration complete (%1$d / %2$d)</string>

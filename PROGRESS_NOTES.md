@@ -193,8 +193,10 @@ the read line, scroll-correct. Stage 4 acceptance met.
   (`com.newsmead.gaze`) + `activity_gaze_calibration.xml` + `calib_*` strings —
   full-screen 16-dot calibration, reads UDP gaze via `GazeStream`, robust
   outlier-rejected median per dot, writes `calibration_wifi.csv` via
-  `CalibrationStore`. Registered in manifest (`exported=false`). Logs the phone
-  IP (`GazeCalib` tag) for the laptop's `--phone-ip`.
+  `CalibrationStore`. Registered in manifest (`exported=true`, see below). Logs
+  the phone IP (`GazeCalib` tag) for the laptop's `--phone-ip`. Has a **"Start"
+  gate** — opens and waits for a tap so the researcher can position the phone
+  before the dots begin (doesn't auto-run).
 - **`ArticleFragment`**: when `GAZE_TOUCH_VALIDATION = false`, builds
   `WiFiGazeProvider(GazeMapper(CalibrationStore.load()))`, streams gaze through
   the same `GazeProvider.OnGaze` entry point (main-thread hop), and stops it in
