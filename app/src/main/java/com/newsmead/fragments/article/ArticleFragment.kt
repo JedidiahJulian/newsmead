@@ -10,6 +10,7 @@ import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -27,6 +28,10 @@ import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.DatabaseHelper
 import com.newsmead.data.FirebaseHelper
+import com.newsmead.data.StudyConfig
+import com.newsmead.gaze.GazeOverlayView
+import com.newsmead.gaze.GazeProvider
+import com.newsmead.gaze.LineAoiMapper
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.fragments.layouts.BottomSheetDialogSaveFragment
 import com.newsmead.models.Article
@@ -271,6 +276,18 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
         addBottomAppBarListeners()
 
+        // Study mode: lock the body font size and remove the ± text-size controls
+        // so line bounding boxes stay stable for gaze AOI mapping (Stage 4).
+        // Applied in dp so the OS font-scale setting can't change the pixel size.
+        if (StudyConfig.LOCK_ARTICLE_FONT_SIZE) {
+            binding.tvArticleText.setTextSize(
+                TypedValue.COMPLEX_UNIT_DIP, StudyConfig.ARTICLE_FONT_SIZE_DP
+            )
+            binding.llArticleBottomButtons.visibility = View.GONE
+        }
+
+        setupGazeDebug()
+
         // Loading article content from url
         lifecycleScope.launch {
             // Check if offline article
@@ -491,6 +508,43 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         binding.btnArticleClrLight.setOnClickListener{ updateColors(ColorMode.LIGHT) }
         binding.btnArticleClrDark.setOnClickListener{ updateColors(ColorMode.DARK) }
         binding.btnArticleClrSepia.setOnClickListener{ updateColors(ColorMode.SEPIA) }
+    }
+
+    /**
+     * Stage 4 (touch-validation slice): attach the debug gaze layer to the
+     * article view — the line-AOI mapper + a gaze-dot overlay. All gaze flows
+     * through the single [GazeProvider.OnGaze] entry point below, so the live
+     * WiFiGazeProvider can drive it later via `setOnGaze` with no changes here.
+     * For now a finger touch substitutes for gaze to validate line mapping.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupGazeDebug() {
+        if (!StudyConfig.GAZE_ENABLED) return
+
+        val overlay = GazeOverlayView(requireContext())
+        (binding.root as ViewGroup).addView(
+            overlay,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        val mapper = LineAoiMapper(binding.tvArticleText)
+
+        // Single gaze entry point (full-screen px). A real GazeProvider plugs in
+        // here later; today it's driven by touch below.
+        val onGaze = GazeProvider.OnGaze { x, y ->
+            overlay.setGazeScreen(x, y)
+            val line = mapper.lineAt(y)
+            Log.d("GazeAOI", "gaze=(${x.toInt()},${y.toInt()}) line=$line/${mapper.lineCount}")
+        }
+
+        if (StudyConfig.GAZE_TOUCH_VALIDATION) {
+            // Finger substitutes for gaze; return false so the article still scrolls.
+            binding.nsvArticleText.setOnTouchListener { _, event ->
+                onGaze.onGaze(event.rawX, event.rawY)
+                false
+            }
+        }
     }
 
     /**

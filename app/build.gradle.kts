@@ -89,6 +89,10 @@ dependencies {
     // Import Volley dependencies
     implementation("com.android.volley:volley:1.2.1")
 
+    // Apache Commons Math — least-squares fit for the gaze affine calibration
+    // (com.newsmead.gaze.GazeMapper). Ported from the gaze-thesis-prototype.
+    implementation("org.apache.commons:commons-math3:3.6.1")
+
     // Import Glide dependencies
     implementation("com.github.bumptech.glide:glide:4.16.0")
 

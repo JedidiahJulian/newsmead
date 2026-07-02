@@ -110,6 +110,85 @@ Latin-square note: the 4 articles map cleanly to conditions A–D via
 `article_id`. The feed shows them in array order; per-participant ordering is a
 study-runtime concern, not yet wired into the app.
 
+---
+
+## 2026-07-02 — Stage 4 prep: article view confirmed native + font size locked
+
+- **WebView vs native (Stage 4 open question):** RESOLVED — the article body is a
+  native `TextView` (`tvArticleText`, set via `.text = article.body`). No WebView
+  anywhere (only a boilerplate mention in `proguard-rules.pro`). So line boxes for
+  AOI mapping come from the `TextView` `Layout` API, not injected JS.
+- **Font size (Stage 4 blocker):** RESOLVED and locked.
+  - The article view had **no "large" preset** — just a ± stepper (min 14 / max 60,
+    `ArticleFragment.addBottomAppBarListeners`). Default body = **20sp**
+    (`ts_body_large`). The stepper is buggy (mixes px/sp: "larger" +~0.7sp/tap,
+    "smaller" −2sp/tap) and density-dependent — unusable for fixed AOIs.
+  - **Decision: 22sp**, locked. Implemented in `StudyConfig`
+    (`LOCK_ARTICLE_FONT_SIZE`, `ARTICLE_FONT_SIZE_DP = 22f`) and applied in
+    `ArticleFragment` via `setTextSize(COMPLEX_UNIT_DIP, 22f)` — **dp, not sp**, so
+    the OS accessibility font-scale can't change the pixel size. The ± controls
+    (`llArticleBottomButtons`) are hidden in study mode → no runtime adjustment.
+  - NOTE: body line spacing is `lineSpacingMultiplier 1.6` + `lineSpacingExtra 1sp`
+    (from `ts_body_large`) — relevant when computing per-line vertical bands.
+  - Color-mode buttons (light/dark/sepia) are left active; they don't change line
+    geometry. Flag if you want them locked too for visual consistency.
+
+---
+
+## 2026-07-02 — Stage 4 slice 1: WiFi gaze stack ported into NewsMead
+
+Ported the self-contained GazeFollower-over-WiFi tracker from
+gaze-thesis-prototype into **`app/src/main/java/com/newsmead/gaze/`** (verbatim
+except `package`): `GazeProvider` (the swappable boundary), `WiFiGazeProvider`,
+`GazeStream` (UDP listener, port 5005), `GazeMapper` (affine laptop-px→phone-px),
+`OneEuroFilter`, `MedianFilter`, `CalibrationStore` (+`CalibrationSample`).
+- Added dep `org.apache.commons:commons-math3:3.6.1` (GazeMapper least-squares).
+- Added `<uses-permission android:name="android.permission.INTERNET"/>` for the
+  UDP socket (was only present transitively via Firebase/Volley).
+- `:app:compileDebugKotlin` → BUILD SUCCESSFUL. Not yet wired to any screen.
+- NOT ported (prototype-only, not needed here): the Stage-1/2/3 camera/menu
+  activities, `WiFiListenerActivity`, `CalibrationActivity`/`CalibrationView`,
+  `GazeDotView`. The calibration *capture* UI is still needed to produce
+  `calibration_wifi.csv` before `WiFiGazeProvider` can map real gaze — see slice
+  decision below.
+
+## 2026-07-02 — Stage 4 slice 2: article-screen wiring (touch-validation)
+
+Wired the gaze AOI layer into the article reading screen, driven by touch for
+validation (no tracker/laptop needed yet). New files in `com.newsmead.gaze`:
+- **`LineAoiMapper`** — `lineAt(screenY)` → body line index. Scroll-aware for free:
+  uses `tvArticleText.getLocationOnScreen()` (which already moves with scroll), so
+  `screenY − textViewTop − totalPaddingTop` indexes the `Layout` directly; returns
+  −1 when the point is off the text. Stable because font size is locked (22dp).
+- **`GazeOverlayView`** — translucent dot drawn from full-screen px; non-interactive
+  (passes touch through), sits on top of the article.
+- **`ArticleFragment.setupGazeDebug()`** — gated by `StudyConfig.GAZE_ENABLED`. Adds
+  the overlay over `binding.root`, and routes all gaze through one
+  `GazeProvider.OnGaze` entry point (so live `WiFiGazeProvider.setOnGaze` drops in
+  later with no fragment changes). With `GAZE_TOUCH_VALIDATION`, an
+  `nsvArticleText` touch listener feeds `event.rawX/rawY` and returns false so
+  scrolling still works.
+- Logs `GazeAOI: gaze=(x,y) line=N/total` per event.
+
+**On-device test (James, A56 — no laptop needed):** open a study article, drag a
+finger down the text, `adb logcat -s GazeAOI`. The logged `line=N` should match the
+line under your finger, and stay correct after scrolling. This is the build-spec
+touch-validation gate; passing it isolates any later error to the gaze tracker,
+not the integration.
+
+`:app:assembleDebug` → BUILD SUCCESSFUL (with JDK 17).
+
+**On-device (A56):** VALIDATED — `GazeAOI` logs stream and `line=N` is responsive
+to touch as the finger moves down the passage (touch-validation gate). Scroll-
+awareness confirmation recommended as a final check.
+
+### Stage 4 slice 3 (NEXT) — live gaze
+Port the calibration *capture* flow (`CalibrationActivity`/`CalibrationView`) from
+the prototype so it writes `calibration_wifi.csv`, then construct
+`WiFiGazeProvider(GazeMapper(CalibrationStore.load(...)))` and set it as the
+article screen's gaze source (`GAZE_TOUCH_VALIDATION = false`). Needs the laptop
+rig + an on-device calibration run to validate.
+
 ### Build note
 - The project's kapt is **incompatible with JDK 21** (fails with
   `module jdk.compiler does not export com.sun.tools.javac.main`). This is a

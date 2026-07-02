@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Gaze bridge: UDP socket receiving GazeFollower samples from the laptop
+         over WiFi (com.newsmead.gaze.GazeStream). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".data.NewsMeadApplication"
         android:allowBackup="true"

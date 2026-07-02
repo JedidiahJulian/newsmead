@@ -24,4 +24,35 @@ object StudyConfig {
 
     /** Name of the bundled article dataset in app/src/main/assets/. */
     const val ARTICLES_ASSET = "study_articles.json"
+
+    /**
+     * Lock the article body font size for the study and remove the in-article
+     * text-size (±) controls. Line bounding boxes for gaze AOI mapping (Stage 4)
+     * are only stable if the font size cannot change during a session.
+     */
+    const val LOCK_ARTICLE_FONT_SIZE = true
+
+    /**
+     * Fixed article body size. Applied in **dp** (not sp) so it ignores the OS
+     * accessibility font-scale setting — the on-screen pixel size, and therefore
+     * the line boxes, stay fixed on a given device. 22dp == 22sp at 100% system
+     * font. (App's original default was 20sp; ts_body_large.)
+     */
+    const val ARTICLE_FONT_SIZE_DP = 22f
+
+    // ---- Stage 4: gaze AOI mapping (article reading screen) ----
+
+    /**
+     * Attach the debug gaze layer to the article screen: the line-AOI mapper
+     * (gaze-y -> text line index) plus the gaze-dot overlay.
+     */
+    const val GAZE_ENABLED = true
+
+    /**
+     * Validation mode: a finger touch on the article substitutes for the gaze
+     * coordinate, so line mapping can be verified on-device without the tracker
+     * (build-spec "validate the plumbing before trusting the gaze"). When the
+     * live WiFiGazeProvider is wired in a later slice, this flips to false.
+     */
+    const val GAZE_TOUCH_VALIDATION = true
 }
