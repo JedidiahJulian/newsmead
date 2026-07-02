@@ -229,3 +229,7 @@ Manifest fix required along the way: `GazeCalibrationActivity` set
   above (login bypass + offline dataset). `study_articles.json` validated as
   well-formed. Full on-device confirmation (home feed renders, article opens)
   still requires an emulator/device.
+
+## 2026-07-02 - Stage 5 slice 1: RSI feed from line AOI stream
+
+Added `ReadingStateInferencer` in `com.newsmead.gaze` and wired it at the existing `GazeProvider.OnGaze` entry point in `ArticleFragment`. It emits/logs `GazeRSI` line samples, fixation, dwell, and regression events only; no saccade or microsaccade features. Targeted JVM tests for the RSI inferencer pass; full `testDebugUnitTest` still has the pre-existing `FirebaseTest` JVM Android API failure.

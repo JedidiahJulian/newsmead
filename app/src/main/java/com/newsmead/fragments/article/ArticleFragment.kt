@@ -35,6 +35,7 @@ import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.GazeOverlayView
 import com.newsmead.gaze.GazeProvider
 import com.newsmead.gaze.LineAoiMapper
+import com.newsmead.gaze.ReadingStateInferencer
 import com.newsmead.gaze.WiFiGazeProvider
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.fragments.layouts.BottomSheetDialogSaveFragment
@@ -54,6 +55,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var isTranslated = false
     private var language = "english"
     private var gazeProvider: GazeProvider? = null
+    private var rsiInferencer: ReadingStateInferencer? = null
     private enum class ColorMode { LIGHT, DARK, SEPIA }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -441,6 +443,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             textToSpeech.stop()
             textToSpeech.shutdown()
         }
+        rsiInferencer?.flush()
         gazeProvider?.stop() // release the UDP socket / listener thread
         super.onDestroy()
     }
@@ -540,13 +543,16 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         overlay.bringToFront()
         overlay.translationZ = 1000f
         val mapper = LineAoiMapper(binding.tvArticleText)
+        rsiInferencer = createRsiInferencer()
 
         // Single gaze entry point (full-screen px). Both the touch-validation
         // source and the live WiFiGazeProvider feed through here.
         val onGaze = GazeProvider.OnGaze { x, y ->
             overlay.setGazeScreen(x, y)
             val line = mapper.lineAt(y)
-            Log.d("GazeAOI", "gaze=(${x.toInt()},${y.toInt()}) line=$line/${mapper.lineCount}")
+            val lineCount = mapper.lineCount
+            Log.d("GazeAOI", "gaze=(${x.toInt()},${y.toInt()}) line=$line/$lineCount")
+            rsiInferencer?.onLine(line, lineCount)
         }
 
         if (StudyConfig.GAZE_TOUCH_VALIDATION) {
@@ -555,6 +561,25 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             attachLiveGaze(onGaze)
         }
     }
+
+    private fun createRsiInferencer(): ReadingStateInferencer =
+        ReadingStateInferencer(object : ReadingStateInferencer.Listener {
+            override fun onLineSample(sample: ReadingStateInferencer.LineSample) {
+                Log.d("GazeRSI", "line=${sample.lineIndex}/${sample.lineCount} t=${sample.timestampMs}")
+            }
+
+            override fun onFixation(event: ReadingStateInferencer.FixationEvent) {
+                Log.d("GazeRSI", "fixation line=${event.lineIndex}/${event.lineCount} duration=${event.durationMs}ms")
+            }
+
+            override fun onDwell(event: ReadingStateInferencer.DwellEvent) {
+                Log.d("GazeRSI", "dwell line=${event.lineIndex}/${event.lineCount} duration=${event.durationMs}ms")
+            }
+
+            override fun onRegression(event: ReadingStateInferencer.RegressionEvent) {
+                Log.d("GazeRSI", "regression ${event.fromLine}->${event.toLine} t=${event.timestampMs}")
+            }
+        })
 
     /** Finger substitutes for gaze; returns false so the article still scrolls. */
     @SuppressLint("ClickableViewAccessibility")
