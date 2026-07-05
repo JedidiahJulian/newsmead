@@ -233,3 +233,18 @@ Manifest fix required along the way: `GazeCalibrationActivity` set
 ## 2026-07-02 - Stage 5 slice 1: RSI feed from line AOI stream
 
 Added `ReadingStateInferencer` in `com.newsmead.gaze` and wired it at the existing `GazeProvider.OnGaze` entry point in `ArticleFragment`. It emits/logs `GazeRSI` line samples, fixation, dwell, and regression events only; no saccade or microsaccade features. Targeted JVM tests for the RSI inferencer pass; full `testDebugUnitTest` still has the pre-existing `FirebaseTest` JVM Android API failure.
+## 2026-07-05 - Stage 5 slice 2: RSI scoring, regression debounce, and interpretation docs
+
+Extended `ReadingStateInferencer` with a composite RSI score logged through `GazeRSI`: `score`, normalized `reg`, `dwell`, `fix`, and raw `events=fN/dNms/rN`. The score is a reading-effort signal, not a comprehension grade.
+
+Adjusted regression detection to reduce false positives from gaze jitter: an upward move now only counts as a regression when it jumps at least 2 lines back and remains on the earlier line for 300ms. Brief upward bounces are ignored.
+
+Added targeted JVM coverage for sustained regressions, ignored upward bounces, and the composite score. Verified:
+
+```powershell
+.\gradlew.bat testDebugUnitTest --tests com.newsmead.gaze.ReadingStateInferencerTest
+```
+
+Result: BUILD SUCCESSFUL.
+
+Added `RSI_README.md` with score ranges, raw metric meanings, interpretation examples, and calibration/noise caveats. `README.md` now links to the RSI guide from the Stage 5 section.

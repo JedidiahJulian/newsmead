@@ -33,17 +33,31 @@ class ReadingStateInferencerTest {
     }
 
     @Test
-    fun emitsRegressionWhenReturningToEarlierLine() {
+    fun emitsRegressionWhenReturningToEarlierLineAndHoldingThere() {
         val events = RecordingListener()
         val inferencer = ReadingStateInferencer(events, fixationThresholdMs = 300, minDwellMs = 120)
 
         inferencer.onLine(lineIndex = 8, lineCount = 20, timestampMs = 1_000)
         inferencer.onLine(lineIndex = 9, lineCount = 20, timestampMs = 1_200)
         inferencer.onLine(lineIndex = 5, lineCount = 20, timestampMs = 1_400)
+        inferencer.onLine(lineIndex = 5, lineCount = 20, timestampMs = 1_700)
 
         assertEquals(1, events.regressions.size)
         assertEquals(9, events.regressions.single().fromLine)
         assertEquals(5, events.regressions.single().toLine)
+    }
+
+    @Test
+    fun ignoresBriefUpwardLineBounceAsRegression() {
+        val events = RecordingListener()
+        val inferencer = ReadingStateInferencer(events, fixationThresholdMs = 300, minDwellMs = 120)
+
+        inferencer.onLine(lineIndex = 8, lineCount = 20, timestampMs = 1_000)
+        inferencer.onLine(lineIndex = 9, lineCount = 20, timestampMs = 1_200)
+        inferencer.onLine(lineIndex = 7, lineCount = 20, timestampMs = 1_400)
+        inferencer.onLine(lineIndex = 9, lineCount = 20, timestampMs = 1_480)
+
+        assertEquals(0, events.regressions.size)
     }
 
     @Test
@@ -60,11 +74,30 @@ class ReadingStateInferencerTest {
         assertEquals(0, events.regressions.size)
     }
 
+    @Test
+    fun emitsCompositeRsiScoreFromRegressionDwellAndFixationComponents() {
+        val events = RecordingListener()
+        val inferencer = ReadingStateInferencer(events, fixationThresholdMs = 300, minDwellMs = 120)
+
+        inferencer.onLine(lineIndex = 1, lineCount = 20, timestampMs = 0)
+        inferencer.onLine(lineIndex = 1, lineCount = 20, timestampMs = 30_000)
+        inferencer.onLine(lineIndex = 4, lineCount = 20, timestampMs = 60_000)
+        inferencer.onLine(lineIndex = 1, lineCount = 20, timestampMs = 90_000)
+        inferencer.onLine(lineIndex = 1, lineCount = 20, timestampMs = 90_300)
+
+        val score = events.scores.last()
+        assertEquals(1.0 / 5.0, score.regressionComponent, 0.0001)
+        assertEquals(90_000.0 / 90_300.0, score.dwellComponent, 0.0001)
+        assertEquals((3.0 / (90_300.0 / 60_000.0)) / 120.0, score.fixationComponent, 0.0001)
+        assertEquals(43.30, score.score, 0.01)
+    }
+
     private class RecordingListener : ReadingStateInferencer.Listener {
         val lines = mutableListOf<ReadingStateInferencer.LineSample>()
         val fixations = mutableListOf<ReadingStateInferencer.FixationEvent>()
         val dwells = mutableListOf<ReadingStateInferencer.DwellEvent>()
         val regressions = mutableListOf<ReadingStateInferencer.RegressionEvent>()
+        val scores = mutableListOf<ReadingStateInferencer.RsiScore>()
 
         override fun onLineSample(sample: ReadingStateInferencer.LineSample) {
             lines.add(sample)
@@ -80,6 +113,10 @@ class ReadingStateInferencerTest {
 
         override fun onRegression(event: ReadingStateInferencer.RegressionEvent) {
             regressions.add(event)
+        }
+
+        override fun onScore(score: ReadingStateInferencer.RsiScore) {
+            scores.add(score)
         }
     }
 }

@@ -140,6 +140,8 @@ GazeRSI: dwell line=21/76 duration=1018ms
 GazeRSI: regression 21->18
 ```
 
+See `RSI_README.md` for score ranges, raw metric meanings, and interpretation caveats.
+
 ## Running the Prototype
 
 Build and install the Android app:

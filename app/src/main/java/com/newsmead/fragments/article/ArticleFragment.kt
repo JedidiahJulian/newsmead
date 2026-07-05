@@ -579,6 +579,17 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             override fun onRegression(event: ReadingStateInferencer.RegressionEvent) {
                 Log.d("GazeRSI", "regression ${event.fromLine}->${event.toLine} t=${event.timestampMs}")
             }
+
+            override fun onScore(score: ReadingStateInferencer.RsiScore) {
+                Log.d(
+                    "GazeRSI",
+                    "score=${"%.1f".format(score.score)} " +
+                        "reg=${"%.2f".format(score.regressionComponent)} " +
+                        "dwell=${"%.2f".format(score.dwellComponent)} " +
+                        "fix=${"%.2f".format(score.fixationComponent)} " +
+                        "events=f${score.fixationCount}/d${score.totalDwellMs}ms/r${score.regressionCount}"
+                )
+            }
         })
 
     /** Finger substitutes for gaze; returns false so the article still scrolls. */
