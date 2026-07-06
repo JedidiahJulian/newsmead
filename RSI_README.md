@@ -51,6 +51,16 @@ Weights:
 | Dwell | `35%` | Spending longer on lines suggests hesitation, careful reading, or processing difficulty. |
 | Fixation | `25%` | Repeated stable fixations show the reader is stopping on text rather than smoothly scanning. |
 
+### 4.3.4 Weight Justification
+
+The component weights are ordered as `regression > dwell > fixation` because the three gaze features differ in how strongly they indicate reading instability. Regression receives the highest weight (`0.40`) because returning from a later line to an earlier line is the most direct behavioral sign of rereading. In normal forward reading, gaze should generally progress downward through the article; a confirmed backward movement suggests that the reader may be checking missed information, resolving confusion, or reprocessing a difficult phrase. For this reason, regression is treated as the strongest instability cue.
+
+Dwell receives the second-highest weight (`0.35`) because prolonged time on a line can indicate hesitation, careful processing, or difficulty, but it is less specific than regression. A reader may dwell longer because the sentence is complex, because they are reading carefully, or because gaze tracking remains stable on one line. Therefore, dwell is important for detecting increased effort, but it is not weighted as strongly as regression because it does not always imply rereading or confusion.
+
+Fixation receives the lowest weight (`0.25`) because fixation count is the most sensitive to individual reading style and tracker noise. Frequent fixations can reflect effortful reading, but they can also occur during normal slow reading, skimming interruptions, or small gaze-estimation fluctuations. Since fixation frequency is useful but less diagnostic on its own, it contributes to the final score with a smaller weight.
+
+Overall, the weighting scheme prioritizes the metric with the clearest connection to reading instability, while still preserving dwell and fixation as supporting evidence. The values are heuristic prototype weights and should be treated as tunable parameters. In a formal study, they should be validated against pilot data, comprehension outcomes, or researcher-coded reading difficulty episodes.
+
 ## Raw Metrics
 
 ### Fixations: `f`

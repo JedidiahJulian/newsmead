@@ -1,5 +1,6 @@
 package com.newsmead.activities
 
+import android.content.pm.PackageManager
 import android.graphics.PointF
 import android.os.Bundle
 import android.os.Handler
@@ -13,26 +14,24 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.newsmead.databinding.ActivityGazeCalibrationBinding
 import com.newsmead.gaze.CalibrationSample
 import com.newsmead.gaze.CalibrationStore
-import com.newsmead.gaze.GazeStream
+import com.newsmead.gaze.LocalGazeSources
+import com.newsmead.gaze.LocalRawGazeSource
 import java.util.Locale
 import kotlin.math.abs
 
 /**
- * Full-screen 16-dot gaze calibration. Gaze arrives over UDP from the laptop's
- * GazeFollower backend (laptop-screen pixels). For each dot it settles, collects
- * ~1 s of samples, and stores their robust (outlier-rejected) median paired with
- * the dot's phone-screen position. The pairs are written to calibration_wifi.csv,
- * from which GazeMapper learns the laptop-px -> phone-px mapping used by
- * WiFiGazeProvider on the article screen.
+ * Full-screen 16-dot gaze calibration. Gaze arrives from the local phone-side raw
+ * gaze source. For each dot it settles, collects ~1 s of samples, and stores
+ * their robust median paired with the dot's phone-screen position. The pairs are
+ * written to calibration_16point.csv, from which GazeMapper learns the local
+ * raw-feature -> phone-screen mapping used by LocalCalibratedGazeProvider.
  *
- * Ported (except package/binding) from gaze-thesis-prototype's CalibrationActivity.
- * Run this once per participant (with the laptop backend streaming) before a
- * reading session.
+ * Run this once per participant before a reading session.
  */
 class GazeCalibrationActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityGazeCalibrationBinding
-    private var gazeStream: GazeStream? = null
+    private var rawGazeSource: LocalRawGazeSource? = null
     private val handler = Handler(Looper.getMainLooper())
 
     private var points: List<PointF> = emptyList()
@@ -48,19 +47,38 @@ class GazeCalibrationActivity : AppCompatActivity() {
         binding = ActivityGazeCalibrationBinding.inflate(layoutInflater)
         setContentView(binding.root)
         enableImmersiveMode()
+        rawGazeSource = LocalGazeSources.create(this).also { source ->
+            source.setOnRawGaze { x, y, _ -> runOnUiThread { onSample(x, y) } }
+            source.start(this)
+        }
 
-        // Log the phone's IP so the laptop's GazeFollower stream can target it
-        // (gazefollower_stream.py --phone-ip <this>).
-        Log.i(TAG, "Phone IP for --phone-ip: ${GazeStream.localIpv4()} (UDP ${GazeStream.DEFAULT_PORT})")
-
-        gazeStream = GazeStream { x, y, _ -> runOnUiThread { onSample(x, y) } }.also { it.start() }
-
-        // Wait for the researcher to position the phone in front of the laptop
-        // screen; only start the dot sequence when they tap Start.
+        // Start the dot sequence only when the researcher taps Start.
         binding.progressText.setText(com.newsmead.R.string.calib_ready_instruction)
         binding.startButton.setOnClickListener {
             binding.startButton.visibility = View.GONE
             beginSequenceWhenLaidOut()
+        }
+    }
+
+
+    private fun startRawGazeSource() {
+        rawGazeSource?.stop()
+        rawGazeSource = LocalGazeSources.create(this).also { source ->
+            source.setOnRawGaze { x, y, _ -> runOnUiThread { onSample(x, y) } }
+            source.start(this)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == CAMERA_PERMISSION_REQUEST &&
+            grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        ) {
+            startRawGazeSource()
         }
     }
 
@@ -189,16 +207,17 @@ class GazeCalibrationActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
-        gazeStream?.stop()
+        rawGazeSource?.stop()
     }
 
     companion object {
         private const val TAG = "GazeCalib"
         private const val SETTLE_MS = 800L
-        private const val COLLECT_MS = 1000L
+        private const val COLLECT_MS = 2500L
         private const val RETRY_PAUSE_MS = 400L
-        private const val MIN_SAMPLES = 10
+        private const val MIN_SAMPLES = 5
         private const val MARGIN_FRAC = 0.1f
         private const val OUTLIER_K = 3.0f // reject samples > K x median-abs-deviation
+        private const val CAMERA_PERMISSION_REQUEST = 4104
     }
 }

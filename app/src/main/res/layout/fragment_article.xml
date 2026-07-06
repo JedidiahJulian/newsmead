@@ -27,6 +27,19 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:tint="?secondaryIconColor" />
+        <ImageButton
+            android:id="@+id/btnRunGazeCalibration"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:background="@null"
+            android:contentDescription="@string/article_calibrate_gaze"
+            android:padding="12dp"
+            android:src="@drawable/ic_visibility"
+            app:layout_constraintBottom_toBottomOf="@+id/btnArticleBack"
+            app:layout_constraintStart_toEndOf="@+id/btnArticleBack"
+            app:layout_constraintTop_toTopOf="@+id/btnArticleBack"
+            app:tint="?secondaryIconColor" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnReadAloudArticle"

@@ -248,3 +248,155 @@ Added targeted JVM coverage for sustained regressions, ignored upward bounces, a
 Result: BUILD SUCCESSFUL.
 
 Added `RSI_README.md` with score ranges, raw metric meanings, interpretation examples, and calibration/noise caveats. `README.md` now links to the RSI guide from the Stage 5 section.
+
+---
+
+## 2026-07-06 - Local 16-point MediaPipe gaze integration, no backend/Wi-Fi
+
+**Context:** `specs.md` was updated to remove the backend/Wi-Fi gaze path and require Stage 4/5 to depend only on the `GazeProvider` boundary. Stage 3 remains accuracy-limited, but the app now runs the gaze stack locally on the phone.
+
+### What changed
+- Removed the live UDP/Wi-Fi gaze path from source:
+  - deleted `app/src/main/java/com/newsmead/gaze/GazeStream.kt`
+  - deleted `app/src/main/java/com/newsmead/gaze/WiFiGazeProvider.kt`
+  - removed the gaze-related `INTERNET` permission from `AndroidManifest.xml`
+- Added local raw gaze pipeline:
+  - `MediaPipeRawGazeSource` uses CameraX front camera + MediaPipe FaceLandmarker.
+  - `LocalRawGazeSource` is the raw feature boundary: emits `gaze_x,gaze_y,timestamp`.
+  - `LocalCalibratedGazeProvider` smooths raw features, applies `GazeMapper`, and emits screen px through `GazeProvider`.
+  - `LocalGazeSources.create(context)` now returns `MediaPipeRawGazeSource(context)`.
+- Added required runtime pieces:
+  - `android.permission.CAMERA`
+  - CameraX dependencies
+  - `com.google.mediapipe:tasks-vision:0.10.14`
+  - `app/src/main/assets/face_landmarker.task`
+- Updated calibration storage:
+  - new file name: `calibration_16point.csv`
+  - legacy `calibration_wifi.csv` can still be read with a warning, but recalibration should write the new file.
+- Updated `GazeMapper` from the old affine/Wi-Fi mapper to the Stage 3 local mapper:
+  - second-degree polynomial features
+  - standardized gaze inputs
+  - clamping to calibration feature range
+  - ridge regularization (`lambda = 1.0`)
+- Updated `GazeCalibrationActivity`:
+  - collects samples from `LocalRawGazeSource`, not UDP.
+  - still uses the 4x4 / 16-dot sequence.
+  - restarts the local raw gaze source after camera permission is granted.
+- Updated `ArticleFragment`:
+  - live mode now builds `LocalCalibratedGazeProvider(GazeMapper(samples), LocalGazeSources.create(...))`.
+  - Stage 4 line mapping and Stage 5 RSI still consume only the `GazeProvider.OnGaze` stream.
+- Set `StudyConfig.GAZE_TOUCH_VALIDATION = false`, so article reading now uses live local MediaPipe gaze by default.
+
+### Current pipeline
+
+```text
+CameraX front camera
+-> MediaPipe FaceLandmarker
+-> raw iris/eye ratio feature
+-> 16-point calibration CSV
+-> GazeMapper
+-> GazeProvider
+-> LineAoiMapper
+-> ReadingStateInferencer / RSI logs
+```
+
+### Test plan
+1. Run app on a real phone.
+2. Grant camera permission.
+3. Launch calibration:
+
+```powershell
+adb shell am start -n com.newsmead/.activities.GazeCalibrationActivity
+```
+
+4. Complete all 16 dots.
+5. Open an article normally.
+6. Watch Logcat tags:
+
+```text
+MediaPipeGaze
+GazeCalib
+GazeAOI
+GazeRSI
+```
+
+Expected logs:
+
+```text
+MediaPipeGaze: Local MediaPipe raw gaze source started
+GazeCalib: Wrote 16 calibration pairs
+GazeAOI: gaze=(x,y) line=N/total
+GazeRSI: score=...
+```
+
+### Verification
+Verified locally:
+
+```powershell
+.\gradlew.bat :app:compileDebugKotlin
+.\gradlew.bat :app:testDebugUnitTest --tests com.newsmead.gaze.ReadingStateInferencerTest
+```
+
+Both commands returned `BUILD SUCCESSFUL`.
+
+### Remaining validation
+- Needs on-device calibration quality check with the new phone-local MediaPipe source.
+- If calibration dots keep retrying, likely causes are camera permission, missing face visibility, poor lighting, unstable phone/head position, or FaceLandmarker not producing iris landmarks consistently.
+- Stage 4/5 integration is still isolated behind `GazeProvider`; if the raw feature needs tuning, downstream line mapping and RSI should not need rewrites.
+
+### 2026-07-06 follow-up: MediaPipe calibration read fixed on device
+
+Initial on-device logs showed two issues:
+
+```text
+MediaPipeGaze: No face landmarks
+GazeCalib: Dot 1: only 0-4 samples, re-collecting
+GazeCalib: Loading legacy calibration_wifi.csv
+```
+
+Fixes applied:
+- `MediaPipeRawGazeSource` now converts CameraX `RGBA_8888` frames with row-stride handling before passing them to FaceLandmarker. The previous direct buffer copy could corrupt frames on devices where `rowStride != width * pixelStride`, causing repeated `No face landmarks`.
+- FaceLandmarker confidence thresholds lowered from `0.5` to `0.35` for the phone-local source.
+- Live-stream timestamps are forced monotonic before `detectAsync()`.
+- Calibration no longer loads legacy `calibration_wifi.csv`; local MediaPipe gaze requires `calibration_16point.csv`.
+- Calibration collection window changed to `2500ms`, with `MIN_SAMPLES = 5`, because phone-local FaceLandmarker throughput is lower than the old UDP stream.
+- Added periodic `MediaPipeGaze raw=(x,y)` diagnostic logging.
+
+Confirmed on connected phone after installing the fixed debug build:
+
+```text
+MediaPipeGaze: Local MediaPipe raw gaze source started
+GazeCalib: pair 1/16 ... n=10 used=10
+...
+GazeCalib: pair 16/16 ...
+GazeCalib: Wrote 16 calibration pairs to /data/user/0/com.newsmead/files/calibration_16point.csv
+```
+
+Verified again:
+
+```powershell
+.\gradlew.bat :app:compileDebugKotlin
+.\gradlew.bat :app:testDebugUnitTest --tests com.newsmead.gaze.ReadingStateInferencerTest
+.\gradlew.bat :app:installDebug
+```
+
+All returned `BUILD SUCCESSFUL`; the fixed APK was installed on the connected phone.
+
+### 2026-07-06 follow-up: in-article recalibration button
+
+Added an in-app control to rerun calibration without using adb:
+- `fragment_article.xml` now has `btnRunGazeCalibration` in the article top bar beside the back button.
+- The button launches `GazeCalibrationActivity` directly.
+- `ArticleFragment` stops the current live gaze provider before launching calibration.
+- When the user returns from calibration, `ArticleFragment` reloads `calibration_16point.csv` and restarts `LocalCalibratedGazeProvider` so the new calibration is used immediately.
+- Added string `article_calibrate_gaze` for the button content description.
+
+Verified:
+
+```powershell
+.\gradlew.bat :app:compileDebugKotlin
+.\gradlew.bat :app:testDebugUnitTest --tests com.newsmead.gaze.ReadingStateInferencerTest
+.\gradlew.bat :app:installDebug
+```
+
+All completed successfully.

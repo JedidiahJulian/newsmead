@@ -27,14 +27,14 @@ object StudyConfig {
 
     /**
      * Lock the article body font size for the study and remove the in-article
-     * text-size (±) controls. Line bounding boxes for gaze AOI mapping (Stage 4)
+     * text-size (+/-) controls. Line bounding boxes for gaze AOI mapping (Stage 4)
      * are only stable if the font size cannot change during a session.
      */
     const val LOCK_ARTICLE_FONT_SIZE = true
 
     /**
      * Fixed article body size. Applied in **dp** (not sp) so it ignores the OS
-     * accessibility font-scale setting — the on-screen pixel size, and therefore
+     * accessibility font-scale setting - the on-screen pixel size, and therefore
      * the line boxes, stay fixed on a given device. 22dp == 22sp at 100% system
      * font. (App's original default was 20sp; ts_body_large.)
      */
@@ -51,8 +51,8 @@ object StudyConfig {
     /**
      * Validation mode: a finger touch on the article substitutes for the gaze
      * coordinate, so line mapping can be verified on-device without the tracker
-     * (build-spec "validate the plumbing before trusting the gaze"). When the
-     * live WiFiGazeProvider is wired in a later slice, this flips to false.
+     * (build-spec "validate the plumbing before trusting the gaze"). Set this
+     * to false only after the local MediaPipe/iris raw source is wired.
      */
     const val GAZE_TOUCH_VALIDATION = false
 }

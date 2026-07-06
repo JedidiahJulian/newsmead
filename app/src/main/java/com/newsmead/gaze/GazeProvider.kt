@@ -6,10 +6,8 @@ import androidx.lifecycle.LifecycleOwner
  * The single boundary all gaze output flows through. Downstream stages (line
  * mapping, RSI) depend only on this interface and its [onGaze] stream, so the
  * tracker implementation can be swapped without touching anything downstream.
- * Current implementation: [WiFiGazeProvider] (GazeFollower over WiFi).
- *
- * Ported from the gaze-thesis-prototype repo (Stage 3, validated). Unchanged
- * except package — swappability is why the port required no interface changes.
+ * Current live implementation is local: phone tracker features are calibrated by
+ * the saved 16-point calibration and emitted as full-screen phone pixels.
  */
 interface GazeProvider {
 

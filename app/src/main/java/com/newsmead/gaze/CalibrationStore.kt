@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Log
 import java.io.File
 
-/** One calibration sample: known screen point (px) ↔ measured gaze feature (laptop px). */
+/** One calibration sample: known screen point (px) to measured local gaze feature. */
 data class CalibrationSample(
     val screenX: Float,
     val screenY: Float,
@@ -17,7 +17,8 @@ object CalibrationStore {
 
     private const val TAG = "GazeCalib"
     private const val HEADER = "screen_x,screen_y,gaze_x,gaze_y"
-    private const val CSV_NAME = "calibration_wifi.csv"
+    private const val CSV_NAME = "calibration_16point.csv"
+    private const val LEGACY_WIFI_CSV_NAME = "calibration_wifi.csv"
 
     fun save(context: Context, samples: List<CalibrationSample>) {
         val file = File(context.filesDir, CSV_NAME)
@@ -33,9 +34,14 @@ object CalibrationStore {
     fun load(context: Context): List<CalibrationSample>? {
         val file = File(context.filesDir, CSV_NAME)
         if (!file.exists()) return null
+        return read(file)
+    }
+
+    private fun read(file: File): List<CalibrationSample>? {
+        if (!file.exists()) return null
         return try {
             file.readLines()
-                .drop(1) // header
+                .drop(1)
                 .filter { it.isNotBlank() }
                 .map { line ->
                     val (sx, sy, gx, gy) = line.split(",")
@@ -43,7 +49,7 @@ object CalibrationStore {
                 }
                 .takeIf { it.isNotEmpty() }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to read calibration.csv", e)
+            Log.e(TAG, "Failed to read ${file.name}", e)
             null
         }
     }

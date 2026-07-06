@@ -25,6 +25,7 @@ import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
 import com.newsmead.R
+import com.newsmead.activities.GazeCalibrationActivity
 import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.DatabaseHelper
@@ -35,8 +36,9 @@ import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.GazeOverlayView
 import com.newsmead.gaze.GazeProvider
 import com.newsmead.gaze.LineAoiMapper
+import com.newsmead.gaze.LocalCalibratedGazeProvider
+import com.newsmead.gaze.LocalGazeSources
 import com.newsmead.gaze.ReadingStateInferencer
-import com.newsmead.gaze.WiFiGazeProvider
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.fragments.layouts.BottomSheetDialogSaveFragment
 import com.newsmead.models.Article
@@ -55,6 +57,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var isTranslated = false
     private var language = "english"
     private var gazeProvider: GazeProvider? = null
+    private var articleGazeSink: GazeProvider.OnGaze? = null
+    private var launchedCalibration = false
     private var rsiInferencer: ReadingStateInferencer? = null
     private enum class ColorMode { LIGHT, DARK, SEPIA }
 
@@ -245,6 +249,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             requireActivity().onBackPressedDispatcher.onBackPressed()
         }
 
+        binding.btnRunGazeCalibration.setOnClickListener {
+            launchGazeCalibration()
+        }
+
         // Show more button to show more articles from source
         binding.btnArticleRecommendations.setOnClickListener {
             // Navigate to ArticleSourceFragment
@@ -283,7 +291,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
         addBottomAppBarListeners()
 
-        // Study mode: lock the body font size and remove the ± text-size controls
+        // Study mode: lock the body font size and remove the +/- text-size controls
         // so line bounding boxes stay stable for gaze AOI mapping (Stage 4).
         // Applied in dp so the OS font-scale setting can't change the pixel size.
         if (StudyConfig.LOCK_ARTICLE_FONT_SIZE) {
@@ -444,10 +452,34 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             textToSpeech.shutdown()
         }
         rsiInferencer?.flush()
-        gazeProvider?.stop() // release the UDP socket / listener thread
+        gazeProvider?.stop()
         super.onDestroy()
     }
 
+
+    override fun onResume() {
+        super.onResume()
+        if (launchedCalibration) {
+            launchedCalibration = false
+            restartLiveGazeAfterCalibration()
+        }
+    }
+
+    private fun launchGazeCalibration() {
+        launchedCalibration = true
+        rsiInferencer?.flush()
+        gazeProvider?.stop()
+        gazeProvider = null
+        startActivity(Intent(requireContext(), GazeCalibrationActivity::class.java))
+    }
+
+    private fun restartLiveGazeAfterCalibration() {
+        if (StudyConfig.GAZE_TOUCH_VALIDATION) return
+        val onGaze = articleGazeSink ?: return
+        gazeProvider?.stop()
+        gazeProvider = null
+        attachLiveGaze(onGaze)
+    }
     // Function to convert text to speech
     private fun speak(text: String) {
         if(!isTranslated && language.lowercase() == "english"){
@@ -521,10 +553,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     /**
      * Stage 4 (touch-validation slice): attach the debug gaze layer to the
-     * article view — the line-AOI mapper + a gaze-dot overlay. All gaze flows
+     * article view: the line-AOI mapper + a gaze-dot overlay. All gaze flows
      * through the single [GazeProvider.OnGaze] entry point below, so the live
-     * WiFiGazeProvider can drive it later via `setOnGaze` with no changes here.
-     * For now a finger touch substitutes for gaze to validate line mapping.
+     * local calibrated provider can drive it via `setOnGaze` with no changes here.
+     * Touch validation proves line mapping before trusting gaze accuracy.
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun setupGazeDebug() {
@@ -546,7 +578,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         rsiInferencer = createRsiInferencer()
 
         // Single gaze entry point (full-screen px). Both the touch-validation
-        // source and the live WiFiGazeProvider feed through here.
+        // source and the local calibrated gaze provider feed through here.
         val onGaze = GazeProvider.OnGaze { x, y ->
             overlay.setGazeScreen(x, y)
             val line = mapper.lineAt(y)
@@ -554,6 +586,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             Log.d("GazeAOI", "gaze=(${x.toInt()},${y.toInt()}) line=$line/$lineCount")
             rsiInferencer?.onLine(line, lineCount)
         }
+
+        articleGazeSink = onGaze
 
         if (StudyConfig.GAZE_TOUCH_VALIDATION) {
             attachTouchValidation(onGaze)
@@ -602,10 +636,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     /**
-     * Live gaze from the WiFiGazeProvider (GazeFollower over WiFi), mapped to the
-     * phone with the saved per-participant calibration. In live mode, do not
-     * silently substitute touch input; missing/invalid calibration must be fixed
-     * before the reading session.
+     * Live gaze from the local phone tracker, mapped to the phone screen with
+     * the saved 16-point calibration. In live mode, do not silently substitute
+     * touch input; missing/invalid calibration must be fixed before reading.
      */
     private fun attachLiveGaze(onGaze: GazeProvider.OnGaze) {
         val samples = CalibrationStore.load(requireContext())
@@ -615,11 +648,14 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             return
         }
         try {
-            val provider = WiFiGazeProvider(GazeMapper(samples))
+            val provider = LocalCalibratedGazeProvider(
+                mapper = GazeMapper(samples),
+                rawSource = LocalGazeSources.create(requireContext()),
+            )
             provider.setOnGaze { x, y -> activity?.runOnUiThread { onGaze.onGaze(x, y) } }
             provider.start(viewLifecycleOwner)
             gazeProvider = provider
-            Log.i("GazeAOI", "Live WiFi gaze started with ${samples.size} calibration samples")
+            Log.i("GazeAOI", "Local calibrated gaze started with ${samples.size} calibration samples")
         } catch (e: Exception) {
             Log.e("GazeAOI", "Calibration fit failed; live gaze not started", e)
             Toast.makeText(context, "Gaze calibration is invalid; recalibrate", Toast.LENGTH_LONG).show()
@@ -715,6 +751,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         // Change icon colors
         binding.btnArticleBack.setColorFilter(color)
         binding.btnArticleShare.setColorFilter(color)
+        binding.btnRunGazeCalibration.setColorFilter(color)
 
         binding.btnSaveList.iconTint = ColorStateList.valueOf(color)
         binding.btnTranslateArticle.iconTint = ColorStateList.valueOf(color)
