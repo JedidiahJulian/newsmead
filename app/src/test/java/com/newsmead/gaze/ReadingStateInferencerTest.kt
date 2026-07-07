@@ -48,6 +48,39 @@ class ReadingStateInferencerTest {
     }
 
     @Test
+    fun emitsRegressionForConfirmedOneLineReread() {
+        val events = RecordingListener()
+        val inferencer = ReadingStateInferencer(events, fixationThresholdMs = 300, minDwellMs = 120)
+
+        inferencer.onLine(lineIndex = 8, lineCount = 20, timestampMs = 1_000)
+        inferencer.onLine(lineIndex = 9, lineCount = 20, timestampMs = 1_200)
+        inferencer.onLine(lineIndex = 8, lineCount = 20, timestampMs = 1_400)
+        inferencer.onLine(lineIndex = 8, lineCount = 20, timestampMs = 1_700)
+
+        assertEquals(1, events.regressions.size)
+        assertEquals(9, events.regressions.single().fromLine)
+        assertEquals(8, events.regressions.single().toLine)
+    }
+
+    @Test
+    fun countsOnlyOneRegressionDuringSameBackwardEpisode() {
+        val events = RecordingListener()
+        val inferencer = ReadingStateInferencer(events, fixationThresholdMs = 300, minDwellMs = 120)
+
+        inferencer.onLine(lineIndex = 8, lineCount = 20, timestampMs = 1_000)
+        inferencer.onLine(lineIndex = 9, lineCount = 20, timestampMs = 1_200)
+        inferencer.onLine(lineIndex = 5, lineCount = 20, timestampMs = 1_400)
+        inferencer.onLine(lineIndex = 5, lineCount = 20, timestampMs = 1_700)
+        inferencer.onLine(lineIndex = 6, lineCount = 20, timestampMs = 1_900)
+        inferencer.onLine(lineIndex = 5, lineCount = 20, timestampMs = 2_100)
+        inferencer.onLine(lineIndex = 5, lineCount = 20, timestampMs = 2_500)
+
+        assertEquals(1, events.regressions.size)
+        assertEquals(9, events.regressions.single().fromLine)
+        assertEquals(5, events.regressions.single().toLine)
+    }
+
+    @Test
     fun ignoresBriefUpwardLineBounceAsRegression() {
         val events = RecordingListener()
         val inferencer = ReadingStateInferencer(events, fixationThresholdMs = 300, minDwellMs = 120)

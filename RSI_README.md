@@ -122,8 +122,8 @@ line 21 -> line 18
 The current logic filters out small gaze jitter. A regression only counts when:
 
 ```text
-upward jump is at least 2 lines
-and gaze stays on the earlier line for at least 300ms
+the gaze moves back to an earlier line
+and stays on that earlier line for at least 300ms
 ```
 
 Interpretation:

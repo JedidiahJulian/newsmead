@@ -23,6 +23,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.newsmead.data.StudyConfig
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
@@ -55,6 +56,7 @@ class MediaPipeRawGazeSource(
     private val busy = AtomicBoolean(false)
     private var listener: LocalRawGazeSource.OnRawGaze? = null
     private var fpsListener: LocalRawGazeSource.OnFps? = null
+    private var blinkStatsListener: LocalRawGazeSource.OnBlinkStats? = null
     private var faceLandmarker: FaceLandmarker? = null
     private var cameraProvider: ProcessCameraProvider? = null
     private var stopped = true
@@ -63,6 +65,11 @@ class MediaPipeRawGazeSource(
     private var blinkState = false
     private var blinkLogCounter = 0
     private var fps = 0f
+    private var totalResults = 0L
+    private var emittedSamples = 0L
+    private var blinkDroppedFrames = 0L
+    private var noFaceFrames = 0L
+    private var lastOpenness = Float.NaN
     private var lastResultTimeMs = 0L
     private val lifecycleLock = Any()
 
@@ -72,6 +79,10 @@ class MediaPipeRawGazeSource(
 
     override fun setOnFps(listener: LocalRawGazeSource.OnFps) {
         this.fpsListener = listener
+    }
+
+    override fun setOnBlinkStats(listener: LocalRawGazeSource.OnBlinkStats) {
+        this.blinkStatsListener = listener
     }
 
     override fun start(owner: LifecycleOwner) {
@@ -179,7 +190,7 @@ class MediaPipeRawGazeSource(
 
         provider.unbindAll()
         provider.bindToLifecycle(owner, CameraSelector.DEFAULT_FRONT_CAMERA, analysis)
-        Log.i(TAG, "Local MediaPipe raw gaze source started")
+        Log.i(TAG, String.format(Locale.US, "Local MediaPipe raw gaze source started; blinkClose=%.3f blinkOpen=%.3f", StudyConfig.GAZE_BLINK_CLOSE_THRESHOLD, StudyConfig.GAZE_BLINK_OPEN_THRESHOLD))
     }
 
     private fun analyze(imageProxy: ImageProxy) {
@@ -210,20 +221,32 @@ class MediaPipeRawGazeSource(
 
     private fun onFaceLandmarkerResult(result: FaceLandmarkerResult, input: MPImage) {
         busy.set(false)
+        totalResults += 1
         updateFps()
         fpsListener?.onFps(fps)
         val face = result.faceLandmarks().firstOrNull()
         if (face == null) {
+            noFaceFrames += 1
+            emitBlinkStats()
             Log.d(TAG, "No face landmarks")
             return
         }
-        if (face.size <= MIN_REQUIRED_LANDMARK_INDEX) return
+        if (face.size <= MIN_REQUIRED_LANDMARK_INDEX) {
+            noFaceFrames += 1
+            emitBlinkStats()
+            return
+        }
 
         // Drop blink frames: during a blink the iris/eyelid landmarks are
         // unreliable, so the gaze feature would be garbage. Matches the prototype,
         // which dropped blink frames before storing/mapping calibration samples.
         val openness = computeOpenness(face, input.width, input.height)
-        if (updateBlink(openness)) return
+        lastOpenness = openness
+        if (updateBlink(openness)) {
+            blinkDroppedFrames += 1
+            emitBlinkStats()
+            return
+        }
 
         val leftIris = center(face, LEFT_IRIS)
         val rightIris = center(face, RIGHT_IRIS)
@@ -231,9 +254,10 @@ class MediaPipeRawGazeSource(
         if (++resultCount % RAW_LOG_INTERVAL == 0) {
             Log.d(TAG, String.format(Locale.US, "raw gaze=(%.4f, %.4f) fps=%.1f", gaze[0], gaze[1], fps))
         }
+        emittedSamples += 1
+        emitBlinkStats()
         listener?.onRawGaze(gaze[0], gaze[1], System.currentTimeMillis())
     }
-
     /** Average (normalized) position over a contiguous landmark range. */
     private fun center(lm: List<NormalizedLandmark>, range: IntRange): FloatArray {
         var x = 0f
@@ -295,23 +319,35 @@ class MediaPipeRawGazeSource(
 
     /**
      * Blink state with hysteresis: enter the blink state when openness falls below
-     * [BLINK_CLOSE], and leave it only when openness rises back above [BLINK_OPEN].
+     * the configured close threshold, and leave it only when openness rises back above the open threshold.
      * The dead-band between the two stops the state chattering when openness hovers
      * near a single threshold. Returns true while a blink is in progress.
      */
     private fun updateBlink(openness: Float): Boolean {
         val prev = blinkState
         blinkState = when {
-            openness < BLINK_CLOSE -> true
-            openness > BLINK_OPEN -> false
+            openness < StudyConfig.GAZE_BLINK_CLOSE_THRESHOLD -> true
+            openness > StudyConfig.GAZE_BLINK_OPEN_THRESHOLD -> false
             else -> blinkState
         }
         if (blinkState != prev || ++blinkLogCounter % RAW_LOG_INTERVAL == 0) {
-            Log.d(TAG, String.format(Locale.US, "open=%.3f blink=%b", openness, blinkState))
+            Log.d(
+                TAG,
+                String.format(
+                    Locale.US,
+                    "open=%.3f blink=%b close=%.3f openTh=%.3f drop=%d emit=%d noFace=%d",
+                    openness,
+                    blinkState,
+                    StudyConfig.GAZE_BLINK_CLOSE_THRESHOLD,
+                    StudyConfig.GAZE_BLINK_OPEN_THRESHOLD,
+                    blinkDroppedFrames,
+                    emittedSamples,
+                    noFaceFrames,
+                ),
+            )
         }
         return blinkState
     }
-
     private fun ImageProxy.toBitmapArgb8888(): Bitmap {
         val plane = planes[0]
         val buffer = plane.buffer
@@ -328,7 +364,20 @@ class MediaPipeRawGazeSource(
             Bitmap.createBitmap(rowBitmap, 0, 0, width, height)
         }
     }
-
+    private fun emitBlinkStats() {
+        blinkStatsListener?.onBlinkStats(
+            LocalRawGazeSource.BlinkStats(
+                totalResults = totalResults,
+                emittedSamples = emittedSamples,
+                blinkDroppedFrames = blinkDroppedFrames,
+                noFaceFrames = noFaceFrames,
+                lastOpenness = lastOpenness,
+                blink = blinkState,
+                closeThreshold = StudyConfig.GAZE_BLINK_CLOSE_THRESHOLD,
+                openThreshold = StudyConfig.GAZE_BLINK_OPEN_THRESHOLD,
+            )
+        )
+    }
     private fun nextTimestampMs(): Long {
         val now = System.currentTimeMillis()
         val next = if (now <= lastTimestampMs) lastTimestampMs + 1 else now
@@ -385,15 +434,6 @@ class MediaPipeRawGazeSource(
         private const val EYE2_CORNER_B = 362
         private const val EYE2_LID_TOP = 386
         private const val EYE2_LID_BOTTOM = 374
-
-        // Blink hysteresis thresholds on the eye aspect ratio (openness): enter
-        // blink below BLINK_CLOSE, leave blink above BLINK_OPEN. Tuned on the A56
-        // (center gaze >0.30, look-down floor ~0.07, hard-blink floor ~0.01); both
-        // sit between the blink floor and the look-down floor so a real blink
-        // triggers but looking down (reading the bottom of the page) does not.
-        private const val BLINK_CLOSE = 0.04f
-        private const val BLINK_OPEN = 0.055f
-
         private const val MIN_REQUIRED_LANDMARK_INDEX = 477
     }
 }

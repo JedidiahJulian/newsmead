@@ -55,4 +55,12 @@ object StudyConfig {
      * to false only after the local MediaPipe/iris raw source is wired.
      */
     const val GAZE_TOUCH_VALIDATION = false
+
+    /**
+     * Blink filtering thresholds for the local MediaPipe gaze source. Openness is
+     * the eye-aspect ratio: lower values mean the eyelids are closer together.
+     * Hysteresis avoids flicker: enter blink below close, leave above open.
+     */
+    const val GAZE_BLINK_CLOSE_THRESHOLD = 0.04f
+    const val GAZE_BLINK_OPEN_THRESHOLD = 0.055f
 }

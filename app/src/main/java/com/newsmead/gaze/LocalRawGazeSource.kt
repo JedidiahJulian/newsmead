@@ -17,8 +17,25 @@ interface LocalRawGazeSource {
         fun onFps(fps: Float)
     }
 
+    data class BlinkStats(
+        val totalResults: Long,
+        val emittedSamples: Long,
+        val blinkDroppedFrames: Long,
+        val noFaceFrames: Long,
+        val lastOpenness: Float,
+        val blink: Boolean,
+        val closeThreshold: Float,
+        val openThreshold: Float,
+    )
+
+    /** Optional monitor for blink filtering and landmark-drop diagnostics. */
+    fun interface OnBlinkStats {
+        fun onBlinkStats(stats: BlinkStats)
+    }
+
     fun setOnRawGaze(listener: OnRawGaze)
     fun setOnFps(listener: OnFps) {}
+    fun setOnBlinkStats(listener: OnBlinkStats) {}
     fun start(owner: LifecycleOwner)
     fun stop()
 }

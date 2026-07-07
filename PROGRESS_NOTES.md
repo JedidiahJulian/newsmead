@@ -46,6 +46,8 @@ this is NOT a ceiling - newsmead was still diverging. Gaze-test UX: per-point
 error now shown on-screen (numeric + yellow estimate dot + miss line); fixed the
 article toolbar so Read Aloud no longer overlaps the new test button.
 
+
+Follow-up (same day) - blink threshold configurability + accuracy diagnostics: moved the MediaPipe blink hysteresis thresholds out of hardcoded source constants into `StudyConfig.GAZE_BLINK_CLOSE_THRESHOLD` / `GAZE_BLINK_OPEN_THRESHOLD` (defaults remain 0.04 / 0.055). Added `LocalRawGazeSource.BlinkStats` so the raw source reports emitted samples, blink-dropped frames, no-face frames, last openness, blink state, and active thresholds. `GazeTestActivity` now logs these as per-point and whole-run deltas in `GazeStage3`, alongside signed `dx/dy`, so accuracy runs can show whether poor results came from bias, false blink filtering, missing landmarks, or low usable sample count.
 Found + fixed the last calibration divergence: `GazeCalibrationActivity` was
 collecting differently from the prototype - COLLECT_MS 2500 (proto 1000),
 MIN_SAMPLES 5 (proto 10), and MAD outlier rejection (`robustCenter`) instead of a
@@ -294,7 +296,7 @@ Added `ReadingStateInferencer` in `com.newsmead.gaze` and wired it at the existi
 
 Extended `ReadingStateInferencer` with a composite RSI score logged through `GazeRSI`: `score`, normalized `reg`, `dwell`, `fix`, and raw `events=fN/dNms/rN`. The score is a reading-effort signal, not a comprehension grade.
 
-Adjusted regression detection to reduce false positives from gaze jitter: an upward move now only counts as a regression when it jumps at least 2 lines back and remains on the earlier line for 300ms. Brief upward bounces are ignored.
+Adjusted regression detection to reduce false positives from gaze jitter: a backward move counts as a regression only after gaze remains on the earlier line for 300ms. Brief upward bounces are ignored. Later follow-up changed the anchor from the immediately previous line to the highest line reached, so confirmed one-line rereads are caught while duplicate counts during the same backward episode are suppressed.
 
 Added targeted JVM coverage for sustained regressions, ignored upward bounces, and the composite score. Verified:
 

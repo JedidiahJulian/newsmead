@@ -23,6 +23,7 @@ class ReadingStateInferencer(
     private var regressionCount = 0
     private var maxLineReached = -1
     private var pendingRegression: PendingRegression? = null
+    private var inRegressionEpisode = false
 
     fun onLine(lineIndex: Int, lineCount: Int, timestampMs: Long = System.currentTimeMillis()) {
         if (lineIndex < 0 || lineCount <= 0) return
@@ -30,7 +31,11 @@ class ReadingStateInferencer(
         if (sessionStartedAtMs == null) {
             sessionStartedAtMs = timestampMs
         }
+        val highWaterBeforeSample = maxLineReached
         maxLineReached = maxOf(maxLineReached, lineIndex)
+        if (lineIndex >= highWaterBeforeSample && highWaterBeforeSample >= 0) {
+            inRegressionEpisode = false
+        }
 
         listener.onLineSample(LineSample(lineIndex, lineCount, timestampMs))
 
@@ -55,7 +60,7 @@ class ReadingStateInferencer(
         if (dwellMs >= minDwellMs) {
             emitDwell(currentLine, activeLineCount, activeStartedAtMs, dwellMs)
         }
-        updatePendingRegression(currentLine, lineIndex, timestampMs)
+        updatePendingRegression(highWaterBeforeSample, lineIndex, timestampMs)
 
         startLine(lineIndex, lineCount, timestampMs)
         emitScore(timestampMs)
@@ -103,13 +108,14 @@ class ReadingStateInferencer(
 
     private fun emitRegression(fromLine: Int, toLine: Int, timestampMs: Long) {
         regressionCount += 1
+        inRegressionEpisode = true
         listener.onRegression(RegressionEvent(fromLine, toLine, timestampMs))
     }
 
-    private fun updatePendingRegression(fromLine: Int, toLine: Int, timestampMs: Long) {
+    private fun updatePendingRegression(highWaterLine: Int, toLine: Int, timestampMs: Long) {
         pendingRegression =
-            if (fromLine - toLine >= regressionMinLineJump) {
-                PendingRegression(fromLine, toLine, timestampMs)
+            if (!inRegressionEpisode && highWaterLine - toLine >= regressionMinLineJump) {
+                PendingRegression(highWaterLine, toLine, timestampMs)
             } else {
                 null
             }
@@ -198,7 +204,7 @@ class ReadingStateInferencer(
         const val DEFAULT_FIXATION_THRESHOLD_MS = 300L
         const val DEFAULT_MIN_DWELL_MS = 120L
         const val DEFAULT_REGRESSION_CONFIRM_MS = 300L
-        const val DEFAULT_REGRESSION_MIN_LINE_JUMP = 2
+        const val DEFAULT_REGRESSION_MIN_LINE_JUMP = 1
         const val EXPECTED_FIXATIONS_PER_MINUTE = 120.0
         const val REGRESSION_WEIGHT = 0.40
         const val DWELL_WEIGHT = 0.35
