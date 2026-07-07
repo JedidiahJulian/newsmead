@@ -41,6 +41,9 @@
         <activity
             android:name=".activities.GazeCalibrationActivity"
             android:exported="true" />
+        <activity
+            android:name=".activities.GazeTestActivity"
+            android:exported="true" />
     </application>
 
 </manifest>

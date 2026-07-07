@@ -12,7 +12,13 @@ interface LocalRawGazeSource {
         fun onRawGaze(gazeX: Float, gazeY: Float, timestampMs: Long)
     }
 
+    /** Optional monitor of the tracker's processing frame rate (results/sec). */
+    fun interface OnFps {
+        fun onFps(fps: Float)
+    }
+
     fun setOnRawGaze(listener: OnRawGaze)
+    fun setOnFps(listener: OnFps) {}
     fun start(owner: LifecycleOwner)
     fun stop()
 }

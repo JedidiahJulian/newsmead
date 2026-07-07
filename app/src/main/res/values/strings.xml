@@ -124,6 +124,15 @@
     <string name="article_translate_btn">Filipino</string>
     <string name="article_read_aloud_btn">Read Aloud</string>
     <string name="article_calibrate_gaze">Run gaze calibration</string>
+    <string name="article_gaze_test">Run gaze accuracy test</string>
+    <!-- gaze accuracy test (ported Stage 3) -->
+    <string name="gaze_test_hint">Look around - the dot should follow your gaze</string>
+    <string name="gaze_test_no_calibration">No calibration found. Run calibration first.</string>
+    <string name="gaze_test_fit_failed">Calibration fit failed. Re-run calibration.</string>
+    <string name="gaze_test_run_accuracy">Run Accuracy Test</string>
+    <string name="gaze_test_accuracy_progress">Accuracy %1$d / %2$d - look at the ring</string>
+    <string name="gaze_test_point_result">Point %1$d / %2$d:  err %3$.0f px   vert %4$.0f px</string>
+    <string name="gaze_test_accuracy_result">Median error: %1$.0f px (%2$.2f cm)\nVertical: %3$.0f px (%4$.2f cm)</string>
     <string name="article_save_to_list_btn">Save to List</string>
     <string name="article_by">by</string>
     <string name="article_show_more_btn">Show more from AUTHOR</string>

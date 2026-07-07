@@ -26,6 +26,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
 import com.newsmead.R
 import com.newsmead.activities.GazeCalibrationActivity
+import com.newsmead.activities.GazeTestActivity
 import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.DatabaseHelper
@@ -58,6 +59,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var language = "english"
     private var gazeProvider: GazeProvider? = null
     private var articleGazeSink: GazeProvider.OnGaze? = null
+    private var gazeOverlay: GazeOverlayView? = null
     private var launchedCalibration = false
     private var rsiInferencer: ReadingStateInferencer? = null
     private enum class ColorMode { LIGHT, DARK, SEPIA }
@@ -251,6 +253,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
         binding.btnRunGazeCalibration.setOnClickListener {
             launchGazeCalibration()
+        }
+
+        binding.btnRunGazeTest.setOnClickListener {
+            launchGazeTest()
         }
 
         // Show more button to show more articles from source
@@ -453,6 +459,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
         rsiInferencer?.flush()
         gazeProvider?.stop()
+        gazeOverlay = null
         super.onDestroy()
     }
 
@@ -471,6 +478,15 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         gazeProvider?.stop()
         gazeProvider = null
         startActivity(Intent(requireContext(), GazeCalibrationActivity::class.java))
+    }
+
+    /** Stop live gaze (frees the camera), open the accuracy test, resume on return. */
+    private fun launchGazeTest() {
+        launchedCalibration = true
+        rsiInferencer?.flush()
+        gazeProvider?.stop()
+        gazeProvider = null
+        startActivity(Intent(requireContext(), GazeTestActivity::class.java))
     }
 
     private fun restartLiveGazeAfterCalibration() {
@@ -563,6 +579,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         if (!StudyConfig.GAZE_ENABLED) return
 
         val overlay = GazeOverlayView(requireContext())
+        gazeOverlay = overlay
         (binding.root as ViewGroup).addView(
             overlay,
             ConstraintLayout.LayoutParams(0, 0).apply {
@@ -648,9 +665,11 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             return
         }
         try {
+            val rawSource = LocalGazeSources.create(requireContext())
+            rawSource.setOnFps { fps -> activity?.runOnUiThread { gazeOverlay?.setFps(fps) } }
             val provider = LocalCalibratedGazeProvider(
                 mapper = GazeMapper(samples),
-                rawSource = LocalGazeSources.create(requireContext()),
+                rawSource = rawSource,
             )
             provider.setOnGaze { x, y -> activity?.runOnUiThread { onGaze.onGaze(x, y) } }
             provider.start(viewLifecycleOwner)

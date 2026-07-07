@@ -1,5 +1,62 @@
 # NewsMead — Progress Notes
 
+## 2026-07-07 — Align MediaPipe gaze feature with the prototype
+
+Reworked `gaze/MediaPipeRawGazeSource.kt` to match the sister-repo prototype's
+`FaceLandmarkerHelper` feature extraction: front-camera frame is now mirrored
+(`postScale(-1,1)` in `uprightMirrored`), each iris is paired to its nearer eye
+via the `frac`-based corner/eyelid feature (iris rings 468..472 / 473..477), and
+blink frames are dropped via eye-aspect-ratio openness with hysteresis
+(BLINK_CLOSE 0.04 / BLINK_OPEN 0.055) before `onRawGaze` emits. Calibration and
+live gaze share this source, so both benefit and stay self-consistent. Raw gaze
+feature values are NOT comparable to the pre-change ones — recalibrate.
+
+Follow-up (same day) — fixed low FPS / lost vertical accuracy: `MediaPipeRawGazeSource`
+was running CPU inference on an uncapped-resolution stream with no FPS floor, so it
+ran far below real time and starved the median/One Euro smoothing. Ported the
+prototype's Stage 1 camera profile: GPU delegate with CPU fallback, 480x360 analysis
+resolution, and `CONTROL_AE_TARGET_FPS_RANGE` pinned to 30. Also switched
+`detectAsync` to the monotonic `nextTimestampMs()` (avoids MediaPipe timestamp
+collisions at 30 fps). Added an FPS readout: `LocalRawGazeSource.OnFps` callback
+surfaced from the source, shown top-right on the calibration screen (`fpsText`) and
+top-left on the article `GazeOverlayView` during live reading.
+Verified `:app:compileDebugKotlin` passes. NOTE: CLI kapt fails on JDK 21 without
+`--add-opens jdk.compiler/...`; build in Android Studio or add those to
+`gradle.properties` `org.gradle.jvmargs`.
+
+Follow-up (same day) — crash fix + gaze test. On-device: repeated native SIGBUS in
+`libmediapipe_tasks_vision_jni.so` (~75-90s in). Bumped MediaPipe tasks-vision
+0.10.14 -> 0.10.29 (matches prototype, which crashed far less); crash gone in
+testing. Diagnosed "dot stuck at top": logcat of live raw feature shows gaze_y
+varies fine (0.19-0.38) and mapped Y sweeps full screen (108-2207) on deliberate
+up/down, but median gaze_y in reading ~0.33 (upper part of calib range) so the dot
+biases high during natural reading — this is the inherent appearance-based limit,
+not a mapper bug. Ported the prototype's Stage 3 accuracy test as
+`GazeTestActivity` (+ `GazeDotView`, `activity_gaze_test.xml`, `gaze_test_*`
+strings): live calibrated dot on a blank screen + 3x3 (20/50/80%) benchmark that
+logs median + vertical error (px/cm) under tag `GazeStage3`. Launch via the new
+dot button next to the calibrate button in the article toolbar (needs calibration
+first). Diagnostic raw-gaze logging added to `MediaPipeRawGazeSource` (tag
+`MediaPipeGaze`, every 15 frames).
+
+Measured accuracy (A56, MediaPipe on-device path, 3 runs): vertical median
+0.67-1.01 cm, overall median 1.68-2.42 cm; horizontal poor/right-shifted. James
+reports the prototype gets ~0.7 cm CONSISTENTLY with this same adopted logic, so
+this is NOT a ceiling - newsmead was still diverging. Gaze-test UX: per-point
+error now shown on-screen (numeric + yellow estimate dot + miss line); fixed the
+article toolbar so Read Aloud no longer overlaps the new test button.
+
+Found + fixed the last calibration divergence: `GazeCalibrationActivity` was
+collecting differently from the prototype - COLLECT_MS 2500 (proto 1000),
+MIN_SAMPLES 5 (proto 10), and MAD outlier rejection (`robustCenter`) instead of a
+plain component-wise median. Since the mapper is only as good as its calibration
+points, aligned all three to the prototype (1000 ms, 10 samples, plain median;
+removed robustCenter/OUTLIER_K). MUST RECALIBRATE for this to take effect, then
+re-run the accuracy test. If still short, next suspect is the live provider blink
+handling: prototype `MediaPipeGazeProvider` resets the median filter on
+blink-reopen; newsmead drops blinks at the source and doesn't reset - not yet
+ported.
+
 ## 2026-07-01 — Bypass login gate for thesis research-instrument use
 
 **Context:** NewsMead is being repurposed as a research instrument for a thesis

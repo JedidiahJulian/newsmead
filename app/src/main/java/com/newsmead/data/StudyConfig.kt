@@ -40,7 +40,7 @@ object StudyConfig {
      */
     const val ARTICLE_FONT_SIZE_DP = 22f
 
-    // ---- Stage 4: gaze AOI mapping (article reading screen) ----
+    // ---- Stage 4: gaze AOI mapping (article reading screen)  ----
 
     /**
      * Attach the debug gaze layer to the article screen: the line-AOI mapper

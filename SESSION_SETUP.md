@@ -43,9 +43,16 @@ This is the **gaze-prototype** repo's script (NOT this repo — NewsMead has no
 Python), run on the machine with the webcam:
 ```
 cd C:\Users\USER\OneDrive\Desktop\gaze-thesis-prototype
+$env:PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"   # PowerShell; once per terminal
 python tools\gazefollower_stream.py --phone-ip <PHONE_IP> --port 5005
 ```
-(Needs `python -m pip install -r tools\gazefollower-requirements.txt` on that machine.)
+- Needs `python -m pip install -r tools\gazefollower-requirements.txt` on that
+  machine (protobuf must be **4.25.x** — mediapipe 0.10.18 needs `protobuf<5,>=4.25.3`).
+- The `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` line is required because
+  TensorFlow 2.10 (also installed) and mediapipe want incompatible protobuf
+  versions; pure-Python protobuf lets both load, and it does NOT slow gaze
+  streaming (protobuf isn't in the per-frame path). cmd.exe form:
+  `set PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python`.
 Flow: a camera preview opens (confirm it sees the face; close it) → **laptop
 calibration dots** (participant looks at each) → streaming begins. A `[heartbeat]`
 line should print a sample rate (~/s). Leave this running the whole session.

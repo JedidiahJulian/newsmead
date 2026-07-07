@@ -17,7 +17,6 @@ import com.newsmead.gaze.CalibrationStore
 import com.newsmead.gaze.LocalGazeSources
 import com.newsmead.gaze.LocalRawGazeSource
 import java.util.Locale
-import kotlin.math.abs
 
 /**
  * Full-screen 16-dot gaze calibration. Gaze arrives from the local phone-side raw
@@ -49,6 +48,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
         enableImmersiveMode()
         rawGazeSource = LocalGazeSources.create(this).also { source ->
             source.setOnRawGaze { x, y, _ -> runOnUiThread { onSample(x, y) } }
+            source.setOnFps { fps -> runOnUiThread { showFps(fps) } }
             source.start(this)
         }
 
@@ -65,8 +65,13 @@ class GazeCalibrationActivity : AppCompatActivity() {
         rawGazeSource?.stop()
         rawGazeSource = LocalGazeSources.create(this).also { source ->
             source.setOnRawGaze { x, y, _ -> runOnUiThread { onSample(x, y) } }
+            source.setOnFps { fps -> runOnUiThread { showFps(fps) } }
             source.start(this)
         }
+    }
+
+    private fun showFps(fps: Float) {
+        binding.fpsText.text = String.format(Locale.US, "%.0f fps", fps)
     }
 
     override fun onRequestPermissionsResult(
@@ -131,17 +136,16 @@ class GazeCalibrationActivity : AppCompatActivity() {
             return
         }
 
-        val center = robustCenter(samplesX, samplesY)
-        val gazeX = center[0]
-        val gazeY = center[1]
+        val gazeX = median(samplesX)
+        val gazeY = median(samplesY)
         val p = points[currentIndex]
         pairs.add(CalibrationSample(p.x, p.y, gazeX, gazeY))
         Log.i(
             TAG,
             String.format(
                 Locale.US,
-                "pair %d/%d: screen=(%.0f, %.0f) gaze=(%.4f, %.4f) n=%d used=%d",
-                currentIndex + 1, points.size, p.x, p.y, gazeX, gazeY, samplesX.size, center[2].toInt(),
+                "pair %d/%d: screen=(%.0f, %.0f) gaze=(%.4f, %.4f) n=%d",
+                currentIndex + 1, points.size, p.x, p.y, gazeX, gazeY, samplesX.size,
             ),
         )
 
@@ -161,31 +165,6 @@ class GazeCalibrationActivity : AppCompatActivity() {
         if (collecting) {
             samplesX.add(fx)
             samplesY.add(fy)
-        }
-    }
-
-    /**
-     * Robust center of the collected samples: median, then drop samples far from
-     * it (blinks/transients that spike the gaze) and re-median the inliers.
-     * Returns [x, y, inlierCount].
-     */
-    private fun robustCenter(xs: List<Float>, ys: List<Float>): FloatArray {
-        val mx = median(xs)
-        val my = median(ys)
-        val dists = xs.indices.map { abs(xs[it] - mx) + abs(ys[it] - my) }
-        val mad = median(dists).coerceAtLeast(1e-6f)
-        val inX = ArrayList<Float>()
-        val inY = ArrayList<Float>()
-        for (i in xs.indices) {
-            if (dists[i] <= OUTLIER_K * mad) {
-                inX.add(xs[i])
-                inY.add(ys[i])
-            }
-        }
-        return if (inX.size >= MIN_SAMPLES / 2) {
-            floatArrayOf(median(inX), median(inY), inX.size.toFloat())
-        } else {
-            floatArrayOf(mx, my, xs.size.toFloat())
         }
     }
 
@@ -213,11 +192,10 @@ class GazeCalibrationActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "GazeCalib"
         private const val SETTLE_MS = 800L
-        private const val COLLECT_MS = 2500L
+        private const val COLLECT_MS = 1000L
         private const val RETRY_PAUSE_MS = 400L
-        private const val MIN_SAMPLES = 5
+        private const val MIN_SAMPLES = 10
         private const val MARGIN_FRAC = 0.1f
-        private const val OUTLIER_K = 3.0f // reject samples > K x median-abs-deviation
         private const val CAMERA_PERMISSION_REQUEST = 4104
     }
 }
