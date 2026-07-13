@@ -46,6 +46,7 @@ import com.newsmead.models.Article
 import com.newsmead.models.SavedList
 import com.newsmead.recyclerviews.feed.ArticleSimplifiedAdapter
 import com.newsmead.recyclerviews.feed.clickListener
+import com.newsmead.gaze.WordHighlighter
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -592,15 +593,22 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         overlay.bringToFront()
         overlay.translationZ = 1000f
         val mapper = LineAoiMapper(binding.tvArticleText)
+        val wordHighlighter = WordHighlighter(binding.tvArticleText)
         rsiInferencer = createRsiInferencer()
 
         // Single gaze entry point (full-screen px). Both the touch-validation
         // source and the local calibrated gaze provider feed through here.
         val onGaze = GazeProvider.OnGaze { x, y ->
+
             overlay.setGazeScreen(x, y)
+
+            wordHighlighter.update(x, y)
+
             val line = mapper.lineAt(y)
             val lineCount = mapper.lineCount
+
             Log.d("GazeAOI", "gaze=(${x.toInt()},${y.toInt()}) line=$line/$lineCount")
+
             rsiInferencer?.onLine(line, lineCount)
         }
 
