@@ -38,7 +38,7 @@ Important files:
 - `MediaPipeGazeProvider.kt` - live camera-to-gaze pipeline
 - `Stage3GazeActivity.kt` - live gaze dot and accuracy benchmark
 - `PROGRESS.md` - chronological device testing and decision log
-- `context.md` - original staged build specification
+- `docs/build-context.md` - original staged build specification
 
 ## Runtime Flow
 

@@ -270,9 +270,9 @@ session). Launched with
 NOTE: `GazeCalibrationActivity` must be `android:exported="true"` — Android 16 /
 One UI on the A56 blocks adb from starting non-exported activities (confirmed:
 `SecurityException: not exported`). Verified launching on-device. Full runbook:
-**SESSION_SETUP.md**.
+**docs/session-setup.md**.
 
-**End-to-end live test — PASSED (A56, 2026-07-02):** per SESSION_SETUP.md, all
+**End-to-end live test — PASSED (A56, 2026-07-02):** per docs/session-setup.md, all
 steps 1–6 confirmed by James (laptop stream → phone calibration → live
 gaze-to-line on the article, scroll-aware, no socket leak on re-entry).
 Manifest fix required along the way: `GazeCalibrationActivity` set
@@ -306,13 +306,13 @@ Added targeted JVM coverage for sustained regressions, ignored upward bounces, a
 
 Result: BUILD SUCCESSFUL.
 
-Added `RSI_README.md` with score ranges, raw metric meanings, interpretation examples, and calibration/noise caveats. `README.md` now links to the RSI guide from the Stage 5 section.
+Added `docs/reading-stability-index.md` with score ranges, raw metric meanings, interpretation examples, and calibration/noise caveats. `README.md` now links to the RSI guide from the Stage 5 section.
 
 ---
 
 ## 2026-07-06 - Local 16-point MediaPipe gaze integration, no backend/Wi-Fi
 
-**Context:** `specs.md` was updated to remove the backend/Wi-Fi gaze path and require Stage 4/5 to depend only on the `GazeProvider` boundary. Stage 3 remains accuracy-limited, but the app now runs the gaze stack locally on the phone.
+**Context:** `docs/implementation-spec.md` was updated to remove the backend/Wi-Fi gaze path and require Stage 4/5 to depend only on the `GazeProvider` boundary. Stage 3 remains accuracy-limited, but the app now runs the gaze stack locally on the phone.
 
 ### What changed
 - Removed the live UDP/Wi-Fi gaze path from source:

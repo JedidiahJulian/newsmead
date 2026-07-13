@@ -1,4 +1,4 @@
-﻿# Gaze Implementation Guide
+# Gaze Implementation Guide
 
 This document explains the gaze-tracking implementation terms used in the NewsMead prototype.
 
@@ -178,7 +178,7 @@ app/src/main/java/com/newsmead/gaze/ReadingStateInferencer.kt
 More detail:
 
 ```text
-RSI_README.md
+docs/reading-stability-index.md
 ```
 
 ## Debug Views

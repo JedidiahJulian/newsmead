@@ -49,7 +49,7 @@ This means:
 
 Each teammate tests acceptance criteria independently on their own
 device. If results diverge significantly between devices, this is
-itself a finding — record it in PROGRESS_NOTES.md rather than
+itself a finding — record it in docs/progress-notes.md rather than
 silently picking one number.
 
 **Tech baseline (current, NewsMead repo):** Kotlin, `GazeProvider` interface backed by a GazeFollower WiFi bridge (Python backend on a co-located laptop). *(Historical Stage 1-3 tech baseline was CameraX + MediaPipe Face Landmarker + Apache Commons Math — no longer active; see gaze-prototype repo.)*

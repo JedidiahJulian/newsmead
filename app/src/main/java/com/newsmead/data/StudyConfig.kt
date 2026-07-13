@@ -5,7 +5,7 @@ package com.newsmead.data
  * (no real users, no backend). Flip these back to false to restore the original
  * production behaviour.
  *
- * See PROGRESS_NOTES.md for the full context and the study_articles.json schema.
+ * See docs/progress-notes.md for the full context and the study_articles.json schema.
  */
 object StudyConfig {
 

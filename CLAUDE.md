@@ -74,9 +74,9 @@ a research instrument for a separate gaze-driven adaptive reading
 thesis. This is someone else's existing codebase we're extending,
 not rewriting — surgical changes only.
 
-## Gaze tracker — resolved, see context.md
+## Gaze tracker — resolved, see docs/build-context.md
 Tracker selection is DONE (GazeFollower, WiFi bridge). See the
-STATUS UPDATE at the top of context.md for the full investigation
+STATUS UPDATE at the top of docs/build-context.md for the full investigation
 and what's still active (Stage 4-5) vs. historical (Stage 1-3).
 
 ## Study modifications made so far
@@ -103,10 +103,10 @@ Open questions before this can be completed:
   be stable, see StudyConfig.kt)
 
 ## Read before starting any work
-- PROGRESS_NOTES.md — what's been done in THIS repo specifically.
+- docs/progress-notes.md — what's been done in THIS repo specifically.
   A teammate using Codex may have worked here since your last
   session. Read this first every session.
-- context.md — the detailed build spec (Stage 4-5 are the active
+- docs/build-context.md — the detailed build spec (Stage 4-5 are the active
   work here; Stages 1-3 are historical, see its STATUS UPDATE)
 - StudyConfig.kt — all study-specific flags in one place
 
@@ -121,5 +121,5 @@ frame rates).
 - Groupmate: TBD
 
 ## After finishing any work session
-Update PROGRESS_NOTES.md with what was completed, decided, and
+Update docs/progress-notes.md with what was completed, decided, and
 what the next session needs to know. Keep it to 1-3 lines.
