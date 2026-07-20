@@ -31,6 +31,23 @@ Higher RSI means the system detected more reading effort. Lower RSI means the re
 
 Use the score as a flag for review. A high score tells the researcher to inspect the raw `GazeRSI` events and the calibration quality.
 
+## Cumulative RSI Versus Adaptive Stability
+
+The GazeRSI score described in this document is cumulative from the beginning of
+the reading session and remains the value used for session reporting. It is not
+used directly to select visual scaffold levels because an early difficult
+episode could keep a cumulative score elevated after the reader recovers.
+
+The adaptive interface instead derives recent regression, dwell, and fixation
+rates from cumulative-counter deltas inside a 10-second window. These recent
+metrics are normalized against a participant-relative baseline, combined with
+the same weights, and smoothed before the scaffold controller sees them.
+
+The current app automatically collects a 20-second per-article baseline as an
+engineering fallback. The manuscript calls for a separate standardized baseline
+phase; that profile still needs to be carried into the experimental articles
+before main data collection. See adaptive-visual-scaffolding.md.
+
 ## How The Score Is Computed
 
 The current implementation combines three normalized components:

@@ -181,6 +181,26 @@ More detail:
 docs/reading-stability-index.md
 ```
 
+## Adaptive Visual Scaffolding
+
+The cumulative RSI remains available for session reporting. Visible adaptation
+uses a separate recent-window estimator so support can rise during instability
+and fall after recovery. It learns a participant-relative baseline, retains only
+positive metric deviations, applies the same 0.40/0.35/0.25 weights, smooths the
+result, and sends it to a conservative level controller.
+
+The controller implements manuscript Section 4.3.5:
+
+- word highlight;
+- current-line emphasis;
+- five-line focus window;
+- last-stable-line re-entry cue.
+
+Only one level is active at a time. Escalation and withdrawal require
+persistence, and low gaze confidence clears support instead of escalating on
+noise. See adaptive-visual-scaffolding.md for the architecture, current
+parameters, forced validation modes, and required research decisions.
+
 ## Debug Views
 
 The app has debug overlays for validating gaze behavior:
@@ -190,7 +210,9 @@ app/src/main/java/com/newsmead/gaze/GazeOverlayView.kt
 app/src/main/java/com/newsmead/gaze/GazeDotView.kt
 ```
 
-These show the estimated gaze point and, during testing, target points.
+These show the optional estimated gaze point/FPS diagnostics and the participant
+scaffolds. Debug visuals are controlled separately from scaffolding so the gaze
+dot is not shown during participant-facing sessions.
 
 ## Important Accuracy Caveats
 

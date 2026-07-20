@@ -1,5 +1,10 @@
 # Stage 4, Stage 5, and 16-Point Calibration Specs
 
+> **Current status (2026-07-20):** Stages 4 and 5 are implemented, and the
+> manuscript's four-level adaptive visual scaffold is now wired to the article
+> view. The older "not implemented" statements below are historical. Use
+> adaptive-visual-scaffolding.md for current behavior and research caveats.
+
 This document explains the current role of 16-point calibration and the planned Stage 4 and Stage 5 work in the gaze thesis prototype.
 
 Current status:

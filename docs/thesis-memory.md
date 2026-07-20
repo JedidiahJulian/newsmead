@@ -149,7 +149,39 @@ Important behavior:
 
 Touch validation also exists. When `GAZE_TOUCH_VALIDATION` is true, finger position substitutes for gaze. This is useful for proving line mapping and RSI without depending on tracker accuracy.
 
-## Current Visual Overlay
+## Current Adaptive Scaffold Implementation
+
+As of 2026-07-20, all four manuscript levels are implemented and wired through
+the article's single GazeProvider callback:
+
+- Level 1 word highlighting is an overlay rectangle derived from a debounced,
+  padding-aware x/y-to-word target. The old TextView-mutating WordHighlighter is
+  deprecated and no longer wired.
+- Level 2 line emphasis draws a low-alpha full-width line anchor.
+- Level 3 draws a five-line focus window and de-emphasizes surrounding visible
+  article text.
+- Level 4 remembers the last stable line and renders that line or an up/down cue
+  after an off-text loss-of-position pattern.
+
+WindowedStabilityEstimator separates adaptation from the cumulative RSI report.
+It derives 10-second recent metrics, collects a participant-relative baseline,
+uses positive z-scores with the manuscript's 0.40/0.35/0.25 weights, and smooths
+the result. AdaptiveScaffoldController applies conservative persistence,
+one-level-at-a-time escalation/withdrawal, confidence gating, and one active
+intervention at a time. GazeOverlayView fades transitions over 400 ms.
+
+StudyConfig supports OFF, ADAPTIVE, and one forced validation mode for each
+level. The red gaze dot/FPS is now a separate debug switch and is hidden in
+participant-facing sessions.
+
+The automatic first-20-second per-article baseline and current z thresholds are
+engineering defaults. The main study still needs the manuscript's standardized
+baseline profile carried across articles and pilot-validated thresholds. Word
+accuracy, visual parameters, and the operational loss-of-position rule also need
+target-population device testing. The canonical technical and research guide is
+adaptive-visual-scaffolding.md.
+
+## Historical Visual Overlay Notes (Superseded 2026-07-20)
 
 The current overlay is:
 
@@ -167,7 +199,7 @@ It does not yet draw:
 - focus window
 - re-entry cue
 
-## Scaffolding Implementation Implication
+## Historical Scaffolding Implementation Implication
 
 The easiest and most technically aligned next scaffolding feature is current-line highlight.
 
@@ -186,7 +218,7 @@ Likely implementation:
 
 This approach is safer than modifying the `TextView` text with spans because it avoids relayout, preserves scrolling behavior, and does not mutate article content.
 
-## Manuscript Alignment Issue
+## Historical Manuscript Alignment Issue
 
 There is a terminology mismatch to decide before implementation.
 
@@ -205,7 +237,7 @@ Possible resolution:
 
 My recommendation is to implement line-by-line highlight first and align the manuscript wording around line-level scaffolding unless the thesis committee specifically requires word-level Level 1.
 
-## Word Highlighting Risk
+## Historical Word Highlighting Risk
 
 Exact word highlighting is possible in Android `TextView`, but it is a harder and less reliable feature.
 
@@ -221,7 +253,7 @@ The biggest concern is not code feasibility. The biggest concern is gaze accurac
 
 Line-level highlight is more consistent with the stated line-level accuracy goal in the repo documentation.
 
-## Practical Next Step
+## Historical Practical Next Step
 
 For the next implementation pass, add a conservative line-highlight scaffold:
 
@@ -233,4 +265,3 @@ For the next implementation pass, add a conservative line-highlight scaffold:
 - keep the feature behind `StudyConfig`
 
 This would give the project a visible adaptive scaffolding layer using the line stream already produced by the app.
-

@@ -10,6 +10,9 @@ import android.graphics.Color
 import androidx.core.content.ContextCompat
 import com.newsmead.R
 
+@Deprecated(
+    message = "Use LineAoiMapper.targetAt plus GazeOverlayView scaffold rendering; this class mutates TextView content.",
+)
 class WordHighlighter(
     private val textView: TextView
 ) {

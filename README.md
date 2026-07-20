@@ -4,7 +4,7 @@ NewsMead is an Android news-reading application repurposed as a thesis research 
 
 This README is written as a manual and study guide for understanding the implementation. It explains what was built, why each decision was made, how calibration works, how MediaPipe and the bundled model are used, how the logs should be interpreted, and how RSI is deduced from the logs.
 
-Supporting documentation lives in [docs/](docs/README.md). Start there for the thesis memory, gaze implementation guide, RSI guide, session setup, progress notes, and implementation specs.
+Supporting documentation lives in [docs/](docs/README.md). Start there for the thesis memory, gaze implementation guide, RSI guide, adaptive visual-scaffolding guide, session setup, progress notes, and implementation specs.
 
 ## Current Status
 
@@ -22,6 +22,9 @@ Implemented:
 - Debug gaze dot overlay and FPS display.
 - Stage 3 gaze accuracy test.
 - Stage 5 RSI events and composite RSI score.
+- Participant-relative rolling stability estimation for reversible adaptation.
+- Four manuscript-aligned scaffold levels: word, line, focus window, and re-entry.
+- Conservative scaffold persistence, withdrawal, confidence gating, fading, forced validation modes, and transition/recovery logs.
 - Logcat output for calibration, raw gaze diagnostics, article line AOI, accuracy testing, and RSI.
 
 Important limitation:
@@ -59,8 +62,12 @@ Phone front camera
 -> full-screen phone coordinate: x, y
 -> GazeProvider.onGaze(x, y)
 -> article TextView line AOI mapper
+-> stable line/word target
 -> ReadingStateInferencer
--> GazeAOI / GazeRSI logs
+-> WindowedStabilityEstimator
+-> AdaptiveScaffoldController
+-> GazeOverlayView
+-> GazeAOI / GazeRSI / GazeScaffold logs
 ```
 
 The important architecture boundary is `GazeProvider`:

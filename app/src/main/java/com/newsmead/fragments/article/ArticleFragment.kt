@@ -33,20 +33,25 @@ import com.newsmead.data.DatabaseHelper
 import com.newsmead.data.FirebaseHelper
 import com.newsmead.data.StudyConfig
 import com.newsmead.gaze.CalibrationStore
+import com.newsmead.gaze.AdaptiveScaffoldController
 import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.GazeOverlayView
 import com.newsmead.gaze.GazeProvider
+import com.newsmead.gaze.GazeTargetStabilizer
 import com.newsmead.gaze.LineAoiMapper
 import com.newsmead.gaze.LocalCalibratedGazeProvider
 import com.newsmead.gaze.LocalGazeSources
 import com.newsmead.gaze.ReadingStateInferencer
+import com.newsmead.gaze.ScaffoldLevel
+import com.newsmead.gaze.ScaffoldUpdate
+import com.newsmead.gaze.TextTarget
+import com.newsmead.gaze.WindowedStabilityEstimator
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.fragments.layouts.BottomSheetDialogSaveFragment
 import com.newsmead.models.Article
 import com.newsmead.models.SavedList
 import com.newsmead.recyclerviews.feed.ArticleSimplifiedAdapter
 import com.newsmead.recyclerviews.feed.clickListener
-import com.newsmead.gaze.WordHighlighter
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -63,6 +68,11 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var gazeOverlay: GazeOverlayView? = null
     private var launchedCalibration = false
     private var rsiInferencer: ReadingStateInferencer? = null
+    private var targetStabilizer: GazeTargetStabilizer? = null
+    private var stabilityEstimator: WindowedStabilityEstimator? = null
+    private var scaffoldController: AdaptiveScaffoldController? = null
+    private var currentTextTarget = TextTarget.INVALID
+    private var lastStabilityLogMs = 0L
     private enum class ColorMode { LIGHT, DARK, SEPIA }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -308,8 +318,6 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             binding.llArticleBottomButtons.visibility = View.GONE
         }
 
-        setupGazeDebug()
-
         // Loading article content from url
         lifecycleScope.launch {
             // Check if offline article
@@ -332,6 +340,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                     binding.ivSourceImage.setImageResource(R.drawable.sample_source_image)
                 }
             }
+
+            // Article text must be final before TextView line/word geometry and
+            // the participant-relative adaptation baseline begin.
+            setupGazeDebug()
 
             // Load Recommended Articles
             DataHelper.loadArticleData(context, pageSize = 7, language = language) { it ->
@@ -460,6 +472,13 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
         rsiInferencer?.flush()
         gazeProvider?.stop()
+        gazeOverlay?.clearScaffold()
+        targetStabilizer?.reset()
+        scaffoldController?.reset()
+        targetStabilizer = null
+        stabilityEstimator = null
+        scaffoldController = null
+        currentTextTarget = TextTarget.INVALID
         gazeOverlay = null
         super.onDestroy()
     }
@@ -495,7 +514,18 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         val onGaze = articleGazeSink ?: return
         gazeProvider?.stop()
         gazeProvider = null
+        resetAdaptiveReadingSession()
         attachLiveGaze(onGaze)
+    }
+
+    private fun resetAdaptiveReadingSession() {
+        targetStabilizer?.reset()
+        stabilityEstimator?.reset()
+        scaffoldController?.reset()?.let(::applyScaffoldUpdate)
+        currentTextTarget = TextTarget.INVALID
+        lastStabilityLogMs = 0L
+        rsiInferencer = createRsiInferencer()
+        Log.i("GazeScaffold", "Adaptive reading session reset after calibration/test interruption")
     }
     // Function to convert text to speech
     private fun speak(text: String) {
@@ -592,24 +622,53 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         )
         overlay.bringToFront()
         overlay.translationZ = 1000f
+        overlay.setDebugVisualsEnabled(StudyConfig.GAZE_DEBUG_VISUALS)
         val mapper = LineAoiMapper(binding.tvArticleText)
-        val wordHighlighter = WordHighlighter(binding.tvArticleText)
+        val stabilizer = GazeTargetStabilizer()
+        val estimator = WindowedStabilityEstimator(
+            windowMs = StudyConfig.SCAFFOLD_WINDOW_MS,
+            baselineDurationMs = StudyConfig.SCAFFOLD_BASELINE_DURATION_MS,
+        )
+        val controller = AdaptiveScaffoldController(
+            wordThreshold = StudyConfig.SCAFFOLD_WORD_THRESHOLD_Z,
+            lineThreshold = StudyConfig.SCAFFOLD_LINE_THRESHOLD_Z,
+            focusThreshold = StudyConfig.SCAFFOLD_FOCUS_THRESHOLD_Z,
+            reentryThreshold = StudyConfig.SCAFFOLD_REENTRY_THRESHOLD_Z,
+            minimumConfidence = StudyConfig.SCAFFOLD_MIN_GAZE_CONFIDENCE,
+            escalationPersistenceMs = StudyConfig.SCAFFOLD_ESCALATION_PERSISTENCE_MS,
+            recoveryPersistenceMs = StudyConfig.SCAFFOLD_RECOVERY_PERSISTENCE_MS,
+            forcedLevel = forcedScaffoldLevel(),
+        )
+        targetStabilizer = stabilizer
+        stabilityEstimator = estimator
+        scaffoldController = controller
         rsiInferencer = createRsiInferencer()
 
         // Single gaze entry point (full-screen px). Both the touch-validation
         // source and the local calibrated gaze provider feed through here.
         val onGaze = GazeProvider.OnGaze { x, y ->
-
+            val timestampMs = System.currentTimeMillis()
             overlay.setGazeScreen(x, y)
+            val rawTarget = mapper.targetAt(x, y)
+            val target = stabilizer.update(rawTarget, timestampMs)
+            currentTextTarget = target
+            estimator.recordGazeSample(rawTarget.isValid, timestampMs)
+            controller.onGazeTarget(target, timestampMs)
 
-            wordHighlighter.update(x, y)
+            Log.d(
+                "GazeAOI",
+                "gaze=(" + x.toInt() + "," + y.toInt() + ") rawLine=" + rawTarget.lineIndex +
+                    " stableLine=" + target.lineIndex + "/" + target.lineCount +
+                    " word=" + target.wordStart + ":" + target.wordEnd
+            )
 
-            val line = mapper.lineAt(y)
-            val lineCount = mapper.lineCount
-
-            Log.d("GazeAOI", "gaze=(${x.toInt()},${y.toInt()}) line=$line/$lineCount")
-
-            rsiInferencer?.onLine(line, lineCount)
+            if (target.isValid) {
+                rsiInferencer?.onLine(target.lineIndex, target.lineCount, timestampMs)
+            } else {
+                applyScaffoldUpdate(
+                    controller.update(estimator.currentSnapshot(timestampMs), target, timestampMs)
+                )
+            }
         }
 
         articleGazeSink = onGaze
@@ -648,8 +707,61 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                         "fix=${"%.2f".format(score.fixationComponent)} " +
                         "events=f${score.fixationCount}/d${score.totalDwellMs}ms/r${score.regressionCount}"
                 )
+                val estimator = stabilityEstimator ?: return
+                val controller = scaffoldController ?: return
+                val snapshot = estimator.onCumulativeScore(score)
+                applyScaffoldUpdate(controller.update(snapshot, currentTextTarget, score.timestampMs))
+                if (score.timestampMs - lastStabilityLogMs >= 2_000L) {
+                    lastStabilityLogMs = score.timestampMs
+                    Log.d(
+                        "GazeScaffold",
+                        String.format(
+                            Locale.US,
+                            "index=%.2f raw=%.2f confidence=%.2f baselineReady=%s " +
+                                "metrics=reg%.1f/min,dwell%.2f,fix%.1f/min",
+                            snapshot.smoothedIndex,
+                            snapshot.rawIndex,
+                            snapshot.confidence,
+                            snapshot.baselineReady,
+                            snapshot.metrics.regressionRatePerMinute,
+                            snapshot.metrics.dwellRatio,
+                            snapshot.metrics.fixationRatePerMinute,
+                        )
+                    )
+                }
             }
         })
+
+    private fun applyScaffoldUpdate(update: ScaffoldUpdate) {
+        gazeOverlay?.setScaffoldState(binding.tvArticleText, update.state)
+        update.transition?.let { transition ->
+            Log.i(
+                "GazeScaffold",
+                String.format(
+                    Locale.US,
+                    "transition=%s->%s reason=%s index=%.2f confidence=%.2f " +
+                        "line=%d target=%d recoveryLatencyMs=%d",
+                    transition.from,
+                    transition.to,
+                    transition.reason,
+                    transition.stabilityIndex,
+                    transition.confidence,
+                    transition.currentLine,
+                    transition.reentryTargetLine,
+                    transition.recoveryLatencyMs ?: -1L,
+                )
+            )
+        }
+    }
+
+    private fun forcedScaffoldLevel(): ScaffoldLevel? = when (StudyConfig.SCAFFOLD_MODE) {
+        StudyConfig.ScaffoldMode.OFF -> ScaffoldLevel.NONE
+        StudyConfig.ScaffoldMode.ADAPTIVE -> null
+        StudyConfig.ScaffoldMode.FORCE_WORD -> ScaffoldLevel.WORD
+        StudyConfig.ScaffoldMode.FORCE_LINE -> ScaffoldLevel.LINE
+        StudyConfig.ScaffoldMode.FORCE_FOCUS -> ScaffoldLevel.FOCUS
+        StudyConfig.ScaffoldMode.FORCE_REENTRY -> ScaffoldLevel.REENTRY
+    }
 
     /** Finger substitutes for gaze; returns false so the article still scrolls. */
     @SuppressLint("ClickableViewAccessibility")

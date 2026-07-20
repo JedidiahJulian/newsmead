@@ -1,5 +1,10 @@
 # Gaze Thesis Prototype
 
+> **NewsMead integration status (2026-07-20):** Stage 4 line/word mapping,
+> Stage 5 RSI, and all four adaptive scaffold renderers are implemented in the
+> current NewsMead tree. This document otherwise records the earlier gaze
+> investigation. See adaptive-visual-scaffolding.md for the current layer.
+
 On-device Android gaze-tracking prototype for a gaze-driven adaptive reading interface. The current implementation uses the phone front camera, MediaPipe Face Landmarker iris/eye landmarks, per-user calibration, and a polynomial mapper to estimate on-screen gaze coordinates.
 
 The target use case is line-level reading detection: accurate enough to infer which line of text the user is reading, not character-level pointing.

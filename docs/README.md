@@ -7,6 +7,7 @@ This directory contains the supporting documentation for the NewsMead gaze-drive
 - [Thesis Memory](thesis-memory.md): working understanding of the thesis, manuscript model, and current implementation.
 - [Gaze Implementation](gaze-implementation.md): gaze pipeline, calibration, mapping, AOI, and accuracy caveats.
 - [Reading Stability Index](reading-stability-index.md): RSI logs, event meanings, score interpretation, and caveats.
+- [Adaptive Visual Scaffolding](adaptive-visual-scaffolding.md): four manuscript levels, adaptive controller, validation modes, logs, and outstanding research decisions.
 - [Session Setup](session-setup.md): device/session setup notes for running the prototype.
 
 ## Build Notes

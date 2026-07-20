@@ -459,3 +459,60 @@ Verified:
 ```
 
 All completed successfully.
+
+## 2026-07-20 - Manuscript-aligned adaptive graded visual scaffolding
+
+Implemented the full Section 4.3.5 adaptation layer. The previous word
+highlighter ran on every gaze sample and the line renderer was not connected;
+focus, re-entry, level selection, and withdrawal did not exist.
+
+### Implementation
+
+- Added visible-text, padding-aware line and locale-aware word targeting.
+- Added 120 ms line, 300 ms word, and 200 ms off-text target stabilization.
+- Added a 10-second WindowedStabilityEstimator using participant baseline
+  mean/std, positive z deviations, manuscript weights, smoothing, and gaze
+  confidence. Cumulative GazeRSI remains the session report.
+- Added NONE, WORD, LINE, FOCUS, and REENTRY states. Escalation is stepwise
+  after 1.5 seconds; withdrawal is stepwise after 3.5 seconds; support clears
+  below 65% valid-text gaze confidence.
+- Re-entry requires index at least 2.5 plus at least 800 ms off text and a return
+  at least two lines from the last stable line. Regression alone is insufficient.
+- Added overlay word, line, five-line focus-window, and re-entry line/arrow
+  rendering. Transitions fade over 400 ms and never auto-scroll.
+- Deprecated WordHighlighter, added OFF/ADAPTIVE/forced validation modes, hid
+  gaze debug visuals by default, and added GazeScaffold transition/recovery logs.
+- Geometry/baseline starts after final article text loads and resets after
+  calibration/test interruption.
+
+### Verification and open research work
+
+- compileDebugKotlin and 18 targeted gaze/scaffold JVM tests pass.
+- Physical-device forced-level and adaptive visual validation remains required.
+- The per-article 20-second baseline is a fallback; carry the manuscript's
+  standardized baseline profile into experimental articles before collection.
+- Thresholds, timing, visual parameters, word accuracy, and the operational
+  re-entry/recovery definitions require formative/pilot validation.
+
+Canonical guide: docs/adaptive-visual-scaffolding.md.
+
+## 2026-07-20 - Gaze diagnostics enabled
+
+- Enabled `StudyConfig.GAZE_DEBUG_VISUALS` for physical-device debugging.
+- The article overlay now shows the live gaze dot and tracker FPS independently
+  of the active scaffold level.
+- This is a researcher diagnostic, not a participant scaffold. Disable it before
+  participant-facing data collection.
+
+## 2026-07-20 - Natural adaptive-trigger validation guidance
+
+- Added a repeatable naturalistic smoke test: clean 20-second baseline followed
+  by 10-15 seconds of within-text pauses and rereading.
+- Documented that adaptation uses the recent windowed index rather than the
+  cumulative GazeRSI score, requires at least 0.65 valid-text confidence, and
+  escalates one level per 1.5-second persistence interval.
+- Recorded the observed index=2.12/confidence=0.64 run as an expected confidence
+  gate, not a scaffold-rendering failure.
+- Recommended forced touch/geometry validation before adaptive validation,
+  calibration in the reading posture, and disabling debug visuals before
+  participant-facing collection.

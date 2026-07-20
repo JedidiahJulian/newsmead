@@ -1,5 +1,42 @@
 # Gaze Study — Session Setup Checklist
 
+> **Current local-tracker workflow (2026-07-20):** The WiFi/GazeFollower
+> instructions below are historical. The current app uses the phone front
+> camera, MediaPipe, 16-point local calibration, and no laptop stream.
+
+For the current build:
+
+1. Confirm GAZE_TOUCH_VALIDATION is false and SCAFFOLD_MODE is ADAPTIVE in
+   StudyConfig. The current diagnostic build has GAZE_DEBUG_VISUALS enabled so
+   researchers can see the gaze dot and FPS; disable it before participant-facing
+   data collection.
+2. Build/install with JDK 17 and open a study article.
+3. Tap the in-article calibration control, grant camera permission, and complete
+   all 16 targets while keeping phone/head position stable.
+4. Optionally use the adjacent gaze accuracy test before the reading task.
+5. Return to the article. The adaptive condition spends its first 20 seconds
+   collecting the provisional per-article baseline, during which no scaffold is
+   shown.
+6. Monitor GazeAOI, GazeRSI, and GazeScaffold. The last tag reports baseline
+   readiness, confidence, level transitions, triggers, target lines, and recovery
+   latency.
+
+For a natural adaptive-trigger smoke test, read normally during the 20-second
+baseline, then spend 10-15 seconds pausing and rereading within one difficult
+paragraph while keeping gaze on the article body. Do not interpret the
+cumulative GazeRSI score as the scaffold trigger. Require baselineReady=true,
+confidence at least 0.65, and a persistently elevated adaptive index. At an index
+of at least 2.0, stepwise escalation can take about 4.5 seconds to reach FOCUS.
+If confidence is 0.64 or lower, recalibrate or keep gaze on valid article text
+for a complete 10-second rolling window before diagnosing the scaffold.
+
+For geometry validation without live gaze, enable touch validation and force
+WORD, LINE, FOCUS, and REENTRY one at a time. See
+adaptive-visual-scaffolding.md. Restore ADAPTIVE before a study session.
+
+The remaining laptop/WiFi checklist is retained only for reproducing the older
+GazeFollower rig and should not be mixed with the current local calibration.
+
 Runbook for a live gaze-tracked reading session (NewsMead + GazeFollower over
 WiFi). Follow top to bottom. Commands are for the PC; run them from a terminal.
 
@@ -77,7 +114,10 @@ watch the live gaze-to-line output:
 ```
 adb logcat -s GazeAOI          # gaze=(x,y) line=N/total, updates as they read
 ```
-The red dot follows gaze; `line=N` is the line being read (scroll-aware).
+The red dot is visible because the current diagnostic build enables
+GAZE_DEBUG_VISUALS. Disable it before participant-facing sessions. Current logs
+use rawLine and stableLine; stableLine is
+the debounced line supplied to RSI and scaffolding.
 
 ---
 

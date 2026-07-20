@@ -2,6 +2,11 @@
 
 ## STATUS UPDATE — READ THIS FIRST
 
+> **Downstream status (2026-07-20):** Stage 4 line/word AOI mapping, Stage 5
+> RSI, and all four adaptive scaffold renderers are implemented. Historical
+> checklists below describe the original acceptance path. See
+> adaptive-visual-scaffolding.md for current behavior.
+
 Stages 1-3 are COMPLETE and their outcome has changed the tracker.
 After Option 2 (MediaPipe + polynomial calibration) and Option 3
 (MobileGaze converted to TFLite) both failed accuracy validation on

@@ -56,6 +56,44 @@ object StudyConfig {
      */
     const val GAZE_TOUCH_VALIDATION = false
 
+    // ---- Adaptive graded visual scaffolding (manuscript Section 4.3.5) ----
+
+    enum class ScaffoldMode {
+        OFF,
+        ADAPTIVE,
+        FORCE_WORD,
+        FORCE_LINE,
+        FORCE_FOCUS,
+        FORCE_REENTRY,
+    }
+
+    /**
+     * ADAPTIVE is the study condition. Forced modes are validation aids that
+     * make one renderer visible without waiting for an instability trigger.
+     */
+    val SCAFFOLD_MODE = ScaffoldMode.ADAPTIVE
+
+    /** Gaze dot and FPS are researcher diagnostics, not participant scaffolds. */
+    const val GAZE_DEBUG_VISUALS = true
+
+    /** Recent behavior window used by adaptation; cumulative RSI remains logged. */
+    const val SCAFFOLD_WINDOW_MS = 10_000L
+
+    /**
+     * Automatic per-article baseline warm-up. No scaffold appears during this
+     * interval. Before formal collection this should be replaced or supplied by
+     * the standardized baseline-reading phase described in the manuscript.
+     */
+    const val SCAFFOLD_BASELINE_DURATION_MS = 20_000L
+
+    const val SCAFFOLD_WORD_THRESHOLD_Z = 1.0
+    const val SCAFFOLD_LINE_THRESHOLD_Z = 1.5
+    const val SCAFFOLD_FOCUS_THRESHOLD_Z = 2.0
+    const val SCAFFOLD_REENTRY_THRESHOLD_Z = 2.5
+    const val SCAFFOLD_MIN_GAZE_CONFIDENCE = 0.65
+    const val SCAFFOLD_ESCALATION_PERSISTENCE_MS = 1_500L
+    const val SCAFFOLD_RECOVERY_PERSISTENCE_MS = 3_500L
+
     /**
      * Blink filtering thresholds for the local MediaPipe gaze source. Openness is
      * the eye-aspect ratio: lower values mean the eyelids are closer together.
