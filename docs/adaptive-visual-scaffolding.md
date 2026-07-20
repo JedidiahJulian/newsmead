@@ -89,6 +89,20 @@ The logged `raw` value is the weighted positive z-score combination before
 smoothing; logged `index` is the two-second exponentially smoothed value used by
 the controller. Neither value should be interpreted as a comprehension score.
 
+Direct 0-100 Session RSI level mapping was considered but is not implemented.
+It would retain early difficulty/noise after recovery, dilute a late difficulty
+episode after long stable reading, and apply the same absolute cutoffs to readers
+with different normal dwell and fixation behavior. It would require an entirely
+new set of pilot-validated thresholds; the current 1.0/1.5/2.0/2.5 adaptive
+cutoffs are not convertible to Session RSI ranges. A high Session RSI also cannot
+replace the separate loss-of-position evidence required for REENTRY.
+
+A rolling 0-100 RSI could be used as an alternative display scale. Once it adds
+participant baseline normalization, smoothing, quality gates, escalation and
+withdrawal persistence, it has the same functional role as the current Adaptive
+Instability Index. Changing the scale alone does not solve measurement noise or
+threshold-validation requirements.
+
 ## Current Controller Policy
 
 The thresholds below are initial engineering values expressed in positive

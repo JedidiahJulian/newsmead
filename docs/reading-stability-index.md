@@ -86,6 +86,30 @@ articles or conditions, and analysis of overall reading effort. A short-window
 and recovery logic; it would reproduce the role of the Adaptive Instability
 Index under a different scale.
 
+#### Alternative considered: direct Session RSI level mapping
+
+Directly mapping the cumulative 0-100 Session RSI to scaffold levels was
+considered and is not the current design. It would make the interface dependent
+on when difficulty occurs. Early difficulty or tracker noise would decay slowly
+and could keep support active after recovery. A late difficulty episode after a
+long stable period could be diluted and trigger too slowly. Naturally slow
+readers could also receive unnecessary support because Session RSI is not
+normalized against their personal baseline.
+
+The adaptive thresholds 1.0, 1.5, 2.0, and 2.5 cannot be reused for Session RSI
+because the scales have different definitions. A direct controller would need a
+new, pilot-validated set of 0-100 cutoffs. Values such as 0-30 NONE, 31-45 WORD,
+46-60 LINE, 61-80 FOCUS, and 81-100 REENTRY are only an illustration of the
+additional decision required; they are not validated, configured, or approved
+for the study. REENTRY would still require independent loss-of-position evidence
+rather than a high score alone.
+
+A rolling 10-second RSI expressed on a 0-100 scale is a possible presentation
+alternative, but without baseline normalization it is less personalized. Adding
+participant normalization, smoothing, spatial-quality/confidence gates, and
+recovery persistence would make it functionally equivalent to the existing
+Adaptive Instability Index apart from its numeric scale.
+
 ### Exact Adaptive Instability Index calculation
 
 Every 500 ms, after at least two seconds of recent observations, the estimator

@@ -144,6 +144,19 @@ Current adaptive thresholds of 1.0, 1.5, 2.0, and 2.5 standard-deviation units
 are engineering defaults. They require pilot validation against labeled reading
 episodes after excluding or marking tracker-error periods.
 
+Direct mapping from cumulative Session RSI to scaffold levels was considered and
+rejected as the current design. Its history would make support slow to withdraw
+after early difficulty and slow to activate for a late episode after prolonged
+stable reading. It would also require separate, empirically derived 0-100 level
+cutoffs and would not remove the need for loss-of-position evidence at Level 4.
+A rolling 0-100 RSI remains a possible display convention, but with baseline
+normalization, smoothing, quality gating, and recovery logic it is functionally
+the Adaptive Instability Index under another scale.
+
+Use `docs/manuscript-implementation-alignment.md` as the living insertion guide for
+bringing Sections 4.3.4 and 4.3.5, methodology, analysis, and limitations into
+alignment with this decision and future implementation changes.
+
 There are unit tests for RSI behavior:
 
 - `app/src/test/java/com/newsmead/gaze/ReadingStateInferencerTest.kt`

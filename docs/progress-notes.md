@@ -556,3 +556,31 @@ Canonical guide: docs/adaptive-visual-scaffolding.md.
 - Recorded the current 1.0/1.5/2.0/2.5 adaptive thresholds as provisional
   engineering values requiring pilot tuning against labeled reading episodes
   with tracker-error periods excluded or separately marked.
+
+### Controller alternative considered
+
+- Considered using cumulative Session RSI directly for scaffold levels.
+- Rejected it as the current controller because cumulative history can preserve
+  early difficulty after recovery, dilute late difficulty after long stable
+  reading, and apply non-personalized cutoffs to different reading styles.
+- Confirmed that direct use would require new pilot-validated 0-100 thresholds;
+  the current adaptive thresholds cannot be converted directly. Any example
+  Session RSI bands remain illustrative only and are not study parameters.
+- Recorded that Level 4 still requires independent loss-of-position evidence.
+- Retained a rolling 0-100 RSI as a possible display-scale alternative, while
+  noting that adding personalization, smoothing, quality gates, escalation, and
+  recovery makes it functionally equivalent to the Adaptive Instability Index.
+
+## 2026-07-21 - Manuscript RSI/adaptive revision guide
+
+- Added `docs/manuscript-implementation-alignment.md` as the authoritative,
+  living insertion guide for updating the actual manuscript as implementation
+  decisions continue.
+- Mapped required changes to Section 4.3.4, a new Section 4.3.4.1, Section
+  4.3.5, methodology/data analysis, and limitations.
+- Included the implemented formulas, controller table, persistence and quality
+  gates, research-variable separation, synchronized logging requirements,
+  circular measurement contamination, the rejected direct Session RSI
+  alternative, and a manuscript consistency checklist.
+- No PDF or manuscript source was edited; the repository currently contains only
+  `Manuscript/Manuscript_Updated.pdf` and no editable DOCX or LaTeX source.
