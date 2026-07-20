@@ -125,6 +125,25 @@ Current weights:
 - dwell weight: `0.35`
 - fixation weight: `0.25`
 
+### RSI terminology and control decision
+
+The research now distinguishes **Session RSI** from the **Adaptive Instability
+Index**. Session RSI is the cumulative 0-100 `GazeRSI score` used to describe
+overall detected effort. The Adaptive Instability Index is the smoothed 0-4
+`GazeScaffold index` derived from participant-relative regression, dwell, and
+fixation changes in the latest 10-second window.
+
+Session RSI must not directly select scaffold levels. Cumulative history can
+remain elevated after recovery or dilute a new difficulty episode after a long
+stable period. The recent index can rise and fall with current behavior and is
+therefore used for temporary escalation and withdrawal. Session RSI remains a
+session outcome for article/condition comparison; neither signal is a
+comprehension measure.
+
+Current adaptive thresholds of 1.0, 1.5, 2.0, and 2.5 standard-deviation units
+are engineering defaults. They require pilot validation against labeled reading
+episodes after excluding or marking tracker-error periods.
+
 There are unit tests for RSI behavior:
 
 - `app/src/test/java/com/newsmead/gaze/ReadingStateInferencerTest.kt`

@@ -227,7 +227,9 @@ If touch input maps to the correct article line nearly 100% of the time, then th
 
 ## Stage 5: Feed Into the RSI Pipeline
 
-Stage 5 is not implemented yet.
+Stage 5 is implemented. The behavioral events feed two related but distinct
+signals: cumulative Session RSI for reporting and the recent participant-relative
+Adaptive Instability Index for scaffold control.
 
 The purpose of Stage 5 is to convert the current reading line from Stage 4 into the signals needed by the RSI pipeline.
 
@@ -283,8 +285,15 @@ Tracker backend
 -> GazeProvider
 -> Stage 4 line mapper
 -> Stage 5 fixation/dwell/regression detector
--> RSI pipeline
+   |-> Session RSI (cumulative 0-100 report)
+   `-> Adaptive Instability Index (recent 0-4 control signal)
+       -> scaffold controller
 ```
+
+Do not wire scaffold levels directly to Session RSI. A cumulative score cannot
+respond symmetrically to new instability and recovery. The adaptive branch uses
+10-second counter deltas, participant-baseline z-scores, two-second exponential
+smoothing, gaze-quality gating, and escalation/withdrawal persistence.
 
 Stages 4 and 5 must not reach backward into MediaPipe, calibration CSV parsing, or polynomial coefficients.
 

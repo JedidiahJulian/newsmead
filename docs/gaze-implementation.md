@@ -189,6 +189,12 @@ and fall after recovery. It learns a participant-relative baseline, retains only
 positive metric deviations, applies the same 0.40/0.35/0.25 weights, smooths the
 result, and sends it to a conservative level controller.
 
+Terminology is intentionally separate: `GazeRSI score` is **Session RSI**, the
+cumulative 0-100 reporting signal; `GazeScaffold index` is the **Adaptive
+Instability Index**, the smoothed 0-4 recent control signal. Do not derive
+scaffold levels from Session RSI. Its historical accumulation can delay a new
+trigger after long stable reading and can keep support active after recovery.
+
 The controller implements manuscript Section 4.3.5:
 
 - word highlight;

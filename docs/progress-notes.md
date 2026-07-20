@@ -535,3 +535,24 @@ Canonical guide: docs/adaptive-visual-scaffolding.md.
 - Marked word/exact-line intervention claims as conditional. If pilot accuracy
   is inadequate, prefer a broader focus/region scaffold, revise the manuscript,
   or replace the backend rather than hiding tracker error in the renderer.
+
+## 2026-07-20 - Session RSI and adaptive-index terminology decision
+
+- Formalized two separate signals to remove research and implementation
+  ambiguity. **Session RSI** is the cumulative 0-100 `GazeRSI score` used for
+  session/article/condition reporting. **Adaptive Instability Index** is the
+  recent participant-relative 0-4 `GazeScaffold index` used for scaffold control.
+- Recorded why Session RSI does not drive adaptation: early difficulty can keep
+  a cumulative value elevated after recovery, while a new late-session event can
+  be diluted by a long stable history. It is also not baseline-relative.
+- Documented the exact adaptive calculation: 10-second counter deltas for
+  regression/minute, dwell proportion, and fixation/minute; positive baseline
+  z-scores; 0.40/0.35/0.25 weighting; clamp to 0-4; and two-second exponential
+  smoothing. Metrics update every 500 ms after at least two seconds of data.
+- Retained Session RSI for overall descriptive analysis. A short-window 0-100
+  alternative would still need personalization, smoothing, quality gates, and
+  recovery logic and would reproduce the current adaptive signal under another
+  scale.
+- Recorded the current 1.0/1.5/2.0/2.5 adaptive thresholds as provisional
+  engineering values requiring pilot tuning against labeled reading episodes
+  with tracker-error periods excluded or separately marked.

@@ -68,6 +68,27 @@ weights. The result is smoothed with a 2-second exponential time constant.
 Adaptation is disabled while the baseline is incomplete or while fewer than 65%
 of recent gaze samples land on visible article text.
 
+### Session RSI versus Adaptive Instability Index
+
+The two signals must not be treated as interchangeable:
+
+| Signal | Log field | Scale | Horizon | Research role |
+| --- | --- | --- | --- | --- |
+| Session RSI | `GazeRSI score` | 0-100 | cumulative session | descriptive outcome/report |
+| Adaptive Instability Index | `GazeScaffold index` | 0-4 | recent 10-second window | scaffold selection |
+
+Session RSI does not drive the controller. Its cumulative history can keep a
+scaffold active after recovery or dilute a new difficulty episode after a long
+stable period. The recent index can both rise and fall, is normalized against
+the participant baseline, and therefore matches temporary support and
+withdrawal. A short-window version of Session RSI would still require baseline
+normalization, smoothing, quality gates, and recovery policy, which is
+functionally the current Adaptive Instability Index.
+
+The logged `raw` value is the weighted positive z-score combination before
+smoothing; logged `index` is the two-second exponentially smoothed value used by
+the controller. Neither value should be interpreted as a comprehension score.
+
 ## Current Controller Policy
 
 The thresholds below are initial engineering values expressed in positive

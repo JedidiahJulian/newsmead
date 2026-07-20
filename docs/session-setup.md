@@ -21,6 +21,11 @@ For the current build:
    readiness, confidence, level transitions, triggers, target lines, and recovery
    latency.
 
+During monitoring, distinguish `GazeRSI score` (cumulative 0-100 Session RSI)
+from `GazeScaffold index` (recent 0-4 Adaptive Instability Index). Predict
+scaffold levels from the latter plus baseline, confidence, persistence, and
+re-entry conditions; do not use the Session RSI score as the trigger.
+
 For a natural adaptive-trigger smoke test, read normally during the 20-second
 baseline, then spend 10-15 seconds pausing and rereading within one difficult
 paragraph while keeping gaze on the article body. Do not interpret the

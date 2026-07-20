@@ -48,6 +48,63 @@ engineering fallback. The manuscript calls for a separate standardized baseline
 phase; that profile still needs to be carried into the experimental articles
 before main data collection. See adaptive-visual-scaffolding.md.
 
+### Terminology decision
+
+Use these names consistently in research notes, logs, and manuscript revisions:
+
+- **Session RSI** is the cumulative `GazeRSI score` on the 0-100 scale. It
+  describes detected effort across the article/session.
+- **Adaptive Instability Index** is the recent participant-relative
+  `GazeScaffold index` on the 0-4 scale. It selects the desired scaffold level.
+
+Avoid calling both values simply RSI. Adaptive RSI may be used informally, but
+Adaptive Instability Index is the preferred research term because the value is
+not derived from the displayed cumulative score and uses a different scale.
+
+For example, the following values describe two different time horizons:
+
+```text
+GazeRSI: score=47.6
+GazeScaffold: index=2.12 raw=2.03 confidence=0.64 baselineReady=true
+```
+
+The first summarizes the session so far. The second describes recent deviation
+from baseline; in this example it was high enough for the focus pathway, but the
+0.64 confidence value blocked adaptation.
+
+### Why Session RSI does not control scaffolds
+
+A cumulative value has excessive memory for a temporary intervention. Difficulty
+early in an article can keep Session RSI elevated after recovery, leaving support
+on too long. Conversely, a new loss of place after a long stable period can be
+diluted by the earlier history and trigger too slowly. Session RSI is also not
+participant-baseline-relative.
+
+Session RSI remains appropriate for end-of-session description, comparison of
+articles or conditions, and analysis of overall reading effort. A short-window
+0-100 score would still require personalization, smoothing, confidence gating,
+and recovery logic; it would reproduce the role of the Adaptive Instability
+Index under a different scale.
+
+### Exact Adaptive Instability Index calculation
+
+Every 500 ms, after at least two seconds of recent observations, the estimator
+uses cumulative-counter deltas inside the latest 10-second window to calculate
+regressions per minute, dwell-time proportion, and fixations per minute. During
+baseline it learns a mean and sample standard deviation for each metric.
+
+After baseline, each recent metric becomes a positive z-score:
+
+```text
+z = max(0, (recent value - baseline mean) / max(baseline SD, SD floor))
+raw index = clamp(0, 4, 0.40*zRegression + 0.35*zDwell + 0.25*zFixation)
+```
+
+The standard-deviation floors are 1.0 regression/minute, 0.05 dwell proportion,
+and 5.0 fixations/minute. The raw index is exponentially smoothed with a
+two-second time constant. That smoothed value is the logged `index` supplied to
+the scaffold controller.
+
 ## How The Score Is Computed
 
 The current implementation combines three normalized components:
