@@ -18,8 +18,8 @@ The project has implemented and tested Stages 1-3 of the gaze module:
 | Stage 1: Camera + MediaPipe landmarks | Passed on Galaxy A56 | Front camera, iris landmarks, no-face handling, about 30 fps in good lighting |
 | Stage 2: Calibration collection | Passed | Originally 9-point, now upgraded to 16-point calibration |
 | Stage 3: Live gaze mapping + benchmark | Implemented and benchmarked | Accuracy is inconsistent across runs; decision gate currently stopped |
-| Stage 4: Reading interface line mapping | Not implemented | Planned integration with NewsMead/article view |
-| Stage 5: RSI feed | Not implemented | Planned fixation/dwell/regression event feed |
+| Stage 4: Reading interface line mapping | Implemented in NewsMead | Scroll-aware line/word mapping and touch validation; live accuracy remains tracker-limited |
+| Stage 5: RSI feed | Implemented in NewsMead | Fixation/dwell/regression, cumulative RSI, recent adaptive index, and scaffold integration |
 
 The important conclusion from the current benchmark log is that the MediaPipe + polynomial approach can sometimes reach usable vertical accuracy, but it is not stable enough across runs yet to be accepted as the final tracker.
 
@@ -345,21 +345,26 @@ The current system does not yet implement:
 
 - automatic recalibration
 - drift correction
-- confidence scoring
+- spatial-accuracy or dispersion confidence scoring
 - line-relative adaptive correction
 
-Timestamps are emitted, so drift can be analyzed later.
+The adaptive layer now calculates valid-text coverage confidence, but this only
+checks whether samples land somewhere on visible text; it does not detect a
+wrong-line estimate. Timestamps are emitted, so drift can be analyzed later.
 
-### 8. Stage 4 and Stage 5 Are Not Integrated Yet
+### 8. Integrated Downstream Pipeline Remains Accuracy-Limited
 
-The gaze tracker currently outputs screen coordinates. It has not yet been integrated into:
+Stage 4 line/word mapping, Stage 5 RSI, and adaptive scaffolding are now
+integrated. Physical-device testing exposed circular measurement contamination:
+the same gaze noise can generate false reading-instability events and position
+the resulting scaffold incorrectly. Software integration therefore does not
+resolve the stopped Stage 3 accuracy gate.
 
-- article line bounding boxes
-- scroll-aware line mapping
-- fixation detection
-- dwell time
-- reading regressions
-- RSI computation
+Required evaluation includes vertical error in pixels and line heights,
+exact-line and within-one-line accuracy, word-selection accuracy, dispersion,
+jump and off-text rates, tracking loss, and drift across scrolling and session
+time. Raw gaze, stabilized targets, inferred events, and scaffold targets must be
+retained separately.
 
 ## Why `GazeProvider` Matters
 
@@ -396,6 +401,12 @@ This is important because Stages 4-5 can be built and tested even if the current
 4. Use touch input to prove line mapping and RSI logic independently of gaze accuracy.
 5. Keep `GazeProvider` as the only dependency boundary.
 6. Decide whether to replace the current MediaPipe + polynomial backend.
+7. Add spatial-quality gating using dispersion, jumps, head/face stability, and
+   line consistency instead of relying only on valid-text coverage.
+8. Evaluate robust spatial filtering, line hysteresis, minimum dwell, drift
+   checks, and recalibration prompts with pilot data.
+9. If exact-line and word accuracy fail, prefer a broader focus/region scaffold
+   and revise the manuscript claims before participant data collection.
 
 Potential tracker paths:
 

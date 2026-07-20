@@ -226,7 +226,34 @@ Single-phone front-camera gaze is sensitive to:
 - phone position
 - calibration quality
 
-The safest interpretation is line-level, not word-level. Treat sudden jumps, large regression counts, and off-screen points as possible tracking or calibration issues before interpreting them as reading behavior.
+The safest interpretation is currently broad reading-region behavior, with
+exact-line use requiring validation and word-level use carrying the greatest
+risk. Treat sudden jumps, large regression counts, and off-screen points as
+possible tracking or calibration issues before interpreting them as reading
+behavior.
+
+The debug gaze dot shows raw mapped coordinates; scaffold targeting uses a
+debounced line/word target. The dot may therefore move more than the scaffold,
+but debounce cannot correct a sustained estimate on the wrong location.
+
+The adaptive confidence value measures the proportion of recent samples that
+land somewhere on visible article text. It does not measure distance from true
+gaze, line correctness, dispersion, head stability, or drift. A wrong-line point
+can count as confident. This allows circular measurement contamination: tracker
+noise can generate apparent regressions/dwell/fixations, raise the instability
+index, and then place the scaffold incorrectly using the same noisy stream.
+
+Required validation metrics are median and 95th-percentile vertical error in
+pixels and line heights, exact-line and within-one-line accuracy, word-selection
+accuracy, dispersion, jump rate, off-text rate, tracking loss, and drift across
+time/scroll position. Log raw coordinates, stabilized targets, inferred events,
+adaptive state, and rendered target separately.
+
+Candidate mitigations include robust spatial smoothing, line hysteresis,
+minimum dwell, outlier/jump rejection, face/head stability checks, drift checks,
+and recalibration prompts. These require pilot validation. If exact-line or word
+accuracy remains unreliable, use a broader region-level scaffold or replace the
+tracker backend rather than masking the error in the renderer.
 
 ## Development Rule
 

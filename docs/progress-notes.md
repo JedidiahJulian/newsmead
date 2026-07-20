@@ -516,3 +516,22 @@ Canonical guide: docs/adaptive-visual-scaffolding.md.
 - Recommended forced touch/geometry validation before adaptive validation,
   calibration in the reading posture, and disabling debug visuals before
   participant-facing collection.
+
+## 2026-07-20 - Scaffold displacement exposes gaze-validity limitation
+
+- Physical-device observation: adaptive scaffolding triggered, but its apparent
+  target moved inconsistently together with the raw gaze indicator.
+- Recorded circular measurement contamination as a key limitation: one noisy
+  stream can inflate regression/dwell/fixation evidence and misplace the scaffold.
+- Clarified that the current confidence value is valid-text coverage, not
+  correct-line or spatial-accuracy confidence.
+- Added required validation measures across the research docs: median/P95
+  vertical error in pixels and line heights, exact-line/within-one-line accuracy,
+  word accuracy, dispersion, jump/off-text rates, tracking loss, and drift.
+- Added recommendations for synchronized pipeline logs, spatial-quality gating,
+  robust filtering, line hysteresis, minimum dwell, outlier rejection,
+  head/face and drift checks, recalibration prompts, and independent or
+  researcher-coded ground truth.
+- Marked word/exact-line intervention claims as conditional. If pilot accuracy
+  is inadequate, prefer a broader focus/region scaffold, revise the manuscript,
+  or replace the backend rather than hiding tracker error in the renderer.

@@ -30,6 +30,13 @@ of at least 2.0, stepwise escalation can take about 4.5 seconds to reach FOCUS.
 If confidence is 0.64 or lower, recalibrate or keep gaze on valid article text
 for a complete 10-second rolling window before diagnosing the scaffold.
 
+Confidence at least 0.65 is necessary but not sufficient: it measures visible-
+text coverage, not correct-line accuracy. If the dot or scaffold remains
+spatially unstable, stop the participant-facing run and record a known-target
+accuracy check, dispersion/jump behavior, posture, lighting, scroll position,
+and elapsed time since calibration. Do not interpret the transition as genuine
+reading difficulty until tracker error has been ruled out.
+
 For geometry validation without live gaze, enable touch validation and force
 WORD, LINE, FOCUS, and REENTRY one at a time. See
 adaptive-visual-scaffolding.md. Restore ADAPTIVE before a study session.

@@ -181,6 +181,31 @@ accuracy, visual parameters, and the operational loss-of-position rule also need
 target-population device testing. The canonical technical and research guide is
 adaptive-visual-scaffolding.md.
 
+### Key measurement limitation observed on device
+
+A 2026-07-20 physical-device run produced a naturally triggered scaffold whose
+position appeared unstable together with the gaze indicator. The indicator is a
+raw coordinate diagnostic and is expected to be noisier than the debounced
+scaffold target, but the observation exposes a central validity risk: the same
+gaze error can inflate regression/dwell/fixation evidence and then misplace the
+intervention. This circular measurement contamination must be treated as a key
+pipeline and manuscript limitation.
+
+Valid-text confidence is not spatial confidence; wrong-line samples still count
+as valid when they land anywhere on article text. Before main data collection,
+measure median/P95 vertical error in line heights, exact-line and adjacent-line
+accuracy, horizontal word accuracy, dispersion, jump/off-text rates, tracking
+loss, and time/scroll drift. Preserve separate synchronized raw gaze, stabilized
+target, inferred event, index, transition, and rendered-target records.
+
+Recommended priorities are a spatial-quality gate, robust filtering and line
+hysteresis, head/face stability and drift checks, recalibration prompts, and
+pilot comparison with known targets or independent/researcher-coded ground
+truth. If word or exact-line localization is not reliable on the study device
+and older-adult population, revise the manuscript hierarchy toward a broader
+focus/region scaffold or replace the gaze backend. Do not interpret a transition
+as proof of genuine reading instability.
+
 ## Historical Visual Overlay Notes (Superseded 2026-07-20)
 
 The current overlay is:

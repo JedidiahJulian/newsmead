@@ -12,10 +12,24 @@ Current status:
 - Stage 1: implemented and passed on Galaxy A56.
 - Stage 2: implemented and upgraded from 9-point to 16-point calibration.
 - Stage 3: implemented and benchmarked.
-- Stage 4: not implemented.
-- Stage 5: not implemented.
+- Stage 4: implemented with scroll-aware line/word mapping and touch validation.
+- Stage 5: implemented with fixation, dwell, regression, cumulative RSI, recent
+  adaptation metrics, and graded scaffold integration.
 
-The Stage 3 decision gate is currently stopped because gaze accuracy is inconsistent across runs. The downstream Stage 4 and Stage 5 work should therefore depend only on `GazeProvider`, so the gaze backend can be replaced later without rewriting the reading interface or RSI pipeline.
+The Stage 3 decision gate remains stopped because gaze accuracy is inconsistent
+across runs. Implementation completion does not clear this measurement-validity
+gate. On-device scaffold displacement confirms that tracker error can affect
+both inferred behavior and intervention placement. Stages 4 and 5 therefore
+continue to depend only on `GazeProvider`, so the backend can be replaced without
+rewriting the reading interface or RSI pipeline.
+
+Acceptance now requires two separate results: touch validation must establish
+correct article geometry, and known-target gaze validation must establish
+spatial accuracy. Report median/P95 vertical error in line heights, exact-line
+and within-one-line accuracy, word accuracy, dispersion, jump/off-text rates,
+tracking loss, and drift. Valid-text percentage alone is not an accuracy gate.
+If these measures fail pilot-defined limits, RSI and adaptive results remain
+exploratory regardless of whether the software triggers correctly.
 
 ## 16-Point Calibration
 
@@ -304,10 +318,13 @@ Current project status:
 - Stage 1: implemented and passed on Galaxy A56 at about 30 fps in good lighting.
 - Stage 2: implemented, passed, and upgraded to 16-point calibration.
 - Stage 3: implemented and benchmarked.
-- Stage 4: not implemented.
-- Stage 5: not implemented.
+- Stage 4: implemented with touch validation and live scroll-aware mapping.
+- Stage 5: implemented and connected to RSI and adaptive scaffolding.
 
-The current blocker is Stage 3 accuracy instability. The MediaPipe plus polynomial approach can sometimes produce usable vertical accuracy, but results are inconsistent across runs.
+The current blocker remains Stage 3 accuracy instability. The MediaPipe plus
+polynomial approach can sometimes produce usable vertical accuracy, but results
+are inconsistent across runs and can contaminate both behavior inference and
+scaffold placement.
 
 Per the current progress log:
 
@@ -317,4 +334,6 @@ Instability is inherent to single-camera appearance gaze on a handheld.
 Per Stage 3 gate: STOP. Decision pending.
 ```
 
-The practical next step is to build Stage 4 using touch-validation first while keeping the gaze backend swappable.
+The practical next step is to quantify known-target line accuracy, dispersion,
+jumps, and drift; add spatial-quality gating; and decide from pilot evidence
+whether to retain exact-line/word interventions or replace the gaze backend.

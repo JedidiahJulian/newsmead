@@ -181,6 +181,48 @@ pathway, but the run correctly remained at NONE because confidence was below
 0.65. Keep gaze on article text for a complete 10-second rolling window before
 classifying that outcome as a controller or renderer failure.
 
+## Observed Gaze-Pipeline Limitation
+
+Physical-device testing on 2026-07-20 showed that a scaffold could trigger while
+its apparent position moved inconsistently with the reader's intended gaze. The
+debug dot displays raw screen coordinates, while scaffold targets pass through
+line/word debounce, so the dot is expected to look noisier than the scaffold.
+However, visible scaffold displacement still indicates that temporal debounce
+alone does not make the underlying estimate spatially reliable.
+
+This creates **circular measurement contamination**: the same noisy gaze stream
+can create false line changes, regressions, fixations, or dwell events that raise
+the adaptive index, and then place the resulting intervention on the wrong word
+or line. Detection validity and rendering validity therefore cannot be inferred
+from a successful transition log. The current confidence value is only the
+fraction of recent samples landing somewhere on visible article text. A sample
+on the wrong line can still count as valid, so confidence at least 0.65 is a
+coverage gate, not evidence of spatial accuracy.
+
+Before participant-facing claims, measure the complete pipeline against known
+targets and report:
+
+- median and 95th-percentile vertical error in pixels and article-line heights;
+- exact-line accuracy and accuracy within one adjacent line;
+- horizontal/word-selection accuracy for Level 1;
+- within-target dispersion, sudden-jump rate, off-text rate, and tracking loss;
+- accuracy before and after scrolling and over session time to expose drift;
+- raw-coordinate, stabilized-target, inferred-event, adaptive-index, and
+  rendered-scaffold traces as separate synchronized records.
+
+Recommended engineering mitigations, to be evaluated rather than assumed valid,
+are robust spatial filtering, line-boundary hysteresis, minimum target dwell,
+large-jump rejection, head/face stability checks, drift checks, and recalibration
+prompts. Add a spatial-quality gate based on dispersion and target consistency;
+do not rely only on valid-text percentage. Keep the tracker behind GazeProvider
+so a better backend can replace it without rewriting the reading interface.
+
+If pilot testing cannot demonstrate reliable word or exact-line localization,
+revise the intervention hierarchy and manuscript claims. Prefer a broader focus
+window or another region-level scaffold, and describe word highlighting as
+provisional or future work. Do not tune the visual renderer to conceal tracker
+error, because that would leave behavioral inference contaminated.
+
 ## Logs
 
 GazeScaffold emits:
@@ -217,6 +259,16 @@ separately.
 5. **Loss-of-position definition:** the 800 ms off-text plus two-line return rule
    is an operational prototype definition. Validate it against researcher-coded
    loss/recovery episodes.
+6. **Spatial-validity gate:** valid-text confidence does not detect wrong-line
+   gaze. Define and freeze pilot-based limits for vertical error, dispersion,
+   jump rate, drift, exact-line accuracy, and within-one-line accuracy before
+   treating adaptive transitions as participant reading behavior.
+7. **Circular contamination:** compare inferred regressions/dwell/fixations with
+   synchronized raw gaze and researcher-coded reading episodes. Report how often
+   tracker error both raises the adaptive index and misplaces the scaffold.
+8. **Intervention granularity:** retain word and exact-line scaffolds only if the
+   target-device and target-population results support their spatial demands.
+   Otherwise revise the manuscript hierarchy toward a robust region-level aid.
 
 ## Verification
 

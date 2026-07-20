@@ -225,6 +225,28 @@ score=81.6 reg=1.00 dwell=0.95 fix=0.33 events=f15/d21354ms/r58
 
 It indicates very high effort, but `r58` is high enough that the first interpretation should be: check calibration and jitter before claiming the reader was confused.
 
+## Circular Measurement Contamination
+
+RSI and the adaptive scaffold currently consume the same estimated line stream.
+Spatial jitter can therefore create artificial line changes, regressions,
+fixations, and dwell events that increase the score or recent adaptive index.
+The same error can then place a triggered scaffold on the wrong location. A
+successful trigger is not independent evidence that genuine reading instability
+occurred.
+
+The current adaptive confidence value only measures whether gaze landed
+somewhere on visible text. It does not establish that the correct line or word
+was identified. RSI analysis must therefore be paired with synchronized raw
+gaze, stabilized line, calibration-quality, tracking-loss, and scaffold-target
+records. Where possible, compare inferred events against researcher-coded video
+or an independent eye-tracking reference.
+
+Before inferential use, quantify vertical error in line-height units, exact-line
+and within-one-line accuracy, within-target dispersion, jump rate, off-text rate,
+and drift over time. Freeze acceptable limits from pilot data. If these limits
+are not met, report RSI as an exploratory tracker-derived signal rather than a
+validated measure of participant reading instability.
+
 ## Recommended Reporting Language
 
 Use cautious language in reports:
@@ -234,6 +256,10 @@ Use cautious language in reports:
 - Good: "This segment should be reviewed with calibration quality and raw line logs."
 - Avoid: "The reader definitely did not understand the text."
 - Avoid: "The score is a comprehension grade."
+
+Reports should explicitly state when tracker noise may have contributed to both
+the inferred instability and scaffold location. A scaffold transition must not
+be described as proof that the reader became unstable.
 
 ## Summary
 
