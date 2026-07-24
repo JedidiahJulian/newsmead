@@ -54,6 +54,61 @@ compileDebugKotlin + all com.newsmead.gaze.* pass. Re-test on A56.
   would risk replacing a better map). New DriftCorrection + 6 JVM tests;
   design doc §7.1. assembleDebug + all com.newsmead.gaze.* tests pass.
   On-device drift-correction round-trip (test -> apply -> re-test) pending.
+- On-device: drift correction confirmed to improve accuracy (James), but gaze
+  hit an "invisible barrier" - would not track above/below a session-varying
+  vertical bound (sometimes near top, sometimes mid-screen). Root cause:
+  GazeMapper hard-clamped live features to the calibrated min/max range, so
+  head-pitch drift beyond the calibrated range froze the mapped output at the
+  boundary px - and the active affine drift correction relocated that frozen
+  point per session, which is why the wall moved. Fix: replaced the hard clamp
+  with gradient (first-order) extrapolation beyond the calibrated range, capped
+  at 1.5 standardized units, so out-of-range gaze continues smoothly instead of
+  stopping while garbage features still can't fling the estimate to infinity.
+  New GazeMapperTest covers inside-range fidelity, barrier removal, and the
+  cap. No recalibration needed (fit unchanged, mapping only).
+
+## 2026-07-24 - Barrier persisted after recalibration + fixation-pulse dot
+
+- Barrier still appeared after a fresh calibration. Found the remaining hard
+  clamp: the gradient extrapolation in GazeMapper.map() hard-capped the
+  out-of-range excess at +/-1.5 z (coerceIn) -> a flat wall once gaze went 1.5 z
+  past the calibrated range, which lands mid-screen when a calibration captured
+  little vertical feature spread. Replaced the hard cap with a tanh soft-limit
+  (widened to 2.5 z): ~linear near the boundary (keeps moving, no wall), smooth
+  asymptote far out (still bounds glitch features). Note: polynomialFeatures()
+  retains a raw-space clamp but is used only for FITTING (in-range samples), not
+  live mapping - harmless.
+- Added a raw->mapped diagnostic log (tag `GazeMap`, every 15 samples) in
+  LocalCalibratedGazeProvider: shows raw feature, filtered feature, and mapped
+  px together. If a wall persists, this distinguishes source-side vertical
+  feature saturation (raw fy flatlines) from mapping (raw moves, mapped stops).
+  Watch this next on-device: `adb logcat -s GazeMap`.
+- Calibration target: inner red dot now "breathes" (scale-only pulse 0.7-1.3x,
+  650ms, against the fixed ring) to hold fixation on the centre. Scale-only =
+  no translation, so it does not induce smooth pursuit. This intentionally
+  relaxes the design doc's "no motion during SAMPLE" for a centred pulse;
+  revisit if pilot data shows fixation instability.
+
+## 2026-07-24 - Fixed live gaze not restarting after the accuracy test
+
+- Symptom: after running the accuracy test / applying drift correction from the
+  article page, gaze appeared dead until fully exiting and re-entering the
+  article - and reading showed no benefit from the correction.
+- Root cause: a CameraX teardown race. GazeTestActivity shares the process-wide
+  ProcessCameraProvider singleton and calls unbindAll() in ITS onDestroy, which
+  runs *after* ArticleFragment.onResume. The article rebound the camera in
+  onResume, then the finishing test activity's unbindAll() immediately clobbered
+  it. A fresh re-entry worked only because nothing tore down afterward. This
+  also explained "no improvement": the article never actually ran with the newly
+  applied correction (it reloads the correction in attachLiveGaze, but the
+  camera was dead).
+- Fix: ArticleFragment.onResume now defers restartLiveGazeAfterCalibration by
+  GAZE_RESTART_DELAY_MS (800ms, isAdded-guarded) so the test activity finishes
+  its onDestroy camera release before the article rebinds. attachLiveGaze
+  already reloads drift correction, so reading now uses it without re-entry.
+  assembleDebug OK. On-device: test -> apply -> back should now show the live
+  dot resume within ~1s and reflect the correction; confirm via `GazeMap` log
+  showing the "[drift-corrected]" suffix during reading.
 
 ## 2026-07-07 — Align MediaPipe gaze feature with the prototype
 

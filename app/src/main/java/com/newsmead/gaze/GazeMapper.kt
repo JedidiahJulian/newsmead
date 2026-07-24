@@ -2,6 +2,7 @@ package com.newsmead.gaze
 
 import kotlin.math.abs
 import kotlin.math.sqrt
+import kotlin.math.tanh
 
 /**
  * Local 16-point calibration mapper. It fits the Stage 3 second-degree
@@ -9,9 +10,14 @@ import kotlin.math.sqrt
  *
  * screen = b0 + b1*zx + b2*zy + b3*zx^2 + b4*zy^2 + b5*zx*zy
  *
- * Live inputs are clamped to the calibrated feature range before standardizing,
- * which avoids large extrapolation jumps when landmarks drift slightly outside
- * the sampled range.
+ * Inside the calibrated feature range the polynomial is evaluated directly.
+ * Outside it, the output continues linearly along the polynomial's gradient at
+ * the range boundary, capped at [EXTRAPOLATION_LIMIT_Z] standardized units.
+ * (An earlier version hard-clamped live inputs to the calibrated range, which
+ * froze the gaze at an "invisible barrier" whenever head-pose drift shifted
+ * the live feature range beyond the calibrated one - and the barrier's screen
+ * position moved with the session's drift correction. Linear extension keeps
+ * quadratic extrapolation from blowing up without creating a wall.)
  */
 class GazeMapper(samples: List<CalibrationSample>) {
 
@@ -25,6 +31,10 @@ class GazeMapper(samples: List<CalibrationSample>) {
     private val maxX: Float
     private val minY: Float
     private val maxY: Float
+    private val zMinX: Double
+    private val zMaxX: Double
+    private val zMinY: Double
+    private val zMaxY: Double
 
     init {
         require(samples.size >= MIN_SAMPLES) {
@@ -38,6 +48,10 @@ class GazeMapper(samples: List<CalibrationSample>) {
         meanY = samples.map { it.gazeY.toDouble() }.average()
         stdX = samples.standardDeviation { it.gazeX.toDouble() }.coerceAtLeast(MIN_STD)
         stdY = samples.standardDeviation { it.gazeY.toDouble() }.coerceAtLeast(MIN_STD)
+        zMinX = (minX - meanX) / stdX
+        zMaxX = (maxX - meanX) / stdX
+        zMinY = (minY - meanY) / stdY
+        zMaxY = (maxY - meanY) / stdY
 
         val features = Array(samples.size) { polynomialFeatures(samples[it].gazeX, samples[it].gazeY) }
         val screenX = DoubleArray(samples.size) { samples[it].screenX.toDouble() }
@@ -47,10 +61,45 @@ class GazeMapper(samples: List<CalibrationSample>) {
     }
 
     /** Map a gaze feature to an on-screen point in pixels. */
-    fun map(gazeX: Float, gazeY: Float): FloatArray =
-        polynomialFeatures(gazeX, gazeY).let { features ->
-            floatArrayOf(evaluate(betaX, features), evaluate(betaY, features))
+    fun map(gazeX: Float, gazeY: Float): FloatArray {
+        val zxRaw = (gazeX.toDouble() - meanX) / stdX
+        val zyRaw = (gazeY.toDouble() - meanY) / stdY
+        val zx = zxRaw.coerceIn(zMinX, zMaxX)
+        val zy = zyRaw.coerceIn(zMinY, zMaxY)
+        val features = doubleArrayOf(1.0, zx, zy, zx * zx, zy * zy, zx * zy)
+        var screenX = dot(betaX, features)
+        var screenY = dot(betaY, features)
+
+        // Beyond the calibrated range: extend along the boundary gradient with a
+        // smooth soft-limit (tanh) rather than a hard cap. Near the boundary this
+        // is ~linear so out-of-range gaze keeps moving (no "invisible wall"); far
+        // out it asymptotes, so a glitchy feature value stays bounded and can't
+        // fling the estimate off-screen. A hard cap here produced exactly the
+        // flat wall users hit when a fresh calibration captured little vertical
+        // feature spread.
+        val excessX = softLimit(zxRaw - zx)
+        val excessY = softLimit(zyRaw - zy)
+        if (excessX != 0.0 || excessY != 0.0) {
+            screenX += gradZx(betaX, zx, zy) * excessX + gradZy(betaX, zx, zy) * excessY
+            screenY += gradZx(betaY, zx, zy) * excessX + gradZy(betaY, zx, zy) * excessY
         }
+        return floatArrayOf(screenX.toFloat(), screenY.toFloat())
+    }
+
+    /** d(screen)/d(zx) of the fitted polynomial at (zx, zy). */
+    private fun gradZx(beta: DoubleArray, zx: Double, zy: Double): Double =
+        beta[1] + 2.0 * beta[3] * zx + beta[5] * zy
+
+    /** d(screen)/d(zy) of the fitted polynomial at (zx, zy). */
+    private fun gradZy(beta: DoubleArray, zx: Double, zy: Double): Double =
+        beta[2] + 2.0 * beta[4] * zy + beta[5] * zx
+
+    private fun dot(beta: DoubleArray, features: DoubleArray): Double =
+        beta.indices.sumOf { beta[it] * features[it] }
+
+    /** ~identity near 0; smoothly asymptotes to +/-EXTRAPOLATION_LIMIT_Z. */
+    private fun softLimit(excess: Double): Double =
+        EXTRAPOLATION_LIMIT_Z * tanh(excess / EXTRAPOLATION_LIMIT_Z)
 
     private fun polynomialFeatures(gazeX: Float, gazeY: Float): DoubleArray {
         val zx = (gazeX.coerceIn(minX, maxX).toDouble() - meanX) / stdX
@@ -119,9 +168,6 @@ class GazeMapper(samples: List<CalibrationSample>) {
         return b
     }
 
-    private fun evaluate(beta: DoubleArray, features: DoubleArray): Float =
-        beta.indices.sumOf { beta[it] * features[it] }.toFloat()
-
     private fun List<CalibrationSample>.standardDeviation(selector: (CalibrationSample) -> Double): Double {
         val mean = map(selector).average()
         return sqrt(sumOf { sample ->
@@ -136,5 +182,14 @@ class GazeMapper(samples: List<CalibrationSample>) {
         private const val RIDGE_LAMBDA = 1.0
         private const val MIN_STD = 1e-6
         private const val SINGULAR_EPSILON = 1e-9
+
+        /**
+         * Soft-limit scale for out-of-range extension, in standardized units.
+         * The tanh is ~linear well within +/-this, and asymptotes beyond it. Set
+         * generously (the 4x4 grid spans ~+/-1.35 z) so normal head-pose drift and
+         * the screen area past the outer dot rows never approach the flat region;
+         * it exists only to bound glitchy feature values.
+         */
+        private const val EXTRAPOLATION_LIMIT_Z = 2.5
     }
 }

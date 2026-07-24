@@ -483,7 +483,14 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         super.onResume()
         if (launchedCalibration) {
             launchedCalibration = false
-            restartLiveGazeAfterCalibration()
+            // The gaze test/calibration activity shares the CameraX singleton and
+            // releases it (unbindAll) in its OWN onDestroy, which runs *after* this
+            // onResume. Rebinding immediately would be clobbered by that teardown
+            // (the camera would start, then die - requiring a full re-entry). Wait
+            // until the finishing activity is gone, then restart.
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (isAdded && !isDetached) restartLiveGazeAfterCalibration()
+            }, GAZE_RESTART_DELAY_MS)
         }
     }
 
@@ -894,5 +901,14 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         // Action
         val action = ArticleFragmentDirections.actionArticleFragmentSelf(article)
         Navigation.findNavController(requireView()).navigate(action)
+    }
+
+    companion object {
+        /**
+         * Delay before restarting live gaze after returning from the gaze
+         * test/calibration activity, giving that activity time to finish its
+         * onDestroy camera release before we rebind the shared CameraX camera.
+         */
+        private const val GAZE_RESTART_DELAY_MS = 800L
     }
 }

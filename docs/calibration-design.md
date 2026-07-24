@@ -20,8 +20,9 @@ The design below revises the *procedure*; these integration facts are fixed:
   after the mapper is fitted.
 - **Fit input:** `calibration_16point.csv` (`screen_x,screen_y,gaze_x,gaze_y`), read by
   `CalibrationStore.load()` → `GazeMapper` (2nd-degree poly on standardized features,
-  ridge λ=1.0, live inputs clamped to calibrated feature range) → `LocalCalibratedGazeProvider`
-  → `ArticleFragment`. **The CSV schema and name stay unchanged and contain only fit points**
+  ridge λ=1.0; beyond the calibrated feature range the output extends linearly along the
+  boundary gradient, capped at 1.5 z — the earlier hard clamp froze gaze at a drifting
+  "invisible barrier") → `LocalCalibratedGazeProvider` → `ArticleFragment`. **The CSV schema and name stay unchanged and contain only fit points**
   (never the drift-repeat or validation points). The new session log (§6) is additive.
 - **Frame-level rejection that already exists:** no-face frames and blink frames
   (eye-aspect-ratio hysteresis, `StudyConfig.GAZE_BLINK_*`). MediaPipe Tasks FaceLandmarker

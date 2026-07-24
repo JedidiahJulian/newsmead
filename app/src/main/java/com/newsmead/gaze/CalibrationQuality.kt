@@ -11,9 +11,9 @@ import kotlin.math.hypot
  * JVM-testable; px -> line-height conversion is left to the caller, which knows
  * the device line geometry.
  *
- * Note: GazeMapper clamps live input to its training feature range, so held-out
- * points on the grid edge read slightly pessimistic. Acceptable for a quality
- * gate (grid rows/columns share feature extremes, so the clamp rarely bites).
+ * Note: beyond its training feature range GazeMapper extends linearly along the
+ * boundary gradient, so held-out grid-edge points read only slightly pessimistic
+ * (grid rows/columns share feature extremes, so this rarely bites anyway).
  */
 object CalibrationQuality {
 

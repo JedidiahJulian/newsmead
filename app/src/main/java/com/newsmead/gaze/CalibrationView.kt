@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 
 /**
  * Calibration target renderer (docs/calibration-design.md §2): a concentric
@@ -31,8 +32,10 @@ class CalibrationView @JvmOverloads constructor(
     private var targetY: Float? = null
     private var appearProgress = 1f
     private var confirmProgress = 0f
+    private var pulseScale = 1f
     private var appearAnimator: ValueAnimator? = null
     private var confirmAnimator: ValueAnimator? = null
+    private var pulseAnimator: ValueAnimator? = null
     private var miniStates: List<MiniDotState> = emptyList()
 
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -66,11 +69,35 @@ class CalibrationView @JvmOverloads constructor(
             }
             start()
         }
+        startPulse()
+    }
+
+    /**
+     * Continuous gentle "breathing" of the inner dot against the fixed ring,
+     * to hold the participant's fixation on the target centre. Scale only (the
+     * dot never moves), so it draws the eye inward without eliciting the smooth
+     * pursuit that a translating target would.
+     */
+    private fun startPulse() {
+        pulseAnimator?.cancel()
+        pulseAnimator = ValueAnimator.ofFloat(PULSE_MIN, PULSE_MAX).apply {
+            duration = PULSE_MS
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { animation ->
+                pulseScale = animation.animatedValue as Float
+                invalidate()
+            }
+            start()
+        }
     }
 
     fun hideTarget() {
         appearAnimator?.cancel()
         confirmAnimator?.cancel()
+        pulseAnimator?.cancel()
+        pulseScale = 1f
         targetX = null
         targetY = null
         invalidate()
@@ -105,7 +132,7 @@ class CalibrationView @JvmOverloads constructor(
         ringPaint.alpha = alpha
         dotPaint.alpha = alpha
         canvas.drawCircle(x, y, RING_RADIUS_DP * density * scale, ringPaint)
-        canvas.drawCircle(x, y, DOT_RADIUS_DP * density * scale, dotPaint)
+        canvas.drawCircle(x, y, DOT_RADIUS_DP * density * scale * pulseScale, dotPaint)
         if (confirmProgress > 0f) {
             confirmPaint.alpha = (200 * confirmProgress).toInt()
             canvas.drawCircle(x, y, RING_RADIUS_DP * density, confirmPaint)
@@ -138,6 +165,11 @@ class CalibrationView @JvmOverloads constructor(
 
         private const val CONFIRM_FLASH_MS = 250L
         private const val APPEAR_START_SCALE = 1.3f
+
+        // Inner-dot "breathing" pulse to hold fixation on the target centre.
+        private const val PULSE_MS = 650L
+        private const val PULSE_MIN = 0.7f
+        private const val PULSE_MAX = 1.3f
 
         // Bullseye sized in dp (44dp ring / 9dp dot diameters), per design §2.2.
         private const val RING_RADIUS_DP = 22f
