@@ -128,14 +128,21 @@ Per point:
 1. Frames already rejected upstream: no-face, blink (existing hysteresis gate).
 2. Discard the first **100–150 ms** of SAMPLE unconditionally (residual settle).
 3. **MAD outlier rejection:** drop samples > **2.5 × MAD** from the component-wise median
-   (per axis). Removes the stray saccade/twitch without assuming Gaussian noise.
-4. **Dispersion gate (feature units):** compute the robust spread (MAD or SD) of the
-   retained samples. Starting threshold: **0.02 feature units per axis** (≈2% of the eye
-   box; tune in pilot — start conservative, loosen if too much data is discarded).
-   If the full window fails, keep the best contiguous sub-window ≥ 300 ms that passes;
-   if none passes → **low-confidence**, re-capture (§4.2).
-5. Aggregate: component-wise **median** of retained samples → the `(feature, screen)` pair.
-6. Minimum retained samples: **10** (existing `MIN_SAMPLES`). Fewer → re-capture.
+   (per axis). Removes the stray saccade/twitch without assuming Gaussian noise. MAD is
+   wide when the fixation is genuinely noisy, so this trims tails without discarding
+   usable data.
+4. Aggregate: component-wise **median** of retained samples → the `(feature, screen)` pair.
+5. Minimum retained samples: **10** (existing `MIN_SAMPLES`). Fewer → re-capture.
+
+> **Removed after first on-device run (2026-07-24):** an absolute dispersion gate
+> (0.02 feature units per axis) plus a most-stable sub-window fallback. The tracker's own
+> per-frame noise floor is ~0.04 horizontally and ~0.05–0.10 vertically — *above* the gate —
+> so acceptance was effectively impossible: every point timed out, retried, and was excluded,
+> aborting the whole calibration ("never good enough"), and the rare sub-window that did pass
+> preferred stable-but-off-target moments over the target-centred median (worse accuracy than
+> the old plain median). Dispersion is still **computed and logged** for data-quality
+> auditing, just not used to reject. A dispersion-based low-confidence flag can return later
+> with per-axis thresholds derived from measured pilot noise — not guessed.
 
 ### 4.2 Re-capture flow
 - Low-confidence or under-sampled point → **immediately re-present once** (same position,
@@ -216,7 +223,12 @@ Immediately after the last fit point:
    accuracy number** (also convertible to cm via DisplayMetrics, matching `GazeTestActivity`).
 4. **Researcher decision screen** (advise-but-allow; never hard-block):
    - Median/P95 error in px and line-heights, validation error, drift flag, excluded points.
-   - Color-coded guidance: green ≤ 1 line-height median; amber ≤ 1.5; red above.
+   - Color-coded guidance anchored to the tracker's DOCUMENTED accuracy (~3–4 line-heights
+     on the A56, from the ~1.68–2.42 cm overall median in progress-notes.md), banded on the
+     worse of LOO and validation: **green ≤ 3.0 line-heights, amber ≤ 4.5, red above**. These
+     flag a calibration that is unusually bad *for this tracker*, not one that misses an
+     unattainable ideal — the earlier 1.0/1.5 bands were below the tracker's own floor and
+     read red on every normal run. Provisional; tighten once pilot data exists.
    - **Accept** (writes CSV + finalizes log) / **Redo worst points** (re-run only the
      worst-K LOO offenders, then re-gate) / **Redo all**.
    - Red result still acceptable at researcher discretion — logged as a quality flag.

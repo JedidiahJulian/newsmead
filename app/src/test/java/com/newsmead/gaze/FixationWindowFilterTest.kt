@@ -3,7 +3,6 @@ package com.newsmead.gaze
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
 
 class FixationWindowFilterTest {
 
@@ -59,28 +58,19 @@ class FixationWindowFilterTest {
     }
 
     @Test
-    fun lowConfidenceOnContinuousDrift() {
-        // x ramps 0.2 -> 0.8 over ~1s: no 300ms sub-window is stable either.
+    fun acceptsNoisyFixationAboveOldDispersionGate() {
+        // Vertical feature noise on this tracker is ~0.05-0.10 - well above the
+        // removed 0.02 gate. A noisy but unbiased fixation must still be ACCEPTED
+        // (the fix for the always-redo/exclusion regression), with the median
+        // centred on the true point and the noise reported as dispersion.
         val samples = (0 until 30).map { i ->
-            FixationWindowFilter.Sample(i * 33L, 0.2f + 0.02f * i, 0.3f)
+            val sign = if (i % 2 == 0) 1f else -1f
+            FixationWindowFilter.Sample(i * 33L, 0.5f + sign * 0.05f, 0.3f + sign * 0.08f)
         }
         val result = filter.filter(samples)
-        assertEquals(FixationWindowFilter.Status.LOW_CONFIDENCE, result.status)
-    }
-
-    @Test
-    fun picksStablePlateauViaSubWindow() {
-        // Two equal-size plateaus far apart: MAD rejects neither (deviations are
-        // symmetric), the full window fails dispersion, and only a sub-window
-        // inside one plateau qualifies.
-        val a = steady(15, 0, 0.45f, 0.30f)
-        val b = steady(15, 500, 0.55f, 0.30f)
-        val result = filter.filter(a + b)
         assertEquals(FixationWindowFilter.Status.ACCEPTED, result.status)
-        assertEquals(0.30f, result.medianY, 0.005f)
-        val nearA = abs(result.medianX - 0.45f) < 0.01f
-        val nearB = abs(result.medianX - 0.55f) < 0.01f
-        assertTrue("median ${result.medianX} sits between plateaus", nearA || nearB)
-        assertTrue(result.dispersionX <= 0.02f)
+        assertEquals(0.5f, result.medianX, 0.02f)
+        assertEquals(0.3f, result.medianY, 0.02f)
+        assertTrue("dispersion reported: ${result.dispersionY}", result.dispersionY > 0.02f)
     }
 }

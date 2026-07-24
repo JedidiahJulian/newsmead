@@ -618,10 +618,15 @@ class GazeCalibrationActivity : AppCompatActivity() {
         private const val WORST_REDO_COUNT = 3
         private const val MARGIN_FRAC = 0.1f
 
-        // Quality-gate bands in line-heights (provisional pending pilot).
-        private const val GREEN_LINES = 1.0f
-        private const val AMBER_LINES = 1.5f
-        private const val DRIFT_FLAG_LINE_FRACTION = 0.5f
+        // Quality-gate bands in line-heights, anchored to this tracker's DOCUMENTED
+        // accuracy (~1.68-2.42 cm overall median ~= 3-4 line-heights on the A56;
+        // see docs/progress-notes.md). The earlier 1.0/1.5 bands were below the
+        // tracker's own floor, so every normal calibration read red. These flag a
+        // calibration that is unusually bad FOR THIS TRACKER, not one that misses an
+        // unattainable ideal. Still provisional; tighten once pilot data exists.
+        private const val GREEN_LINES = 3.0f
+        private const val AMBER_LINES = 4.5f
+        private const val DRIFT_FLAG_LINE_FRACTION = 1.0f
         private const val ARTICLE_LINE_SPACING_MULT = 1.6f
 
         private val GREEN_COLOR = Color.parseColor("#2E7D32")

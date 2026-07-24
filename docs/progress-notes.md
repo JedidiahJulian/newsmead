@@ -22,6 +22,20 @@ FixationWindowFilterTest/CalibrationQualityTest. On-device (A56) validation of
 the new flow still required; thresholds (dispersion 0.02, gate bands 1.0/1.5
 lines, drift 0.5 line) are provisional pending pilot.
 
+Same day - **first on-device run regressed vs. the old design** (worse accuracy,
+gate always said redo). Root cause: the 0.02 feature-unit dispersion gate was
+BELOW the tracker's own per-frame noise floor (~0.04 horizontal, ~0.05-0.10
+vertical), so no SAMPLE window ever passed -> every point timed out, retried,
+excluded -> full-calibration abort; the rare sub-window that passed picked
+stable-but-off-target moments (worse than plain median). Fix: removed the
+dispersion gate AND sub-window selection from `FixationWindowFilter` - kept only
+lead-in trim + 2.5x MAD outlier rejection + median (old robust behavior plus a
+light trim). Dispersion still computed/logged, not used to reject. Also
+re-anchored gate bands to the tracker's DOCUMENTED accuracy (green <=3.0 /
+amber <=4.5 line-heights; drift flag at 1.0 line) since the old 1.0/1.5 bands
+were below the tracker floor and read red on every normal run. Tests updated;
+compileDebugKotlin + all com.newsmead.gaze.* pass. Re-test on A56.
+
 ## 2026-07-07 — Align MediaPipe gaze feature with the prototype
 
 Reworked `gaze/MediaPipeRawGazeSource.kt` to match the sister-repo prototype's

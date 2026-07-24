@@ -1,7 +1,6 @@
 package com.newsmead.gaze
 
 import kotlin.math.abs
-import kotlin.math.max
 import kotlin.math.sqrt
 
 /**
@@ -10,21 +9,26 @@ import kotlin.math.sqrt
  * feature samples (normalized iris-in-eye ratios, NOT pixels), so thresholds
  * can be tuned and re-run against logged data on the JVM without re-collecting.
  *
- * Pipeline: drop the lead-in, reject per-axis MAD outliers, then gate on
- * dispersion — accepting the full window, else the best contiguous sub-window,
- * else flagging the point low-confidence.
+ * Pipeline: drop the lead-in, reject per-axis MAD outliers, take the median of
+ * what remains. This is the old robust median with a light outlier trim added.
+ *
+ * NOTE: earlier this class also gated on absolute dispersion (0.02 feature units)
+ * and, when that failed, selected the most-stable sub-window. Both were removed:
+ * the tracker's own per-frame noise floor is ~0.04 horizontally and ~0.05-0.10
+ * vertically, so a 0.02 gate never passed and forced timeouts/exclusions, while
+ * sub-window selection preferred stable-but-off-target moments over the
+ * target-centred average. Dispersion is still COMPUTED and returned for the
+ * session log, just not used to reject.
  */
 class FixationWindowFilter(
     private val leadInMs: Long = LEAD_IN_MS,
     private val madK: Float = MAD_K,
-    private val maxDispersion: Float = MAX_DISPERSION,
-    private val minSubWindowMs: Long = MIN_SUB_WINDOW_MS,
     private val minSamples: Int = MIN_SAMPLES,
 ) {
 
     data class Sample(val timestampMs: Long, val x: Float, val y: Float)
 
-    enum class Status { ACCEPTED, LOW_CONFIDENCE, TOO_FEW_SAMPLES }
+    enum class Status { ACCEPTED, TOO_FEW_SAMPLES }
 
     data class Result(
         val status: Status,
@@ -49,30 +53,17 @@ class FixationWindowFilter(
         if (trimmed.size < minSamples) return diagnostic(Status.TOO_FEW_SAMPLES, trimmed, rawCount)
 
         // Per-axis MAD outlier rejection: removes the stray saccade/twitch without
-        // assuming Gaussian noise.
+        // assuming Gaussian noise. MAD is wide when the fixation is genuinely noisy,
+        // so this trims tails without discarding usable data.
         val retained = rejectMadOutliers(trimmed)
         if (retained.size < minSamples) return diagnostic(Status.TOO_FEW_SAMPLES, retained, rawCount)
 
-        val dx = standardDeviation(retained.map { it.x })
-        val dy = standardDeviation(retained.map { it.y })
-        if (dx <= maxDispersion && dy <= maxDispersion) {
-            return Result(
-                Status.ACCEPTED,
-                median(retained.map { it.x }), median(retained.map { it.y }),
-                dx, dy, rawCount, retained.size,
-            )
-        }
-
-        // Full window too spread: look for the best contiguous stable sub-window.
-        bestSubWindow(retained)?.let { sub ->
-            return Result(
-                Status.ACCEPTED,
-                median(sub.map { it.x }), median(sub.map { it.y }),
-                standardDeviation(sub.map { it.x }), standardDeviation(sub.map { it.y }),
-                rawCount, sub.size,
-            )
-        }
-        return diagnostic(Status.LOW_CONFIDENCE, retained, rawCount)
+        return Result(
+            Status.ACCEPTED,
+            median(retained.map { it.x }), median(retained.map { it.y }),
+            standardDeviation(retained.map { it.x }), standardDeviation(retained.map { it.y }),
+            rawCount, retained.size,
+        )
     }
 
     /** Result carrying whatever medians/dispersions are computable, for logging. */
@@ -100,33 +91,6 @@ class FixationWindowFilter(
         }
     }
 
-    /**
-     * Best (lowest worst-axis dispersion) contiguous sub-window spanning at least
-     * [minSubWindowMs] with at least [minSamples] samples and both axes within
-     * [maxDispersion]. Null if no sub-window qualifies. O(n^3) is fine at the
-     * ~45-sample scale of one SAMPLE window.
-     */
-    private fun bestSubWindow(samples: List<Sample>): List<Sample>? {
-        var best: List<Sample>? = null
-        var bestSpread = Float.MAX_VALUE
-        for (i in samples.indices) {
-            for (j in i + 1 until samples.size) {
-                if (samples[j].timestampMs - samples[i].timestampMs < minSubWindowMs) continue
-                val window = samples.subList(i, j + 1)
-                if (window.size < minSamples) continue
-                val dx = standardDeviation(window.map { it.x })
-                val dy = standardDeviation(window.map { it.y })
-                if (dx > maxDispersion || dy > maxDispersion) continue
-                val spread = max(dx, dy)
-                if (spread < bestSpread) {
-                    bestSpread = spread
-                    best = window
-                }
-            }
-        }
-        return best
-    }
-
     private fun median(values: List<Float>): Float {
         val sorted = values.sorted()
         val n = sorted.size
@@ -143,8 +107,6 @@ class FixationWindowFilter(
         // Starting values per docs/calibration-design.md §4; provisional pending pilot.
         private const val LEAD_IN_MS = 120L
         private const val MAD_K = 2.5f
-        private const val MAX_DISPERSION = 0.02f
-        private const val MIN_SUB_WINDOW_MS = 300L
         private const val MIN_SAMPLES = 10
         private const val MAD_EPSILON = 1e-6f
     }
