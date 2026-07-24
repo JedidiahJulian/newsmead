@@ -110,6 +110,29 @@ compileDebugKotlin + all com.newsmead.gaze.* pass. Re-test on A56.
   dot resume within ~1s and reflect the correction; confirm via `GazeMap` log
   showing the "[drift-corrected]" suffix during reading.
 
+## 2026-07-24 - Re-calibration system re-architected to the calibration standard
+
+Full re-architecture (design doc §7.2); re-calibration stays on the article page.
+- Extracted `CalibrationPointCollector` - the shared per-point capture engine
+  (APPEAR/HOLD/SETTLE/SAMPLE-adaptive/CONFIRM + FixationWindowFilter driving
+  CalibrationView). Both GazeCalibrationActivity and GazeTestActivity now use it,
+  removing the duplicated/divergent sampling (the test previously used the old
+  plain-median-over-fixed-window path, which is why improving calibration never
+  improved the test). GazeCalibrationActivity refactored onto it with behavior
+  preserved.
+- Redesigned GazeTestActivity as an accuracy-check + drift re-calibration screen:
+  shared capture (good sampling, light bg, pulsing bullseye, audio, mini-map);
+  3x3 measure feeding an affine fit in screen space; **honest leave-one-out**
+  post-correction estimate (DriftCorrection.leaveOneOutMedianPx) instead of the
+  optimistic in-sample residual; median/P95/vertical + line-height bands
+  matching the calibration gate. Remedy gate now offers Apply / **Revert to
+  calibration** / **Full recalibration** / Measure again (was Apply-only).
+- Added append-only recalibration_log.csv audit trail (apply/revert) alongside
+  the single active drift_correction.csv.
+- New DriftCorrection.leaveOneOutMedianPx + tests. assembleDebug + all
+  com.newsmead.gaze.* tests pass. On-device: re-verify measure -> apply -> revert
+  and that calibration still runs identically after the collector refactor.
+
 ## 2026-07-07 — Align MediaPipe gaze feature with the prototype
 
 Reworked `gaze/MediaPipeRawGazeSource.kt` to match the sister-repo prototype's

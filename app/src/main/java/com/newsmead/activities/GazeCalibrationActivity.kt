@@ -8,7 +8,6 @@ import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.text.TextPaint
 import android.util.Log
 import android.util.TypedValue
@@ -19,6 +18,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.newsmead.data.StudyConfig
 import com.newsmead.databinding.ActivityGazeCalibrationBinding
+import com.newsmead.gaze.CalibrationPointCollector
 import com.newsmead.gaze.CalibrationQuality
 import com.newsmead.gaze.CalibrationSample
 import com.newsmead.gaze.CalibrationSessionLog
@@ -53,8 +53,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private lateinit var binding: ActivityGazeCalibrationBinding
     private var rawGazeSource: LocalRawGazeSource? = null
     private val handler = Handler(Looper.getMainLooper())
-    private val filter = FixationWindowFilter()
     private var tone: ToneGenerator? = null
+    private lateinit var collector: CalibrationPointCollector
 
     // Sequence state
     private var gridPoints: List<PointF> = emptyList()
@@ -64,11 +64,6 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private var attempts = 0
     private var presentationCounter = 0
     private var started = false
-
-    // Collection state
-    private var collecting = false
-    private val sampleBuf = ArrayList<FixationWindowFilter.Sample>()
-    private var sampleStartUptimeMs = 0L
 
     // Results
     private val fitPairs = LinkedHashMap<Int, CalibrationSample>() // gridIndex -> pair
@@ -100,6 +95,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
             Log.w(TAG, "ToneGenerator unavailable; calibration runs without audio cues", e)
             null
         }
+        collector = CalibrationPointCollector(binding.calibrationView, tone)
         startRawGazeSource()
 
         // Start the dot sequence only when the researcher taps Start.
@@ -116,7 +112,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private fun startRawGazeSource() {
         rawGazeSource?.stop()
         rawGazeSource = LocalGazeSources.create(this).also { source ->
-            source.setOnRawGaze { x, y, ts -> runOnUiThread { onSample(x, y, ts) } }
+            source.setOnRawGaze { x, y, ts -> runOnUiThread { collector.onRawSample(x, y, ts) } }
             source.setOnFps { fps -> runOnUiThread { showFps(fps) } }
             source.setOnBlinkStats { stats -> latestBlinkStats = stats }
             source.start(this)
@@ -213,58 +209,23 @@ class GazeCalibrationActivity : AppCompatActivity() {
 
     private fun startAttempt() {
         val pres = presentations[presIndex]
-        collecting = false
-        sampleBuf.clear()
         if (attempts == 0) presStartBlinkStats = latestBlinkStats
         binding.statusText.text = ""
         updateProgressText(pres)
         updateMiniMap()
-        binding.calibrationView.showTarget(pres.point.x, pres.point.y)
-        // APPEAR (animation) + HOLD_ATTENTION (older-adult saccadic latency).
-        handler.postDelayed({ enterSettle() }, CalibrationView.APPEAR_MS + HOLD_MS)
-    }
-
-    /** Static, unsampled: overshoot/correction saccades land here. */
-    private fun enterSettle() {
-        handler.postDelayed({ enterSample() }, SETTLE_MS)
-    }
-
-    private fun enterSample() {
-        sampleBuf.clear()
-        collecting = true
-        sampleStartUptimeMs = SystemClock.uptimeMillis()
-        tone?.startTone(ToneGenerator.TONE_PROP_BEEP, TICK_TONE_MS)
-        handler.postDelayed({ checkSample() }, BASE_SAMPLE_MS)
-    }
-
-    /**
-     * Adaptive SAMPLE window: accept as soon as the filter is satisfied, extend
-     * in small steps otherwise, and fail the attempt at the timeout.
-     */
-    private fun checkSample() {
-        val result = filter.filter(sampleBuf.toList())
-        if (result.status == FixationWindowFilter.Status.ACCEPTED) {
-            enterConfirm(result)
-            return
+        // The shared collector runs APPEAR -> HOLD -> SETTLE -> SAMPLE -> CONFIRM
+        // and filters the samples; we own only the per-point outcome policy.
+        collector.capture(pres.point.x, pres.point.y) { result ->
+            if (result.status == FixationWindowFilter.Status.ACCEPTED) {
+                recordSuccess(result)
+                handler.postDelayed({ advance() }, CONFIRM_MS)
+            } else {
+                failAttempt(result)
+            }
         }
-        val elapsed = SystemClock.uptimeMillis() - sampleStartUptimeMs
-        if (elapsed < SAMPLE_TIMEOUT_MS) {
-            handler.postDelayed({ checkSample() }, SAMPLE_RECHECK_MS)
-        } else {
-            failAttempt(result)
-        }
-    }
-
-    private fun enterConfirm(result: FixationWindowFilter.Result) {
-        collecting = false
-        binding.calibrationView.flashConfirm()
-        tone?.startTone(ToneGenerator.TONE_PROP_ACK, ACK_TONE_MS)
-        recordSuccess(result)
-        handler.postDelayed({ advance() }, CONFIRM_MS)
     }
 
     private fun failAttempt(result: FixationWindowFilter.Result) {
-        collecting = false
         attempts++
         val pres = presentations[presIndex]
         Log.w(
@@ -528,10 +489,6 @@ class GazeCalibrationActivity : AppCompatActivity() {
         binding.calibrationView.setMiniMap(states)
     }
 
-    private fun onSample(x: Float, y: Float, timestampMs: Long) {
-        if (collecting) sampleBuf.add(FixationWindowFilter.Sample(timestampMs, x, y))
-    }
-
     private fun logPresentation(
         pres: Presentation,
         result: FixationWindowFilter.Result,
@@ -596,6 +553,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
+        collector.cancel()
         rawGazeSource?.stop()
         tone?.release()
         if (!logFinished) sessionLog?.finish("aborted")
@@ -604,12 +562,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "GazeCalib"
 
-        // Per-point state timings (docs/calibration-design.md §2.3).
-        private const val HOLD_MS = 500L
-        private const val SETTLE_MS = 400L
-        private const val BASE_SAMPLE_MS = 700L
-        private const val SAMPLE_RECHECK_MS = 250L
-        private const val SAMPLE_TIMEOUT_MS = 1500L
+        // Inter-point pacing owned by this host; per-point capture timings live
+        // in CalibrationPointCollector.
         private const val CONFIRM_MS = 250L
         private const val RETRY_PAUSE_MS = 500L
 
@@ -640,8 +594,6 @@ class GazeCalibrationActivity : AppCompatActivity() {
         )
 
         private const val TONE_VOLUME = 60
-        private const val TICK_TONE_MS = 50
-        private const val ACK_TONE_MS = 100
         private const val CAMERA_PERMISSION_REQUEST = 4104
     }
 }

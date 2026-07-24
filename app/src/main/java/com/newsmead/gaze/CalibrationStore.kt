@@ -21,6 +21,8 @@ object CalibrationStore {
     private const val LEGACY_WIFI_CSV_NAME = "calibration_wifi.csv"
     private const val DRIFT_CSV_NAME = "drift_correction.csv"
     private const val DRIFT_HEADER = "cx0,cx1,cx2,cy0,cy1,cy2,timestamp_ms,pre_median_px,post_median_px"
+    private const val RECAL_LOG_NAME = "recalibration_log.csv"
+    private const val RECAL_LOG_HEADER = "timestamp_ms,outcome,pre_median_px,post_median_px"
 
     fun save(context: Context, samples: List<CalibrationSample>) {
         val file = File(context.filesDir, CSV_NAME)
@@ -84,6 +86,26 @@ object CalibrationStore {
         val file = File(context.filesDir, DRIFT_CSV_NAME)
         if (file.exists() && file.delete()) {
             Log.i(TAG, "Cleared drift correction (superseded)")
+        }
+    }
+
+    /**
+     * Append-only audit trail of re-calibration actions (apply/revert), one line
+     * per action, for thesis data-quality reporting. Separate from the single
+     * active drift_correction.csv so history is never overwritten.
+     */
+    fun appendRecalibrationHistory(
+        context: Context,
+        outcome: String,
+        preMedianPx: Float,
+        postMedianPx: Float,
+    ) {
+        val file = File(context.filesDir, RECAL_LOG_NAME)
+        try {
+            if (!file.exists()) file.appendText(RECAL_LOG_HEADER + '\n')
+            file.appendText("${System.currentTimeMillis()},$outcome,$preMedianPx,$postMedianPx\n")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to append $RECAL_LOG_NAME", e)
         }
     }
 

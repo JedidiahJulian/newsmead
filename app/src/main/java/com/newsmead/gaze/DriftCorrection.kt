@@ -68,6 +68,30 @@ class DriftCorrection(val coeffX: DoubleArray, val coeffY: DoubleArray) {
             return DriftCorrection(composeAxis(outer.coeffX), composeAxis(outer.coeffY))
         }
 
+        /**
+         * Honest post-correction estimate: refit the affine correction leaving
+         * one observation out each time, predict the held-out point, and return
+         * the median px error. Unlike [medianResidualPx] (in-sample, optimistic),
+         * this estimates how the correction generalizes to gaze it was not fitted
+         * on. Null if there are too few observations to leave one out (needs
+         * MIN_OBSERVATIONS + 1) or any refit is degenerate.
+         */
+        fun leaveOneOutMedianPx(observations: List<Observation>): Float? {
+            if (observations.size < MIN_OBSERVATIONS + 1) return null
+            val errors = ArrayList<Float>(observations.size)
+            for (held in observations.indices) {
+                val training = observations.filterIndexed { i, _ -> i != held }
+                val fit = fit(training) ?: return null
+                val corrected = fit.apply(observations[held].predictedX, observations[held].predictedY)
+                errors.add(
+                    hypot(corrected[0] - observations[held].targetX, corrected[1] - observations[held].targetY),
+                )
+            }
+            val sorted = errors.sorted()
+            val n = sorted.size
+            return if (n % 2 == 1) sorted[n / 2] else (sorted[n / 2 - 1] + sorted[n / 2]) / 2f
+        }
+
         /** Median px error of [correction] over [observations] (in-sample). */
         fun medianResidualPx(
             correction: DriftCorrection,

@@ -257,6 +257,34 @@ drift, which is mostly bias/gain, not a change in the polynomial's shape:
   If the affine correction can't fix it (error isn't affine), the honest remedy is a full
   recalibration.
 
+### 7.2 Re-calibration architecture (redesign, 2026-07-24)
+
+The accuracy/re-calibration screen (`GazeTestActivity`, launched from the article top bar)
+was brought up to the calibration standard and its duplication removed:
+
+- **Shared capture core.** `CalibrationPointCollector` owns the per-point
+  APPEAR→HOLD→SETTLE→SAMPLE(adaptive)→CONFIRM mechanics + `FixationWindowFilter` and drives
+  `CalibrationView`. **Both** full calibration and re-calibration use it, so they share
+  identical sampling (MAD outlier rejection, lead-in trim, pulsing bullseye, light
+  background, audio) instead of each carrying its own copy — the old test used a separate,
+  inferior plain-median-over-fixed-window path that improving calibration never touched.
+- **Measurement space.** The collector is fed the *mapped screen px* from the live pipeline
+  (not raw features), because the drift correction is affine in screen space. Its filter
+  medians in px; the per-point `(predicted px, target px)` pairs feed the fit.
+- **Purpose split: measure → remedy.** A 3×3 pass (20/50/80%, off the calibration grid)
+  reports median/P95/vertical error in px and line-heights. Then the screen offers the
+  right remedy, not just "apply":
+  - **Apply correction** — affine fit, composed with any active correction.
+  - **Revert to calibration** — clears the drift correction (base 16-point map only).
+  - **Full recalibration** — launches the 16-point flow when drift isn't affine-correctable.
+  - **Measure again.**
+- **Honest post-estimate.** The gate shows a **leave-one-out** estimate of the corrected
+  error (`DriftCorrection.leaveOneOutMedianPx`), not the optimistic in-sample residual —
+  refit on n−1 points, predict the held-out one. Same line-height bands as the calibration
+  gate (green ≤3, amber ≤4.5).
+- **Audit trail.** Applying/reverting appends a timestamped line to `recalibration_log.csv`
+  (append-only history), alongside the single active `drift_correction.csv`.
+
 ---
 
 ## 8. Implementation notes

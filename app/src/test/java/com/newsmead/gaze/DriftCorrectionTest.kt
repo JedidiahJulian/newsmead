@@ -78,6 +78,33 @@ class DriftCorrectionTest {
     }
 
     @Test
+    fun leaveOneOutIsSmallForConsistentAffineDrift() {
+        // A clean affine drift generalizes: LOO error stays tiny.
+        val obs = observations { x, y -> (1.05f * x + 20f) to (0.98f * y - 30f) }
+        val loo = DriftCorrection.leaveOneOutMedianPx(obs)
+        requireNotNull(loo)
+        assertTrue("loo=$loo", loo < 2f)
+    }
+
+    @Test
+    fun leaveOneOutPunishesNonAffineNoise() {
+        // Add a large per-point perturbation the affine model can't capture: the
+        // in-sample residual understates the true error; LOO exposes it.
+        val base = observations { x, y -> x + 20f to y - 20f }.toMutableList()
+        base[4] = base[4].copy(targetX = base[4].targetX + 250f, targetY = base[4].targetY - 250f)
+        val fit = DriftCorrection.fit(base)!!
+        val inSample = DriftCorrection.medianResidualPx(fit, base)
+        val loo = DriftCorrection.leaveOneOutMedianPx(base)!!
+        assertTrue("loo=$loo inSample=$inSample", loo >= inSample)
+    }
+
+    @Test
+    fun leaveOneOutNullWhenTooFew() {
+        val obs = observations { x, y -> x to y }.take(4)
+        assertNull(DriftCorrection.leaveOneOutMedianPx(obs))
+    }
+
+    @Test
     fun nullWhenTooFewObservations() {
         val obs = observations { x, y -> x to y }.take(3)
         assertNull(DriftCorrection.fit(obs))
