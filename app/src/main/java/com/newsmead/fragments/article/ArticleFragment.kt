@@ -25,7 +25,6 @@ import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
 import com.newsmead.R
-import com.newsmead.activities.GazeCalibrationActivity
 import com.newsmead.activities.GazeTestActivity
 import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
@@ -262,10 +261,6 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             requireActivity().onBackPressedDispatcher.onBackPressed()
         }
 
-        binding.btnRunGazeCalibration.setOnClickListener {
-            launchGazeCalibration()
-        }
-
         binding.btnRunGazeTest.setOnClickListener {
             launchGazeTest()
         }
@@ -490,14 +485,6 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             launchedCalibration = false
             restartLiveGazeAfterCalibration()
         }
-    }
-
-    private fun launchGazeCalibration() {
-        launchedCalibration = true
-        rsiInferencer?.flush()
-        gazeProvider?.stop()
-        gazeProvider = null
-        startActivity(Intent(requireContext(), GazeCalibrationActivity::class.java))
     }
 
     /** Stop live gaze (frees the camera), open the accuracy test, resume on return. */
@@ -890,7 +877,6 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         // Change icon colors
         binding.btnArticleBack.setColorFilter(color)
         binding.btnArticleShare.setColorFilter(color)
-        binding.btnRunGazeCalibration.setColorFilter(color)
 
         binding.btnSaveList.iconTint = ColorStateList.valueOf(color)
         binding.btnTranslateArticle.iconTint = ColorStateList.valueOf(color)

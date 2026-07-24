@@ -1,16 +1,15 @@
 package com.newsmead.fragments.bottomnavigation
 
-import android.content.Context.MODE_PRIVATE
-import android.content.SharedPreferences
+import android.content.Intent
 import android.os.Bundle
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.newsmead.R
+import com.newsmead.activities.GazeCalibrationActivity
 import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.FirebaseHelper
@@ -20,8 +19,6 @@ import com.newsmead.recyclerviews.feed.ArticleAdapter
 import com.newsmead.recyclerviews.feed.clickListener
 class HomeFragment : Fragment(), clickListener {
 
-    // Shared preferences for current language
-    private lateinit var sharedPreferences: SharedPreferences
     private lateinit var articleAdapter: ArticleAdapter
     private lateinit var viewBinding: FragmentHomeBinding
 
@@ -36,15 +33,6 @@ class HomeFragment : Fragment(), clickListener {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        // Shared preferences
-        this.sharedPreferences = requireActivity().getSharedPreferences("language", MODE_PRIVATE)
-
-        // Set language to English by default
-        var language = sharedPreferences.getString("language", "English")
-        if (language == "Filipino") {
-            this.viewBinding.btnLanguage.text = getString(R.string.home_show_english)
-        }
 
         // Start shimmer
         viewBinding.shimmerFeed.startShimmer()
@@ -81,38 +69,9 @@ class HomeFragment : Fragment(), clickListener {
             Navigation.findNavController(requireView()).navigate(action)
         }
 
-        // Language Button (Toggles between English and Filipino)
-        this.viewBinding.btnLanguage.setOnClickListener {
-            viewBinding.rvFeed.visibility = View.GONE
-            viewBinding.shimmerFeed.startShimmer()
-            viewBinding.shimmerFeed.visibility = View.VISIBLE
-
-            if (language == "English") {
-                // Change string resource
-                this.viewBinding.btnLanguage.text = getString(R.string.home_show_english)
-                language = "Filipino"
-                sharedPreferences.edit().putString("language", "Filipino").apply()
-
-            } else {
-                // Change string resource
-                this.viewBinding.btnLanguage.text = getString(R.string.home_show_filipino)
-                language = "English"
-                sharedPreferences.edit().putString("language", "English").apply()
-            }
-            DataHelper.loadArticleData(context, language=language) { articles ->
-                if (FirebaseHelper.isNetworkAvailable(requireContext())) {
-                    // Stop the shimmer
-                    viewBinding.shimmerFeed.stopShimmer()
-                    viewBinding.shimmerFeed.visibility = View.GONE
-                    viewBinding.rvFeed.visibility = View.VISIBLE
-                    // Update the adapter with the retrieved articles
-                    articleAdapter.updateData(articles)
-
-
-                    Toast.makeText(context, "You're now seeing: $language news", Toast.LENGTH_SHORT).show()
-                }
-            }
-
+        // Gaze calibration button - launches the 16-point calibration screen
+        this.viewBinding.btnGazeCalibration.setOnClickListener {
+            startActivity(Intent(requireContext(), GazeCalibrationActivity::class.java))
         }
     }
 
