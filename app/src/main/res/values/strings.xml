@@ -6,12 +6,26 @@
 
     <!-- gaze calibration (Stage 4) -->
     <string name="calib_progress_initial">Calibration</string>
-    <string name="calib_ready_instruction">Position the phone in front of the laptop screen and sit comfortably.\nTap Start when ready.</string>
+    <string name="calib_ready_instruction">Hold the phone at your normal reading position.\nFollow the dot with your eyes - it flashes green when captured.\nTap Start when ready.</string>
     <string name="calib_start_button">Ready - Start</string>
     <string name="calib_progress">Point %1$d / %2$d - look at the dot</string>
     <string name="calib_retry">No clear read - retrying</string>
     <string name="calib_done">Calibration complete (%1$d / %2$d)</string>
     <string name="calib_saved">Saved. Press back to return.</string>
+    <string name="calib_practice_label">Practice point - follow the dot</string>
+    <string name="calib_drift_label">One more - look at the dot</string>
+    <string name="calib_validation_progress">Accuracy check - point %1$d / %2$d</string>
+    <string name="calib_excluded_notice">Point skipped after 2 tries</string>
+    <string name="calib_gate_title">Calibration quality check</string>
+    <string name="calib_gate_summary">Fit error (leave-one-out):\nmedian %1$.0f px (%2$.1f lines) - P95 %3$.0f px (%4$.1f lines)\nValidation (%5$d pts): median %6$.0f px (%7$.1f lines)\nExcluded points: %8$d</string>
+    <string name="calib_gate_drift">High drift between start and end (%1$.0f px)</string>
+    <string name="calib_gate_advice_good">Good - accept</string>
+    <string name="calib_gate_advice_ok">Borderline - consider redoing worst points</string>
+    <string name="calib_gate_advice_poor">Poor - redo recommended</string>
+    <string name="calib_accept">Accept and save</string>
+    <string name="calib_redo_worst">Redo worst points</string>
+    <string name="calib_redo_all">Redo all</string>
+    <string name="calib_aborted">Only %1$d of %2$d points usable - calibration must be redone</string>
 
     <!-- text commons -->
     <string name="commons_category">Category</string>

@@ -3,7 +3,7 @@
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000"
+    android:background="@color/light"
     android:keepScreenOn="true">
 
     <com.newsmead.gaze.CalibrationView
@@ -17,7 +17,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="top|center_horizontal"
         android:layout_marginTop="24dp"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/light_text"
         android:textSize="16sp"
         android:text="@string/calib_progress_initial" />
 
@@ -28,7 +28,7 @@
         android:layout_gravity="top|end"
         android:layout_marginTop="24dp"
         android:layout_marginEnd="16dp"
-        android:textColor="#00E5FF"
+        android:textColor="#00695C"
         android:textSize="14sp"
         android:text="" />
 
@@ -38,7 +38,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="48dp"
-        android:textColor="#FFCC00"
+        android:textColor="#B26A00"
         android:textSize="16sp"
         android:text="" />
 
@@ -48,5 +48,47 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:text="@string/calib_start_button" />
+
+    <LinearLayout
+        android:id="@+id/gatePanel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/gateText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp"
+            android:textColor="@color/light_text"
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/btnAccept"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/calib_accept" />
+
+        <Button
+            android:id="@+id/btnRedoWorst"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/calib_redo_worst" />
+
+        <Button
+            android:id="@+id/btnRedoAll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/calib_redo_all" />
+
+    </LinearLayout>
 
 </FrameLayout>

@@ -1,5 +1,27 @@
 # NewsMead — Progress Notes
 
+## 2026-07-24 - Calibration redesign doc (review of external draft)
+
+Reviewed an externally drafted 16-point calibration design and wrote the revised,
+codebase-accurate version as docs/calibration-design.md (state machine, feature-unit
+rejection/dispersion, drift check, post-fit LOO + validation quality gate with
+Accept/Redo, session JSON log; §9 lists all corrections vs. the draft).
+
+Same day - implemented the full redesign. New: `FixationWindowFilter` (lead-in
+trim, MAD outlier rejection, dispersion gate + sub-window fallback),
+`CalibrationQuality` (LOO residuals, median/P95), `CalibrationSessionLog`
+(incremental per-session JSON). Rewrote `GazeCalibrationActivity` (per-point
+APPEAR/HOLD/SETTLE/SAMPLE-adaptive/CONFIRM state machine, randomized order +
+practice point + drift repeat, 2-attempt exclusion with 12-point floor, audio
+cues, 5-point held-out validation pass, Accept/Redo-worst/Redo-all gate with
+line-height error bands; **CSV now written only on Accept**) and
+`CalibrationView` (light reading-surface background, dp bullseye, appear/confirm
+animation, 16-dot mini-map). Verified: `:app:assembleDebug` + all
+`com.newsmead.gaze.*` JVM tests pass (JDK 17), incl. new
+FixationWindowFilterTest/CalibrationQualityTest. On-device (A56) validation of
+the new flow still required; thresholds (dispersion 0.02, gate bands 1.0/1.5
+lines, drift 0.5 line) are provisional pending pilot.
+
 ## 2026-07-07 — Align MediaPipe gaze feature with the prototype
 
 Reworked `gaze/MediaPipeRawGazeSource.kt` to match the sister-repo prototype's
