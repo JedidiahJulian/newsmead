@@ -777,6 +777,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             val provider = LocalCalibratedGazeProvider(
                 mapper = GazeMapper(samples),
                 rawSource = rawSource,
+                correction = CalibrationStore.loadDriftCorrection(requireContext()),
             )
             provider.setOnGaze { x, y -> activity?.runOnUiThread { onGaze.onGaze(x, y) } }
             provider.start(viewLifecycleOwner)

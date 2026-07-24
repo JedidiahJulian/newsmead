@@ -236,6 +236,26 @@ Immediately after the last fit point:
 `GazeTestActivity` (3×3, 20/50/80%) stays as the independent benchmark; the in-flow
 validation pass is a quick subset, not a replacement.
 
+### 7.1 Mid-session drift correction (added 2026-07-24)
+
+The accuracy test doubles as a drift-correction instrument. Each run yields 9
+(predicted px, true target px) pairs — exactly the data needed to correct posture-shift
+drift, which is mostly bias/gain, not a change in the polynomial's shape:
+
+- After a run, an **affine correction** `truth ≈ A·predicted + b` (6 params, least squares)
+  is fitted from the pairs and offered to the researcher with the measured pre-error and the
+  estimated post-error (in-sample — re-run the test to verify independently).
+- On Apply, the correction is stored (`drift_correction.csv`) and applied by
+  `LocalCalibratedGazeProvider` **after** `GazeMapper` — the 16-point fit and the
+  `GazeProvider` boundary are untouched, and the article screen picks it up on next start.
+- The test always measures the live pipeline (correction included), so a subsequent fit
+  maps corrected→truth and is stored as the **composition** with the active correction.
+- Any accepted full calibration **clears** the correction (`CalibrationStore.save`).
+- Deliberately NOT a fresh 9-point polynomial re-fit: 6 coefficients from 9 points is a
+  thin, edge-unstable fit that risks replacing a good-but-drifted map with a worse one.
+  If the affine correction can't fix it (error isn't affine), the honest remedy is a full
+  recalibration.
+
 ---
 
 ## 8. Implementation notes

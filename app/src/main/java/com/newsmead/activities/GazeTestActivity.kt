@@ -13,6 +13,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.newsmead.databinding.ActivityGazeTestBinding
 import com.newsmead.gaze.CalibrationStore
+import com.newsmead.gaze.DriftCorrection
 import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.GazeProvider
 import com.newsmead.gaze.LocalCalibratedGazeProvider
@@ -42,6 +43,14 @@ class GazeTestActivity : AppCompatActivity() {
     private val bufX = ArrayList<Float>()
     private val bufY = ArrayList<Float>()
     private val errors = ArrayList<FloatArray>() // per point [dx, dy] in px
+    private val observations = ArrayList<DriftCorrection.Observation>()
+
+    // Drift correction: what the pipeline ran with during this test, and the
+    // candidate fitted from the latest run (pending researcher approval).
+    private var activeCorrection: DriftCorrection? = null
+    private var pendingCorrection: DriftCorrection? = null
+    private var pendingPreMedianPx = 0f
+    private var pendingPostMedianPx = 0f
     @Volatile private var latestBlinkStats: LocalRawGazeSource.BlinkStats? = null
     private var testStartBlinkStats: LocalRawGazeSource.BlinkStats? = null
     private var pointStartBlinkStats: LocalRawGazeSource.BlinkStats? = null
@@ -52,6 +61,7 @@ class GazeTestActivity : AppCompatActivity() {
         setContentView(binding.root)
         enableImmersiveMode()
         binding.accuracyButton.setOnClickListener { startAccuracyTest() }
+        binding.applyCorrectionButton.setOnClickListener { applyPendingCorrection() }
         startGaze()
     }
 
@@ -72,7 +82,8 @@ class GazeTestActivity : AppCompatActivity() {
         val rawSource = LocalGazeSources.create(this)
         rawSource.setOnFps { fps -> runOnUiThread { binding.gazeDot.setFps(fps) } }
         rawSource.setOnBlinkStats { stats -> latestBlinkStats = stats }
-        provider = LocalCalibratedGazeProvider(mapper, rawSource).apply {
+        activeCorrection = CalibrationStore.loadDriftCorrection(this)
+        provider = LocalCalibratedGazeProvider(mapper, rawSource, activeCorrection).apply {
             setOnGaze { x, y -> runOnUiThread { onGaze(x, y) } }
             start(this@GazeTestActivity)
         }
@@ -105,6 +116,9 @@ class GazeTestActivity : AppCompatActivity() {
         testPoints = computeTestPoints(view.width, view.height)
         testIndex = 0
         errors.clear()
+        observations.clear()
+        pendingCorrection = null
+        binding.applyCorrectionButton.visibility = View.GONE
         testStartBlinkStats = latestBlinkStats
         binding.accuracyButton.visibility = View.GONE
         showTestPoint(0)
@@ -151,6 +165,7 @@ class GazeTestActivity : AppCompatActivity() {
         val dx = gx - p.x
         val dy = gy - p.y
         errors.add(floatArrayOf(dx, dy))
+        observations.add(DriftCorrection.Observation(gx, gy, p.x, p.y))
         val pointStats = blinkDelta(pointStartBlinkStats, latestBlinkStats)
         Log.i(
             TAG,
@@ -231,6 +246,43 @@ class GazeTestActivity : AppCompatActivity() {
             com.newsmead.R.string.gaze_test_accuracy_result, medPx, medCm, medVertPx, medVertCm,
         )
         binding.accuracyButton.visibility = View.VISIBLE
+        offerDriftCorrection(medPx)
+    }
+
+    /**
+     * Fit an affine drift correction from this run's (predicted, truth) pairs
+     * and offer it to the researcher. The test ran through the pipeline with
+     * [activeCorrection] applied, so the new fit maps corrected->truth and the
+     * stored candidate is the composition of the two. The estimate shown is
+     * in-sample; re-run the test after applying to verify independently.
+     */
+    private fun offerDriftCorrection(preMedianPx: Float) {
+        val newFit = DriftCorrection.fit(observations) ?: return
+        val postMedianPx = DriftCorrection.medianResidualPx(newFit, observations)
+        pendingCorrection = activeCorrection?.let { DriftCorrection.compose(newFit, it) } ?: newFit
+        pendingPreMedianPx = preMedianPx
+        pendingPostMedianPx = postMedianPx
+        Log.i(
+            TAG,
+            String.format(
+                Locale.US,
+                "DRIFT FIT: median %.0f px -> est. %.0f px (in-sample, n=%d, composed=%b)",
+                preMedianPx, postMedianPx, observations.size, activeCorrection != null,
+            ),
+        )
+        binding.applyCorrectionButton.text =
+            getString(com.newsmead.R.string.gaze_test_apply_correction, preMedianPx, postMedianPx)
+        binding.applyCorrectionButton.visibility = View.VISIBLE
+    }
+
+    private fun applyPendingCorrection() {
+        val correction = pendingCorrection ?: return
+        CalibrationStore.saveDriftCorrection(this, correction, pendingPreMedianPx, pendingPostMedianPx)
+        pendingCorrection = null
+        binding.applyCorrectionButton.visibility = View.GONE
+        binding.hintText.text = getString(com.newsmead.R.string.gaze_test_correction_applied)
+        // Restart the pipeline so the live dot immediately uses the correction.
+        startGaze()
     }
 
     private fun blinkDelta(

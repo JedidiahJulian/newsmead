@@ -31,4 +31,12 @@
         android:visibility="gone"
         android:text="@string/gaze_test_run_accuracy" />
 
+    <Button
+        android:id="@+id/applyCorrectionButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="100dp"
+        android:visibility="gone" />
+
 </FrameLayout>

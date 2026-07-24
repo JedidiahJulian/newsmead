@@ -4,11 +4,14 @@ import androidx.lifecycle.LifecycleOwner
 
 /**
  * Local Stage 3 provider: maps phone-side raw gaze features through the saved
- * 16-point calibration and emits calibrated full-screen phone pixels.
+ * 16-point calibration and emits calibrated full-screen phone pixels. An
+ * optional affine [correction] (fitted from the gaze accuracy test) is applied
+ * after the mapper to compensate mid-session drift without re-calibrating.
  */
 class LocalCalibratedGazeProvider(
     private val mapper: GazeMapper,
     private val rawSource: LocalRawGazeSource,
+    private val correction: DriftCorrection? = null,
 ) : GazeProvider {
 
     private val medianX = MedianFilter()
@@ -26,7 +29,8 @@ class LocalCalibratedGazeProvider(
             val fx = smoothX.filter(medianX.filter(gazeX), timestampMs)
             val fy = smoothY.filter(medianY.filter(gazeY), timestampMs)
             val screen = mapper.map(fx, fy)
-            onGaze?.onGaze(screen[0], screen[1])
+            val corrected = correction?.apply(screen[0], screen[1]) ?: screen
+            onGaze?.onGaze(corrected[0], corrected[1])
         }
         rawSource.start(owner)
     }

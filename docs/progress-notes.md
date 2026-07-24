@@ -36,6 +36,25 @@ amber <=4.5 line-heights; drift flag at 1.0 line) since the old 1.0/1.5 bands
 were below the tracker floor and read red on every normal run. Tests updated;
 compileDebugKotlin + all com.newsmead.gaze.* pass. Re-test on A56.
 
+## 2026-07-24 - Calibration button moved to home + drift correction from accuracy test
+
+- Home page: replaced the language-toggle button ("Show me English/Filipino
+  news" - inert in offline study mode, all articles English) with "Calibrate
+  eye tracker" launching GazeCalibrationActivity. Removed the calibration
+  button from the article top bar (accuracy-test button stays, re-anchored
+  next to back). Language-toggle logic deleted from HomeFragment; restore from
+  git history if Filipino content ever returns.
+- Accuracy test now doubles as re-adaptation (James's idea): after a run, an
+  affine drift correction (truth ~ A*predicted + b) is fitted from the 9
+  (predicted, target) pairs and offered with pre -> est.-post medians. Applied
+  post-mapper in LocalCalibratedGazeProvider (16-pt fit + GazeProvider boundary
+  untouched), persisted as drift_correction.csv, composed across successive
+  runs, cleared automatically when a new full calibration is accepted.
+  Deliberately an affine layer, NOT a fresh 9-point polynomial refit (thin fit
+  would risk replacing a better map). New DriftCorrection + 6 JVM tests;
+  design doc §7.1. assembleDebug + all com.newsmead.gaze.* tests pass.
+  On-device drift-correction round-trip (test -> apply -> re-test) pending.
+
 ## 2026-07-07 — Align MediaPipe gaze feature with the prototype
 
 Reworked `gaze/MediaPipeRawGazeSource.kt` to match the sister-repo prototype's
