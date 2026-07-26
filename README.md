@@ -116,6 +116,7 @@ const val LOCK_ARTICLE_FONT_SIZE = true
 const val ARTICLE_FONT_SIZE_DP = 22f
 const val GAZE_ENABLED = true
 const val GAZE_TOUCH_VALIDATION = false
+val SCAFFOLD_MODE = ScaffoldMode.ADAPTIVE
 ```
 
 Meaning:
@@ -126,6 +127,7 @@ Meaning:
 - `ARTICLE_FONT_SIZE_DP = 22f`: the body text is applied in `dp`, not `sp`, so Android accessibility font scaling does not change the actual pixel height.
 - `GAZE_ENABLED = true`: the article screen attaches the gaze overlay, line mapper, and RSI inferencer.
 - `GAZE_TOUCH_VALIDATION = false`: live gaze is used by default. If set to `true`, finger touches simulate gaze for line-mapping validation.
+- `SCAFFOLD_MODE = ScaffoldMode.ADAPTIVE`: which visual scaffolding behaviour the article screen runs. `ADAPTIVE` is the study condition. Other values force a single level or cycle through all of them for validation and demo recording. See [Scaffold Modes](#scaffold-modes).
 
 ### Stage 4: Line AOI Mapping
 
@@ -751,6 +753,58 @@ Purpose:
 
 The overlay is not the data source. It only displays the output produced by the gaze provider.
 
+The same overlay also draws the four adaptive scaffold levels. Which one appears is decided by `SCAFFOLD_MODE`.
+
+## Scaffold Modes
+
+Main files:
+
+```text
+app/src/main/java/com/newsmead/data/StudyConfig.kt
+app/src/main/java/com/newsmead/gaze/AdaptiveScaffoldController.kt
+app/src/main/java/com/newsmead/gaze/GazeOverlayView.kt
+```
+
+`SCAFFOLD_MODE` selects how the article screen decides which visual scaffold to show. It is a compile-time constant, so changing it means editing `StudyConfig.kt` and rebuilding. There is no in-app toggle.
+
+```kotlin
+val SCAFFOLD_MODE = ScaffoldMode.ADAPTIVE
+```
+
+| Value | Behaviour |
+| --- | --- |
+| `ADAPTIVE` | **The study condition.** Levels are selected by the Adaptive Instability Index, subject to baseline readiness, gaze confidence, and escalation/withdrawal persistence. |
+| `OFF` | No scaffold at all. The static control condition. |
+| `FORCE_WORD` | Level 1 only: a translucent box on the fixated word. |
+| `FORCE_LINE` | Level 2 only: a translucent band on the current line. |
+| `FORCE_FOCUS` | Level 3 only: text outside the current line plus two lines above/below is dimmed. |
+| `FORCE_REENTRY` | Level 4 only: the last stable line is emphasised, with an arrow when it is off screen. |
+| `DEMO_CYCLE` | Holds each level in turn (none, word, line, focus, re-entry) and loops, for recording all four in one continuous take. |
+
+Every mode except `ADAPTIVE` pins the level directly and **bypasses the adaptive policy**: no baseline wait, no confidence gate, no persistence timing. Real gaze still decides *where* each level is drawn, so the forced and demo modes validate rendering and targeting only. They demonstrate nothing about instability detection, and results from them must not be reported as adaptive behaviour.
+
+Related switches:
+
+```kotlin
+const val SCAFFOLD_DEMO_LEVEL_DURATION_MS = 12_000L
+const val SCAFFOLD_DEMO_CAPTION = true
+const val GAZE_DEBUG_VISUALS = true
+```
+
+- `SCAFFOLD_DEMO_LEVEL_DURATION_MS`: how long `DEMO_CYCLE` holds each level.
+- `SCAFFOLD_DEMO_CAPTION`: draws the active level's name on screen during `DEMO_CYCLE`.
+- `GAZE_DEBUG_VISUALS`: the red gaze dot and FPS readout. A researcher diagnostic, not a participant scaffold.
+
+Before any participant-facing session, confirm `SCAFFOLD_MODE` is `ADAPTIVE` (or `OFF` for the control condition) and `GAZE_DEBUG_VISUALS` is `false`.
+
+Transitions are logged under `GazeScaffold`:
+
+```powershell
+adb logcat -s GazeScaffold
+```
+
+The full controller policy, thresholds, level designs, validation order, and outstanding research decisions are documented in [docs/adaptive-visual-scaffolding.md](docs/adaptive-visual-scaffolding.md).
+
 ## RSI: Reading State Index
 
 Main file:
@@ -1013,6 +1067,7 @@ Core gaze tags:
 | `GazeStage3` | `GazeTestActivity` | Accuracy test point errors and median error summary. |
 | `GazeAOI` | `ArticleFragment`, `LineAoiMapper` | Screen gaze coordinate mapped to article line index. |
 | `GazeRSI` | `ReadingStateInferencer` listener in `ArticleFragment` | Line samples, fixation, dwell, regression, RSI score. |
+| `GazeScaffold` | `AdaptiveScaffoldController` via `ArticleFragment` | Stability index, gaze confidence, baseline readiness, and scaffold level transitions. |
 
 ## How To Interpret MediaPipeGaze Logs
 

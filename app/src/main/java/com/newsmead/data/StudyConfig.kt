@@ -65,13 +65,21 @@ object StudyConfig {
         FORCE_LINE,
         FORCE_FOCUS,
         FORCE_REENTRY,
+        DEMO_CYCLE,
     }
 
     /**
      * ADAPTIVE is the study condition. Forced modes are validation aids that
      * make one renderer visible without waiting for an instability trigger.
+     * DEMO_CYCLE walks every level in turn for recording; it is not a study mode.
      */
-    val SCAFFOLD_MODE = ScaffoldMode.ADAPTIVE
+    val SCAFFOLD_MODE = ScaffoldMode.DEMO_CYCLE
+
+    /** How long DEMO_CYCLE holds each level before moving to the next one. */
+    const val SCAFFOLD_DEMO_LEVEL_DURATION_MS = 12_000L
+
+    /** Draw the active level's name on screen during DEMO_CYCLE recordings. */
+    const val SCAFFOLD_DEMO_CAPTION = true
 
     /** Gaze dot and FPS are researcher diagnostics, not participant scaffolds. */
     const val GAZE_DEBUG_VISUALS = true

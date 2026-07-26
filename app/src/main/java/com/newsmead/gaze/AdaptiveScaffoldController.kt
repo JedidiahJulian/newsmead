@@ -41,7 +41,9 @@ class AdaptiveScaffoldController(
     private val lossOffTextMs: Long = DEFAULT_LOSS_OFF_TEXT_MS,
     private val minimumLossLineJump: Int = DEFAULT_MINIMUM_LOSS_LINE_JUMP,
     private val reentryEvidenceMs: Long = DEFAULT_REENTRY_EVIDENCE_MS,
-    private val forcedLevel: ScaffoldLevel? = null,
+    /** Non-null pins the level, bypassing the adaptive policy. Settable so a
+     *  demo/validation run can move through the levels without a rebuild. */
+    var forcedLevel: ScaffoldLevel? = null,
 ) {
     private var currentLevel = ScaffoldLevel.NONE
     private var candidateLevel = ScaffoldLevel.NONE
@@ -74,6 +76,10 @@ class AdaptiveScaffoldController(
     ): ScaffoldUpdate {
         val forced = forcedLevel
         if (forced != null) {
+            // Keep the anchor fresh even though the adaptive path is skipped, so a
+            // deliberate look-away during a forced REENTRY run still resolves to the
+            // line the reader actually left instead of the line they are on.
+            if (target.isValid) lastStableLine = target.lineIndex
             return changeImmediately(forced, snapshot, target, timestampMs, "forced study level")
         }
 

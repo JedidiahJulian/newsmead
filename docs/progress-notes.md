@@ -1,5 +1,18 @@
 # NewsMead — Progress Notes
 
+## 2026-07-26 - DEMO_CYCLE scaffold mode for presentation recording
+
+Added `StudyConfig.ScaffoldMode.DEMO_CYCLE` (+ `SCAFFOLD_DEMO_LEVEL_DURATION_MS`
+12s, `SCAFFOLD_DEMO_CAPTION`): holds each level in turn (NONE -> WORD -> LINE ->
+FOCUS -> REENTRY, looping) while real gaze still drives placement, so all four
+render in one continuous take without a rebuild per level. `forcedLevel` is now a
+settable `var` and forced runs also track `lastStableLine`, so a forced REENTRY
+anchors to the line the reader actually left. **`SCAFFOLD_MODE` is currently set
+to DEMO_CYCLE - set it back to ADAPTIVE before any participant-facing session.**
+Demo bypasses baseline/confidence/persistence, so it shows the renderers only,
+never instability detection. compileDebugKotlin + assembleDebug + all
+com.newsmead.gaze.* tests pass (new forced-anchor test).
+
 ## 2026-07-24 - Calibration redesign doc (review of external draft)
 
 Reviewed an externally drafted 16-point calibration design and wrote the revised,

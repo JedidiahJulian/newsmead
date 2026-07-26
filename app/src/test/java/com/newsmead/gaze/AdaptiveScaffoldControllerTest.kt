@@ -82,14 +82,34 @@ class AdaptiveScaffoldControllerTest {
         assertEquals(10, update.state.reentryTargetLine)
     }
 
+    @Test
+    fun forcedReentryAnchorsToTheLineTheReaderLeft() {
+        val controller = AdaptiveScaffoldController(
+            lossOffTextMs = 500,
+            reentryEvidenceMs = 10_000,
+            forcedLevel = ScaffoldLevel.REENTRY,
+        )
+        // Forced runs skip the adaptive path, so the anchor has to be tracked there too.
+        controller.update(snapshot(0.0, baselineReady = false), TextTarget(10, 30), 0)
+        controller.onGazeTarget(TextTarget.INVALID, 100)
+        val displaced = TextTarget(5, 30)
+        controller.onGazeTarget(displaced, 700)
+
+        val update = controller.update(snapshot(0.0, baselineReady = false), displaced, 700)
+
+        assertEquals(ScaffoldLevel.REENTRY, update.state.level)
+        assertEquals(10, update.state.reentryTargetLine)
+    }
+
     private fun snapshot(
         index: Double,
         confidence: Double = 1.0,
+        baselineReady: Boolean = true,
     ) = WindowedStabilityEstimator.StabilitySnapshot(
         rawIndex = index,
         smoothedIndex = index,
         confidence = confidence,
-        baselineReady = true,
+        baselineReady = baselineReady,
         metrics = WindowedStabilityEstimator.ReadingMetrics.EMPTY,
         timestampMs = 0,
     )

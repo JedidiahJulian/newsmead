@@ -40,6 +40,11 @@ class GazeOverlayView @JvmOverloads constructor(
         textSize = 36f
         typeface = Typeface.MONOSPACE
     }
+    private val captionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(230, 0, 229, 255)
+        textSize = 34f
+        typeface = Typeface.DEFAULT_BOLD
+    }
     private val radius = 18f
     private val cornerRadius = dp(5f)
     private val loc = IntArray(2)
@@ -52,6 +57,7 @@ class GazeOverlayView @JvmOverloads constructor(
     private var screenX = 0f
     private var screenY = 0f
     private var fpsText: String? = null
+    private var captionText: String? = null
     private var debugVisualsEnabled = false
     private var scaffoldTextView: TextView? = null
     private var requestedState = ScaffoldState()
@@ -103,6 +109,12 @@ class GazeOverlayView @JvmOverloads constructor(
         scaffoldTextView?.let { setScaffoldState(it, ScaffoldState()) }
     }
 
+    /** Label the active level on screen during a demo recording; null hides it. */
+    fun setScaffoldCaption(text: String?) {
+        captionText = text
+        invalidate()
+    }
+
     /** Show the tracker's current processing frame rate in the corner. */
     fun setFps(fps: Float) {
         fpsText = String.format(Locale.US, "%.0f fps", fps)
@@ -117,6 +129,7 @@ class GazeOverlayView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         drawScaffold(canvas)
+        captionText?.let { canvas.drawText(it, 24f, height - dp(20f), captionPaint) }
         if (!debugVisualsEnabled) return
         fpsText?.let { canvas.drawText(it, 24f, 60f, fpsPaint) }
         if (!hasPoint) return

@@ -72,6 +72,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var scaffoldController: AdaptiveScaffoldController? = null
     private var currentTextTarget = TextTarget.INVALID
     private var lastStabilityLogMs = 0L
+    private val scaffoldDemoHandler = Handler(Looper.getMainLooper())
+    private var scaffoldDemoStep = 0
     private enum class ColorMode { LIGHT, DARK, SEPIA }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -465,6 +467,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             textToSpeech.stop()
             textToSpeech.shutdown()
         }
+        scaffoldDemoHandler.removeCallbacksAndMessages(null)
         rsiInferencer?.flush()
         gazeProvider?.stop()
         gazeOverlay?.clearScaffold()
@@ -672,6 +675,34 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         } else {
             attachLiveGaze(onGaze)
         }
+
+        if (StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) startScaffoldDemoCycle()
+    }
+
+    /**
+     * Recording aid, not a study mode: hold each level for
+     * [StudyConfig.SCAFFOLD_DEMO_LEVEL_DURATION_MS] and then move to the next one,
+     * so all four appear in a single continuous take. Real gaze still decides where
+     * each level is drawn - only the adaptive *trigger* is bypassed, so nothing here
+     * demonstrates instability detection.
+     */
+    private fun startScaffoldDemoCycle() {
+        scaffoldDemoHandler.removeCallbacksAndMessages(null)
+        scaffoldDemoStep = 0
+        val advance = object : Runnable {
+            override fun run() {
+                val controller = scaffoldController ?: return
+                val level = SCAFFOLD_DEMO_SEQUENCE[scaffoldDemoStep % SCAFFOLD_DEMO_SEQUENCE.size]
+                controller.forcedLevel = level
+                if (StudyConfig.SCAFFOLD_DEMO_CAPTION) {
+                    gazeOverlay?.setScaffoldCaption(SCAFFOLD_DEMO_CAPTIONS[level])
+                }
+                Log.i("GazeScaffold", "demo cycle -> $level")
+                scaffoldDemoStep++
+                scaffoldDemoHandler.postDelayed(this, StudyConfig.SCAFFOLD_DEMO_LEVEL_DURATION_MS)
+            }
+        }
+        scaffoldDemoHandler.post(advance)
     }
 
     private fun createRsiInferencer(): ReadingStateInferencer =
@@ -755,6 +786,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         StudyConfig.ScaffoldMode.FORCE_LINE -> ScaffoldLevel.LINE
         StudyConfig.ScaffoldMode.FORCE_FOCUS -> ScaffoldLevel.FOCUS
         StudyConfig.ScaffoldMode.FORCE_REENTRY -> ScaffoldLevel.REENTRY
+        StudyConfig.ScaffoldMode.DEMO_CYCLE -> SCAFFOLD_DEMO_SEQUENCE.first()
     }
 
     /** Finger substitutes for gaze; returns false so the article still scrolls. */
@@ -910,5 +942,22 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
          * onDestroy camera release before we rebind the shared CameraX camera.
          */
         private const val GAZE_RESTART_DELAY_MS = 800L
+
+        /** Order DEMO_CYCLE walks through; it loops, so a retake needs no restart. */
+        private val SCAFFOLD_DEMO_SEQUENCE = listOf(
+            ScaffoldLevel.NONE,
+            ScaffoldLevel.WORD,
+            ScaffoldLevel.LINE,
+            ScaffoldLevel.FOCUS,
+            ScaffoldLevel.REENTRY,
+        )
+
+        private val SCAFFOLD_DEMO_CAPTIONS = mapOf(
+            ScaffoldLevel.NONE to "No scaffold (stable reading)",
+            ScaffoldLevel.WORD to "Level 1 - Word highlighting",
+            ScaffoldLevel.LINE to "Level 2 - Line emphasis",
+            ScaffoldLevel.FOCUS to "Level 3 - Focus window",
+            ScaffoldLevel.REENTRY to "Level 4 - Re-entry support",
+        )
     }
 }
