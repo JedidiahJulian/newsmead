@@ -11,6 +11,10 @@ The first recorded alignment topic is the distinction between the cumulative
 Session Reading State Index and the recent Adaptive Instability Index used for
 visual scaffolding.
 
+**Section 4.3.2 (Gaze Tracking)** — calibration, the gaze mapping model,
+calibration quality assurance, and drift correction — is drafted separately in
+`docs/calibration-methods.md`, following the same conventions.
+
 These revisions are required because the manuscript must not imply that the
 cumulative 0-100 RSI directly selects scaffold levels. The actual implementation
 uses a participant-relative recent-window signal. The current adaptive thresholds

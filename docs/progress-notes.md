@@ -110,6 +110,22 @@ compileDebugKotlin + all com.newsmead.gaze.* pass. Re-test on A56.
   dot resume within ~1s and reflect the correction; confirm via `GazeMap` log
   showing the "[drift-corrected]" suffix during reading.
 
+## 2026-07-25 - Section 4.3.2 manuscript draft for the gaze/calibration system
+
+Added `docs/calibration-methods.md`: insertable Section 4.3.2 (Gaze Tracking)
+draft covering feature extraction, the 16-point calibration procedure, the
+polynomial mapping model, quality assurance, and 9-point verification/drift
+correction. Follows the conventions of `manuscript-implementation-alignment.md`
+(blockquoted manuscript prose, formula fences, provisional-parameter marking,
+traceability table, consistency checklist), which now cross-references it.
+
+Terminology decision recorded: the 3x3 procedure is **accuracy verification**
+(+ affine **drift correction**), NOT "9-point calibration" - it never re-estimates
+the polynomial. Two items flagged for James before submission: (1) the A56
+accuracy figures in these notes predate the calibration redesign and must be
+re-measured; (2) MediaPipe confidence thresholds read 0.5 in source but 0.35 in
+the 2026-07-06 note - source is authoritative, confirm before citing.
+
 ## 2026-07-24 - Re-calibration system re-architected to the calibration standard
 
 Full re-architecture (design doc §7.2); re-calibration stays on the article page.
