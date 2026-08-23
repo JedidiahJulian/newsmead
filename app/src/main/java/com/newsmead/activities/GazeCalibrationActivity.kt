@@ -82,6 +82,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private var logFinished = false
     @Volatile private var latestBlinkStats: LocalRawGazeSource.BlinkStats? = null
     private var presStartBlinkStats: LocalRawGazeSource.BlinkStats? = null
+    private var sampleWindowActive = false
+    private val pointSourceEvents = ArrayList<LocalRawGazeSource.Diagnostics>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,6 +98,10 @@ class GazeCalibrationActivity : AppCompatActivity() {
             null
         }
         collector = CalibrationPointCollector(binding.calibrationView, tone)
+        collector.setOnSampleWindowChanged { active ->
+            sampleWindowActive = active
+            if (active) pointSourceEvents.clear()
+        }
         startRawGazeSource()
 
         // Start the dot sequence only when the researcher taps Start.
@@ -115,6 +121,11 @@ class GazeCalibrationActivity : AppCompatActivity() {
             source.setOnRawGaze { x, y, ts -> runOnUiThread { collector.onRawSample(x, y, ts) } }
             source.setOnFps { fps -> runOnUiThread { showFps(fps) } }
             source.setOnBlinkStats { stats -> latestBlinkStats = stats }
+            source.setOnDiagnostics { diagnostics ->
+                runOnUiThread {
+                    if (sampleWindowActive) pointSourceEvents.add(diagnostics)
+                }
+            }
             source.start(this)
         }
     }
@@ -209,7 +220,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
 
     private fun startAttempt() {
         val pres = presentations[presIndex]
-        if (attempts == 0) presStartBlinkStats = latestBlinkStats
+        presStartBlinkStats = latestBlinkStats
         binding.statusText.text = ""
         updateProgressText(pres)
         updateMiniMap()
@@ -234,6 +245,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
                 "failed: ${result.status} raw=${result.rawCount} retained=${result.retainedCount}",
         )
         if (attempts < MAX_ATTEMPTS) {
+            logPresentation(pres, result, attempt = attempts, excludedFlag = false)
             binding.statusText.text = getString(com.newsmead.R.string.calib_retry)
             handler.postDelayed({ startAttempt() }, RETRY_PAUSE_MS)
             return
@@ -249,7 +261,12 @@ class GazeCalibrationActivity : AppCompatActivity() {
             Kind.VALIDATION -> sessionLog?.addFlag("validation_point_failed")
             Kind.PRACTICE -> Unit
         }
-        if (pres.kind != Kind.VALIDATION) logPresentation(pres, result, excludedFlag = pres.kind == Kind.FIT)
+        logPresentation(
+            pres,
+            result,
+            attempt = attempts,
+            excludedFlag = pres.kind == Kind.FIT,
+        )
         updateMiniMap()
         handler.postDelayed({ advance() }, RETRY_PAUSE_MS)
     }
@@ -270,7 +287,14 @@ class GazeCalibrationActivity : AppCompatActivity() {
                 val mapped = fittedMapper?.map(result.medianX, result.medianY) ?: return
                 val errPx = hypot(mapped[0] - pres.point.x, mapped[1] - pres.point.y)
                 validationErrorsPx.add(errPx)
-                sessionLog?.addValidationPoint(pres.point.x, pres.point.y, errPx, errPx / lineHeightPx)
+                sessionLog?.addValidationPoint(
+                    pres.point.x,
+                    pres.point.y,
+                    mapped[0],
+                    mapped[1],
+                    errPx,
+                    errPx / lineHeightPx,
+                )
             }
         }
         Log.i(
@@ -283,7 +307,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
                 result.dispersionX, result.dispersionY,
             ),
         )
-        if (pres.kind != Kind.VALIDATION) logPresentation(pres, result, excludedFlag = false)
+        logPresentation(pres, result, attempt = attempts + 1, excludedFlag = false)
         updateMiniMap()
     }
 
@@ -492,6 +516,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private fun logPresentation(
         pres: Presentation,
         result: FixationWindowFilter.Result,
+        attempt: Int,
         excludedFlag: Boolean,
     ) {
         val start = presStartBlinkStats
@@ -502,6 +527,9 @@ class GazeCalibrationActivity : AppCompatActivity() {
             if (start != null && end != null) end.noFaceFrames - start.noFaceFrames else 0L
         sessionLog?.logPoint(
             pointId = pres.gridIndex,
+            kind = pres.kind.name,
+            attempt = attempt,
+            status = result.status.name,
             screenX = pres.point.x,
             screenY = pres.point.y,
             presentationIndex = presentationCounter++,
@@ -517,6 +545,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
             featureY = result.medianY,
             dispersionX = result.dispersionX,
             dispersionY = result.dispersionY,
+            sourceEvents = pointSourceEvents.toList(),
         )
     }
 

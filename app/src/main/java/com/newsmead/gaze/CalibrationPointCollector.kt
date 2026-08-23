@@ -25,12 +25,18 @@ class CalibrationPointCollector(
     private val handler = Handler(Looper.getMainLooper())
     private val buffer = ArrayList<FixationWindowFilter.Sample>()
     private var collecting = false
+    private var sampleWindowListener: ((Boolean) -> Unit)? = null
     private var sampleStartMs = 0L
     private var onDone: ((FixationWindowFilter.Result) -> Unit)? = null
 
     /** Forward every raw gaze sample here; buffered only during the SAMPLE window. */
     fun onRawSample(x: Float, y: Float, timestampMs: Long) {
         if (collecting) buffer.add(FixationWindowFilter.Sample(timestampMs, x, y))
+    }
+
+    /** Passive notification used to align diagnostic telemetry with SAMPLE only. */
+    fun setOnSampleWindowChanged(listener: (Boolean) -> Unit) {
+        sampleWindowListener = listener
     }
 
     /**
@@ -40,7 +46,7 @@ class CalibrationPointCollector(
      */
     fun capture(x: Float, y: Float, onDone: (FixationWindowFilter.Result) -> Unit) {
         this.onDone = onDone
-        collecting = false
+        setCollecting(false)
         buffer.clear()
         view.showTarget(x, y)
         // APPEAR (animation) + HOLD_ATTENTION (older-adult saccadic latency).
@@ -50,7 +56,7 @@ class CalibrationPointCollector(
     /** Cancel any in-flight capture (on stop / redo / activity teardown). */
     fun cancel() {
         handler.removeCallbacksAndMessages(null)
-        collecting = false
+        setCollecting(false)
         onDone = null
     }
 
@@ -61,7 +67,7 @@ class CalibrationPointCollector(
 
     private fun startSample() {
         buffer.clear()
-        collecting = true
+        setCollecting(true)
         sampleStartMs = SystemClock.uptimeMillis()
         tone?.startTone(ToneGenerator.TONE_PROP_BEEP, TICK_TONE_MS)
         handler.postDelayed({ check() }, BASE_SAMPLE_MS)
@@ -71,7 +77,7 @@ class CalibrationPointCollector(
     private fun check() {
         val result = filter.filter(buffer.toList())
         if (result.status == FixationWindowFilter.Status.ACCEPTED) {
-            collecting = false
+            setCollecting(false)
             view.flashConfirm()
             tone?.startTone(ToneGenerator.TONE_PROP_ACK, ACK_TONE_MS)
             onDone?.invoke(result)
@@ -80,9 +86,15 @@ class CalibrationPointCollector(
         if (SystemClock.uptimeMillis() - sampleStartMs < SAMPLE_TIMEOUT_MS) {
             handler.postDelayed({ check() }, SAMPLE_RECHECK_MS)
         } else {
-            collecting = false
+            setCollecting(false)
             onDone?.invoke(result)
         }
+    }
+
+    private fun setCollecting(value: Boolean) {
+        if (collecting == value) return
+        collecting = value
+        sampleWindowListener?.invoke(value)
     }
 
     companion object {

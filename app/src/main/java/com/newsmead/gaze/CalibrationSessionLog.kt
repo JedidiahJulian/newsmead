@@ -41,6 +41,11 @@ class CalibrationSessionLog(
         root.put("screen_px", JSONArray().put(screenWidthPx).put(screenHeightPx))
         root.put("density_dpi", densityDpi)
         root.put("order_seed", orderSeed)
+        root.put("camera_frames_retained", false)
+        root.put(
+            "processing_path",
+            "raw_eye_features -> eye_average -> fixation_window_aggregate -> quadratic_mapper_for_validation",
+        )
         root.put("points", points)
         root.put("validation", validation)
         root.put("session_quality_flags", flags)
@@ -49,6 +54,9 @@ class CalibrationSessionLog(
 
     fun logPoint(
         pointId: Int,
+        kind: String,
+        attempt: Int,
+        status: String,
         screenX: Float,
         screenY: Float,
         presentationIndex: Int,
@@ -64,10 +72,14 @@ class CalibrationSessionLog(
         featureY: Float,
         dispersionX: Float,
         dispersionY: Float,
+        sourceEvents: List<LocalRawGazeSource.Diagnostics>,
     ) {
         points.put(
             JSONObject().apply {
                 put("point_id", pointId)
+                put("kind", kind)
+                put("attempt", attempt)
+                put("status", status)
                 putNum("screen_x", screenX)
                 putNum("screen_y", screenY)
                 put("presentation_index", presentationIndex)
@@ -81,6 +93,9 @@ class CalibrationSessionLog(
                 put("no_face", noFace)
                 put("aggregated_feature", featureArray(featureX, featureY))
                 put("dispersion_feature", featureArray(dispersionX, dispersionY))
+                put("source_events", JSONArray().apply {
+                    sourceEvents.forEach { put(it.toJson()) }
+                })
             },
         )
         flush()
@@ -119,11 +134,22 @@ class CalibrationSessionLog(
         flush()
     }
 
-    fun addValidationPoint(screenX: Float, screenY: Float, errorPx: Float, errorLines: Float) {
+    fun addValidationPoint(
+        screenX: Float,
+        screenY: Float,
+        mappedX: Float,
+        mappedY: Float,
+        errorPx: Float,
+        errorLines: Float,
+    ) {
         validation.put(
             JSONObject().apply {
                 putNum("screen_x", screenX)
                 putNum("screen_y", screenY)
+                putNum("mapped_x", mappedX)
+                putNum("mapped_y", mappedY)
+                putNum("dx_px", mappedX - screenX)
+                putNum("dy_px", mappedY - screenY)
                 putNum("error_px", errorPx)
                 putNum("error_lines", errorLines)
             },
@@ -156,6 +182,35 @@ class CalibrationSessionLog(
         JSONArray().apply {
             put(if (x.isFinite()) x.toDouble() else JSONObject.NULL)
             put(if (y.isFinite()) y.toDouble() else JSONObject.NULL)
+        }
+
+    private fun LocalRawGazeSource.Diagnostics.toJson(): JSONObject =
+        JSONObject().apply {
+            put("sequence", sequence)
+            put("outcome", outcome.name)
+            put("capture_timestamp_ns", captureTimestampNs)
+            put("submitted_elapsed_ns", submittedElapsedNs)
+            put("result_elapsed_ns", resultElapsedNs)
+            putNum(
+                "submit_to_result_ms",
+                if (submittedElapsedNs > 0L && resultElapsedNs >= submittedElapsedNs) {
+                    (resultElapsedNs - submittedElapsedNs) / 1_000_000f
+                } else {
+                    Float.NaN
+                },
+            )
+            put("frame_width", frameWidth)
+            put("frame_height", frameHeight)
+            put("rotation_degrees", rotationDegrees)
+            putNum("eye_1_x", eye1X)
+            putNum("eye_1_y", eye1Y)
+            putNum("eye_2_x", eye2X)
+            putNum("eye_2_y", eye2Y)
+            putNum("gaze_x", gazeX)
+            putNum("gaze_y", gazeY)
+            putNum("eye_1_openness", eye1Openness)
+            putNum("eye_2_openness", eye2Openness)
+            put("busy_dropped_frames_cumulative", busyDroppedFrames)
         }
 
     /** JSONObject.put(double) throws on NaN/Infinity; store null instead. */

@@ -10,9 +10,12 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.TextPaint
+import android.text.InputType
 import android.util.Log
 import android.util.TypedValue
 import android.view.View
+import android.widget.EditText
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -26,8 +29,10 @@ import com.newsmead.gaze.DriftCorrection
 import com.newsmead.gaze.FixationWindowFilter
 import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.GazeProvider
+import com.newsmead.gaze.GazeAccuracySessionLog
 import com.newsmead.gaze.LocalCalibratedGazeProvider
 import com.newsmead.gaze.LocalGazeSources
+import com.newsmead.gaze.LocalRawGazeSource
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -65,6 +70,12 @@ class GazeTestActivity : AppCompatActivity() {
     private var pendingCorrection: DriftCorrection? = null
     private var pendingPreMedianPx = 0f
     private var pendingPostMedianPx = 0f
+    private var calibrationPointCount = 0
+
+    private var accuracySessionLog: GazeAccuracySessionLog? = null
+    private var sampleWindowActive = false
+    private val pointPipelineSamples = ArrayList<LocalCalibratedGazeProvider.PipelineDiagnostics>()
+    private val pointSourceEvents = ArrayList<LocalRawGazeSource.Diagnostics>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,11 +90,18 @@ class GazeTestActivity : AppCompatActivity() {
             null
         }
         collector = CalibrationPointCollector(binding.calibrationView, tone)
-        binding.accuracyButton.setOnClickListener { startMeasurement() }
+        collector.setOnSampleWindowChanged { active ->
+            sampleWindowActive = active
+            if (active) {
+                pointPipelineSamples.clear()
+                pointSourceEvents.clear()
+            }
+        }
+        binding.accuracyButton.setOnClickListener { requestMeasurementLabel() }
         binding.btnApply.setOnClickListener { applyPendingCorrection() }
         binding.btnRevert.setOnClickListener { revertToCalibration() }
         binding.btnFullRecal.setOnClickListener { launchFullRecalibration() }
-        binding.btnRemeasure.setOnClickListener { startMeasurement() }
+        binding.btnRemeasure.setOnClickListener { requestMeasurementLabel() }
         startGaze()
     }
 
@@ -95,6 +113,7 @@ class GazeTestActivity : AppCompatActivity() {
             binding.gatePanel.visibility = View.VISIBLE
             return
         }
+        calibrationPointCount = samples.size
         val mapper = try {
             GazeMapper(samples)
         } catch (e: Exception) {
@@ -106,10 +125,21 @@ class GazeTestActivity : AppCompatActivity() {
         val rawSource = LocalGazeSources.create(this)
         rawSource.setOnFps { fps -> runOnUiThread { binding.gazeDot.setFps(fps) } }
         activeCorrection = CalibrationStore.loadDriftCorrection(this)
-        provider = LocalCalibratedGazeProvider(mapper, rawSource, activeCorrection).apply {
+        val localProvider = LocalCalibratedGazeProvider(mapper, rawSource, activeCorrection).apply {
+            setOnSourceDiagnostics { diagnostics ->
+                runOnUiThread {
+                    if (sampleWindowActive) pointSourceEvents.add(diagnostics)
+                }
+            }
+            setOnDiagnostics { diagnostics ->
+                runOnUiThread {
+                    if (sampleWindowActive) pointPipelineSamples.add(diagnostics)
+                }
+            }
             setOnGaze { x, y -> runOnUiThread { onGaze(x, y) } }
             start(this@GazeTestActivity)
         }
+        provider = localProvider
         binding.hintText.text = getString(com.newsmead.R.string.gaze_test_hint)
         binding.accuracyButton.visibility = View.VISIBLE
     }
@@ -134,13 +164,41 @@ class GazeTestActivity : AppCompatActivity() {
 
     // --- Measurement pass (shared capture engine) --------------------------
 
-    private fun startMeasurement() {
+    private fun requestMeasurementLabel() {
+        val input = EditText(this).apply {
+            hint = "e.g. seated_normal-light_no-glasses_run-1"
+            inputType = InputType.TYPE_CLASS_TEXT
+            setSingleLine(true)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Diagnostic run label")
+            .setMessage("Describe posture, lighting, glasses, and repeat number.")
+            .setView(input)
+            .setPositiveButton("Start") { _, _ ->
+                startMeasurement(input.text.toString().trim().ifEmpty { "unlabelled" })
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun startMeasurement(runLabel: String) {
         val w = binding.calibrationView.width
         val h = binding.calibrationView.height
         if (w == 0 || h == 0) {
-            binding.calibrationView.post { startMeasurement() }
+            binding.calibrationView.post { startMeasurement(runLabel) }
             return
         }
+        accuracySessionLog?.finish("restarted")
+        accuracySessionLog = GazeAccuracySessionLog(
+            context = this,
+            runLabel = runLabel,
+            screenWidthPx = w,
+            screenHeightPx = h,
+            densityDpi = resources.displayMetrics.densityDpi,
+            lineHeightPx = lineHeightPx,
+            calibrationPointCount = calibrationPointCount,
+            activeCorrection = activeCorrection,
+        )
         targets = computeTargets(w, h)
         observations.clear()
         pendingCorrection = null
@@ -179,6 +237,15 @@ class GazeTestActivity : AppCompatActivity() {
 
     private fun onPointCaptured(result: FixationWindowFilter.Result) {
         val p = targets[pointIndex]
+        accuracySessionLog?.logPoint(
+            pointIndex = pointIndex,
+            attempt = attempts + 1,
+            targetX = p.x,
+            targetY = p.y,
+            result = result,
+            pipelineSamples = pointPipelineSamples.toList(),
+            sourceEvents = pointSourceEvents.toList(),
+        )
         observations.add(DriftCorrection.Observation(result.medianX, result.medianY, p.x, p.y))
         val err = hypot(result.medianX - p.x, result.medianY - p.y)
         Log.i(
@@ -194,6 +261,16 @@ class GazeTestActivity : AppCompatActivity() {
     }
 
     private fun onPointFailed(result: FixationWindowFilter.Result) {
+        val p = targets[pointIndex]
+        accuracySessionLog?.logPoint(
+            pointIndex = pointIndex,
+            attempt = attempts + 1,
+            targetX = p.x,
+            targetY = p.y,
+            result = result,
+            pipelineSamples = pointPipelineSamples.toList(),
+            sourceEvents = pointSourceEvents.toList(),
+        )
         attempts++
         Log.w(TAG, "point ${pointIndex + 1} attempt $attempts failed: ${result.status} raw=${result.rawCount}")
         if (attempts < MAX_ATTEMPTS) {
@@ -227,6 +304,7 @@ class GazeTestActivity : AppCompatActivity() {
         binding.calibrationView.setMiniMap(emptyList())
         if (observations.size < DriftCorrection.MIN_OBSERVATIONS) {
             binding.hintText.text = getString(com.newsmead.R.string.gaze_recal_insufficient)
+            accuracySessionLog?.finish("insufficient_points")
             showGate(canApply = false)
             return
         }
@@ -247,6 +325,15 @@ class GazeTestActivity : AppCompatActivity() {
             pendingCorrection = null
         }
 
+        accuracySessionLog?.logSummary(
+            acceptedPointCount = observations.size,
+            medianPx = medianPx,
+            p95Px = p95Px,
+            verticalMedianPx = vertMedianPx,
+            estimatedCorrectedLooPx = looPostPx,
+        )
+        accuracySessionLog?.finish("completed")
+
         Log.i(
             TAG,
             String.format(
@@ -258,7 +345,8 @@ class GazeTestActivity : AppCompatActivity() {
         )
 
         binding.hintText.text = ""
-        binding.gateText.text = buildGateSummary(medianPx, medianLines, p95Px, vertMedianPx, looPostPx)
+        binding.gateText.text = buildGateSummary(medianPx, medianLines, p95Px, vertMedianPx, looPostPx) +
+            "\n\nDiagnostic log: ${accuracySessionLog?.fileName() ?: "unavailable"}"
         binding.gateText.setTextColor(bandColor(medianLines))
         showGate(canApply = pendingCorrection != null)
     }
@@ -365,6 +453,7 @@ class GazeTestActivity : AppCompatActivity() {
         collector.cancel()
         provider?.stop()
         tone?.release()
+        accuracySessionLog?.finish("aborted")
     }
 
     companion object {

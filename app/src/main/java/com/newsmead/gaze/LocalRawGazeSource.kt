@@ -33,9 +33,46 @@ interface LocalRawGazeSource {
         fun onBlinkStats(stats: BlinkStats)
     }
 
+    enum class DiagnosticOutcome {
+        EMITTED,
+        BLINK_DROPPED,
+        NO_FACE,
+        INSUFFICIENT_LANDMARKS,
+        BUSY_DROPPED,
+    }
+
+    /**
+     * Passive per-result telemetry for diagnostics. None of these values are used
+     * to produce gaze; consumers may log them without changing tracker behavior.
+     */
+    data class Diagnostics(
+        val sequence: Long,
+        val outcome: DiagnosticOutcome,
+        val captureTimestampNs: Long,
+        val submittedElapsedNs: Long,
+        val resultElapsedNs: Long,
+        val frameWidth: Int,
+        val frameHeight: Int,
+        val rotationDegrees: Int,
+        val eye1X: Float = Float.NaN,
+        val eye1Y: Float = Float.NaN,
+        val eye2X: Float = Float.NaN,
+        val eye2Y: Float = Float.NaN,
+        val gazeX: Float = Float.NaN,
+        val gazeY: Float = Float.NaN,
+        val eye1Openness: Float = Float.NaN,
+        val eye2Openness: Float = Float.NaN,
+        val busyDroppedFrames: Long,
+    )
+
+    fun interface OnDiagnostics {
+        fun onDiagnostics(diagnostics: Diagnostics)
+    }
+
     fun setOnRawGaze(listener: OnRawGaze)
     fun setOnFps(listener: OnFps) {}
     fun setOnBlinkStats(listener: OnBlinkStats) {}
+    fun setOnDiagnostics(listener: OnDiagnostics) {}
     fun start(owner: LifecycleOwner)
     fun stop()
 }

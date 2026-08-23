@@ -57,6 +57,7 @@ class MediaPipeRawGazeSource(
     private var listener: LocalRawGazeSource.OnRawGaze? = null
     private var fpsListener: LocalRawGazeSource.OnFps? = null
     private var blinkStatsListener: LocalRawGazeSource.OnBlinkStats? = null
+    private var diagnosticsListener: LocalRawGazeSource.OnDiagnostics? = null
     private var faceLandmarker: FaceLandmarker? = null
     private var cameraProvider: ProcessCameraProvider? = null
     private var stopped = true
@@ -69,8 +70,13 @@ class MediaPipeRawGazeSource(
     private var emittedSamples = 0L
     private var blinkDroppedFrames = 0L
     private var noFaceFrames = 0L
+    private var busyDroppedFrames = 0L
+    private var diagnosticSequence = 0L
     private var lastOpenness = Float.NaN
     private var lastResultTimeMs = 0L
+    private var inFlightCaptureTimestampNs = 0L
+    private var inFlightSubmittedElapsedNs = 0L
+    private var inFlightRotationDegrees = 0
     private val lifecycleLock = Any()
 
     override fun setOnRawGaze(listener: LocalRawGazeSource.OnRawGaze) {
@@ -83,6 +89,10 @@ class MediaPipeRawGazeSource(
 
     override fun setOnBlinkStats(listener: LocalRawGazeSource.OnBlinkStats) {
         this.blinkStatsListener = listener
+    }
+
+    override fun setOnDiagnostics(listener: LocalRawGazeSource.OnDiagnostics) {
+        diagnosticsListener = listener
     }
 
     override fun start(owner: LifecycleOwner) {
@@ -202,13 +212,26 @@ class MediaPipeRawGazeSource(
             return
         }
         if (!busy.compareAndSet(false, true)) {
+            busyDroppedFrames += 1
+            emitDiagnostics(
+                outcome = LocalRawGazeSource.DiagnosticOutcome.BUSY_DROPPED,
+                captureTimestampNs = imageProxy.imageInfo.timestamp,
+                submittedElapsedNs = 0L,
+                resultElapsedNs = SystemClock.elapsedRealtimeNanos(),
+                frameWidth = imageProxy.width,
+                frameHeight = imageProxy.height,
+                rotationDegrees = imageProxy.imageInfo.rotationDegrees,
+            )
             imageProxy.close()
             return
         }
 
         try {
             if (stopped) return
-            val bitmap = imageProxy.toBitmapArgb8888().uprightMirrored(imageProxy.imageInfo.rotationDegrees)
+            inFlightCaptureTimestampNs = imageProxy.imageInfo.timestamp
+            inFlightSubmittedElapsedNs = SystemClock.elapsedRealtimeNanos()
+            inFlightRotationDegrees = imageProxy.imageInfo.rotationDegrees
+            val bitmap = imageProxy.toBitmapArgb8888().uprightMirrored(inFlightRotationDegrees)
             val mpImage = BitmapImageBuilder(bitmap).build()
             landmarker.detectAsync(mpImage, nextTimestampMs())
         } catch (e: Exception) {
@@ -221,42 +244,73 @@ class MediaPipeRawGazeSource(
 
     private fun onFaceLandmarkerResult(result: FaceLandmarkerResult, input: MPImage) {
         busy.set(false)
+        val resultElapsedNs = SystemClock.elapsedRealtimeNanos()
         totalResults += 1
         updateFps()
         fpsListener?.onFps(fps)
         val face = result.faceLandmarks().firstOrNull()
         if (face == null) {
             noFaceFrames += 1
+            emitDiagnostics(
+                outcome = LocalRawGazeSource.DiagnosticOutcome.NO_FACE,
+                resultElapsedNs = resultElapsedNs,
+                frameWidth = input.width,
+                frameHeight = input.height,
+            )
             emitBlinkStats()
             Log.d(TAG, "No face landmarks")
             return
         }
         if (face.size <= MIN_REQUIRED_LANDMARK_INDEX) {
             noFaceFrames += 1
-            emitBlinkStats()
-            return
-        }
-
-        // Drop blink frames: during a blink the iris/eyelid landmarks are
-        // unreliable, so the gaze feature would be garbage. Matches the prototype,
-        // which dropped blink frames before storing/mapping calibration samples.
-        val openness = computeOpenness(face, input.width, input.height)
-        lastOpenness = openness
-        if (updateBlink(openness)) {
-            blinkDroppedFrames += 1
+            emitDiagnostics(
+                outcome = LocalRawGazeSource.DiagnosticOutcome.INSUFFICIENT_LANDMARKS,
+                resultElapsedNs = resultElapsedNs,
+                frameWidth = input.width,
+                frameHeight = input.height,
+            )
             emitBlinkStats()
             return
         }
 
         val leftIris = center(face, LEFT_IRIS)
         val rightIris = center(face, RIGHT_IRIS)
-        val gaze = computeGaze(face, leftIris, rightIris)
+        val gaze = computeGazeDetails(face, leftIris, rightIris)
+
+        // Drop blink frames: during a blink the iris/eyelid landmarks are
+        // unreliable, so the gaze feature would be garbage. Matches the prototype,
+        // which dropped blink frames before storing/mapping calibration samples.
+        val eyeOpenness = computeEyeOpenness(face, input.width, input.height)
+        val openness = (eyeOpenness[0] + eyeOpenness[1]) / 2f
+        lastOpenness = openness
+        if (updateBlink(openness)) {
+            blinkDroppedFrames += 1
+            emitDiagnostics(
+                outcome = LocalRawGazeSource.DiagnosticOutcome.BLINK_DROPPED,
+                resultElapsedNs = resultElapsedNs,
+                frameWidth = input.width,
+                frameHeight = input.height,
+                gaze = gaze,
+                eyeOpenness = eyeOpenness,
+            )
+            emitBlinkStats()
+            return
+        }
+
         if (++resultCount % RAW_LOG_INTERVAL == 0) {
-            Log.d(TAG, String.format(Locale.US, "raw gaze=(%.4f, %.4f) fps=%.1f", gaze[0], gaze[1], fps))
+            Log.d(TAG, String.format(Locale.US, "raw gaze=(%.4f, %.4f) fps=%.1f", gaze[4], gaze[5], fps))
         }
         emittedSamples += 1
+        emitDiagnostics(
+            outcome = LocalRawGazeSource.DiagnosticOutcome.EMITTED,
+            resultElapsedNs = resultElapsedNs,
+            frameWidth = input.width,
+            frameHeight = input.height,
+            gaze = gaze,
+            eyeOpenness = eyeOpenness,
+        )
         emitBlinkStats()
-        listener?.onRawGaze(gaze[0], gaze[1], System.currentTimeMillis())
+        listener?.onRawGaze(gaze[4], gaze[5], System.currentTimeMillis())
     }
     /** Average (normalized) position over a contiguous landmark range. */
     private fun center(lm: List<NormalizedLandmark>, range: IntRange): FloatArray {
@@ -276,7 +330,11 @@ class MediaPipeRawGazeSource(
      * nearer eye so the corner math holds regardless of MediaPipe's left/right
      * ordering or the frame mirroring.
      */
-    private fun computeGaze(lm: List<NormalizedLandmark>, irisA: FloatArray, irisB: FloatArray): FloatArray {
+    private fun computeGazeDetails(
+        lm: List<NormalizedLandmark>,
+        irisA: FloatArray,
+        irisB: FloatArray,
+    ): FloatArray {
         val eye1cx = (lm[EYE1_CORNER_A].x() + lm[EYE1_CORNER_B].x()) / 2f
         val (iris1, iris2) =
             if (abs(irisA[0] - eye1cx) <= abs(irisB[0] - eye1cx)) irisA to irisB else irisB to irisA
@@ -285,7 +343,7 @@ class MediaPipeRawGazeSource(
         val v1 = frac(iris1[1], lm[EYE1_LID_TOP].y(), lm[EYE1_LID_BOTTOM].y())
         val h2 = frac(iris2[0], lm[EYE2_CORNER_A].x(), lm[EYE2_CORNER_B].x())
         val v2 = frac(iris2[1], lm[EYE2_LID_TOP].y(), lm[EYE2_LID_BOTTOM].y())
-        return floatArrayOf((h1 + h2) / 2f, (v1 + v2) / 2f)
+        return floatArrayOf(h1, v1, h2, v2, (h1 + h2) / 2f, (v1 + v2) / 2f)
     }
 
     /** Fraction of [v] between bounds [a] and [b] (order-independent). */
@@ -301,10 +359,45 @@ class MediaPipeRawGazeSource(
      * both eyes, computed in pixels so the ratio is aspect-correct. Near 0 when the
      * eyes are closed; compared against the blink thresholds.
      */
-    private fun computeOpenness(lm: List<NormalizedLandmark>, w: Int, h: Int): Float {
+    private fun computeEyeOpenness(lm: List<NormalizedLandmark>, w: Int, h: Int): FloatArray {
         val e1 = eyeAspect(lm, EYE1_LID_TOP, EYE1_LID_BOTTOM, EYE1_CORNER_A, EYE1_CORNER_B, w, h)
         val e2 = eyeAspect(lm, EYE2_LID_TOP, EYE2_LID_BOTTOM, EYE2_CORNER_A, EYE2_CORNER_B, w, h)
-        return (e1 + e2) / 2f
+        return floatArrayOf(e1, e2)
+    }
+
+    private fun emitDiagnostics(
+        outcome: LocalRawGazeSource.DiagnosticOutcome,
+        captureTimestampNs: Long = inFlightCaptureTimestampNs,
+        submittedElapsedNs: Long = inFlightSubmittedElapsedNs,
+        resultElapsedNs: Long,
+        frameWidth: Int,
+        frameHeight: Int,
+        rotationDegrees: Int = inFlightRotationDegrees,
+        gaze: FloatArray? = null,
+        eyeOpenness: FloatArray? = null,
+    ) {
+        val sink = diagnosticsListener ?: return
+        sink.onDiagnostics(
+            LocalRawGazeSource.Diagnostics(
+                sequence = ++diagnosticSequence,
+                outcome = outcome,
+                captureTimestampNs = captureTimestampNs,
+                submittedElapsedNs = submittedElapsedNs,
+                resultElapsedNs = resultElapsedNs,
+                frameWidth = frameWidth,
+                frameHeight = frameHeight,
+                rotationDegrees = rotationDegrees,
+                eye1X = gaze?.getOrNull(0) ?: Float.NaN,
+                eye1Y = gaze?.getOrNull(1) ?: Float.NaN,
+                eye2X = gaze?.getOrNull(2) ?: Float.NaN,
+                eye2Y = gaze?.getOrNull(3) ?: Float.NaN,
+                gazeX = gaze?.getOrNull(4) ?: Float.NaN,
+                gazeY = gaze?.getOrNull(5) ?: Float.NaN,
+                eye1Openness = eyeOpenness?.getOrNull(0) ?: Float.NaN,
+                eye2Openness = eyeOpenness?.getOrNull(1) ?: Float.NaN,
+                busyDroppedFrames = busyDroppedFrames,
+            ),
+        )
     }
 
     private fun eyeAspect(
