@@ -96,19 +96,41 @@ class GazeAccuracySessionLog(
     }
 
     fun logSummary(
-        acceptedPointCount: Int,
-        medianPx: Float,
-        p95Px: Float,
-        verticalMedianPx: Float,
+        summary: ReadingSpatialMetrics.Summary,
+        lineHeightPx: Float,
         estimatedCorrectedLooPx: Float?,
     ) {
         root.put(
             "summary",
             JSONObject().apply {
-                put("accepted_point_count", acceptedPointCount)
-                putNum("median_px", medianPx)
-                putNum("p95_px", p95Px)
-                putNum("vertical_median_px", verticalMedianPx)
+                put("accepted_point_count", summary.points.size)
+                putNum("median_px", summary.medianErrorPx)
+                putNum("p95_px", summary.p95ErrorPx)
+                putNum("max_px", summary.maxErrorPx)
+                putNum("vertical_median_px", summary.medianVerticalPx)
+                putNum("vertical_p95_px", summary.p95VerticalPx)
+                putNum("vertical_max_px", summary.maxVerticalPx)
+                putNum("vertical_median_lines", summary.medianVerticalPx / lineHeightPx)
+                putNum("vertical_p95_lines", summary.p95VerticalPx / lineHeightPx)
+                putNum("vertical_max_lines", summary.maxVerticalPx / lineHeightPx)
+                put("within_0_5_line", summary.withinHalfLine)
+                put("within_1_0_line", summary.withinOneLine)
+                put("within_1_2_line_provisional", summary.withinReference)
+                put("meets_provisional_1_2_line_reference", summary.meetsProvisionalReference)
+                put("worst_vertical_point_index", summary.worstVertical.id)
+                put("worst_euclidean_point_index", summary.worstEuclidean.id)
+                put("point_metrics", JSONArray().apply {
+                    summary.points.forEach { point ->
+                        put(JSONObject().apply {
+                            put("point_index", point.id)
+                            put("region", point.label)
+                            putNum("dx_px", point.dxPx)
+                            putNum("dy_px", point.dyPx)
+                            putNum("error_px", point.errorPx)
+                            putNum("vertical_error_lines", point.verticalLines)
+                        })
+                    }
+                })
                 putNum("estimated_corrected_loo_px", estimatedCorrectedLooPx ?: Float.NaN)
             },
         )

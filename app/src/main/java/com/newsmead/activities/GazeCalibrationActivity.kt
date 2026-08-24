@@ -28,17 +28,17 @@ import com.newsmead.gaze.FixationWindowFilter
 import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.LocalGazeSources
 import com.newsmead.gaze.LocalRawGazeSource
+import com.newsmead.gaze.ReadingSpatialMetrics
 import java.util.Locale
 import kotlin.math.hypot
-import kotlin.random.Random
 
 /**
  * Full-screen 16-dot gaze calibration (docs/calibration-design.md).
  *
  * Per point: APPEAR -> HOLD_ATTENTION -> SETTLE -> SAMPLE (adaptive) -> CONFIRM,
  * with MAD/dispersion rejection (FixationWindowFilter), one automatic re-capture
- * and exclusion after a second failure. The sequence is randomized per session,
- * preceded by a practice point, and a near-center point repeats at the end as a
+ * and exclusion after a second failure. The sequence uses a predictable fixed
+ * row-major order, preceded by a practice point, and a near-center point repeats at the end as a
  * drift check. After the fit, a leave-one-out report plus a 5-point held-out
  * validation pass feed a researcher quality gate (Accept / Redo worst / Redo
  * all); calibration_16point.csv is written only on Accept. Every point is also
@@ -73,8 +73,10 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private var fittedMapper: GazeMapper? = null
     private var looReport: CalibrationQuality.Report? = null
     private var looGridOrder: List<Int> = emptyList()
-    private val validationErrorsPx = ArrayList<Float>()
+    private val validationObservations = ArrayList<ReadingSpatialMetrics.Observation>()
     private var driftDeltaPx = Float.NaN
+    private var driftDxPx = Float.NaN
+    private var driftDyPx = Float.NaN
     private var lineHeightPx = 1f
 
     // Diagnostics / logging
@@ -166,17 +168,9 @@ class GazeCalibrationActivity : AppCompatActivity() {
         gridPoints = computePoints(view.width, view.height)
         driftGridIndex = nearestToCenter(gridPoints, view.width, view.height)
 
-        // Randomized order prevents anticipatory saccades; the seed is logged so
-        // the permutation is reconstructible. The drift point is forced into the
-        // first three presentations, and repeats at the very end (design §3.2).
-        val seed = System.currentTimeMillis()
-        val rnd = Random(seed)
-        val order = gridPoints.indices.shuffled(rnd).toMutableList()
-        val driftPos = order.indexOf(driftGridIndex)
-        if (driftPos > 2) {
-            order.removeAt(driftPos)
-            order.add(rnd.nextInt(3), driftGridIndex)
-        }
+        // Fixed row-major order restores the original, predictable traversal for
+        // older adults: top-left to top-right, then each following row.
+        val order = gridPoints.indices.toList()
 
         presentations.clear()
         presentations.add(
@@ -188,10 +182,15 @@ class GazeCalibrationActivity : AppCompatActivity() {
         )
 
         sessionLog = CalibrationSessionLog(
-            this, view.width, view.height, resources.displayMetrics.densityDpi, seed,
+            this,
+            view.width,
+            view.height,
+            resources.displayMetrics.densityDpi,
+            orderSeed = FIXED_ORDER_SEED,
+            orderMode = "fixed_row_major",
         )
         logFinished = false
-        Log.i(TAG, "Sequence started: seed=$seed drift=$driftGridIndex order=$order")
+        Log.i(TAG, "Sequence started: mode=fixed_row_major drift=$driftGridIndex order=$order")
         runPresentation(0)
     }
 
@@ -286,7 +285,17 @@ class GazeCalibrationActivity : AppCompatActivity() {
             Kind.VALIDATION -> {
                 val mapped = fittedMapper?.map(result.medianX, result.medianY) ?: return
                 val errPx = hypot(mapped[0] - pres.point.x, mapped[1] - pres.point.y)
-                validationErrorsPx.add(errPx)
+                val validationIndex = validationObservations.size
+                validationObservations.add(
+                    ReadingSpatialMetrics.Observation(
+                        id = validationIndex,
+                        label = validationLabel(validationIndex),
+                        targetX = pres.point.x,
+                        targetY = pres.point.y,
+                        predictedX = mapped[0],
+                        predictedY = mapped[1],
+                    ),
+                )
                 sessionLog?.addValidationPoint(
                     pres.point.x,
                     pres.point.y,
@@ -294,6 +303,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
                     mapped[1],
                     errPx,
                     errPx / lineHeightPx,
+                    kotlin.math.abs(mapped[1] - pres.point.y) / lineHeightPx,
                 )
             }
         }
@@ -339,20 +349,22 @@ class GazeCalibrationActivity : AppCompatActivity() {
         looGridOrder = ordered.map { it.key }
         looReport = CalibrationQuality.leaveOneOut(samples)
 
-        driftDeltaPx = computeDriftDeltaPx()
-        sessionLog?.logDrift(driftFirst, driftSecond, driftDeltaPx, driftFlagged())
+        computeDriftResiduals()
+        sessionLog?.logDrift(
+            driftFirst, driftSecond, driftDxPx, driftDyPx, driftDeltaPx, driftFlagged(),
+        )
         looReport?.let { rep ->
+            val summary = looSummary(samples, rep) ?: return@let
             sessionLog?.logFit(
                 pointsUsed = samples.size,
-                looMedianPx = rep.medianPx,
-                looP95Px = rep.p95Px,
-                looMedianLines = rep.medianPx / lineHeightPx,
-                worstPointIds = rep.worstIndices.take(WORST_REDO_COUNT).map { looGridOrder[it] },
+                summary = summary,
+                lineHeightPx = lineHeightPx,
+                worstPointIds = readingWorstIndices(rep).take(WORST_REDO_COUNT).map { looGridOrder[it] },
             )
         }
 
         // Held-out validation pass: positions deliberately off the 4x4 grid.
-        validationErrorsPx.clear()
+        validationObservations.clear()
         sessionLog?.resetValidation()
         val view = binding.calibrationView
         VALIDATION_FRACTIONS.forEach { (fx, fy) ->
@@ -363,13 +375,18 @@ class GazeCalibrationActivity : AppCompatActivity() {
         runPresentation(presIndex)
     }
 
-    private fun computeDriftDeltaPx(): Float {
-        val mapper = fittedMapper ?: return Float.NaN
-        val f1 = driftFirst ?: return Float.NaN
-        val f2 = driftSecond ?: return Float.NaN
+    private fun computeDriftResiduals() {
+        driftDxPx = Float.NaN
+        driftDyPx = Float.NaN
+        driftDeltaPx = Float.NaN
+        val mapper = fittedMapper ?: return
+        val f1 = driftFirst ?: return
+        val f2 = driftSecond ?: return
         val a = mapper.map(f1[0], f1[1])
         val b = mapper.map(f2[0], f2[1])
-        return hypot(a[0] - b[0], a[1] - b[1])
+        driftDxPx = b[0] - a[0]
+        driftDyPx = b[1] - a[1]
+        driftDeltaPx = hypot(driftDxPx, driftDyPx)
     }
 
     private fun driftFlagged(): Boolean =
@@ -382,40 +399,31 @@ class GazeCalibrationActivity : AppCompatActivity() {
             showAbort(fitPairs.size)
             return
         }
-        val looMedianLines = rep.medianPx / lineHeightPx
-        val looP95Lines = rep.p95Px / lineHeightPx
-        val valMedianPx = if (validationErrorsPx.isNotEmpty()) median(validationErrorsPx) else Float.NaN
-        val valMedianLines = valMedianPx / lineHeightPx
-
-        var summary = getString(
-            com.newsmead.R.string.calib_gate_summary,
-            rep.medianPx, looMedianLines, rep.p95Px, looP95Lines,
-            validationErrorsPx.size, valMedianPx, valMedianLines, excluded.size,
-        )
-        if (driftFlagged()) {
-            summary += "\n" + getString(com.newsmead.R.string.calib_gate_drift, driftDeltaPx)
-        }
-
-        // Advise-but-allow (design §7): band on the worse of LOO and validation.
-        val bandLines = if (valMedianLines.isFinite()) maxOf(looMedianLines, valMedianLines) else looMedianLines
-        val (advice, color) = when {
-            bandLines <= GREEN_LINES -> com.newsmead.R.string.calib_gate_advice_good to GREEN_COLOR
-            bandLines <= AMBER_LINES -> com.newsmead.R.string.calib_gate_advice_ok to AMBER_COLOR
-            else -> com.newsmead.R.string.calib_gate_advice_poor to RED_COLOR
-        }
+        val samples = fitPairs.entries.sortedBy { it.key }.map { it.value }
+        val fitSummary = looSummary(samples, rep) ?: run { showAbort(fitPairs.size); return }
+        val validationSummary = ReadingSpatialMetrics.summarize(validationObservations, lineHeightPx)
+        validationSummary?.let { sessionLog?.logValidationSummary(it, lineHeightPx) }
+        val provisional = fitSummary.meetsProvisionalReference &&
+            validationSummary?.meetsProvisionalReference == true && !driftFlagged() && excluded.isEmpty()
+        val color = if (provisional) GREEN_COLOR else AMBER_COLOR
+        val summary = buildCalibrationSummary(fitSummary, validationSummary, provisional)
         Log.i(
             TAG,
             String.format(
                 Locale.US,
-                "GATE: loo median=%.0f px (%.2f lines) p95=%.0f px; validation median=%.0f px (%.2f lines, n=%d); " +
-                    "excluded=%d drift=%.0f px lineHeight=%.1f px",
-                rep.medianPx, looMedianLines, rep.p95Px, valMedianPx, valMedianLines,
-                validationErrorsPx.size, excluded.size, driftDeltaPx, lineHeightPx,
+                "GATE: LOO vertical median=%.2f lines p95=%.2f max=%.2f within1.2=%d/%d; " +
+                    "validation within1.2=%d/%d; excluded=%d drift=(%.0f,%.0f) px",
+                fitSummary.medianVerticalPx / lineHeightPx,
+                fitSummary.p95VerticalPx / lineHeightPx,
+                fitSummary.maxVerticalPx / lineHeightPx,
+                fitSummary.withinReference, fitSummary.points.size,
+                validationSummary?.withinReference ?: 0, validationSummary?.points?.size ?: 0,
+                excluded.size, driftDxPx, driftDyPx,
             ),
         )
         binding.progressText.text = getString(com.newsmead.R.string.calib_gate_title)
         binding.statusText.text = ""
-        binding.gateText.text = summary + "\n\n" + getString(advice)
+        binding.gateText.text = summary
         binding.gateText.setTextColor(color)
         binding.btnAccept.visibility = View.VISIBLE
         binding.btnRedoWorst.visibility = View.VISIBLE
@@ -448,7 +456,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
 
     private fun redoWorstPoints() {
         val rep = looReport ?: return
-        val worstGrid = rep.worstIndices.take(WORST_REDO_COUNT).map { looGridOrder[it] }
+        val worstGrid = readingWorstIndices(rep).take(WORST_REDO_COUNT).map { looGridOrder[it] }
         val redoSet = (worstGrid + excluded).toSet()
         Log.i(TAG, "Redoing points: $redoSet")
         redoSet.forEach { fitPairs.remove(it) }
@@ -458,7 +466,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
         binding.gatePanel.visibility = View.GONE
 
         presentations.clear()
-        redoSet.shuffled(Random(System.currentTimeMillis())).forEach {
+        redoSet.sorted().forEach {
             presentations.add(Presentation(Kind.FIT, it, gridPoints[it]))
         }
         // After these, advance() refits and re-runs the validation pass.
@@ -474,8 +482,10 @@ class GazeCalibrationActivity : AppCompatActivity() {
         driftSecond = null
         fittedMapper = null
         looReport = null
-        validationErrorsPx.clear()
+        validationObservations.clear()
         driftDeltaPx = Float.NaN
+        driftDxPx = Float.NaN
+        driftDyPx = Float.NaN
         presentationCounter = 0
         binding.gatePanel.visibility = View.GONE
         startSequence()
@@ -564,10 +574,118 @@ class GazeCalibrationActivity : AppCompatActivity() {
         return (fm.descent - fm.ascent) * ARTICLE_LINE_SPACING_MULT + extraPx
     }
 
-    private fun median(values: List<Float>): Float {
-        val sorted = values.sorted()
-        val n = sorted.size
-        return if (n % 2 == 1) sorted[n / 2] else (sorted[n / 2 - 1] + sorted[n / 2]) / 2f
+    private fun looSummary(
+        samples: List<CalibrationSample>,
+        report: CalibrationQuality.Report,
+    ): ReadingSpatialMetrics.Summary? {
+        val observations = samples.indices.map { index ->
+            val sample = samples[index]
+            val gridId = looGridOrder[index]
+            ReadingSpatialMetrics.Observation(
+                id = gridId,
+                label = gridLabel(gridId),
+                targetX = sample.screenX,
+                targetY = sample.screenY,
+                predictedX = sample.screenX + report.dxPx[index],
+                predictedY = sample.screenY + report.dyPx[index],
+            )
+        }
+        return ReadingSpatialMetrics.summarize(observations, lineHeightPx)
+    }
+
+    private fun buildCalibrationSummary(
+        fit: ReadingSpatialMetrics.Summary,
+        validation: ReadingSpatialMetrics.Summary?,
+        provisional: Boolean,
+    ): String = buildString {
+        appendLine("16-point fit — leave-one-out (not training error)")
+        appendLine(metricSummary(fit))
+        appendLine("Individual fit targets (signed vertical; + is below target)")
+        appendLine(pointDetails(fit))
+        appendLine("Worst fit: P${fit.worstVertical.id + 1} ${fit.worstVertical.label} " +
+            "(${signedLines(fit.worstVertical.dyPx)} vertical, ${fit.worstVertical.errorPx.toInt()} px total)")
+        appendLine("Rows 1–4 (vertical median): ${gridAxisSummary(fit, true)}")
+        appendLine("Columns 1–4 (vertical median): ${gridAxisSummary(fit, false)}")
+        appendLine()
+        appendLine("5 held-out checks")
+        if (validation == null) {
+            appendLine("No clean held-out targets recorded.")
+        } else {
+            appendLine(metricSummary(validation))
+            appendLine("Individual held-out targets")
+            appendLine(pointDetails(validation))
+            appendLine("Worst held-out: ${validation.worstVertical.label} " +
+                "(${signedLines(validation.worstVertical.dyPx)} vertical, " +
+                "${validation.worstVertical.errorPx.toInt()} px total)")
+        }
+        appendLine()
+        appendLine(String.format(Locale.US, "Drift: dx %+.0f px · dy %+.1f lines · total %.1f lines%s",
+            driftDxPx, driftDyPx / lineHeightPx, driftDeltaPx / lineHeightPx,
+            if (driftFlagged()) " — warning" else ""))
+        appendLine("Coverage: ${fit.points.size}/16 fit · ${validation?.points?.size ?: 0}/5 held-out · ${excluded.size} excluded")
+        appendLine()
+        appendLine(
+            if (provisional) {
+                "Meets the provisional spatial reference: every measured target is within 1.2 lines."
+            } else {
+                "Does not meet the provisional spatial reference. Review the individual target(s) above."
+            },
+        )
+        append("This is a spatial diagnostic, not proof of reading-line compatibility; direct reading validation is still required.")
+    }
+
+    private fun metricSummary(summary: ReadingSpatialMetrics.Summary): String = String.format(
+        Locale.US,
+        "Vertical median %.1f · P95 %.1f · max %.1f lines | within 0.5/1.0/1.2: %d/%d · %d/%d · %d/%d | 2-D median/P95/max: %.0f/%.0f/%.0f px",
+        summary.medianVerticalPx / lineHeightPx,
+        summary.p95VerticalPx / lineHeightPx,
+        summary.maxVerticalPx / lineHeightPx,
+        summary.withinHalfLine, summary.points.size,
+        summary.withinOneLine, summary.points.size,
+        summary.withinReference, summary.points.size,
+        summary.medianErrorPx, summary.p95ErrorPx, summary.maxErrorPx,
+    )
+
+    private fun pointDetails(summary: ReadingSpatialMetrics.Summary): String =
+        summary.points.sortedBy { it.id }.joinToString("\n") {
+            String.format(
+                Locale.US,
+                "P%d %-13s dx %+.0f px · dy %+.1f lines · total %.0f px",
+                it.id + 1, it.label, it.dxPx, it.dyPx / lineHeightPx, it.errorPx,
+            )
+        }
+
+    private fun readingWorstIndices(report: CalibrationQuality.Report): List<Int> =
+        report.dyPx.indices.sortedByDescending { kotlin.math.abs(report.dyPx[it]) }
+
+    private fun gridAxisSummary(summary: ReadingSpatialMetrics.Summary, rows: Boolean): String =
+        (0..3).joinToString(" / ") { axis ->
+            val values = summary.points
+                .filter { if (rows) it.id / 4 == axis else it.id % 4 == axis }
+                .map { it.verticalLines }
+                .sorted()
+            if (values.isEmpty()) {
+                "—"
+            } else {
+                val n = values.size
+                val median = if (n % 2 == 1) values[n / 2] else (values[n / 2 - 1] + values[n / 2]) / 2f
+                String.format(Locale.US, "%.1f", median)
+            }
+        }
+
+    private fun signedLines(dyPx: Float): String =
+        String.format(Locale.US, "%+.1f lines", dyPx / lineHeightPx)
+
+    private fun gridLabel(index: Int): String =
+        "row ${index / 4 + 1}, col ${index % 4 + 1}"
+
+    private fun validationLabel(index: Int): String = when (index) {
+        0 -> "center"
+        1 -> "top-left"
+        2 -> "top-right"
+        3 -> "bottom-left"
+        4 -> "bottom-right"
+        else -> "held-out ${index + 1}"
     }
 
     private fun enableImmersiveMode() {
@@ -600,15 +718,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
         private const val MIN_FIT_POINTS = 12
         private const val WORST_REDO_COUNT = 3
         private const val MARGIN_FRAC = 0.1f
+        private const val FIXED_ORDER_SEED = 0L
 
-        // Quality-gate bands in line-heights, anchored to this tracker's DOCUMENTED
-        // accuracy (~1.68-2.42 cm overall median ~= 3-4 line-heights on the A56;
-        // see docs/progress-notes.md). The earlier 1.0/1.5 bands were below the
-        // tracker's own floor, so every normal calibration read red. These flag a
-        // calibration that is unusually bad FOR THIS TRACKER, not one that misses an
-        // unattainable ideal. Still provisional; tighten once pilot data exists.
-        private const val GREEN_LINES = 3.0f
-        private const val AMBER_LINES = 4.5f
         private const val DRIFT_FLAG_LINE_FRACTION = 1.0f
         private const val ARTICLE_LINE_SPACING_MULT = 1.6f
 

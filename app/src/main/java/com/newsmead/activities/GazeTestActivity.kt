@@ -33,9 +33,8 @@ import com.newsmead.gaze.GazeAccuracySessionLog
 import com.newsmead.gaze.LocalCalibratedGazeProvider
 import com.newsmead.gaze.LocalGazeSources
 import com.newsmead.gaze.LocalRawGazeSource
+import com.newsmead.gaze.ReadingSpatialMetrics
 import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.ceil
 import kotlin.math.hypot
 
 /**
@@ -63,6 +62,7 @@ class GazeTestActivity : AppCompatActivity() {
     private var pointIndex = 0
     private var attempts = 0
     private val observations = ArrayList<DriftCorrection.Observation>()
+    private val observationTargetIndices = ArrayList<Int>()
 
     // Drift correction the live pipeline currently runs with, plus the candidate
     // fitted from the latest measurement (pending researcher approval).
@@ -201,6 +201,7 @@ class GazeTestActivity : AppCompatActivity() {
         )
         targets = computeTargets(w, h)
         observations.clear()
+        observationTargetIndices.clear()
         pendingCorrection = null
         binding.accuracyButton.visibility = View.GONE
         binding.gatePanel.visibility = View.GONE
@@ -247,6 +248,7 @@ class GazeTestActivity : AppCompatActivity() {
             sourceEvents = pointSourceEvents.toList(),
         )
         observations.add(DriftCorrection.Observation(result.medianX, result.medianY, p.x, p.y))
+        observationTargetIndices.add(pointIndex)
         val err = hypot(result.medianX - p.x, result.medianY - p.y)
         Log.i(
             TAG,
@@ -309,27 +311,38 @@ class GazeTestActivity : AppCompatActivity() {
             return
         }
 
-        val errorsPx = observations.map { hypot(it.predictedX - it.targetX, it.predictedY - it.targetY) }
-        val medianPx = median(errorsPx)
-        val p95Px = percentile(errorsPx, 0.95)
-        val vertMedianPx = median(observations.map { abs(it.predictedY - it.targetY) })
-        val medianLines = medianPx / lineHeightPx
+        val readingSummary = ReadingSpatialMetrics.summarize(
+            observations.mapIndexed { index, observation ->
+                val targetIndex = observationTargetIndices[index]
+                ReadingSpatialMetrics.Observation(
+                    id = targetIndex,
+                    label = targetLabel(targetIndex),
+                    targetX = observation.targetX,
+                    targetY = observation.targetY,
+                    predictedX = observation.predictedX,
+                    predictedY = observation.predictedY,
+                )
+            },
+            lineHeightPx,
+        ) ?: run {
+            accuracySessionLog?.finish("summary_failed")
+            showGate(canApply = false)
+            return
+        }
 
         val newFit = DriftCorrection.fit(observations)
         val looPostPx = DriftCorrection.leaveOneOutMedianPx(observations)
         if (newFit != null && looPostPx != null) {
             pendingCorrection = activeCorrection?.let { DriftCorrection.compose(newFit, it) } ?: newFit
-            pendingPreMedianPx = medianPx
+            pendingPreMedianPx = readingSummary.medianErrorPx
             pendingPostMedianPx = looPostPx
         } else {
             pendingCorrection = null
         }
 
         accuracySessionLog?.logSummary(
-            acceptedPointCount = observations.size,
-            medianPx = medianPx,
-            p95Px = p95Px,
-            verticalMedianPx = vertMedianPx,
+            summary = readingSummary,
+            lineHeightPx = lineHeightPx,
             estimatedCorrectedLooPx = looPostPx,
         )
         accuracySessionLog?.finish("completed")
@@ -338,41 +351,77 @@ class GazeTestActivity : AppCompatActivity() {
             TAG,
             String.format(
                 Locale.US,
-                "ACCURACY n=%d median=%.0f px (%.2f lines) p95=%.0f px vert=%.0f px; est. corrected(LOO)=%.0f px; active=%b",
-                observations.size, medianPx, medianLines, p95Px, vertMedianPx,
+                "ACCURACY n=%d vertical median/p95/max=%.2f/%.2f/%.2f lines within1.2=%d/%d; " +
+                    "2D median/p95/max=%.0f/%.0f/%.0f px; est. corrected(LOO)=%.0f px; active=%b",
+                observations.size,
+                readingSummary.medianVerticalPx / lineHeightPx,
+                readingSummary.p95VerticalPx / lineHeightPx,
+                readingSummary.maxVerticalPx / lineHeightPx,
+                readingSummary.withinReference, readingSummary.points.size,
+                readingSummary.medianErrorPx, readingSummary.p95ErrorPx, readingSummary.maxErrorPx,
                 looPostPx ?: Float.NaN, activeCorrection != null,
             ),
         )
 
         binding.hintText.text = ""
-        binding.gateText.text = buildGateSummary(medianPx, medianLines, p95Px, vertMedianPx, looPostPx) +
+        binding.gateText.text = buildGateSummary(readingSummary, looPostPx) +
             "\n\nDiagnostic log: ${accuracySessionLog?.fileName() ?: "unavailable"}"
-        binding.gateText.setTextColor(bandColor(medianLines))
+        binding.gateText.setTextColor(
+            if (readingSummary.meetsProvisionalReference) GREEN_COLOR else AMBER_COLOR,
+        )
         showGate(canApply = pendingCorrection != null)
     }
 
     private fun buildGateSummary(
-        medianPx: Float,
-        medianLines: Float,
-        p95Px: Float,
-        vertMedianPx: Float,
+        summary: ReadingSpatialMetrics.Summary,
         looPostPx: Float?,
-    ): String {
-        val summary = getString(
-            com.newsmead.R.string.gaze_recal_summary,
-            medianPx, medianLines, p95Px, vertMedianPx,
-        )
-        val estimate = looPostPx?.let {
-            "\n" + getString(com.newsmead.R.string.gaze_recal_estimate, it, it / lineHeightPx)
-        } ?: ""
-        val advice = getString(
-            when {
-                medianLines <= GREEN_LINES -> com.newsmead.R.string.gaze_recal_advice_good
-                medianLines <= AMBER_LINES -> com.newsmead.R.string.gaze_recal_advice_ok
-                else -> com.newsmead.R.string.gaze_recal_advice_poor
+    ): String = buildString {
+        appendLine("9-point live-pipeline spatial check")
+        appendLine(String.format(
+            Locale.US,
+            "Vertical median %.1f · P95 %.1f · max %.1f lines",
+            summary.medianVerticalPx / lineHeightPx,
+            summary.p95VerticalPx / lineHeightPx,
+            summary.maxVerticalPx / lineHeightPx,
+        ))
+        appendLine("Within 0.5/1.0/1.2 lines: ${summary.withinHalfLine}/${summary.points.size} · " +
+            "${summary.withinOneLine}/${summary.points.size} · ${summary.withinReference}/${summary.points.size}")
+        appendLine(String.format(
+            Locale.US,
+            "2-D median/P95/max: %.0f/%.0f/%.0f px",
+            summary.medianErrorPx, summary.p95ErrorPx, summary.maxErrorPx,
+        ))
+        appendLine()
+        appendLine("Individual targets (signed vertical; + is below target)")
+        summary.points.sortedBy { it.id }.forEach { point ->
+            appendLine(String.format(
+                Locale.US,
+                "P%d %-13s dx %+.0f px · dy %+.1f lines · total %.0f px",
+                point.id + 1, point.label, point.dxPx, point.dyPx / lineHeightPx, point.errorPx,
+            ))
+        }
+        appendLine("Worst: P${summary.worstVertical.id + 1} ${summary.worstVertical.label} " +
+            String.format(Locale.US, "at %.1f vertical lines", summary.worstVertical.verticalLines))
+        appendLine("Rows (top/middle/bottom): ${axisSummary(summary, true)}")
+        appendLine("Columns (left/center/right): ${axisSummary(summary, false)}")
+        looPostPx?.let {
+            appendLine()
+            appendLine(String.format(
+                Locale.US,
+                "Global affine candidate: estimated leave-one-out 2-D median %.0f px (%.1f lines).",
+                it, it / lineHeightPx,
+            ))
+            appendLine("This estimate is not a verified correction and may not repair a one-sided or local failure.")
+        }
+        appendLine()
+        appendLine(
+            if (summary.meetsProvisionalReference) {
+                "Meets the provisional spatial reference: every measured target is within 1.2 vertical lines."
+            } else {
+                "Does not meet the provisional spatial reference; inspect the target and region pattern above."
             },
         )
-        return "$summary$estimate\n\n$advice"
+        append("This check does not establish reading-line compatibility; that requires direct reading validation.")
     }
 
     private fun showGate(canApply: Boolean) {
@@ -411,11 +460,19 @@ class GazeTestActivity : AppCompatActivity() {
 
     // --- Helpers -----------------------------------------------------------
 
-    private fun bandColor(lines: Float): Int = when {
-        lines <= GREEN_LINES -> GREEN_COLOR
-        lines <= AMBER_LINES -> AMBER_COLOR
-        else -> RED_COLOR
+    private fun targetLabel(index: Int): String {
+        val rows = arrayOf("top", "middle", "bottom")
+        val cols = arrayOf("left", "center", "right")
+        return "${rows[index / 3]}-${cols[index % 3]}"
     }
+
+    private fun axisSummary(summary: ReadingSpatialMetrics.Summary, rows: Boolean): String =
+        (0..2).joinToString(" / ") { axis ->
+            val values = summary.points
+                .filter { if (rows) it.id / 3 == axis else it.id % 3 == axis }
+                .map { it.verticalLines }
+            if (values.isEmpty()) "—" else String.format(Locale.US, "%.1f", median(values))
+        }
 
     /** See GazeCalibrationActivity.computeLineHeightPx - same article geometry. */
     private fun computeLineHeightPx(): Float {
@@ -431,11 +488,6 @@ class GazeTestActivity : AppCompatActivity() {
         val sorted = values.sorted()
         val n = sorted.size
         return if (n % 2 == 1) sorted[n / 2] else (sorted[n / 2 - 1] + sorted[n / 2]) / 2f
-    }
-
-    private fun percentile(values: List<Float>, p: Double): Float {
-        val sorted = values.sorted()
-        return sorted[(ceil(p * sorted.size).toInt() - 1).coerceIn(0, sorted.size - 1)]
     }
 
     private fun enableImmersiveMode() {
@@ -463,13 +515,9 @@ class GazeTestActivity : AppCompatActivity() {
         private const val MAX_ATTEMPTS = 2
         private const val TONE_VOLUME = 60
 
-        // Same line-height bands as the calibration gate (provisional).
-        private const val GREEN_LINES = 3.0f
-        private const val AMBER_LINES = 4.5f
         private const val ARTICLE_LINE_SPACING_MULT = 1.6f
 
         private val GREEN_COLOR = Color.parseColor("#2E7D32")
         private val AMBER_COLOR = Color.parseColor("#B26A00")
-        private val RED_COLOR = Color.parseColor("#C62828")
     }
 }

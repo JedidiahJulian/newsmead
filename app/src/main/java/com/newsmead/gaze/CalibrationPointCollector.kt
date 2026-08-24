@@ -48,7 +48,9 @@ class CalibrationPointCollector(
         this.onDone = onDone
         setCollecting(false)
         buffer.clear()
-        view.showTarget(x, y)
+        // Contract through acquisition and the expected base recording window,
+        // reaching the center near the normal capture/advance transition.
+        view.showTarget(x, y, EXPECTED_CONTRACTION_MS)
         // APPEAR (animation) + HOLD_ATTENTION (older-adult saccadic latency).
         handler.postDelayed({ settle() }, CalibrationView.APPEAR_MS + HOLD_MS)
     }
@@ -101,7 +103,9 @@ class CalibrationPointCollector(
         // Per-point state timings (docs/calibration-design.md §2.3).
         private const val HOLD_MS = 500L
         private const val SETTLE_MS = 400L
+        private const val PRE_SAMPLE_MS = CalibrationView.APPEAR_MS + HOLD_MS + SETTLE_MS
         private const val BASE_SAMPLE_MS = 700L
+        private const val EXPECTED_CONTRACTION_MS = PRE_SAMPLE_MS + BASE_SAMPLE_MS
         private const val SAMPLE_RECHECK_MS = 250L
         private const val SAMPLE_TIMEOUT_MS = 1500L
         private const val TICK_TONE_MS = 50

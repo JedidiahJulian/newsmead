@@ -184,6 +184,51 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 
 **Next inquiry:** Produce a diagnostics-backed proposal that separates (1) stricter target-wise acceptance/recheck, (2) restoration/comparison of the last known better calibration and mapping behavior, and (3) robust global versus regional correction, with an independent verification requirement.
 
+### 2026-08-23 — Reading-oriented spatial measurement revision implemented
+
+**Question:** How should the existing 16-point calibration and nine-point live-pipeline check report quality without allowing a favorable session median to hide a severe target or regional failure?
+
+**Action:** Revised measurement and presentation only; the raw gaze estimator, temporal pipeline, quadratic mapper, and affine correction fit were not changed. Both checks now retain signed per-target horizontal and vertical residuals, express vertical residuals in rendered article line-heights, report median/P95/maximum and counts within 0.5, 1.0, and a provisional 1.2-line reference, identify the worst target, and show regional summaries. The 16-point fit is evaluated with leave-one-out predictions and separately reports all five held-out checks and x/y drift. The nine-point check reports all nine targets and row/column medians. Result panels are scrollable so none of this evidence is hidden.
+
+**Evidence:** E-029. The shared metrics and activity changes compile. `CalibrationQualityTest` and `ReadingSpatialMetricsTest` pass. The complete repository unit suite still contains an unrelated failure in `FirebaseTest.createAccount`.
+
+**Interpretation:** Green now means only that every recorded target meets the provisional 1.2-line vertical spatial reference (with complete/no-exclusion and drift conditions also applied to the 16-point gate). It no longer means “good for reading” or “no correction needed.” Both screens explicitly state that direct reading validation is still required. Redo-worst selection in the 16-point flow now prioritizes the largest vertical leave-one-out residuals, consistent with line assignment as the primary use case.
+
+**Constraint:** A correction estimated from a nine-point run remains a candidate, not proof of improvement. It must be verified on separate data before it can support a reading-performance claim, particularly when errors are regional rather than global.
+
+### 2026-08-24 — Revised 16-point and nine-point measurements verified on device
+
+**Question:** Do the reading-oriented result screens and JSON records correctly expose individual, tail, regional, drift, and coverage failures in a newly paired calibration and immediate live-pipeline run?
+
+**Action:** Completed and saved one fixed-phone, normal-light, no-glasses 16-point calibration, then immediately completed an uncorrected nine-point run using that newly saved 16-point map. The first same-day attempt was retained separately but excluded as a paired comparison because its calibration activity was exited without saving and its nine-point run therefore used the previous day's map.
+
+**Evidence:** E-030. Paired artifacts are retained locally under `diagnostics-local/2026-08-24/metrics-v2/run-2/`. The calibration outcome is `accepted`; `calibration_16point.csv` was updated at 11:51; the nine-point artifact records 16 calibration points and `drift_correction_active: false`.
+
+**Observations:**
+
+- The 16-point leave-one-out vertical median was 3.61 line-heights, P95/maximum was 6.65, and only 3/16 targets were within the provisional 1.2-line reference. The largest vertical miss was point 16 (row 4, column 4) at 6.65 lines.
+- The five held-out checks had a 3.00-line vertical median and 8.07-line P95/maximum; only 1/5 was within 1.2 lines. The bottom-left held-out check was worst at 8.07 lines, while bottom-right was 0.86 lines, demonstrating a strongly localized rather than uniformly lower-screen error.
+- Start-to-end mapped drift was approximately `dx = -59 px`, `dy = -382 px` (about -3.23 line-heights vertically), with a 387 px total, and was correctly flagged.
+- The immediate nine-point live-path vertical median was 2.69 lines, P95/maximum was 8.17, and only 1/9 targets was within 1.2 lines. The worst target was top-right at 8.17 vertical lines; row medians were approximately 4.02 (top), 2.07 (middle), and 2.69 (bottom) lines, while column medians were 2.30 (left), 2.07 (center), and 4.38 (right).
+- Nine-point total 2-D error was 433 px median and 985 px P95/maximum. The global affine candidate's leave-one-out 2-D median estimate was 223 px, but this is not an independent post-correction result and does not establish that the regional failures would be repaired.
+- All expected target-level metric collections were present: 16 leave-one-out fit targets, five held-out targets, and nine live-pipeline targets. The provisional assessment correctly remained false and did not allow the median to hide the worst targets.
+
+**Interpretation:** The revised validation measurement is functioning as designed. It confirms that the current problem is not a single uniform offset: large errors change location and direction across fit, held-out, and immediate live checks, alongside substantial within-session vertical drift. Applying the nine-point affine candidate is not yet justified as an improvement because it was fit and estimated on the same nine observations and has not been independently verified.
+
+**Next inquiry:** Introduce the proposed fixed center crosshair plus contracting ring as one controlled capture-stimulus change, then repeat the same saved-calibration/immediate-nine-point pair and compare capture dispersion, drift, target-wise vertical error, and regional tails against E-030.
+
+### 2026-08-24 — Older-adult fixation target and predictable order implemented
+
+**Question:** Can the shared target provide a clearer exact fixation location and easier attentional guidance for older adults, while avoiding repeated animation during measurement?
+
+**Action:** Replaced the continuously pulsing inner cue with a code-drawn hit-marker: a fixed outer ring, four crosshair arms with deliberately short inward segments, a small permanent center `+`, and a saturated bright-red disc with its own black outline. The red disc begins at the outer-arm tips and contracts to the overall size of the center `+` over 1800 ms: the 1100 ms APPEAR/HOLD/SETTLE period plus the expected 700 ms base SAMPLE window. The black reticle is drawn over the opaque red disc so it remains visible throughout. Restored the original 16-point fixed row-major traversal and made redo-worst ordering deterministic. The already-fixed nine-point row-major traversal was retained. Calibration JSON now records `order_mode: fixed_row_major`.
+
+**Evidence:** E-031. Local implementation in `CalibrationView.kt`, `GazeCalibrationActivity.kt`, and `CalibrationSessionLog.kt`. The app compiles and the focused gaze-metrics tests pass; on-device usability and outcome comparison remain pending.
+
+**Interpretation:** The intervention is accessibility-oriented and changes only target presentation/order, not raw gaze estimation, filtering, mapping, or validation calculations. Fixed order reduces transition uncertainty for participants but couples screen region with elapsed sequence time. The center remains stationary, but radial size change now continues through the expected base sample window; its effect on sample dispersion must be checked rather than assumed beneficial.
+
+**Next inquiry:** Visually verify target size, contrast, contraction timing, and fixed traversal on the A56, then collect the same saved-calibration/immediate-nine-point pair used for E-030.
+
 ## Evidence Registry
 
 | ID | Date | Evidence source | Conditions | Artifact or location | Notes |
@@ -216,6 +261,9 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 | E-026 | 2026-08-23 | Pre-redesign accuracy record | Galaxy A56 and sister prototype before calibration rebuild | `docs/progress-notes.md` | A56 vertical 0.67-1.01 cm; prototype approximately 0.7 cm consistently |
 | E-027 | 2026-08-23 | Regression-window audit | Git history around July 24 rebuild | Commits `4b5198f`, `3dca061`, `4322154`, `8dddc02` | Sampling, filtering, extrapolation, and accuracy-test behavior changed after earlier measurements |
 | E-028 | 2026-08-23 | Offline mapper/aggregation replay | Final fixed-phone calibration and three live runs | `diagnostics-local/analyze_mapper_replay.py` | Exact current replay; clamp reduces tails but does not restore line accuracy; plain median/affine results mixed |
+| E-029 | 2026-08-23 | Reading-oriented validation revision | Local implementation and JVM tests | `ReadingSpatialMetrics.kt`, calibration and accuracy activities/loggers | Per-target dx/dy, vertical line metrics, tails, regions, provisional all-target reference; estimator unchanged |
+| E-030 | 2026-08-24 | On-device revised-metrics verification | Galaxy A56; fixed phone, normal light, no glasses; saved calibration plus immediate uncorrected run | `diagnostics-local/2026-08-24/metrics-v2/run-2/` | Complete 16 LOO + 5 held-out + 9 live target metrics; large regional errors and vertical drift correctly exposed |
+| E-031 | 2026-08-24 | Older-adult target/order intervention | Local implementation pending device verification | `CalibrationView.kt`, `GazeCalibrationActivity.kt`, `CalibrationSessionLog.kt` | Fixed hit-marker, one-way contraction before sampling, fixed row-major traversal; estimator unchanged |
 
 ## Confirmed Findings
 
@@ -233,6 +281,9 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 12. Historical records and researcher observation establish a credible regression relative to the earlier NewsMead/prototype behavior.
 13. Current soft extrapolation amplifies some catastrophic regional errors, but it is not the sole cause of the regression.
 14. Accuracy and correction decisions must include individual target and regional errors; session median alone is insufficient.
+15. The 16-point and nine-point result screens now implement target-wise, reading-oriented spatial reporting while keeping reading compatibility as an unestablished outcome.
+16. The revised measurements are verified on device and correctly prevent favorable aggregate interpretation when individual targets, tails, or drift fail (E-030).
+17. The next controlled intervention uses a predictable row-major order and a fixed-center contracting hit-marker, with temporal/spatial order coupling documented as a tradeoff (E-031).
 
 ## Open Questions
 
@@ -248,4 +299,8 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 
 ## Decisions Resulting From Diagnostics
 
-No improvement decisions have been made. Any future decision must cite the relevant journal entry and evidence ID from this document.
+1. Revise validation measurement before modifying the gaze estimator (E-029).
+2. Use vertical error in rendered article line-heights as the primary spatial reading metric while retaining signed horizontal error and total 2-D error (E-029).
+3. Treat 1.2 line-heights as a provisional all-target spatial reference, not a validated reading pass threshold (E-025, E-026, E-029).
+4. Do not allow session median alone to produce a favorable assessment; report and consider every target, tail error, region, drift, and coverage (E-022, E-024, E-028, E-029).
+5. Prioritize older-adult target predictability for the next controlled comparison by restoring fixed row-major order and replacing continuous pulsing with a one-way pre-sample contraction around a fixed reticle (E-031).

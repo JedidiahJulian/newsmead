@@ -7,14 +7,16 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
-import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 
 /**
  * Calibration target renderer (docs/calibration-design.md §2): a concentric
- * bullseye sized in dp for 45-65-year-old acuity, with a fade/scale appear
- * animation and a capture-confirm flash. Deliberately static (no motion) once
- * the appear animation ends, so nothing elicits pursuit or micro-saccades
- * during the settle/sample states. Also draws a 16-dot progress mini-map.
+ * reticle sized in dp for 45-65-year-old acuity, with a fixed four-arm
+ * hit-marker and a red filled disc that contracts once to a small fixed centre
+ * plus to guide fixation. The collector synchronizes the contraction across
+ * target acquisition and the expected base sample window, so it reaches the
+ * center near the normal capture/advance time.
+ * Also draws a 16-dot progress mini-map.
  *
  * Colors assume the light (reading-surface) background set in the layout.
  */
@@ -32,10 +34,10 @@ class CalibrationView @JvmOverloads constructor(
     private var targetY: Float? = null
     private var appearProgress = 1f
     private var confirmProgress = 0f
-    private var pulseScale = 1f
+    private var focusRadiusDp = CONTRACT_END_RADIUS_DP
     private var appearAnimator: ValueAnimator? = null
     private var confirmAnimator: ValueAnimator? = null
-    private var pulseAnimator: ValueAnimator? = null
+    private var focusAnimator: ValueAnimator? = null
     private var miniStates: List<MiniDotState> = emptyList()
 
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -47,6 +49,23 @@ class CalibrationView @JvmOverloads constructor(
         color = DOT_COLOR
         style = Paint.Style.FILL
     }
+    private val focusOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = RING_COLOR
+        style = Paint.Style.STROKE
+        strokeWidth = FOCUS_OUTLINE_STROKE_DP * density
+    }
+    private val crosshairPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = RING_COLOR
+        style = Paint.Style.STROKE
+        strokeWidth = CROSSHAIR_STROKE_DP * density
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val centerCrossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = RING_COLOR
+        style = Paint.Style.STROKE
+        strokeWidth = CENTER_CROSS_STROKE_DP * density
+        strokeCap = Paint.Cap.ROUND
+    }
     private val confirmPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = CONFIRM_COLOR
         style = Paint.Style.FILL
@@ -56,10 +75,11 @@ class CalibrationView @JvmOverloads constructor(
     }
 
     /** Show the target at [x],[y] with the APPEAR fade/scale-in animation. */
-    fun showTarget(x: Float, y: Float) {
+    fun showTarget(x: Float, y: Float, contractionDurationMs: Long) {
         targetX = x
         targetY = y
         confirmProgress = 0f
+        appearProgress = 0f
         appearAnimator?.cancel()
         appearAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = APPEAR_MS
@@ -69,24 +89,20 @@ class CalibrationView @JvmOverloads constructor(
             }
             start()
         }
-        startPulse()
+        startContraction(contractionDurationMs)
     }
 
     /**
-     * Continuous gentle "breathing" of the inner dot against the fixed ring,
-     * to hold the participant's fixation on the target centre. Scale only (the
-     * dot never moves), so it draws the eye inward without eliciting the smooth
-     * pursuit that a translating target would.
+     * One inward contraction. The collector supplies the acquisition plus base
+     * sample duration so the cue reaches center near normal target completion.
      */
-    private fun startPulse() {
-        pulseAnimator?.cancel()
-        pulseAnimator = ValueAnimator.ofFloat(PULSE_MIN, PULSE_MAX).apply {
-            duration = PULSE_MS
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            interpolator = AccelerateDecelerateInterpolator()
+    private fun startContraction(durationMs: Long) {
+        focusAnimator?.cancel()
+        focusAnimator = ValueAnimator.ofFloat(CONTRACT_START_RADIUS_DP, CONTRACT_END_RADIUS_DP).apply {
+            duration = durationMs
+            interpolator = DecelerateInterpolator()
             addUpdateListener { animation ->
-                pulseScale = animation.animatedValue as Float
+                focusRadiusDp = animation.animatedValue as Float
                 invalidate()
             }
             start()
@@ -96,8 +112,8 @@ class CalibrationView @JvmOverloads constructor(
     fun hideTarget() {
         appearAnimator?.cancel()
         confirmAnimator?.cancel()
-        pulseAnimator?.cancel()
-        pulseScale = 1f
+        focusAnimator?.cancel()
+        focusRadiusDp = CONTRACT_END_RADIUS_DP
         targetX = null
         targetY = null
         invalidate()
@@ -131,12 +147,37 @@ class CalibrationView @JvmOverloads constructor(
         val alpha = (255 * appearProgress).toInt()
         ringPaint.alpha = alpha
         dotPaint.alpha = alpha
+        focusOutlinePaint.alpha = alpha
+        crosshairPaint.alpha = alpha
+        centerCrossPaint.alpha = alpha
+        // The saturated red guidance disc starts at the arm tips. Draw the
+        // black reticle over it so every alignment mark remains high-contrast.
+        canvas.drawCircle(x, y, focusRadiusDp * density, dotPaint)
+        canvas.drawCircle(x, y, focusRadiusDp * density, focusOutlinePaint)
         canvas.drawCircle(x, y, RING_RADIUS_DP * density * scale, ringPaint)
-        canvas.drawCircle(x, y, DOT_RADIUS_DP * density * scale * pulseScale, dotPaint)
+        drawCrosshair(canvas, x, y, scale)
+        drawCenterCross(canvas, x, y)
         if (confirmProgress > 0f) {
             confirmPaint.alpha = (200 * confirmProgress).toInt()
             canvas.drawCircle(x, y, RING_RADIUS_DP * density, confirmPaint)
         }
+    }
+
+    /** Four separated arms keep the exact centre unobstructed, like a hit-marker. */
+    private fun drawCrosshair(canvas: Canvas, x: Float, y: Float, scale: Float) {
+        val inner = CROSSHAIR_INNER_GAP_DP * density * scale
+        val outer = CROSSHAIR_OUTER_DP * density * scale
+        canvas.drawLine(x - outer, y, x - inner, y, crosshairPaint)
+        canvas.drawLine(x + inner, y, x + outer, y, crosshairPaint)
+        canvas.drawLine(x, y - outer, x, y - inner, crosshairPaint)
+        canvas.drawLine(x, y + inner, x, y + outer, crosshairPaint)
+    }
+
+    /** Small permanent plus marking the exact fixation coordinate. */
+    private fun drawCenterCross(canvas: Canvas, x: Float, y: Float) {
+        val half = CENTER_CROSS_HALF_DP * density
+        canvas.drawLine(x - half, y, x + half, y, centerCrossPaint)
+        canvas.drawLine(x, y - half, x, y + half, centerCrossPaint)
     }
 
     private fun drawMiniMap(canvas: Canvas) {
@@ -166,15 +207,19 @@ class CalibrationView @JvmOverloads constructor(
         private const val CONFIRM_FLASH_MS = 250L
         private const val APPEAR_START_SCALE = 1.3f
 
-        // Inner-dot "breathing" pulse to hold fixation on the target centre.
-        private const val PULSE_MS = 650L
-        private const val PULSE_MIN = 0.7f
-        private const val PULSE_MAX = 1.3f
+        // Starts at the four outer arm tips and ends at the center plus bounds.
+        private const val CONTRACT_START_RADIUS_DP = 24f
+        private const val CONTRACT_END_RADIUS_DP = 6f
 
         // Bullseye sized in dp (44dp ring / 9dp dot diameters), per design §2.2.
         private const val RING_RADIUS_DP = 22f
         private const val RING_STROKE_DP = 3f
-        private const val DOT_RADIUS_DP = 4.5f
+        private const val FOCUS_OUTLINE_STROKE_DP = 1.5f
+        private const val CROSSHAIR_STROKE_DP = 2.5f
+        private const val CROSSHAIR_INNER_GAP_DP = 19f
+        private const val CROSSHAIR_OUTER_DP = 24f
+        private const val CENTER_CROSS_STROKE_DP = 2f
+        private const val CENTER_CROSS_HALF_DP = 6f
 
         private const val MINI_RADIUS_DP = 3.5f
         private const val MINI_GAP_DP = 6f
@@ -182,7 +227,7 @@ class CalibrationView @JvmOverloads constructor(
 
         // Contrast-first colors for the light reading-surface background.
         private val RING_COLOR = Color.parseColor("#37474F")
-        private val DOT_COLOR = Color.parseColor("#C62828")
+        private val DOT_COLOR = Color.parseColor("#FF0000")
         private val CONFIRM_COLOR = Color.parseColor("#2E7D32")
         private val MINI_PENDING_COLOR = Color.parseColor("#BDBDBD")
         private val MINI_CURRENT_COLOR = Color.parseColor("#C62828")

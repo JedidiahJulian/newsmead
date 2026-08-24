@@ -22,6 +22,8 @@ class CalibrationQualityTest {
         val report = CalibrationQuality.leaveOneOut(grid())
         requireNotNull(report)
         assertEquals(16, report.errorsPx.size)
+        assertEquals(16, report.dxPx.size)
+        assertEquals(16, report.dyPx.size)
         // Ridge regularization biases the fit slightly, so LOO error is nonzero
         // even on perfect synthetic data - but it must stay small relative to
         // the 267px grid spacing.

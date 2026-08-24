@@ -61,10 +61,15 @@ a known open flag — if sepia/dark are kept available to participants, calibrat
 the participant will read in.)
 
 ### 2.2 Target structure
-Concentric bullseye, sized for reduced acuity/contrast sensitivity at 45–65:
-- Outer ring: static circle, **40–48dp diameter** (current `CalibrationView` uses raw-px
-  radius 34 — convert to dp).
-- Inner dot: **8–10dp** diameter.
+Hit-marker reticle, sized for reduced acuity/contrast sensitivity at 45–65:
+- Outer ring: static circle, **44dp diameter**.
+- Four shortened crosshair arms meet the outer ring but leave the exact center open.
+- A small fixed `+` marks the exact center throughout presentation.
+- A bright saturated-red disc with a black outline begins at the tips of the four
+  outer arms, with the black reticle drawn above it for contrast. The arms extend only
+  slightly inward from the fixed ring. The disc contracts once toward the center marker
+  across APPEAR, HOLD_ATTENTION, SETTLE, and the expected 700 ms base SAMPLE window,
+  reaching the size of the center `+` near normal capture/advance time.
 - Color: chosen by **contrast ratio against the §2.1 background**, not fixed hue. On a
   paper-tone background: dark/charcoal ring + warm-red inner dot. (The draft's amber was
   chosen for a black background that §2.1 removes.) Verify in pilot.
@@ -78,14 +83,16 @@ APPEAR → HOLD_ATTENTION → SETTLE → SAMPLE → CONFIRM → (advance | re-ca
 | State | Duration | Visual | Purpose |
 |---|---|---|---|
 | APPEAR | 150–250 ms | fade/scale in at new position | cue the saccade |
-| HOLD_ATTENTION | 400–600 ms | static, full size | older-adult saccadic latency |
-| SETTLE | 300–500 ms, **not sampled** | static, no motion | overshoot/correction saccades land here |
-| SAMPLE | adaptive: until **N=10** post-rejection samples or **1500 ms** timeout | static; no animation | data collection |
+| HOLD_ATTENTION | 400–600 ms | center cue completes one inward contraction | older-adult saccadic latency and fixation guidance |
+| SETTLE | 300–500 ms, **not sampled** | final slow inward contraction | overshoot/correction saccades land here |
+| SAMPLE | adaptive: until **N=10** post-rejection samples or **1500 ms** timeout | centered radial contraction during the expected first 700 ms; no translation | data collection |
 | CONFIRM | ~100 ms | scale-down flash + soft audio tick | pacing feedback |
 
 - Implemented as an explicit state enum driving `CalibrationView`, replacing the current
   scattered `Handler.postDelayed` timers. Testable; SAMPLE boundaries unambiguous.
-- **No motion during SETTLE or SAMPLE** — animation there elicits pursuit/micro-saccades.
+- The guidance changes size during the expected base SAMPLE period but its center never
+  translates. Treat this as a controlled accessibility intervention and compare its
+  dispersion against the prior static-sample target.
 - Audio: soft tick at SETTLE→SAMPLE transition (clear temporal "now" marker), soft confirm
   at capture. Non-startling; `ToneGenerator` is sufficient.
 
@@ -103,10 +110,12 @@ APPEAR → HOLD_ATTENTION → SETTLE → SAMPLE → CONFIRM → (advance | re-ca
 existing 10% margin already exceeds the draft's ≥5% edge guidance.
 
 ### 3.2 Ordering
-- **Randomize presentation order per session** (prevents anticipatory saccades). Log the
-  permutation and the RNG seed in the session log.
-- **Drift check:** one near-center point is presented **twice** — once in the first three
-  presentations, once in the last three. The second presentation is logged for the drift
+- Use the original **fixed row-major order** for participant predictability: top-left to
+  top-right, then each following row through bottom-right. This prioritizes older-adult
+  usability over the anti-anticipation benefit of randomization. Log `fixed_row_major` so
+  the spatial/time-order coupling remains explicit in analysis.
+- **Drift check:** one near-center grid point is presented **twice** — once at its fixed
+  grid position and once at the end. The second presentation is logged for the drift
   delta (§5) and **excluded from the CSV/fit**.
 
 ### 3.3 Practice point
@@ -181,7 +190,8 @@ participant still yields analyzable data) to app-private storage alongside the C
 {
   "session_id": "…", "participant_id": "…",
   "timestamp_start": "ISO8601", "device_model": "…",
-  "screen_px": [w, h], "density_dpi": 0, "order_seed": 0,
+  "screen_px": [w, h], "density_dpi": 0,
+  "order_seed": 0, "order_mode": "fixed_row_major",
   "points": [{
     "point_id": 0, "screen_x": 0.0, "screen_y": 0.0,
     "presentation_index": 0, "practice": false, "drift_repeat": false,
@@ -265,7 +275,7 @@ was brought up to the calibration standard and its duplication removed:
 - **Shared capture core.** `CalibrationPointCollector` owns the per-point
   APPEAR→HOLD→SETTLE→SAMPLE(adaptive)→CONFIRM mechanics + `FixationWindowFilter` and drives
   `CalibrationView`. **Both** full calibration and re-calibration use it, so they share
-  identical sampling (MAD outlier rejection, lead-in trim, pulsing bullseye, light
+  identical sampling (MAD outlier rejection, lead-in trim, contracting hit-marker, light
   background, audio) instead of each carrying its own copy — the old test used a separate,
   inferior plain-median-over-fixed-window path that improving calibration never touched.
 - **Measurement space.** The collector is fed the *mapped screen px* from the live pipeline

@@ -22,6 +22,7 @@ class CalibrationSessionLog(
     screenHeightPx: Int,
     densityDpi: Int,
     orderSeed: Long,
+    orderMode: String,
 ) {
 
     private val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
@@ -41,6 +42,7 @@ class CalibrationSessionLog(
         root.put("screen_px", JSONArray().put(screenWidthPx).put(screenHeightPx))
         root.put("density_dpi", densityDpi)
         root.put("order_seed", orderSeed)
+        root.put("order_mode", orderMode)
         root.put("camera_frames_retained", false)
         root.put(
             "processing_path",
@@ -101,12 +103,21 @@ class CalibrationSessionLog(
         flush()
     }
 
-    fun logDrift(first: FloatArray?, second: FloatArray?, deltaPxPostFit: Float, flagged: Boolean) {
+    fun logDrift(
+        first: FloatArray?,
+        second: FloatArray?,
+        dxPxPostFit: Float,
+        dyPxPostFit: Float,
+        deltaPxPostFit: Float,
+        flagged: Boolean,
+    ) {
         root.put(
             "drift_check",
             JSONObject().apply {
                 put("first_pass_feature", first?.let { featureArray(it[0], it[1]) } ?: JSONObject.NULL)
                 put("second_pass_feature", second?.let { featureArray(it[0], it[1]) } ?: JSONObject.NULL)
+                putNum("dx_px_postfit", dxPxPostFit)
+                putNum("dy_px_postfit", dyPxPostFit)
                 putNum("delta_px_postfit", deltaPxPostFit)
                 put("flagged_high_drift", flagged)
             },
@@ -116,19 +127,37 @@ class CalibrationSessionLog(
 
     fun logFit(
         pointsUsed: Int,
-        looMedianPx: Float,
-        looP95Px: Float,
-        looMedianLines: Float,
+        summary: ReadingSpatialMetrics.Summary,
+        lineHeightPx: Float,
         worstPointIds: List<Int>,
     ) {
         root.put(
             "fit",
             JSONObject().apply {
                 put("points_used", pointsUsed)
-                putNum("loo_median_px", looMedianPx)
-                putNum("loo_p95_px", looP95Px)
-                putNum("loo_median_lines", looMedianLines)
+                putNum("loo_median_px", summary.medianErrorPx)
+                putNum("loo_p95_px", summary.p95ErrorPx)
+                putNum("loo_max_px", summary.maxErrorPx)
+                putNum("loo_vertical_median_lines", summary.medianVerticalPx / lineHeightPx)
+                putNum("loo_vertical_p95_lines", summary.p95VerticalPx / lineHeightPx)
+                putNum("loo_vertical_max_lines", summary.maxVerticalPx / lineHeightPx)
+                put("within_0_5_line", summary.withinHalfLine)
+                put("within_1_0_line", summary.withinOneLine)
+                put("within_1_2_line_provisional", summary.withinReference)
+                put("meets_provisional_1_2_line_reference", summary.meetsProvisionalReference)
                 put("worst_point_ids", JSONArray(worstPointIds))
+                put("leave_one_out_points", JSONArray().apply {
+                    summary.points.forEach { point ->
+                        put(JSONObject().apply {
+                            put("point_id", point.id)
+                            put("region", point.label)
+                            putNum("dx_px", point.dxPx)
+                            putNum("dy_px", point.dyPx)
+                            putNum("error_px", point.errorPx)
+                            putNum("vertical_error_lines", point.verticalLines)
+                        })
+                    }
+                })
             },
         )
         flush()
@@ -141,6 +170,7 @@ class CalibrationSessionLog(
         mappedY: Float,
         errorPx: Float,
         errorLines: Float,
+        verticalErrorLines: Float,
     ) {
         validation.put(
             JSONObject().apply {
@@ -152,6 +182,28 @@ class CalibrationSessionLog(
                 putNum("dy_px", mappedY - screenY)
                 putNum("error_px", errorPx)
                 putNum("error_lines", errorLines)
+                putNum("vertical_error_lines", verticalErrorLines)
+            },
+        )
+        flush()
+    }
+
+    fun logValidationSummary(summary: ReadingSpatialMetrics.Summary, lineHeightPx: Float) {
+        root.put(
+            "validation_summary",
+            JSONObject().apply {
+                put("accepted_point_count", summary.points.size)
+                putNum("median_px", summary.medianErrorPx)
+                putNum("p95_px", summary.p95ErrorPx)
+                putNum("max_px", summary.maxErrorPx)
+                putNum("vertical_median_lines", summary.medianVerticalPx / lineHeightPx)
+                putNum("vertical_p95_lines", summary.p95VerticalPx / lineHeightPx)
+                putNum("vertical_max_lines", summary.maxVerticalPx / lineHeightPx)
+                put("within_0_5_line", summary.withinHalfLine)
+                put("within_1_0_line", summary.withinOneLine)
+                put("within_1_2_line_provisional", summary.withinReference)
+                put("meets_provisional_1_2_line_reference", summary.meetsProvisionalReference)
+                put("worst_vertical_point_index", summary.worstVertical.id)
             },
         )
         flush()

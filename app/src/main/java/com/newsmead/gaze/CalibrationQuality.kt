@@ -23,6 +23,9 @@ object CalibrationQuality {
     data class Report(
         /** Index-aligned with the input samples. */
         val errorsPx: List<Float>,
+        /** Signed predicted-minus-target residuals, index-aligned with samples. */
+        val dxPx: List<Float>,
+        val dyPx: List<Float>,
         val medianPx: Float,
         val p95Px: Float,
         /** Sample indices sorted worst-first. */
@@ -33,6 +36,8 @@ object CalibrationQuality {
     fun leaveOneOut(samples: List<CalibrationSample>): Report? {
         if (samples.size < MIN_POINTS) return null
         val errors = ArrayList<Float>(samples.size)
+        val dx = ArrayList<Float>(samples.size)
+        val dy = ArrayList<Float>(samples.size)
         for (held in samples.indices) {
             val training = samples.filterIndexed { i, _ -> i != held }
             val mapper = try {
@@ -41,13 +46,17 @@ object CalibrationQuality {
                 return null
             }
             val predicted = mapper.map(samples[held].gazeX, samples[held].gazeY)
-            errors.add(hypot(predicted[0] - samples[held].screenX, predicted[1] - samples[held].screenY))
+            val residualX = predicted[0] - samples[held].screenX
+            val residualY = predicted[1] - samples[held].screenY
+            dx.add(residualX)
+            dy.add(residualY)
+            errors.add(hypot(residualX, residualY))
         }
         val sorted = errors.sorted()
         val n = sorted.size
         val median = if (n % 2 == 1) sorted[n / 2] else (sorted[n / 2 - 1] + sorted[n / 2]) / 2f
         val p95 = sorted[ceil(0.95 * n).toInt() - 1]
         val worst = errors.indices.sortedByDescending { errors[it] }
-        return Report(errors, median, p95, worst)
+        return Report(errors, dx, dy, median, p95, worst)
     }
 }
