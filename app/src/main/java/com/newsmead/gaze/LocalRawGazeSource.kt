@@ -73,6 +73,7 @@ interface LocalRawGazeSource {
     fun setOnFps(listener: OnFps) {}
     fun setOnBlinkStats(listener: OnBlinkStats) {}
     fun setOnDiagnostics(listener: OnDiagnostics) {}
+    fun clearOnDiagnostics() {}
     fun start(owner: LifecycleOwner)
     fun stop()
 }

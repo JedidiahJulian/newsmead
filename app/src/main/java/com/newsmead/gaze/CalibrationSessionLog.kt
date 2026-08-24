@@ -18,6 +18,8 @@ import java.util.Locale
  */
 class CalibrationSessionLog(
     context: Context,
+    runLabel: String,
+    telemetryMode: DetailedTelemetryMode,
     screenWidthPx: Int,
     screenHeightPx: Int,
     densityDpi: Int,
@@ -31,9 +33,13 @@ class CalibrationSessionLog(
     private val points = JSONArray()
     private var validation = JSONArray()
     private val flags = JSONArray()
+    private val detailedTelemetryEnabled = telemetryMode.enabled
 
     init {
         root.put("session_id", "calibration_session_$stamp")
+        root.put("run_label", runLabel)
+        root.put("telemetry_mode", telemetryMode.logLabel)
+        root.put("detailed_telemetry_enabled", detailedTelemetryEnabled)
         root.put(
             "timestamp_start",
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US).format(Date()),
@@ -74,6 +80,7 @@ class CalibrationSessionLog(
         featureY: Float,
         dispersionX: Float,
         dispersionY: Float,
+        fpsSummary: FpsSummary?,
         sourceEvents: List<LocalRawGazeSource.Diagnostics>,
     ) {
         points.put(
@@ -95,9 +102,12 @@ class CalibrationSessionLog(
                 put("no_face", noFace)
                 put("aggregated_feature", featureArray(featureX, featureY))
                 put("dispersion_feature", featureArray(dispersionX, dispersionY))
-                put("source_events", JSONArray().apply {
-                    sourceEvents.forEach { put(it.toJson()) }
-                })
+                put("fps_summary", fpsSummary?.toJson() ?: JSONObject.NULL)
+                if (detailedTelemetryEnabled) {
+                    put("source_events", JSONArray().apply {
+                        sourceEvents.forEach { put(it.toJson()) }
+                    })
+                }
             },
         )
         flush()
@@ -221,8 +231,9 @@ class CalibrationSessionLog(
         flush()
     }
 
-    fun finish(outcome: String) {
+    fun finish(outcome: String, fpsSummary: FpsSummary? = null) {
         root.put("outcome", outcome)
+        root.put("fps_summary", fpsSummary?.toJson() ?: JSONObject.NULL)
         root.put(
             "timestamp_end",
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US).format(Date()),
@@ -264,6 +275,13 @@ class CalibrationSessionLog(
             putNum("eye_2_openness", eye2Openness)
             put("busy_dropped_frames_cumulative", busyDroppedFrames)
         }
+
+    private fun FpsSummary.toJson(): JSONObject = JSONObject().apply {
+        put("sample_count", sampleCount)
+        putNum("mean", mean)
+        putNum("min", min)
+        putNum("max", max)
+    }
 
     /** JSONObject.put(double) throws on NaN/Infinity; store null instead. */
     private fun JSONObject.putNum(key: String, value: Float) {

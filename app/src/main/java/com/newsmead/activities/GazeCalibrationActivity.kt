@@ -8,10 +8,15 @@ import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.InputType
 import android.text.TextPaint
 import android.util.Log
 import android.util.TypedValue
 import android.view.View
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.LinearLayout
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -24,7 +29,9 @@ import com.newsmead.gaze.CalibrationSample
 import com.newsmead.gaze.CalibrationSessionLog
 import com.newsmead.gaze.CalibrationStore
 import com.newsmead.gaze.CalibrationView
+import com.newsmead.gaze.DetailedTelemetryMode
 import com.newsmead.gaze.FixationWindowFilter
+import com.newsmead.gaze.FpsSummaryAccumulator
 import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.LocalGazeSources
 import com.newsmead.gaze.LocalRawGazeSource
@@ -86,6 +93,11 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private var presStartBlinkStats: LocalRawGazeSource.BlinkStats? = null
     private var sampleWindowActive = false
     private val pointSourceEvents = ArrayList<LocalRawGazeSource.Diagnostics>()
+    private val pointFps = FpsSummaryAccumulator()
+    private val runFps = FpsSummaryAccumulator()
+    private var runLabel = "unlabelled"
+    private var telemetryMode = DetailedTelemetryMode.ON
+    private var runSetupComplete = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -102,16 +114,16 @@ class GazeCalibrationActivity : AppCompatActivity() {
         collector = CalibrationPointCollector(binding.calibrationView, tone)
         collector.setOnSampleWindowChanged { active ->
             sampleWindowActive = active
-            if (active) pointSourceEvents.clear()
+            if (active) {
+                pointSourceEvents.clear()
+                pointFps.reset()
+            }
         }
         startRawGazeSource()
 
         // Start the dot sequence only when the researcher taps Start.
         binding.progressText.setText(com.newsmead.R.string.calib_ready_instruction)
-        binding.startButton.setOnClickListener {
-            binding.startButton.visibility = View.GONE
-            beginSequenceWhenLaidOut()
-        }
+        binding.startButton.setOnClickListener { requestRunSetup() }
         binding.btnAccept.setOnClickListener { acceptCalibration() }
         binding.btnRedoWorst.setOnClickListener { redoWorstPoints() }
         binding.btnRedoAll.setOnClickListener { redoAll() }
@@ -121,15 +133,72 @@ class GazeCalibrationActivity : AppCompatActivity() {
         rawGazeSource?.stop()
         rawGazeSource = LocalGazeSources.create(this).also { source ->
             source.setOnRawGaze { x, y, ts -> runOnUiThread { collector.onRawSample(x, y, ts) } }
-            source.setOnFps { fps -> runOnUiThread { showFps(fps) } }
-            source.setOnBlinkStats { stats -> latestBlinkStats = stats }
-            source.setOnDiagnostics { diagnostics ->
+            source.setOnFps { fps ->
                 runOnUiThread {
-                    if (sampleWindowActive) pointSourceEvents.add(diagnostics)
+                    showFps(fps)
+                    if (sampleWindowActive) {
+                        pointFps.add(fps)
+                        runFps.add(fps)
+                    }
+                }
+            }
+            source.setOnBlinkStats { stats -> latestBlinkStats = stats }
+            if (runSetupComplete && telemetryMode.enabled) {
+                source.setOnDiagnostics { diagnostics ->
+                    runOnUiThread {
+                        if (sampleWindowActive) pointSourceEvents.add(diagnostics)
+                    }
                 }
             }
             source.start(this)
         }
+    }
+
+    private fun requestRunSetup() {
+        val input = EditText(this).apply {
+            hint = "e.g. fixed_normal-light_no-glasses_run-1"
+            inputType = InputType.TYPE_CLASS_TEXT
+            setSingleLine(true)
+        }
+        val detailed = CheckBox(this).apply {
+            text = "Detailed per-frame telemetry ON"
+            isChecked = telemetryMode.enabled
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = (24 * resources.displayMetrics.density).toInt()
+            setPadding(padding, 0, padding, 0)
+            addView(input)
+            addView(detailed)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Calibration run setup")
+            .setMessage("Use the same physical conditions for the ON/OFF pair.")
+            .setView(container)
+            .setPositiveButton("Start") { _, _ ->
+                runLabel = input.text.toString().trim().ifEmpty { "unlabelled" }
+                telemetryMode = if (detailed.isChecked) {
+                    DetailedTelemetryMode.ON
+                } else {
+                    DetailedTelemetryMode.OFF
+                }
+                runSetupComplete = true
+                rawGazeSource?.let { source ->
+                    if (telemetryMode.enabled) {
+                        source.setOnDiagnostics { diagnostics ->
+                            runOnUiThread {
+                                if (sampleWindowActive) pointSourceEvents.add(diagnostics)
+                            }
+                        }
+                    } else {
+                        source.clearOnDiagnostics()
+                    }
+                }
+                binding.startButton.visibility = View.GONE
+                startPreRunCountdown { beginSequenceWhenLaidOut() }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showFps(fps: Float) {
@@ -164,6 +233,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
     }
 
     private fun startSequence() {
+        runFps.reset()
         val view = binding.calibrationView
         gridPoints = computePoints(view.width, view.height)
         driftGridIndex = nearestToCenter(gridPoints, view.width, view.height)
@@ -182,10 +252,12 @@ class GazeCalibrationActivity : AppCompatActivity() {
         )
 
         sessionLog = CalibrationSessionLog(
-            this,
-            view.width,
-            view.height,
-            resources.displayMetrics.densityDpi,
+            context = this,
+            runLabel = runLabel,
+            telemetryMode = telemetryMode,
+            screenWidthPx = view.width,
+            screenHeightPx = view.height,
+            densityDpi = resources.displayMetrics.densityDpi,
             orderSeed = FIXED_ORDER_SEED,
             orderMode = "fixed_row_major",
         )
@@ -446,7 +518,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private fun acceptCalibration() {
         val ordered = fitPairs.entries.sortedBy { it.key }.map { it.value }
         CalibrationStore.save(this, ordered)
-        sessionLog?.finish("accepted")
+        sessionLog?.finish("accepted", runFps.snapshot())
         logFinished = true
         binding.gatePanel.visibility = View.GONE
         binding.progressText.text =
@@ -470,11 +542,11 @@ class GazeCalibrationActivity : AppCompatActivity() {
             presentations.add(Presentation(Kind.FIT, it, gridPoints[it]))
         }
         // After these, advance() refits and re-runs the validation pass.
-        runPresentation(0)
+        startPreRunCountdown { runPresentation(0) }
     }
 
     private fun redoAll() {
-        sessionLog?.finish("redo_all")
+        sessionLog?.finish("redo_all", runFps.snapshot())
         logFinished = true
         fitPairs.clear()
         excluded.clear()
@@ -488,10 +560,28 @@ class GazeCalibrationActivity : AppCompatActivity() {
         driftDyPx = Float.NaN
         presentationCounter = 0
         binding.gatePanel.visibility = View.GONE
-        startSequence()
+        startPreRunCountdown { startSequence() }
     }
 
     // --- UI helpers ---------------------------------------------------------
+
+    private fun startPreRunCountdown(onFinished: () -> Unit) {
+        var value = COUNTDOWN_START
+        binding.countdownText.visibility = View.VISIBLE
+        val tick = object : Runnable {
+            override fun run() {
+                if (value == 0) {
+                    binding.countdownText.visibility = View.GONE
+                    onFinished()
+                    return
+                }
+                binding.countdownText.text = value.toString()
+                value--
+                handler.postDelayed(this, COUNTDOWN_STEP_MS)
+            }
+        }
+        handler.post(tick)
+    }
 
     private fun updateProgressText(pres: Presentation) {
         binding.progressText.text = when (pres.kind) {
@@ -555,6 +645,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
             featureY = result.medianY,
             dispersionX = result.dispersionX,
             dispersionY = result.dispersionY,
+            fpsSummary = pointFps.snapshot(),
             sourceEvents = pointSourceEvents.toList(),
         )
     }
@@ -703,7 +794,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
         collector.cancel()
         rawGazeSource?.stop()
         tone?.release()
-        if (!logFinished) sessionLog?.finish("aborted")
+        if (!logFinished) sessionLog?.finish("aborted", runFps.snapshot())
     }
 
     companion object {
@@ -734,6 +825,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
         )
 
         private const val TONE_VOLUME = 60
+        private const val COUNTDOWN_START = 3
+        private const val COUNTDOWN_STEP_MS = 1_000L
         private const val CAMERA_PERMISSION_REQUEST = 4104
     }
 }

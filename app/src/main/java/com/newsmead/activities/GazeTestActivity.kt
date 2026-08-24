@@ -14,7 +14,9 @@ import android.text.InputType
 import android.util.Log
 import android.util.TypedValue
 import android.view.View
+import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.LinearLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
@@ -26,7 +28,9 @@ import com.newsmead.gaze.CalibrationPointCollector
 import com.newsmead.gaze.CalibrationStore
 import com.newsmead.gaze.CalibrationView
 import com.newsmead.gaze.DriftCorrection
+import com.newsmead.gaze.DetailedTelemetryMode
 import com.newsmead.gaze.FixationWindowFilter
+import com.newsmead.gaze.FpsSummaryAccumulator
 import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.GazeProvider
 import com.newsmead.gaze.GazeAccuracySessionLog
@@ -53,6 +57,7 @@ class GazeTestActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityGazeTestBinding
     private var provider: GazeProvider? = null
+    private var localProvider: LocalCalibratedGazeProvider? = null
     private val handler = Handler(Looper.getMainLooper())
     private var tone: ToneGenerator? = null
     private lateinit var collector: CalibrationPointCollector
@@ -76,6 +81,9 @@ class GazeTestActivity : AppCompatActivity() {
     private var sampleWindowActive = false
     private val pointPipelineSamples = ArrayList<LocalCalibratedGazeProvider.PipelineDiagnostics>()
     private val pointSourceEvents = ArrayList<LocalRawGazeSource.Diagnostics>()
+    private val pointFps = FpsSummaryAccumulator()
+    private val runFps = FpsSummaryAccumulator()
+    private var telemetryMode = DetailedTelemetryMode.ON
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -95,6 +103,7 @@ class GazeTestActivity : AppCompatActivity() {
             if (active) {
                 pointPipelineSamples.clear()
                 pointSourceEvents.clear()
+                pointFps.reset()
             }
         }
         binding.accuracyButton.setOnClickListener { requestMeasurementLabel() }
@@ -123,22 +132,21 @@ class GazeTestActivity : AppCompatActivity() {
         }
         provider?.stop()
         val rawSource = LocalGazeSources.create(this)
-        rawSource.setOnFps { fps -> runOnUiThread { binding.gazeDot.setFps(fps) } }
+        rawSource.setOnFps { fps ->
+            runOnUiThread {
+                binding.gazeDot.setFps(fps)
+                if (sampleWindowActive) {
+                    pointFps.add(fps)
+                    runFps.add(fps)
+                }
+            }
+        }
         activeCorrection = CalibrationStore.loadDriftCorrection(this)
         val localProvider = LocalCalibratedGazeProvider(mapper, rawSource, activeCorrection).apply {
-            setOnSourceDiagnostics { diagnostics ->
-                runOnUiThread {
-                    if (sampleWindowActive) pointSourceEvents.add(diagnostics)
-                }
-            }
-            setOnDiagnostics { diagnostics ->
-                runOnUiThread {
-                    if (sampleWindowActive) pointPipelineSamples.add(diagnostics)
-                }
-            }
             setOnGaze { x, y -> runOnUiThread { onGaze(x, y) } }
             start(this@GazeTestActivity)
         }
+        this.localProvider = localProvider
         provider = localProvider
         binding.hintText.text = getString(com.newsmead.R.string.gaze_test_hint)
         binding.accuracyButton.visibility = View.VISIBLE
@@ -170,11 +178,27 @@ class GazeTestActivity : AppCompatActivity() {
             inputType = InputType.TYPE_CLASS_TEXT
             setSingleLine(true)
         }
+        val detailed = CheckBox(this).apply {
+            text = "Detailed per-frame telemetry ON"
+            isChecked = telemetryMode.enabled
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = (24 * resources.displayMetrics.density).toInt()
+            setPadding(padding, 0, padding, 0)
+            addView(input)
+            addView(detailed)
+        }
         AlertDialog.Builder(this)
-            .setTitle("Diagnostic run label")
-            .setMessage("Describe posture, lighting, glasses, and repeat number.")
-            .setView(input)
+            .setTitle("Accuracy run setup")
+            .setMessage("Describe the run and select the same telemetry mode used for its calibration.")
+            .setView(container)
             .setPositiveButton("Start") { _, _ ->
+                telemetryMode = if (detailed.isChecked) {
+                    DetailedTelemetryMode.ON
+                } else {
+                    DetailedTelemetryMode.OFF
+                }
                 startMeasurement(input.text.toString().trim().ifEmpty { "unlabelled" })
             }
             .setNegativeButton("Cancel", null)
@@ -188,10 +212,13 @@ class GazeTestActivity : AppCompatActivity() {
             binding.calibrationView.post { startMeasurement(runLabel) }
             return
         }
-        accuracySessionLog?.finish("restarted")
+        accuracySessionLog?.finish("restarted", runFps.snapshot())
+        configureDetailedTelemetry()
+        runFps.reset()
         accuracySessionLog = GazeAccuracySessionLog(
             context = this,
             runLabel = runLabel,
+            telemetryMode = telemetryMode,
             screenWidthPx = w,
             screenHeightPx = h,
             densityDpi = resources.displayMetrics.densityDpi,
@@ -206,7 +233,7 @@ class GazeTestActivity : AppCompatActivity() {
         binding.accuracyButton.visibility = View.GONE
         binding.gatePanel.visibility = View.GONE
         binding.gazeDot.clearEstimate()
-        runPoint(0)
+        startPreRunCountdown { runPoint(0) }
     }
 
     /** 3x3 grid at 20/50/80% - deliberately offset from the 16 calibration dots. */
@@ -244,6 +271,7 @@ class GazeTestActivity : AppCompatActivity() {
             targetX = p.x,
             targetY = p.y,
             result = result,
+            fpsSummary = pointFps.snapshot(),
             pipelineSamples = pointPipelineSamples.toList(),
             sourceEvents = pointSourceEvents.toList(),
         )
@@ -270,6 +298,7 @@ class GazeTestActivity : AppCompatActivity() {
             targetX = p.x,
             targetY = p.y,
             result = result,
+            fpsSummary = pointFps.snapshot(),
             pipelineSamples = pointPipelineSamples.toList(),
             sourceEvents = pointSourceEvents.toList(),
         )
@@ -306,7 +335,7 @@ class GazeTestActivity : AppCompatActivity() {
         binding.calibrationView.setMiniMap(emptyList())
         if (observations.size < DriftCorrection.MIN_OBSERVATIONS) {
             binding.hintText.text = getString(com.newsmead.R.string.gaze_recal_insufficient)
-            accuracySessionLog?.finish("insufficient_points")
+            accuracySessionLog?.finish("insufficient_points", runFps.snapshot())
             showGate(canApply = false)
             return
         }
@@ -325,7 +354,7 @@ class GazeTestActivity : AppCompatActivity() {
             },
             lineHeightPx,
         ) ?: run {
-            accuracySessionLog?.finish("summary_failed")
+            accuracySessionLog?.finish("summary_failed", runFps.snapshot())
             showGate(canApply = false)
             return
         }
@@ -345,7 +374,7 @@ class GazeTestActivity : AppCompatActivity() {
             lineHeightPx = lineHeightPx,
             estimatedCorrectedLooPx = looPostPx,
         )
-        accuracySessionLog?.finish("completed")
+        accuracySessionLog?.finish("completed", runFps.snapshot())
 
         Log.i(
             TAG,
@@ -432,6 +461,25 @@ class GazeTestActivity : AppCompatActivity() {
         binding.gatePanel.visibility = View.VISIBLE
     }
 
+    private fun configureDetailedTelemetry() {
+        val current = localProvider ?: return
+        if (telemetryMode.enabled) {
+            current.setOnSourceDiagnostics { diagnostics ->
+                runOnUiThread {
+                    if (sampleWindowActive) pointSourceEvents.add(diagnostics)
+                }
+            }
+            current.setOnDiagnostics { diagnostics ->
+                runOnUiThread {
+                    if (sampleWindowActive) pointPipelineSamples.add(diagnostics)
+                }
+            }
+        } else {
+            current.setOnSourceDiagnostics(null)
+            current.setOnDiagnostics(null)
+        }
+    }
+
     private fun applyPendingCorrection() {
         val correction = pendingCorrection ?: return
         CalibrationStore.saveDriftCorrection(this, correction, pendingPreMedianPx, pendingPostMedianPx)
@@ -459,6 +507,24 @@ class GazeTestActivity : AppCompatActivity() {
     }
 
     // --- Helpers -----------------------------------------------------------
+
+    private fun startPreRunCountdown(onFinished: () -> Unit) {
+        var value = COUNTDOWN_START
+        binding.countdownText.visibility = View.VISIBLE
+        val tick = object : Runnable {
+            override fun run() {
+                if (value == 0) {
+                    binding.countdownText.visibility = View.GONE
+                    onFinished()
+                    return
+                }
+                binding.countdownText.text = value.toString()
+                value--
+                handler.postDelayed(this, COUNTDOWN_STEP_MS)
+            }
+        }
+        handler.post(tick)
+    }
 
     private fun targetLabel(index: Int): String {
         val rows = arrayOf("top", "middle", "bottom")
@@ -505,7 +571,7 @@ class GazeTestActivity : AppCompatActivity() {
         collector.cancel()
         provider?.stop()
         tone?.release()
-        accuracySessionLog?.finish("aborted")
+        accuracySessionLog?.finish("aborted", runFps.snapshot())
     }
 
     companion object {
@@ -514,6 +580,8 @@ class GazeTestActivity : AppCompatActivity() {
         private const val RETRY_PAUSE_MS = 500L
         private const val MAX_ATTEMPTS = 2
         private const val TONE_VOLUME = 60
+        private const val COUNTDOWN_START = 3
+        private const val COUNTDOWN_STEP_MS = 1_000L
 
         private const val ARTICLE_LINE_SPACING_MULT = 1.6f
 

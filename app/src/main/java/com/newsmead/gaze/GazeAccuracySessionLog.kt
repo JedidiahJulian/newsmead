@@ -18,6 +18,7 @@ import java.util.Locale
 class GazeAccuracySessionLog(
     context: Context,
     runLabel: String,
+    telemetryMode: DetailedTelemetryMode,
     screenWidthPx: Int,
     screenHeightPx: Int,
     densityDpi: Int,
@@ -31,10 +32,13 @@ class GazeAccuracySessionLog(
     private val root = JSONObject()
     private val points = JSONArray()
     private var finished = false
+    private val detailedTelemetryEnabled = telemetryMode.enabled
 
     init {
         root.put("session_id", "gaze_accuracy_session_$stamp")
         root.put("run_label", runLabel)
+        root.put("telemetry_mode", telemetryMode.logLabel)
+        root.put("detailed_telemetry_enabled", detailedTelemetryEnabled)
         root.put("timestamp_start", isoTimestamp())
         root.put("device_model", Build.MODEL)
         root.put("device_manufacturer", Build.MANUFACTURER)
@@ -61,6 +65,7 @@ class GazeAccuracySessionLog(
         targetX: Float,
         targetY: Float,
         result: FixationWindowFilter.Result,
+        fpsSummary: FpsSummary?,
         pipelineSamples: List<LocalCalibratedGazeProvider.PipelineDiagnostics>,
         sourceEvents: List<LocalRawGazeSource.Diagnostics>,
     ) {
@@ -84,12 +89,15 @@ class GazeAccuracySessionLog(
                 putNum("output_dispersion_y", result.dispersionY)
                 put("collector_raw_count", result.rawCount)
                 put("collector_retained_count", result.retainedCount)
-                put("pipeline_samples", JSONArray().apply {
-                    pipelineSamples.forEach { put(it.toJson()) }
-                })
-                put("source_events", JSONArray().apply {
-                    sourceEvents.forEach { put(it.toJson()) }
-                })
+                put("fps_summary", fpsSummary?.toJson() ?: JSONObject.NULL)
+                if (detailedTelemetryEnabled) {
+                    put("pipeline_samples", JSONArray().apply {
+                        pipelineSamples.forEach { put(it.toJson()) }
+                    })
+                    put("source_events", JSONArray().apply {
+                        sourceEvents.forEach { put(it.toJson()) }
+                    })
+                }
             },
         )
         flush()
@@ -137,10 +145,11 @@ class GazeAccuracySessionLog(
         flush()
     }
 
-    fun finish(outcome: String) {
+    fun finish(outcome: String, fpsSummary: FpsSummary? = null) {
         if (finished) return
         finished = true
         root.put("outcome", outcome)
+        root.put("fps_summary", fpsSummary?.toJson() ?: JSONObject.NULL)
         root.put("timestamp_end", isoTimestamp())
         flush()
         Log.i(TAG, "Finished gaze accuracy diagnostic log ${file.absolutePath}: $outcome")
@@ -197,6 +206,13 @@ class GazeAccuracySessionLog(
     private fun DriftCorrection.toJson(): JSONObject = JSONObject().apply {
         put("coeff_x", JSONArray().apply { coeffX.forEach { put(it) } })
         put("coeff_y", JSONArray().apply { coeffY.forEach { put(it) } })
+    }
+
+    private fun FpsSummary.toJson(): JSONObject = JSONObject().apply {
+        put("sample_count", sampleCount)
+        putNum("mean", mean)
+        putNum("min", min)
+        putNum("max", max)
     }
 
     private fun JSONObject.putNum(key: String, value: Float) {

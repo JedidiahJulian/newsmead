@@ -44,25 +44,26 @@ class LocalCalibratedGazeProvider(
     private var onDiagnostics: OnDiagnostics? = null
     private var onSourceDiagnostics: LocalRawGazeSource.OnDiagnostics? = null
     @Volatile private var latestSourceDiagnostics: LocalRawGazeSource.Diagnostics? = null
+    private var started = false
     private var logCounter = 0
 
     override fun setOnGaze(listener: GazeProvider.OnGaze) {
         onGaze = listener
     }
 
-    fun setOnDiagnostics(listener: OnDiagnostics) {
+    fun setOnDiagnostics(listener: OnDiagnostics?) {
         onDiagnostics = listener
+        refreshSourceDiagnostics()
     }
 
-    fun setOnSourceDiagnostics(listener: LocalRawGazeSource.OnDiagnostics) {
+    fun setOnSourceDiagnostics(listener: LocalRawGazeSource.OnDiagnostics?) {
         onSourceDiagnostics = listener
+        refreshSourceDiagnostics()
     }
 
     override fun start(owner: LifecycleOwner) {
-        rawSource.setOnDiagnostics { diagnostics ->
-            latestSourceDiagnostics = diagnostics
-            onSourceDiagnostics?.onDiagnostics(diagnostics)
-        }
+        started = true
+        refreshSourceDiagnostics()
         rawSource.setOnRawGaze { gazeX, gazeY, timestampMs ->
             val mx = medianX.filter(gazeX)
             val my = medianY.filter(gazeY)
@@ -112,7 +113,22 @@ class LocalCalibratedGazeProvider(
     }
 
     override fun stop() {
+        started = false
+        rawSource.clearOnDiagnostics()
         rawSource.stop()
+    }
+
+    private fun refreshSourceDiagnostics() {
+        if (!started) return
+        if (onDiagnostics == null && onSourceDiagnostics == null) {
+            latestSourceDiagnostics = null
+            rawSource.clearOnDiagnostics()
+            return
+        }
+        rawSource.setOnDiagnostics { diagnostics ->
+            latestSourceDiagnostics = diagnostics
+            onSourceDiagnostics?.onDiagnostics(diagnostics)
+        }
     }
 
     companion object {

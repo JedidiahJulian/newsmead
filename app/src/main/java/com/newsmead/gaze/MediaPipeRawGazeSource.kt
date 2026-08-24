@@ -57,7 +57,7 @@ class MediaPipeRawGazeSource(
     private var listener: LocalRawGazeSource.OnRawGaze? = null
     private var fpsListener: LocalRawGazeSource.OnFps? = null
     private var blinkStatsListener: LocalRawGazeSource.OnBlinkStats? = null
-    private var diagnosticsListener: LocalRawGazeSource.OnDiagnostics? = null
+    @Volatile private var diagnosticsListener: LocalRawGazeSource.OnDiagnostics? = null
     private var faceLandmarker: FaceLandmarker? = null
     private var cameraProvider: ProcessCameraProvider? = null
     private var stopped = true
@@ -93,6 +93,10 @@ class MediaPipeRawGazeSource(
 
     override fun setOnDiagnostics(listener: LocalRawGazeSource.OnDiagnostics) {
         diagnosticsListener = listener
+    }
+
+    override fun clearOnDiagnostics() {
+        diagnosticsListener = null
     }
 
     override fun start(owner: LifecycleOwner) {
