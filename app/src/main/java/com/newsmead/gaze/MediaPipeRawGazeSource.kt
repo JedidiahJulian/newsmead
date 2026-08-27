@@ -62,6 +62,7 @@ class MediaPipeRawGazeSource(
     private var cameraProvider: ProcessCameraProvider? = null
     private var stopped = true
     private var lastTimestampMs = 0L
+    private var frameSizeLogged = false
     private var resultCount = 0
     private var blinkState = false
     private var blinkLogCounter = 0
@@ -179,15 +180,18 @@ class MediaPipeRawGazeSource(
     private fun bindCamera(provider: ProcessCameraProvider, owner: LifecycleOwner) {
         // Cap the analysis resolution and pin the camera to 30 fps. MediaPipe on a
         // full-resolution stream drops well below real time, which starves the
-        // median/One Euro smoothing and wrecks vertical accuracy. 480x360 @ 30 fps
-        // is the Stage 1 profile the prototype validated on the A56.
+        // median/One Euro smoothing and wrecks vertical accuracy. The former
+        // 480x360 request was not supported by the A56 and its lower-first fallback
+        // silently negotiated 320x240. Request the standard 640x480 profile so the
+        // iris/eyelid geometry has four times as many source pixels while retaining
+        // the same 4:3 aspect ratio and 30 fps target.
         val analysisBuilder = ImageAnalysis.Builder()
             .setResolutionSelector(
                 ResolutionSelector.Builder()
                     .setResolutionStrategy(
                         ResolutionStrategy(
-                            Size(480, 360),
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER,
+                            Size(640, 480),
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
                         ),
                     )
                     .build(),
@@ -208,6 +212,14 @@ class MediaPipeRawGazeSource(
     }
 
     private fun analyze(imageProxy: ImageProxy) {
+        if (!frameSizeLogged) {
+            frameSizeLogged = true
+            Log.i(
+                TAG,
+                "CameraX analysis frame=${imageProxy.width}x${imageProxy.height} " +
+                    "rotation=${imageProxy.imageInfo.rotationDegrees}",
+            )
+        }
         val landmarker = synchronized(lifecycleLock) {
             if (stopped) null else faceLandmarker
         }
