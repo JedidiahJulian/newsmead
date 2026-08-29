@@ -10,10 +10,14 @@ For the current build:
    StudyConfig. The current diagnostic build has GAZE_DEBUG_VISUALS enabled so
    researchers can see the gaze dot and FPS; disable it before participant-facing
    data collection.
-2. Build/install with JDK 17 and open a study article.
-3. Tap the in-article calibration control, grant camera permission, and complete
-   all 16 targets while keeping phone/head position stable.
-4. Optionally use the adjacent gaze accuracy test before the reading task.
+2. Build/install with JDK 17.
+3. On the **home screen**, tap "Calibrate eye tracker", grant camera permission,
+   and complete all 16 targets while keeping phone/head position stable. Review
+   the quality gate (error in px and line-heights) and Accept, or redo. The
+   calibration file is written only on Accept.
+4. Open a study article. The **accuracy check** is the dots control in the
+   article top bar: it measures error over 9 points and can apply an affine
+   drift correction (or revert it) without redoing the full calibration.
 5. Return to the article. The adaptive condition spends its first 20 seconds
    collecting the provisional per-article baseline, during which no scaffold is
    shown.

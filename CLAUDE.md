@@ -74,10 +74,22 @@ a research instrument for a separate gaze-driven adaptive reading
 thesis. This is someone else's existing codebase we're extending,
 not rewriting — surgical changes only.
 
-## Gaze tracker — resolved, see docs/build-context.md
-Tracker selection is DONE (GazeFollower, WiFi bridge). See the
-STATUS UPDATE at the top of docs/build-context.md for the full investigation
-and what's still active (Stage 4-5) vs. historical (Stage 1-3).
+## Gaze tracker — on-device MediaPipe, see docs/build-context.md
+Current tracker: **MediaPipe Face Landmarker running on-device** (CameraX
+front camera) with 16-point polynomial calibration. No laptop, no
+backend, no network.
+
+History matters here: the team tried MediaPipe on-device (failed
+accuracy validation), MobileGaze/TFLite (failed), then GazeFollower
+over WiFi (passed, adopted 2026-07-02), then reverted to on-device
+MediaPipe (2026-07-06) because a co-located laptop per session is
+impractical for a field study with older adults. That trade chose
+deployability over the better raw accuracy number — accuracy is the
+known, documented limitation, not a solved problem.
+
+Do NOT re-add the WiFi/GazeFollower path; `WiFiGazeProvider.kt` and
+`GazeStream.kt` were deliberately deleted. Full decision table and
+rationale: the STATUS UPDATE at the top of docs/build-context.md.
 
 ## Study modifications made so far
 - Login bypassed for research use (StudyConfig.kt — BYPASS_LOGIN flag)
@@ -90,24 +102,30 @@ and what's still active (Stage 4-5) vs. historical (Stage 1-3).
   than a real outlet name.
 - See StudyConfig.kt for all study-specific flags/switches
 
-## Current task — Stage 4: AOI mapping
-Porting the GazeProvider (GazeFollower WiFi bridge implementation)
-into this codebase and wiring it to the article reading screen.
+## Current state — Stages 4 and 5 complete
+Gaze-to-line AOI mapping, the RSI pipeline, and all four adaptive
+scaffold renderers are implemented. The two former Stage 4 blockers
+are resolved: the article body is a native `TextView` (line boxes come
+from the `Layout` API, not injected JS), and the study font size is
+locked at 22dp (`StudyConfig.LOCK_ARTICLE_FONT_SIZE` /
+`ARTICLE_FONT_SIZE_DP`).
 
-Open questions before this can be completed:
-- Does the article view render text via WebView or native
-  TextViews? (Determines how line bounding boxes are obtained)
-- Study font size not yet finalized — check article view's
-  large-text control actual point size, then lock it (no runtime
-  adjustment during study sessions — required for AOI mapping to
-  be stable, see StudyConfig.kt)
+Active work is now calibration quality and validation:
+- Calibration/re-calibration subsystem was rebuilt 2026-07-24 —
+  canonical guide is docs/calibration-design.md.
+- **Outstanding:** re-measure device accuracy with the rebuilt
+  calibration (prior figures in progress-notes.md predate it), and
+  validate on a target-age (45-65) face.
+- Thresholds across calibration and scaffolding are provisional
+  engineering values pending pilot tuning.
 
 ## Read before starting any work
 - docs/progress-notes.md — what's been done in THIS repo specifically.
   A teammate using Codex may have worked here since your last
   session. Read this first every session.
-- docs/build-context.md — the detailed build spec (Stage 4-5 are the active
-  work here; Stages 1-3 are historical, see its STATUS UPDATE)
+- docs/build-context.md — the detailed build spec; its STATUS UPDATE holds the
+  tracker decision history (read before touching anything gaze-related)
+- docs/calibration-design.md — calibration/re-calibration architecture
 - StudyConfig.kt — all study-specific flags in one place
 
 ## Non-negotiable architecture rule
