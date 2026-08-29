@@ -10,9 +10,9 @@ The diagnostics are exploratory. Checks will follow the evidence found in the cu
 
 - **Started:** 2026-08-20
 - **Branch:** `gaze-pipeline-improvements`
-- **Status:** Initial Galaxy A56 calibration and live-path baseline collected and analyzed
+- **Status:** Fresh-session check complete; typical error remains improved, but calibration/live tails are not repeatable enough for exact-line use
 - **Current backend:** MediaPipe Face Landmarker with iris-relative features, participant calibration, and screen-coordinate output
-- **Repository state:** Work remains local and unstaged
+- **Repository state:** Code/document checkpoints are kept separate from numeric participant artifacts; those artifacts remain local and must stay unstaged
 
 ## Investigation Boundaries
 
@@ -229,6 +229,133 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 
 **Next inquiry:** Visually verify target size, contrast, contraction timing, and fixed traversal on the A56, then collect the same saved-calibration/immediate-nine-point pair used for E-030.
 
+### 2026-08-24 — Conversation-era change and instrumentation audit
+
+**Question:** Did gaze-estimation behavior change during the diagnostic conversation, and could the added telemetry itself be affecting accuracy or FPS?
+
+**Action:** Compared the branch baseline `f77ce6e`, diagnostics commit `79a5ceb`, and validation/target commit `e214eb6` file-by-file. Separated numerical estimator/filter logic from runtime instrumentation and later participant-facing capture changes.
+
+**Evidence:** E-032. Git confirms that `GazeMapper`, `FixationWindowFilter`, `DriftCorrection`, `MedianFilter`, and `OneEuroFilter` are byte-for-byte unchanged from `f77ce6e`. The MediaPipe emitted feature remains the same two-eye arithmetic average, and the live order remains median → One Euro → mapper → optional correction.
+
+**Observations:**
+
+- Commit `79a5ceb` did not intentionally change gaze mathematics, sampling durations, or filter thresholds, but it added per-frame source/pipeline callbacks, UI-thread queue work, in-memory detailed event buffers, and repeated synchronous pretty-JSON rewrites. Calibration artifacts grew from roughly 11 KB historically to roughly 400–580 KB in the instrumented runs.
+- This overhead is a plausible runtime confound even though recorded MediaPipe submit-to-result latency remained about 30–31 ms median, all diagnostic targets retained enough samples, and no face/blink loss dominated the SAMPLE windows. The current evidence neither proves nor safely excludes a callback/queue/persistence effect on effective sample arrival or participant pacing.
+- Commit `e214eb6` changed validation reporting and, after E-030 had already been recorded, changed target presentation and order at the researcher's request. It therefore cannot explain E-030's earlier severe errors, although it must remain fixed during subsequent comparisons.
+- The branch baseline `f77ce6e` already included the July 24 calibration redesign. Historically better behavior may therefore predate the conversation without contradicting the unchanged estimator files observed since `f77ce6e`.
+
+**Interpretation:** Open-ended diagnosis is complete enough to stop collecting arbitrary conditions. Before attributing the regression to the July redesign or modifying the estimator, run one bounded A/B with identical target/order/model behavior and detailed telemetry selectively ON versus OFF. Retain lightweight per-point metrics and FPS in both modes.
+
+**Next inquiry:** Implement a selectable detailed-telemetry mode, run matched saved-calibration/immediate-nine-point pairs, and use the result as the entry gate to accuracy improvement or legacy-path comparison.
+
+### 2026-08-24 — Detailed-telemetry control implemented
+
+**Question:** Can detailed per-frame instrumentation be selected independently while retaining enough lightweight evidence for a valid ON/OFF comparison?
+
+**Action:** Added an explicit run-label and detailed-telemetry checkbox to both full calibration and the nine-point check. OFF clears the MediaPipe diagnostic sink and omits `source_events`/`pipeline_samples`; ON preserves the existing callbacks and arrays. Both modes retain per-point target/estimate, counts, dispersion, spatial metrics, drift/validation summaries, and constant-memory point/run FPS summaries.
+
+**Evidence:** E-033. The implementation compiles, all `com.newsmead.gaze.*` JVM tests pass, `assembleDebug` passes, and the debug build is installed on the connected Galaxy A56. Git diff inspection confirms no changes to mapper, fixation filter, drift correction, smoothing filters, target drawing, collector timing, or point ordering.
+
+**Interpretation:** The software control is ready, but it is not yet empirically evaluated. No estimator or general gaze improvement may begin until the matched fixed-phone ON/OFF pairs are collected and compared.
+
+**Next inquiry:** Run one full procedurally valid 16-point calibration plus immediate uncorrected nine-point check in each telemetry mode under unchanged fixed-phone, normal-light, no-glasses conditions.
+
+### 2026-08-24 — Detailed-telemetry handheld control evaluated
+
+**Question:** Does disabling detailed per-frame instrumentation materially restore throughput, sample capture, or spatial accuracy under natural handheld use?
+
+**Action:** Evaluated two valid calibration-plus-immediate-nine-point pairs per mode on the Galaxy A56, normal light, no glasses, natural handheld posture. Classification used the embedded `telemetry_mode`, not the typed label. One attempted OFF redo (`handheld-tell-off_cal_redo-1`) actually recorded `detailed_on` and was excluded with its following OFF test as a mismatched pair; the second OFF redo was valid. No affine correction was active in any included nine-point run.
+
+**Evidence:** E-034. Calibration FPS averaged 26.54 ON versus 26.25 OFF; nine-point FPS averaged 27.08 ON versus 26.60 OFF. Median retained samples were 12/12 for ON calibrations versus 13/13 OFF, and 12/13 for ON tests versus 12/11 OFF. Calibration feature dispersion was comparable and did not improve consistently OFF. Nine-point vertical medians were 1.09 and 0.59 lines ON versus 1.38 and 1.06 OFF; P95/max were 3.43 and 3.04 ON versus 3.08 and 2.54 OFF. ON had better typical error and threshold coverage, while OFF had somewhat smaller tails; calibration LOO, held-out validation, drift, output dispersion, and failure regions varied by run rather than mode. OFF artifacts were roughly 9–25 KB versus 251–440 KB ON, confirming that the control removed the intended detailed history.
+
+**Interpretation:** Telemetry OFF did not restore FPS, sample arrival, or accuracy. Mixed tail and regional differences are consistent with the tracker’s existing run-to-run/handheld variation, not a mode-specific recovery. The control rules out a material detailed-instrumentation regression under these runs, though it cannot exclude a subtle effect. Close this diagnostic gate and do not spend the next iteration optimizing telemetry as an accuracy intervention.
+
+**Next inquiry:** Compare the current July 24 calibration path against the pre-redesign behavior, one behavior change at a time, while keeping detailed telemetry OFF for lower runtime/storage overhead.
+
+### 2026-08-24 — Pre-run countdown added before fresh-session confirmation
+
+**Question:** Can the abrupt transition from setup confirmation to the first target be removed without changing capture behavior?
+
+**Action:** Added a centered 3–2–1 countdown before initial full calibration, redo-worst, redo-all, and every nine-point measurement. Each numeral displays for one second; the countdown hides before the existing first target begins. No estimator, mapper, filter, target, order, SAMPLE boundary, or per-target duration changed.
+
+**Evidence:** E-035. `compileDebugKotlin`, all `com.newsmead.gaze.*` JVM tests, and `assembleDebug` pass. The updated APK is installed on the connected A56 with existing app data preserved.
+
+**Interpretation:** The four valid telemetry-control accuracy runs (0.59–1.38-line medians and 2.54–3.43-line tails) were substantially better than E-030 and the earlier fixed-phone set. A stable regression is no longer established; those earlier sessions may have been poor runs or may reflect the pre-E-031 target/order behavior. Before changing calibration math, obtain one independent natural-handheld OFF pair after a genuine session reset.
+
+**Next inquiry:** After several hours or on another day, collect one telemetry-OFF full calibration plus immediate uncorrected nine-point run with the countdown build. Accept the first procedurally valid calibration as-is and do not repeat merely for a poor score.
+
+### 2026-08-28 — Fresh-session OFF repeatability check completed
+
+**Question:** Does the substantially improved August 24 handheld accuracy repeat after a genuine multi-day reset without selecting a favorable calibration?
+
+**Action:** Collected one natural-handheld full calibration (`handheld_fresh_off_cal_20260828_1`) and immediate nine-point check (`handheld_fresh_off_test_20260828_1`) with detailed telemetry OFF. The first procedurally valid calibration was saved as-is, and no affine correction was active.
+
+**Evidence:** E-036. Calibration averaged 25.81 FPS with median raw/retained counts 20/14 and low median feature dispersion (0.00102 x, 0.00184 y). Its LOO vertical median/P95/max was 1.29/6.24/6.24 lines, drift was 286 px, and held-out validation median/P95/max was 4.49/7.44/7.44 lines. The immediate live test averaged 25.61 FPS with 19/12 raw/retained samples, a 1.55-line vertical median, 4.87-line P95/max, 277 px 2-D median, and 4/9 targets within 1.2 lines. Top-left was worst at 4.87 lines; bottom-right, bottom-center, and middle-left were 2.35–2.67 lines. All nine estimates were horizontally left of target.
+
+**Interpretation:** The independent session remains better in typical vertical error than E-030 (1.55 versus 2.69 lines), so the recent improvement was not purely a single-session accident. However, severe regional tails returned, and the calibration’s held-out validation was markedly poor despite healthy FPS, sample counts, and low within-point dispersion. The system is therefore improved but not repeatable enough for exact-line attribution. Across the five recent valid live runs, top-left is the worst vertical target in four, identifying a recurring regional weakness rather than purely random bad runs.
+
+**Next inquiry:** Without collecting another run or changing code, compare the five recent calibration/test pairs for predictors of tail failure—feature-range geometry, target-wise calibration residuals, held-out regions, drift, and mapper conditioning—with special attention to the recurring top-left failure. Determine whether bad sessions can be detected reliably at the quality gate before choosing a single calibration-path intervention.
+
+### 2026-08-28 — Five-pair offline tail-predictor analysis
+
+**Question:** Can any metric available before Save reliably distinguish a calibration that will produce a severe immediate live tail?
+
+**Action:** Read the five valid calibration/immediate-nine-point pairs directly from app-private storage and compared only saved aggregate evidence. For each calibration, reconstructed the standardized six-term quadratic design and ridge normal matrix; measured feature spread, row/column ordering and separation, ridge leverage, fitted top-left vertical gain, pointwise LOO error, held-out validation, and drift. Compared these with live median, maximum, top-left, 2-D, and signed-horizontal errors. The mismatched ON-calibration/OFF-test pair remained excluded. No raw participant artifact was copied out of app-private storage; the reusable script prints derived aggregates only.
+
+**Evidence:** E-037. All five calibrations had perfect horizontal target ordering. Vertical feature ordering was reversed at 0–2 of 12 adjacent row comparisons, with especially weak top-row/second-row separation in OFF1 and the fresh OFF run. Unregularized design condition numbers were modest (4.23–7.91), and the ridge-normal condition numbers were 16.35–39.30; the worst fresh live run was not the most ill-conditioned and had the lowest fitted top-left vertical gain. The top-left calibration target was the maximum vertical LOO error in every pair (5.23–6.59 lines), while it was the worst live target in four of five pairs. Held-out maximum did not rank live tails: OFF2 had the largest held-out maximum (7.82 lines) but the smallest live maximum (2.54), whereas fresh OFF had 7.44 held-out and 4.87 live. High-drift calibrations (215, 241, and 286 px) had live maxima of 3.43, 3.08, and 4.87 lines; low-drift calibrations (71 and 36 px) had 3.04 and 2.54. With only five pairs, rank correlations are descriptive and not inferential.
+
+**Interpretation:** Polynomial conditioning, LOO aggregates, and held-out errors do not provide a reliable pre-save selector for the later live tail. High drift is the only practical directional warning, but it is not a guarantee: a low-drift pair still reached a 3.04-line live maximum. The repeated top-left failure is systematic across calibration and live measurement, not a marker unique to the fresh bad-tail session. Because fixed row-major traversal makes top-left both a corner and the first measured fit target, these data cannot separate regional feature geometry from a first-target/sequence effect.
+
+**Next inquiry:** Adopt one narrow stopping rule before changing calibration math: when the existing gate flags high drift, do not Save that calibration; use Redo All once, and if the repeat is also high-drift, abort and retain the prior calibration. Treat this as risk control, not proof of line-level accuracy. After that rule is implemented, isolate the top-left region/first-target confound in a separate controlled intervention rather than combining changes.
+
+### 2026-08-29 — Regularized per-eye linear mapper rejected prospectively
+
+**Question:** Does retaining four per-eye iris features in a small five-coefficient ridge-linear mapper improve accuracy over the six-coefficient quadratic mapper of the two-eye average?
+
+**Action:** Compared five small mapper families offline on nine compatible detailed calibration sessions, then prospectively deployed the best descriptive candidate (`per_eye_linear`, ridge 1). The implementation preserved the target, sequence, capture filter, smoothing parameters, and separate affine drift layer; it added per-eye aggregation and an eight-column calibration CSV with legacy four-column fallback. Two telemetry-OFF full-calibration/immediate-nine-point pairs were collected. The active mapper was then restored to `quadratic_average` after both live runs failed.
+
+**Evidence:** E-038. The immediately preceding quadratic live run had a 0.76-line vertical median and 1.04-line maximum. Per-eye run 1 produced 5.74/8.83 lines and per-eye run 2 produced 2.63/4.19 lines. Run 1 had 1/9 targets within 1.2 lines; run 2 had 0/9. FPS remained comparable (18.14 and 20.12). Same-calibration offline counterfactuals were mixed: per-eye improved run-1 held-out median/max (3.40/5.74 lines versus quadratic 3.78/6.85), but worsened run 2 (2.51/4.87 versus quadratic 1.63/3.21). Run-1 drift was 774 px and run-2 drift was 71 px, so the live failure was not restricted to a high-drift calibration.
+
+**Interpretation:** Selective per-eye retention is not a deployable accuracy improvement in this form. Earlier descriptive wins across repeated sessions did not generalize to the two prospective runs, and the same-calibration comparison did not consistently favor it. Keep the quadratic mapper active. Retain aggregate-only per-eye logging and the offline comparison tool so future alternatives can be evaluated without enabling costly per-frame telemetry.
+
+**Next inquiry:** Do not deploy another mapper from retrospective rankings alone. Any posture compensation must first establish that its posture inputs vary independently of target position; the present fixed calibration sequence cannot identify that safely. Treat pose-departure detection as reliability protection rather than an accuracy claim.
+
+### 2026-08-29 — Quadratic rollback sanity check completed
+
+**Question:** After rejecting the per-eye intervention, does a fresh calibration and immediate test confirm that the installed app is again executing the quadratic-average pipeline?
+
+**Action:** Installed the tested rollback build, then collected a fresh 16-point calibration (`quadratic_restored_tel-off_cal_1`) and immediate nine-point test (`quadratic_restored_tel-off_test_1`). The embedded mapper field, rather than the typed label, was used to verify the active path.
+
+**Evidence:** E-039. Both artifacts recorded `active_mapping_mode: quadratic_average`, 16 calibration points, no affine correction, and approximately 20–21 FPS. The calibration was detailed-OFF and had 2.50/6.33-line LOO median/max, 1.53/3.73-line held-out median/max, and 259 px drift. The live test produced a 1.35-line vertical median, 2.58-line maximum, and 3/9 targets within 1.2 lines. Its embedded telemetry mode was `detailed_on` despite the `tel-off` typed label, so it is not an OFF/OFF telemetry pair. All three top-row targets were the largest vertical errors at 2.39–2.58 lines; top-center, not top-left, was worst.
+
+**Interpretation:** The rollback is operational and materially better than both prospective per-eye runs, although this fresh quadratic session does not reproduce the unusually strong 0.76/1.04-line baseline. The remaining run-to-run spread belongs to the base tracker/calibration problem, not a failure to restore the mapper. The telemetry mismatch does not invalidate this mapper sanity check because the active mapper is explicit and the completed E-034 control found no material telemetry effect; do not require another participant run solely to correct the label/mode mismatch.
+
+**Next inquiry:** Close the per-eye intervention. Keep the quadratic mapper active and choose the next intervention from a mechanism that is identifiable under the calibration procedure; do not fit posture terms that are confounded with fixed target order.
+
+### 2026-08-29 — Upper-left acquisition practice intervention installed
+
+**Question:** Is the recurring upper-left/early-top-row weakness partly caused by the first recorded point also requiring the largest initial center-to-corner acquisition movement?
+
+**Action:** Removed the rejected per-eye mapper, mapper factory, live per-eye filters, and associated runtime tests. Kept aggregate-only per-eye calibration persistence and the offline comparison tool. Added one unrecorded upper-left practice fixation after the existing center practice and immediately before the unchanged 16-point row-major fit sequence. If Redo Worst includes point 0, the same practice fixation precedes its recapture. No mapper, filter, capture timing, recorded target coordinate/order, camera resolution, nine-point sequence, or affine behavior changed.
+
+**Evidence:** E-040. The calibration log now records `practice_target_count: 2` and `upper_left_practice_before_first_fit: true`, while continuing to record `quadratic_average` as the requested and active mapper. `compileDebugKotlin`, the focused gaze JVM suite, and `assembleDebug` passed; the APK was installed over the existing app with data and prior logs preserved. Git staging and commit were not performed.
+
+**Interpretation:** This is a narrow acquisition/sequence intervention, not a new estimator. It preserves the predictable older-adult row-major traversal while preventing recorded point 0 from being the participant's first upper-left fixation. One prospective calibration/immediate-test pair is sufficient for its initial keep/revert decision; do not repeat merely to select a favorable run.
+
+**Next inquiry:** Collect one telemetry-OFF 16-point calibration and immediate telemetry-OFF nine-point test. Compare point-0/top-row LOO and live top-row errors with E-039, while also reporting whole-session median/max so a local improvement cannot hide a global regression.
+
+### 2026-08-29 — Upper-left acquisition practice rejected prospectively
+
+**Question:** Did the extra unrecorded upper-left fixation improve the recurring upper-left/early-top-row error without degrading whole-session behavior?
+
+**Action:** Collected exactly one telemetry-OFF calibration (`upperleft-practice_tel-off_cal_1`) and immediate telemetry-OFF test (`upperleft-practice_tel-off_test_1`). Verified two accepted practice targets, `quadratic_average`, 16 fit points, and no affine correction from embedded fields. After evaluation, removed the extra practice from initial calibration and point-0 recapture, rebuilt, retested, and installed the original one-practice sequence.
+
+**Evidence:** E-041. Against E-039, live vertical median improved from 1.35 to 0.96 lines and coverage improved from 3/9 to 5/9 within 1.2 lines. However, top-left worsened from 2.52 to 2.78 lines, maximum error worsened from 2.58 to 3.53 lines, 2-D median increased from 215 to 343 px, and estimates developed a large leftward bias. Calibration point-0 LOO improved from 6.33 to 4.30 lines, but the LOO maximum worsened to 7.44 lines, held-out median/max worsened from 1.53/3.73 to 5.72/10.12 lines, and drift increased from 259 to 850 px. Top-center/top-right live errors improved, but bottom-left became worst at 3.53 lines.
+
+**Interpretation:** The intervention failed its primary target-specific hypothesis and traded a better median for worse regional/global tails. It is rejected rather than retained based on the favorable aggregate. The upper-left failure cannot be attributed primarily to the initial center-to-corner acquisition under this one-run controlled intervention. Do not add target-order complexity on this evidence.
+
+**Next inquiry:** Keep the original predictable calibration sequence and quadratic mapper. Do not request another repeat of this intervention. The next change should not be another retrospective mapper or target-order variant; posture-related work must be framed as reliability protection unless independent posture information can support an accuracy model.
+
 ## Evidence Registry
 
 | ID | Date | Evidence source | Conditions | Artifact or location | Notes |
@@ -263,7 +390,17 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 | E-028 | 2026-08-23 | Offline mapper/aggregation replay | Final fixed-phone calibration and three live runs | `diagnostics-local/analyze_mapper_replay.py` | Exact current replay; clamp reduces tails but does not restore line accuracy; plain median/affine results mixed |
 | E-029 | 2026-08-23 | Reading-oriented validation revision | Local implementation and JVM tests | `ReadingSpatialMetrics.kt`, calibration and accuracy activities/loggers | Per-target dx/dy, vertical line metrics, tails, regions, provisional all-target reference; estimator unchanged |
 | E-030 | 2026-08-24 | On-device revised-metrics verification | Galaxy A56; fixed phone, normal light, no glasses; saved calibration plus immediate uncorrected run | `diagnostics-local/2026-08-24/metrics-v2/run-2/` | Complete 16 LOO + 5 held-out + 9 live target metrics; large regional errors and vertical drift correctly exposed |
-| E-031 | 2026-08-24 | Older-adult target/order intervention | Local implementation pending device verification | `CalibrationView.kt`, `GazeCalibrationActivity.kt`, `CalibrationSessionLog.kt` | Fixed hit-marker, one-way contraction before sampling, fixed row-major traversal; estimator unchanged |
+| E-031 | 2026-08-24 | Older-adult target/order intervention | Visual behavior reviewed on Galaxy A56; accuracy comparison pending | `CalibrationView.kt`, `GazeCalibrationActivity.kt`, `CalibrationSessionLog.kt` | Fixed hit-marker, contraction through expected base sample, fixed row-major traversal; estimator unchanged |
+| E-032 | 2026-08-24 | Conversation-era regression audit | Git comparison of `f77ce6e`, `79a5ceb`, and `e214eb6` | Repository history and relevant gaze source diffs | Estimator/filter math unchanged; detailed telemetry is a remaining runtime confound; July redesign predates conversation |
+| E-033 | 2026-08-24 | Detailed-telemetry ON/OFF control | Compile, focused/all gaze JVM tests, APK assembly, A56 install, source diff audit | Telemetry mode UI, session loggers, diagnostic listener boundary, FPS accumulator/test | OFF removes detailed callbacks/arrays; lightweight comparison evidence remains in both modes; physical A/B pending |
+| E-034 | 2026-08-24 | Replicated natural-handheld telemetry control | Galaxy A56; normal light, no glasses; two valid calibration/immediate-nine-point pairs per mode | Ten new app-private artifacts from 15:21–15:37; eight included, one mismatched pair excluded | OFF greatly reduced artifact size but did not restore FPS, samples, or accuracy; instrumentation confound closed |
+| E-035 | 2026-08-24 | Centered pre-run countdown | Static entry-path audit, compile, all gaze JVM tests, APK assembly/install | Calibration/test activities and layouts | 3–2–1 occurs only before the first target; capture behavior unchanged; fresh OFF confirmation pending |
+| E-036 | 2026-08-28 | Independent-session handheld repeatability | Galaxy A56; natural handheld, normal light, no glasses, telemetry OFF, no correction | `calibration_session_20260828_060527.json`, `gaze_accuracy_session_20260828_060732_402.json` in app-private storage | Median remained improved at 1.55 lines, but 4.87-line live and 7.44-line held-out tails confirm unresolved regional/repeatability risk |
+| E-037 | 2026-08-28 | Five-pair offline tail-predictor analysis | Five valid recent natural-handheld calibration/immediate-test pairs; descriptive n=5 comparison | `diagnostics-local/analyze_recent_repeatability.py`; source artifacts streamed from app-private storage | No reliable gate predictor; drift is directional only; top-left is worst calibration LOO point in 5/5 and worst live point in 4/5 |
+| E-038 | 2026-08-29 | Prospective per-eye mapper intervention | Galaxy A56; natural handheld, telemetry OFF, two full calibration/immediate-test pairs, no affine correction | Four app-private artifacts at 20:49–20:54; `tools/gaze/compare_mapper_candidates.py` | Per-eye live medians/tails 5.74/8.83 and 2.63/4.19 lines; candidate rejected and quadratic default restored |
+| E-039 | 2026-08-29 | Quadratic rollback sanity check | Galaxy A56; fresh calibration OFF, immediate test inadvertently ON, no affine correction | `calibration_session_20260829_214116.json`, `gaze_accuracy_session_20260829_214301_000.json` in app-private storage | Mapper confirmed quadratic; live median/max 1.35/2.58 lines, materially better than both per-eye runs |
+| E-040 | 2026-08-29 | Upper-left acquisition-practice intervention | Static sequence/diff audit, focused gaze tests, APK assembly/install | Calibration activity and lightweight session fields | Adds one unrecorded upper-left practice before fit point 0; rejected per-eye runtime removed; prospective pair pending |
+| E-041 | 2026-08-29 | Prospective upper-left-practice evaluation and rollback | Galaxy A56; telemetry OFF calibration/test, quadratic mapper, no affine correction | `calibration_session_20260829_220839.json`, `gaze_accuracy_session_20260829_221046_730.json`; subsequent rollback build/install | Median improved but top-left and global tail did not; intervention rejected and original sequence restored |
 
 ## Confirmed Findings
 
@@ -283,7 +420,18 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 14. Accuracy and correction decisions must include individual target and regional errors; session median alone is insufficient.
 15. The 16-point and nine-point result screens now implement target-wise, reading-oriented spatial reporting while keeping reading compatibility as an unestablished outcome.
 16. The revised measurements are verified on device and correctly prevent favorable aggregate interpretation when individual targets, tails, or drift fail (E-030).
+17. A five-coefficient per-eye ridge-linear mapper failed both prospective live runs and was restored to the averaged quadratic default; retrospective multi-session wins were not sufficient deployment evidence.
+18. A fresh rollback sanity run explicitly recorded the quadratic mapper and recovered to a 1.35-line median/2.58-line maximum; it confirms restoration but also confirms unresolved base-pipeline session variability.
+19. The next isolated intervention changes only acquisition context: point 0 is preceded by an unrecorded fixation at the same upper-left coordinate while all recorded points and gaze math remain unchanged.
+20. Upper-left pre-acquisition did not improve live top-left error and worsened the live maximum, 2-D median, held-out tail, and drift despite improving the vertical median; the original sequence was restored.
 17. The next controlled intervention uses a predictable row-major order and a fixed-center contracting hit-marker, with temporal/spatial order coupling documented as a tradeoff (E-031).
+18. Conversation-era commits did not change mapper/filter mathematics, and the replicated ON/OFF control found no material FPS, sample-count, or accuracy recovery with detailed telemetry disabled (E-032, E-034).
+19. Detailed telemetry materially increases artifact size, but it is not supported as the cause of the observed gaze-accuracy regression; keep it OFF for leaner routine runs rather than as an accuracy fix (E-034).
+20. The current handheld build can produce markedly better accuracy than the earlier diagnostic sessions, so repeatability across an independent session must be checked before treating the July path as regressed (E-034, E-035).
+21. The independent-session run retained the typical-error improvement but reproduced severe regional tails; healthy FPS/samples and low calibration dispersion rule out simple throughput or noisy-fixation failure for that session (E-036).
+22. Top-left was the worst vertical live target in four of the five recent valid runs, making it the clearest recurring regional failure for the next bounded analysis (E-034, E-036).
+23. Across those five pairs, top-left was also the worst calibration LOO target in every run, while mapper conditioning and held-out validation did not rank the later live tails (E-037).
+24. No saved calibration metric reliably selects a good immediate live run. High drift is the only directional warning observed, so it can support a conservative redo/abort rule but not an accuracy claim (E-037).
 
 ## Open Questions
 
@@ -304,3 +452,5 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 3. Treat 1.2 line-heights as a provisional all-target spatial reference, not a validated reading pass threshold (E-025, E-026, E-029).
 4. Do not allow session median alone to produce a favorable assessment; report and consider every target, tail error, region, drift, and coverage (E-022, E-024, E-028, E-029).
 5. Prioritize older-adult target predictability for the next controlled comparison by restoring fixed row-major order and replacing continuous pulsing with a one-way pre-sample contraction around a fixed reticle (E-031).
+6. Do not use calibration LOO, held-out error, or mapper conditioning to claim that a run will have a small live tail; the five-pair comparison does not support that inference (E-037).
+7. Before changing calibration math, make the existing high-drift flag a stopping rule: Redo All once instead of saving; if the repeat also flags high drift, abort and retain the prior calibration. This is risk control, not a line-accuracy gate (E-037).
