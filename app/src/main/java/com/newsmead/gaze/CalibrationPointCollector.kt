@@ -48,9 +48,11 @@ class CalibrationPointCollector(
         this.onDone = onDone
         setCollecting(false)
         buffer.clear()
-        // Contract through acquisition and the expected base recording window,
-        // reaching the center near the normal capture/advance transition.
-        view.showTarget(x, y, EXPECTED_CONTRACTION_MS)
+        // Finish the visual contraction before the unsampled settle phase. The
+        // target then stays completely stationary before and during SAMPLE, so
+        // target acquisition or a row-wrap saccade cannot be mistaken for a
+        // measured fixation merely because the cue was still moving/shrinking.
+        view.showTarget(x, y, ACQUISITION_CONTRACTION_MS)
         // APPEAR (animation) + HOLD_ATTENTION (older-adult saccadic latency).
         handler.postDelayed({ settle() }, CalibrationView.APPEAR_MS + HOLD_MS)
     }
@@ -101,11 +103,13 @@ class CalibrationPointCollector(
 
     companion object {
         // Per-point state timings (docs/calibration-design.md §2.3).
-        private const val HOLD_MS = 500L
-        private const val SETTLE_MS = 400L
-        private const val PRE_SAMPLE_MS = CalibrationView.APPEAR_MS + HOLD_MS + SETTLE_MS
+        // Give participants 1.8 s total before recording: 1.0 s to acquire the
+        // contracting cue, then 0.8 s on the stationary center. This applies to
+        // every target rather than special-casing the first/left column.
+        private const val HOLD_MS = 800L
+        private const val SETTLE_MS = 800L
+        private const val ACQUISITION_CONTRACTION_MS = CalibrationView.APPEAR_MS + HOLD_MS
         private const val BASE_SAMPLE_MS = 700L
-        private const val EXPECTED_CONTRACTION_MS = PRE_SAMPLE_MS + BASE_SAMPLE_MS
         private const val SAMPLE_RECHECK_MS = 250L
         private const val SAMPLE_TIMEOUT_MS = 1500L
         private const val TICK_TONE_MS = 50

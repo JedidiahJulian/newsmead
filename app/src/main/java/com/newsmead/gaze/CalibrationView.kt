@@ -13,9 +13,8 @@ import android.view.animation.DecelerateInterpolator
  * Calibration target renderer (docs/calibration-design.md §2): a concentric
  * reticle sized in dp for 45-65-year-old acuity, with a fixed four-arm
  * hit-marker and a red filled disc that contracts once to a small fixed centre
- * plus to guide fixation. The collector synchronizes the contraction across
- * target acquisition and the expected base sample window, so it reaches the
- * center near the normal capture/advance time.
+ * plus to guide fixation. The collector completes the contraction during target
+ * acquisition, then holds the center cue stationary through settle and sampling.
  * Also draws a 16-dot progress mini-map.
  *
  * Colors assume the light (reading-surface) background set in the layout.
@@ -92,10 +91,7 @@ class CalibrationView @JvmOverloads constructor(
         startContraction(contractionDurationMs)
     }
 
-    /**
-     * One inward contraction. The collector supplies the acquisition plus base
-     * sample duration so the cue reaches center near normal target completion.
-     */
+    /** One inward contraction completed before the collector begins sampling. */
     private fun startContraction(durationMs: Long) {
         focusAnimator?.cancel()
         focusAnimator = ValueAnimator.ofFloat(CONTRACT_START_RADIUS_DP, CONTRACT_END_RADIUS_DP).apply {
