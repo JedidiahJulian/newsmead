@@ -38,6 +38,8 @@ import com.newsmead.gaze.LocalCalibratedGazeProvider
 import com.newsmead.gaze.LocalGazeSources
 import com.newsmead.gaze.LocalRawGazeSource
 import com.newsmead.gaze.ReadingSpatialMetrics
+import com.newsmead.gaze.PostureProfile
+import com.newsmead.gaze.PostureSummaryAccumulator
 import java.util.Locale
 import kotlin.math.hypot
 
@@ -76,13 +78,16 @@ class GazeTestActivity : AppCompatActivity() {
     private var pendingPreMedianPx = 0f
     private var pendingPostMedianPx = 0f
     private var calibrationPointCount = 0
+    private var postureProfile: PostureProfile? = null
 
     private var accuracySessionLog: GazeAccuracySessionLog? = null
-    private var sampleWindowActive = false
+    @Volatile private var sampleWindowActive = false
     private val pointPipelineSamples = ArrayList<LocalCalibratedGazeProvider.PipelineDiagnostics>()
     private val pointSourceEvents = ArrayList<LocalRawGazeSource.Diagnostics>()
     private val pointFps = FpsSummaryAccumulator()
     private val runFps = FpsSummaryAccumulator()
+    private val pointPosture = PostureSummaryAccumulator()
+    private val runPosture = PostureSummaryAccumulator()
     private var telemetryMode = DetailedTelemetryMode.ON
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,6 +109,7 @@ class GazeTestActivity : AppCompatActivity() {
                 pointPipelineSamples.clear()
                 pointSourceEvents.clear()
                 pointFps.reset()
+                pointPosture.reset()
             }
         }
         binding.accuracyButton.setOnClickListener { requestMeasurementLabel() }
@@ -123,6 +129,7 @@ class GazeTestActivity : AppCompatActivity() {
             return
         }
         calibrationPointCount = samples.size
+        postureProfile = PostureProfile.fromCalibration(samples)
         val mapper = try {
             GazeMapper(samples)
         } catch (e: Exception) {
@@ -142,8 +149,19 @@ class GazeTestActivity : AppCompatActivity() {
             }
         }
         activeCorrection = CalibrationStore.loadDriftCorrection(this)
-        val localProvider = LocalCalibratedGazeProvider(mapper, rawSource, activeCorrection).apply {
+        val localProvider = LocalCalibratedGazeProvider(
+            mapper,
+            rawSource,
+            activeCorrection,
+            postureProfile,
+        ).apply {
             setOnGaze { x, y -> runOnUiThread { onGaze(x, y) } }
+            setOnPostureAssessment { assessment ->
+                if (sampleWindowActive) {
+                    pointPosture.add(assessment)
+                    runPosture.add(assessment)
+                }
+            }
             start(this@GazeTestActivity)
         }
         this.localProvider = localProvider
@@ -212,9 +230,10 @@ class GazeTestActivity : AppCompatActivity() {
             binding.calibrationView.post { startMeasurement(runLabel) }
             return
         }
-        accuracySessionLog?.finish("restarted", runFps.snapshot())
+        accuracySessionLog?.finish("restarted", runFps.snapshot(), runPosture.snapshot())
         configureDetailedTelemetry()
         runFps.reset()
+        runPosture.reset()
         accuracySessionLog = GazeAccuracySessionLog(
             context = this,
             runLabel = runLabel,
@@ -225,6 +244,7 @@ class GazeTestActivity : AppCompatActivity() {
             lineHeightPx = lineHeightPx,
             calibrationPointCount = calibrationPointCount,
             activeCorrection = activeCorrection,
+            postureProfile = postureProfile,
         )
         targets = computeTargets(w, h)
         observations.clear()
@@ -274,6 +294,7 @@ class GazeTestActivity : AppCompatActivity() {
             fpsSummary = pointFps.snapshot(),
             pipelineSamples = pointPipelineSamples.toList(),
             sourceEvents = pointSourceEvents.toList(),
+            postureSummary = pointPosture.snapshot(),
         )
         observations.add(DriftCorrection.Observation(result.medianX, result.medianY, p.x, p.y))
         observationTargetIndices.add(pointIndex)
@@ -301,6 +322,7 @@ class GazeTestActivity : AppCompatActivity() {
             fpsSummary = pointFps.snapshot(),
             pipelineSamples = pointPipelineSamples.toList(),
             sourceEvents = pointSourceEvents.toList(),
+            postureSummary = pointPosture.snapshot(),
         )
         attempts++
         Log.w(TAG, "point ${pointIndex + 1} attempt $attempts failed: ${result.status} raw=${result.rawCount}")
@@ -335,7 +357,7 @@ class GazeTestActivity : AppCompatActivity() {
         binding.calibrationView.setMiniMap(emptyList())
         if (observations.size < DriftCorrection.MIN_OBSERVATIONS) {
             binding.hintText.text = getString(com.newsmead.R.string.gaze_recal_insufficient)
-            accuracySessionLog?.finish("insufficient_points", runFps.snapshot())
+            accuracySessionLog?.finish("insufficient_points", runFps.snapshot(), runPosture.snapshot())
             showGate(canApply = false)
             return
         }
@@ -354,7 +376,7 @@ class GazeTestActivity : AppCompatActivity() {
             },
             lineHeightPx,
         ) ?: run {
-            accuracySessionLog?.finish("summary_failed", runFps.snapshot())
+            accuracySessionLog?.finish("summary_failed", runFps.snapshot(), runPosture.snapshot())
             showGate(canApply = false)
             return
         }
@@ -374,7 +396,7 @@ class GazeTestActivity : AppCompatActivity() {
             lineHeightPx = lineHeightPx,
             estimatedCorrectedLooPx = looPostPx,
         )
-        accuracySessionLog?.finish("completed", runFps.snapshot())
+        accuracySessionLog?.finish("completed", runFps.snapshot(), runPosture.snapshot())
 
         Log.i(
             TAG,
@@ -571,7 +593,7 @@ class GazeTestActivity : AppCompatActivity() {
         collector.cancel()
         provider?.stop()
         tone?.release()
-        accuracySessionLog?.finish("aborted", runFps.snapshot())
+        accuracySessionLog?.finish("aborted", runFps.snapshot(), runPosture.snapshot())
     }
 
     companion object {

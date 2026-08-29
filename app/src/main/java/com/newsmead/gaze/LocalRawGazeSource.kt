@@ -16,9 +16,16 @@ interface LocalRawGazeSource {
         val eye1Y: Float = Float.NaN,
         val eye2X: Float = Float.NaN,
         val eye2Y: Float = Float.NaN,
+        val faceCenterX: Float = Float.NaN,
+        val faceCenterY: Float = Float.NaN,
+        val faceScale: Float = Float.NaN,
+        val headRollDeg: Float = Float.NaN,
     ) {
         val hasPerEye: Boolean
             get() = eye1X.isFinite() && eye1Y.isFinite() && eye2X.isFinite() && eye2Y.isFinite()
+
+        val posture: PostureFeatures
+            get() = PostureFeatures(faceCenterX, faceCenterY, faceScale, headRollDeg)
     }
 
     fun interface OnRawGaze {
@@ -75,6 +82,10 @@ interface LocalRawGazeSource {
         val gazeY: Float = Float.NaN,
         val eye1Openness: Float = Float.NaN,
         val eye2Openness: Float = Float.NaN,
+        val faceCenterX: Float = Float.NaN,
+        val faceCenterY: Float = Float.NaN,
+        val faceScale: Float = Float.NaN,
+        val headRollDeg: Float = Float.NaN,
         val busyDroppedFrames: Long,
     )
 

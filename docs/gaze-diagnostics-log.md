@@ -356,6 +356,18 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 
 **Next inquiry:** Keep the original predictable calibration sequence and quadratic mapper. Do not request another repeat of this intervention. The next change should not be another retrospective mapper or target-order variant; posture-related work must be framed as reliability protection unless independent posture information can support an accuracy model.
 
+### 2026-08-29 — Calibration-pose departure monitoring added in shadow mode
+
+**Question:** Can the system identify obvious departure from the pose under which the active calibration was collected, without feeding posture into the gaze estimate or reading logic?
+
+**Action:** Added passive eye-midpoint face centre, aspect-correct eye separation/scale, and eye-line roll features to raw samples and calibration aggregates. Extended the calibration CSV additively to 12 columns while retaining 4/8-column read compatibility. A participant-independent rule builds a conservative envelope from at least eight valid calibration points (observed min/max plus the larger of three MADs or a fixed minimum margin). The live provider assesses each sample but does not alter or suppress it. Accuracy logs retain lightweight per-point and whole-run summaries even with detailed telemetry OFF; telemetry ON also records per-frame fields. Article use emits only throttled status in the existing diagnostic log.
+
+**Evidence:** E-042. Static data-flow audit confirms posture assessment is side-channel only: the existing average-eye values still enter the same median-7, One Euro, quadratic mapping, and optional affine correction in the same order, and the mapped output is always emitted. All gaze-focused JVM tests pass, the APK assembles, and the build was installed over the A56 app with data preserved. The full local suite reaches 52 tests with only the unrelated existing `FirebaseTest.createAccount` failure. A posture-aware calibration/test remains pending.
+
+**Interpretation:** This is reliability instrumentation, not an accuracy intervention. It uses the same algorithm and margins for every participant while referencing each participant's own calibration pose. Existing calibrations remain usable but report posture as unavailable until replaced through the normal calibration flow.
+
+**Next inquiry:** Collect one telemetry-OFF ordinary calibration and immediate telemetry-OFF nine-point test. Evaluate flag availability and false-positive behavior before allowing posture status to influence any downstream event.
+
 ## Evidence Registry
 
 | ID | Date | Evidence source | Conditions | Artifact or location | Notes |
@@ -401,6 +413,7 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 | E-039 | 2026-08-29 | Quadratic rollback sanity check | Galaxy A56; fresh calibration OFF, immediate test inadvertently ON, no affine correction | `calibration_session_20260829_214116.json`, `gaze_accuracy_session_20260829_214301_000.json` in app-private storage | Mapper confirmed quadratic; live median/max 1.35/2.58 lines, materially better than both per-eye runs |
 | E-040 | 2026-08-29 | Upper-left acquisition-practice intervention | Static sequence/diff audit, focused gaze tests, APK assembly/install | Calibration activity and lightweight session fields | Adds one unrecorded upper-left practice before fit point 0; rejected per-eye runtime removed; prospective pair pending |
 | E-041 | 2026-08-29 | Prospective upper-left-practice evaluation and rollback | Galaxy A56; telemetry OFF calibration/test, quadratic mapper, no affine correction | `calibration_session_20260829_220839.json`, `gaze_accuracy_session_20260829_221046_730.json`; subsequent rollback build/install | Median improved but top-left and global tail did not; intervention rejected and original sequence restored |
+| E-042 | 2026-08-29 | Posture-departure shadow monitor | Static path audit, compile, gaze-focused JVM tests, APK assembly/install | Posture features/profile, additive calibration CSV fields, live assessment and lightweight summaries | Evidence-only; no coordinate/filter/mapper/AOI/scaffold effect; physical run pending |
 
 ## Confirmed Findings
 
@@ -424,6 +437,7 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 18. A fresh rollback sanity run explicitly recorded the quadratic mapper and recovered to a 1.35-line median/2.58-line maximum; it confirms restoration but also confirms unresolved base-pipeline session variability.
 19. The next isolated intervention changes only acquisition context: point 0 is preceded by an unrecorded fixation at the same upper-left coordinate while all recorded points and gaze math remain unchanged.
 20. Upper-left pre-acquisition did not improve live top-left error and worsened the live maximum, 2-D median, held-out tail, and drift despite improving the vertical median; the original sequence was restored.
+21. Posture-departure monitoring is implemented only as a shadow side channel. It does not compensate coordinates or exclude samples, and older calibrations correctly produce `UNAVAILABLE` until a posture-aware calibration is accepted (E-042).
 17. The next controlled intervention uses a predictable row-major order and a fixed-center contracting hit-marker, with temporal/spatial order coupling documented as a tradeoff (E-031).
 18. Conversation-era commits did not change mapper/filter mathematics, and the replicated ON/OFF control found no material FPS, sample-count, or accuracy recovery with detailed telemetry disabled (E-032, E-034).
 19. Detailed telemetry materially increases artifact size, but it is not supported as the cause of the observed gaze-accuracy regression; keep it OFF for leaner routine runs rather than as an accuracy fix (E-034).

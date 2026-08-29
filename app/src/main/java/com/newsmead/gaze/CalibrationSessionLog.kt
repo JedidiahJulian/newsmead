@@ -85,6 +85,10 @@ class CalibrationSessionLog(
         eye1Y: Float,
         eye2X: Float,
         eye2Y: Float,
+        faceCenterX: Float,
+        faceCenterY: Float,
+        faceScale: Float,
+        headRollDeg: Float,
         dispersionX: Float,
         dispersionY: Float,
         fpsSummary: FpsSummary?,
@@ -109,6 +113,15 @@ class CalibrationSessionLog(
                 put("no_face", noFace)
                 put("aggregated_feature", featureArray(featureX, featureY))
                 put("aggregated_per_eye_feature", featureArray(eye1X, eye1Y, eye2X, eye2Y))
+                put(
+                    "aggregated_posture_feature",
+                    JSONObject().apply {
+                        putNum("face_center_x", faceCenterX)
+                        putNum("face_center_y", faceCenterY)
+                        putNum("face_scale", faceScale)
+                        putNum("head_roll_deg", headRollDeg)
+                    },
+                )
                 put("dispersion_feature", featureArray(dispersionX, dispersionY))
                 put("fps_summary", fpsSummary?.toJson() ?: JSONObject.NULL)
                 if (detailedTelemetryEnabled) {
@@ -140,6 +153,12 @@ class CalibrationSessionLog(
                 put("flagged_high_drift", flagged)
             },
         )
+        flush()
+    }
+
+    fun logPostureProfile(profile: PostureProfile?) {
+        root.put("posture_shadow_mode", true)
+        root.put("posture_profile", profile?.toJson() ?: JSONObject.NULL)
         flush()
     }
 
@@ -289,8 +308,29 @@ class CalibrationSessionLog(
             putNum("gaze_y", gazeY)
             putNum("eye_1_openness", eye1Openness)
             putNum("eye_2_openness", eye2Openness)
+            putNum("face_center_x", faceCenterX)
+            putNum("face_center_y", faceCenterY)
+            putNum("face_scale", faceScale)
+            putNum("head_roll_deg", headRollDeg)
             put("busy_dropped_frames_cumulative", busyDroppedFrames)
         }
+
+    private fun PostureProfile.toJson(): JSONObject = JSONObject().apply {
+        put("calibration_point_count", calibrationPointCount)
+        put("face_center_x", faceCenterX.toJson())
+        put("face_center_y", faceCenterY.toJson())
+        put("face_scale", faceScale.toJson())
+        put("head_roll_deg", headRollDeg.toJson())
+    }
+
+    private fun PostureAxisRange.toJson(): JSONObject = JSONObject().apply {
+        putNum("median", median)
+        putNum("observed_min", minimum)
+        putNum("observed_max", maximum)
+        putNum("margin", margin)
+        putNum("lower_bound", lowerBound)
+        putNum("upper_bound", upperBound)
+    }
 
     private fun FpsSummary.toJson(): JSONObject = JSONObject().apply {
         put("sample_count", sampleCount)

@@ -35,6 +35,7 @@ import com.newsmead.gaze.FpsSummaryAccumulator
 import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.LocalGazeSources
 import com.newsmead.gaze.LocalRawGazeSource
+import com.newsmead.gaze.PostureProfile
 import com.newsmead.gaze.ReadingSpatialMetrics
 import java.util.Locale
 import kotlin.math.hypot
@@ -356,6 +357,10 @@ class GazeCalibrationActivity : AppCompatActivity() {
                     result.medianEye1Y,
                     result.medianEye2X,
                     result.medianEye2Y,
+                    result.medianFaceCenterX,
+                    result.medianFaceCenterY,
+                    result.medianFaceScale,
+                    result.medianHeadRollDeg,
                 )
                 if (pres.gridIndex == driftGridIndex && driftFirst == null) {
                     driftFirst = floatArrayOf(result.medianX, result.medianY)
@@ -428,6 +433,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
         }
         looGridOrder = ordered.map { it.key }
         looReport = CalibrationQuality.leaveOneOut(samples)
+        sessionLog?.logPostureProfile(PostureProfile.fromCalibration(samples))
 
         computeDriftResiduals()
         sessionLog?.logDrift(
@@ -655,6 +661,10 @@ class GazeCalibrationActivity : AppCompatActivity() {
             eye1Y = result.medianEye1Y,
             eye2X = result.medianEye2X,
             eye2Y = result.medianEye2Y,
+            faceCenterX = result.medianFaceCenterX,
+            faceCenterY = result.medianFaceCenterY,
+            faceScale = result.medianFaceScale,
+            headRollDeg = result.medianHeadRollDeg,
             dispersionX = result.dispersionX,
             dispersionY = result.dispersionY,
             fpsSummary = pointFps.snapshot(),

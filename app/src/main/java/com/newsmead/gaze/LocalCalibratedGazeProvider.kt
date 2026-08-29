@@ -14,6 +14,7 @@ class LocalCalibratedGazeProvider(
     private val mapper: GazeMapper,
     private val rawSource: LocalRawGazeSource,
     private val correction: DriftCorrection? = null,
+    private val postureProfile: PostureProfile? = null,
 ) : GazeProvider {
 
     data class PipelineDiagnostics(
@@ -30,10 +31,15 @@ class LocalCalibratedGazeProvider(
         val outputY: Float,
         val correctionActive: Boolean,
         val outputTimestampMs: Long,
+        val postureAssessment: PostureAssessment,
     )
 
     fun interface OnDiagnostics {
         fun onDiagnostics(diagnostics: PipelineDiagnostics)
+    }
+
+    fun interface OnPostureAssessment {
+        fun onPostureAssessment(assessment: PostureAssessment)
     }
 
     private val medianX = MedianFilter()
@@ -42,6 +48,7 @@ class LocalCalibratedGazeProvider(
     private val smoothY = OneEuroFilter(minCutoff = 0.7, beta = 0.005)
     private var onGaze: GazeProvider.OnGaze? = null
     private var onDiagnostics: OnDiagnostics? = null
+    private var onPostureAssessment: OnPostureAssessment? = null
     private var onSourceDiagnostics: LocalRawGazeSource.OnDiagnostics? = null
     @Volatile private var latestSourceDiagnostics: LocalRawGazeSource.Diagnostics? = null
     private var started = false
@@ -61,10 +68,16 @@ class LocalCalibratedGazeProvider(
         refreshSourceDiagnostics()
     }
 
+    fun setOnPostureAssessment(listener: OnPostureAssessment?) {
+        onPostureAssessment = listener
+    }
+
     override fun start(owner: LifecycleOwner) {
         started = true
         refreshSourceDiagnostics()
         rawSource.setOnRawGaze { sample ->
+            val postureAssessment = postureProfile?.assess(sample.posture)
+                ?: PostureAssessment.unavailable()
             val mx = medianX.filter(sample.gazeX)
             val my = medianY.filter(sample.gazeY)
             val fx = smoothX.filter(mx, sample.timestampMs)
@@ -81,12 +94,14 @@ class LocalCalibratedGazeProvider(
                     TAG,
                     String.format(
                         Locale.US,
-                        "raw=(%.4f, %.4f) filt=(%.4f, %.4f) -> screen=(%.0f, %.0f)%s",
+                        "raw=(%.4f, %.4f) filt=(%.4f, %.4f) -> screen=(%.0f, %.0f)%s pose=%s",
                         sample.gazeX, sample.gazeY, fx, fy, corrected[0], corrected[1],
                         if (correction != null) " [drift-corrected]" else "",
+                        postureAssessment.status.name,
                     ),
                 )
             }
+            onPostureAssessment?.onPostureAssessment(postureAssessment)
             onDiagnostics?.onDiagnostics(
                 PipelineDiagnostics(
                     source = latestSourceDiagnostics?.takeIf {
@@ -105,6 +120,7 @@ class LocalCalibratedGazeProvider(
                     outputY = corrected[1],
                     correctionActive = correction != null,
                     outputTimestampMs = sample.timestampMs,
+                    postureAssessment = postureAssessment,
                 ),
             )
             onGaze?.onGaze(corrected[0], corrected[1])

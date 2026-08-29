@@ -817,6 +817,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 mapper = GazeMapper(samples),
                 rawSource = rawSource,
                 correction = CalibrationStore.loadDriftCorrection(requireContext()),
+                postureProfile = com.newsmead.gaze.PostureProfile.fromCalibration(samples),
             )
             provider.setOnGaze { x, y -> activity?.runOnUiThread { onGaze.onGaze(x, y) } }
             provider.start(viewLifecycleOwner)

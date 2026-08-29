@@ -35,6 +35,8 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
@@ -291,6 +293,7 @@ class MediaPipeRawGazeSource(
         val leftIris = center(face, LEFT_IRIS)
         val rightIris = center(face, RIGHT_IRIS)
         val gaze = computeGazeDetails(face, leftIris, rightIris)
+        val posture = computePosture(face, input.width, input.height)
 
         // Drop blink frames: during a blink the iris/eyelid landmarks are
         // unreliable, so the gaze feature would be garbage. Matches the prototype,
@@ -307,6 +310,7 @@ class MediaPipeRawGazeSource(
                 frameHeight = input.height,
                 gaze = gaze,
                 eyeOpenness = eyeOpenness,
+                posture = posture,
             )
             emitBlinkStats()
             return
@@ -323,6 +327,7 @@ class MediaPipeRawGazeSource(
             frameHeight = input.height,
             gaze = gaze,
             eyeOpenness = eyeOpenness,
+            posture = posture,
         )
         emitBlinkStats()
         listener?.onRawGaze(
@@ -334,7 +339,38 @@ class MediaPipeRawGazeSource(
                 eye1Y = gaze[1],
                 eye2X = gaze[2],
                 eye2Y = gaze[3],
+                faceCenterX = posture.faceCenterX,
+                faceCenterY = posture.faceCenterY,
+                faceScale = posture.faceScale,
+                headRollDeg = posture.headRollDeg,
             ),
+        )
+    }
+
+    /** Passive pose geometry; never used to calculate or modify gaze. */
+    private fun computePosture(
+        lm: List<NormalizedLandmark>,
+        frameWidth: Int,
+        frameHeight: Int,
+    ): PostureFeatures {
+        val eye1X = (lm[EYE1_CORNER_A].x() + lm[EYE1_CORNER_B].x()) / 2f
+        val eye1Y = (lm[EYE1_CORNER_A].y() + lm[EYE1_CORNER_B].y()) / 2f
+        val eye2X = (lm[EYE2_CORNER_A].x() + lm[EYE2_CORNER_B].x()) / 2f
+        val eye2Y = (lm[EYE2_CORNER_A].y() + lm[EYE2_CORNER_B].y()) / 2f
+        // Order by image x so an eye-index convention cannot turn a near-zero
+        // roll into an angle near 180 degrees.
+        val (leftX, leftY, rightX, rightY) = if (eye1X <= eye2X) {
+            floatArrayOf(eye1X, eye1Y, eye2X, eye2Y)
+        } else {
+            floatArrayOf(eye2X, eye2Y, eye1X, eye1Y)
+        }
+        val dxPx = (rightX - leftX) * frameWidth
+        val dyPx = (rightY - leftY) * frameHeight
+        return PostureFeatures(
+            faceCenterX = (leftX + rightX) / 2f,
+            faceCenterY = (leftY + rightY) / 2f,
+            faceScale = hypot(dxPx, dyPx) / frameWidth,
+            headRollDeg = Math.toDegrees(atan2(dyPx, dxPx).toDouble()).toFloat(),
         )
     }
     /** Average (normalized) position over a contiguous landmark range. */
@@ -400,6 +436,7 @@ class MediaPipeRawGazeSource(
         rotationDegrees: Int = inFlightRotationDegrees,
         gaze: FloatArray? = null,
         eyeOpenness: FloatArray? = null,
+        posture: PostureFeatures? = null,
     ) {
         val sink = diagnosticsListener ?: return
         sink.onDiagnostics(
@@ -420,6 +457,10 @@ class MediaPipeRawGazeSource(
                 gazeY = gaze?.getOrNull(5) ?: Float.NaN,
                 eye1Openness = eyeOpenness?.getOrNull(0) ?: Float.NaN,
                 eye2Openness = eyeOpenness?.getOrNull(1) ?: Float.NaN,
+                faceCenterX = posture?.faceCenterX ?: Float.NaN,
+                faceCenterY = posture?.faceCenterY ?: Float.NaN,
+                faceScale = posture?.faceScale ?: Float.NaN,
+                headRollDeg = posture?.headRollDeg ?: Float.NaN,
                 busyDroppedFrames = busyDroppedFrames,
             ),
         )

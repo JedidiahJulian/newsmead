@@ -41,6 +41,10 @@ class CalibrationPointCollector(
                     eye1Y = sample.eye1Y,
                     eye2X = sample.eye2X,
                     eye2Y = sample.eye2Y,
+                    faceCenterX = sample.faceCenterX,
+                    faceCenterY = sample.faceCenterY,
+                    faceScale = sample.faceScale,
+                    headRollDeg = sample.headRollDeg,
                 ),
             )
         }

@@ -17,7 +17,7 @@ class CalibrationCsvCodecTest {
     }
 
     @Test
-    fun roundTripsPerEyeCalibration() {
+    fun roundTripsPerEyeAndPostureCalibration() {
         val original = CalibrationSample(
             screenX = 100f,
             screenY = 200f,
@@ -27,11 +27,24 @@ class CalibrationCsvCodecTest {
             eye1Y = 0.55f,
             eye2X = 0.45f,
             eye2Y = 0.65f,
+            faceCenterX = 0.51f,
+            faceCenterY = 0.32f,
+            faceScale = 0.19f,
+            headRollDeg = -2.5f,
         )
 
         val decoded = CalibrationCsvCodec.decode(CalibrationCsvCodec.encode(original))
 
         assertEquals(original, decoded)
         assertTrue(decoded.hasPerEye)
+        assertTrue(decoded.posture.isAvailable)
+    }
+
+    @Test
+    fun readsExistingEightColumnCalibrationWithoutPosture() {
+        val sample = CalibrationCsvCodec.decode("100,200,0.4,0.6,0.35,0.55,0.45,0.65")
+
+        assertTrue(sample.hasPerEye)
+        assertFalse(sample.posture.isAvailable)
     }
 }

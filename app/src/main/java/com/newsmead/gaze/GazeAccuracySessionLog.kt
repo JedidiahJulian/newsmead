@@ -25,6 +25,7 @@ class GazeAccuracySessionLog(
     lineHeightPx: Float,
     calibrationPointCount: Int,
     activeCorrection: DriftCorrection?,
+    postureProfile: PostureProfile?,
 ) {
 
     private val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
@@ -50,6 +51,9 @@ class GazeAccuracySessionLog(
         root.put("active_mapping_mode", MAPPING_MODE)
         root.put("drift_correction_active", activeCorrection != null)
         root.put("drift_correction", activeCorrection?.toJson() ?: JSONObject.NULL)
+        root.put("posture_shadow_mode", true)
+        root.put("posture_affects_gaze_output", false)
+        root.put("posture_profile", postureProfile?.toJson() ?: JSONObject.NULL)
         root.put("camera_frames_retained", false)
         root.put(
             "processing_path",
@@ -69,6 +73,7 @@ class GazeAccuracySessionLog(
         fpsSummary: FpsSummary?,
         pipelineSamples: List<LocalCalibratedGazeProvider.PipelineDiagnostics>,
         sourceEvents: List<LocalRawGazeSource.Diagnostics>,
+        postureSummary: PostureSummary,
     ) {
         val accepted = result.status == FixationWindowFilter.Status.ACCEPTED
         val dx = if (accepted) result.medianX - targetX else Float.NaN
@@ -91,6 +96,7 @@ class GazeAccuracySessionLog(
                 put("collector_raw_count", result.rawCount)
                 put("collector_retained_count", result.retainedCount)
                 put("fps_summary", fpsSummary?.toJson() ?: JSONObject.NULL)
+                put("posture_shadow_summary", postureSummary.toJson())
                 if (detailedTelemetryEnabled) {
                     put("pipeline_samples", JSONArray().apply {
                         pipelineSamples.forEach { put(it.toJson()) }
@@ -146,11 +152,16 @@ class GazeAccuracySessionLog(
         flush()
     }
 
-    fun finish(outcome: String, fpsSummary: FpsSummary? = null) {
+    fun finish(
+        outcome: String,
+        fpsSummary: FpsSummary? = null,
+        postureSummary: PostureSummary? = null,
+    ) {
         if (finished) return
         finished = true
         root.put("outcome", outcome)
         root.put("fps_summary", fpsSummary?.toJson() ?: JSONObject.NULL)
+        root.put("posture_shadow_summary", postureSummary?.toJson() ?: JSONObject.NULL)
         root.put("timestamp_end", isoTimestamp())
         flush()
         Log.i(TAG, "Finished gaze accuracy diagnostic log ${file.absolutePath}: $outcome")
@@ -173,6 +184,9 @@ class GazeAccuracySessionLog(
             putNum("output_x", outputX)
             putNum("output_y", outputY)
             put("correction_active", correctionActive)
+            put("posture_status", postureAssessment.status.name)
+            put("posture_out_of_range_axes", JSONArray(postureAssessment.outOfRangeAxes))
+            putNum("posture_max_normalized_excess", postureAssessment.maxNormalizedExcess)
         }
 
     private fun LocalRawGazeSource.Diagnostics.toJson(): JSONObject =
@@ -201,12 +215,44 @@ class GazeAccuracySessionLog(
             putNum("gaze_y", gazeY)
             putNum("eye_1_openness", eye1Openness)
             putNum("eye_2_openness", eye2Openness)
+            putNum("face_center_x", faceCenterX)
+            putNum("face_center_y", faceCenterY)
+            putNum("face_scale", faceScale)
+            putNum("head_roll_deg", headRollDeg)
             put("busy_dropped_frames_cumulative", busyDroppedFrames)
         }
 
     private fun DriftCorrection.toJson(): JSONObject = JSONObject().apply {
         put("coeff_x", JSONArray().apply { coeffX.forEach { put(it) } })
         put("coeff_y", JSONArray().apply { coeffY.forEach { put(it) } })
+    }
+
+    private fun PostureProfile.toJson(): JSONObject = JSONObject().apply {
+        put("calibration_point_count", calibrationPointCount)
+        put("face_center_x", faceCenterX.toJson())
+        put("face_center_y", faceCenterY.toJson())
+        put("face_scale", faceScale.toJson())
+        put("head_roll_deg", headRollDeg.toJson())
+    }
+
+    private fun PostureAxisRange.toJson(): JSONObject = JSONObject().apply {
+        putNum("median", median)
+        putNum("observed_min", minimum)
+        putNum("observed_max", maximum)
+        putNum("margin", margin)
+        putNum("lower_bound", lowerBound)
+        putNum("upper_bound", upperBound)
+    }
+
+    private fun PostureSummary.toJson(): JSONObject = JSONObject().apply {
+        put("sample_count", sampleCount)
+        put("assessed_count", assessedCount)
+        put("in_range_count", inRangeCount)
+        put("out_of_range_count", outOfRangeCount)
+        put("unavailable_count", unavailableCount)
+        putNum("out_of_range_fraction", outOfRangeFraction)
+        putNum("max_normalized_excess", maxNormalizedExcess)
+        put("out_of_range_axis_counts", JSONObject(outOfRangeAxisCounts))
     }
 
     private fun FpsSummary.toJson(): JSONObject = JSONObject().apply {

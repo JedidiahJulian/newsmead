@@ -18,12 +18,16 @@ The design below revises the *procedure*; these integration facts are fixed:
   corner-relative horizontal, eyelid-relative vertical, both eyes averaged). All pre-fit
   thresholds (dispersion, drift) are therefore in **feature units**, convertible to px only
   after the mapper is fitted.
-- **Fit input:** `calibration_16point.csv` (`screen_x,screen_y,gaze_x,gaze_y`), read by
+- **Fit input:** `calibration_16point.csv` (the first four mapper columns remain
+  `screen_x,screen_y,gaze_x,gaze_y`), read by
   `CalibrationStore.load()` → `GazeMapper` (2nd-degree poly on standardized features,
   ridge λ=1.0; beyond the calibrated feature range the output extends linearly along the
   boundary gradient, capped at 1.5 z — the earlier hard clamp froze gaze at a drifting
-  "invisible barrier") → `LocalCalibratedGazeProvider` → `ArticleFragment`. **The CSV schema and name stay unchanged and contain only fit points**
-  (never the drift-repeat or validation points). The new session log (§6) is additive.
+  "invisible barrier") → `LocalCalibratedGazeProvider` → `ArticleFragment`. The current
+  12-column schema appends per-eye and passive posture evidence; the mapper continues to use
+  only the original averaged gaze pair. The codec remains compatible with legacy four- and
+  eight-column files. The CSV still contains only fit points (never the drift-repeat or
+  validation points). The session log (§6) is additive.
 - **Frame-level rejection that already exists:** no-face frames and blink frames
   (eye-aspect-ratio hysteresis, `StudyConfig.GAZE_BLINK_*`). MediaPipe Tasks FaceLandmarker
   exposes **no per-frame landmark confidence** — rejection is: no-face, blink, dispersion (§4).
@@ -295,6 +299,19 @@ was brought up to the calibration standard and its duplication removed:
 - **Audit trail.** Applying/reverting appends a timestamped line to `recalibration_log.csv`
   (append-only history), alongside the single active `drift_correction.csv`.
 
+### 7.3 Calibration-pose departure shadow monitor (added 2026-08-29)
+
+Each accepted fit point also stores the median eye-midpoint face centre, aspect-correct
+eye-centre separation/scale, and eye-line roll. The active calibration defines a conservative
+per-axis envelope from its observed min/max expanded by robust margins. Live samples are
+classified `IN_RANGE`, `OUT_OF_RANGE`, or `UNAVAILABLE` and summarized in diagnostic logs.
+
+This classification is deliberately **shadow only** during evaluation. It does not enter the
+quadratic feature vector, alter median/One Euro filtering, change the affine drift layer,
+suppress gaze coordinates, or affect AOI/RSI/scaffold decisions. It therefore cannot be
+reported as an accuracy improvement. Existing four/eight-column calibrations remain valid and
+produce `UNAVAILABLE` posture status until a normal new calibration supplies the extra fields.
+
 ---
 
 ## 8. Implementation notes
@@ -331,7 +348,8 @@ was brought up to the calibration standard and its duplication removed:
 **Added:**
 7. §7 post-fit quality gate: immediate fit, LOO residuals, line-height error units,
    Accept / Redo-worst / Redo-all researcher screen; CSV written only on Accept.
-8. §0 integration contract: CSV schema/name unchanged, fit points only; session log additive;
+8. §0 integration contract: CSV name and mapper columns unchanged, posture/per-eye evidence
+   appended compatibly, fit points only; session log additive;
    `GazeTestActivity` retained as independent benchmark.
 9. Fit floor raised 6 → 12 points for session validity; abort path defined.
 10. Concrete starting thresholds (dispersion 0.02 feature units, drift ½ line-height,

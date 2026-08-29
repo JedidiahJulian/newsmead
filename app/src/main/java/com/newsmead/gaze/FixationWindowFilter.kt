@@ -34,6 +34,10 @@ class FixationWindowFilter(
         val eye1Y: Float = Float.NaN,
         val eye2X: Float = Float.NaN,
         val eye2Y: Float = Float.NaN,
+        val faceCenterX: Float = Float.NaN,
+        val faceCenterY: Float = Float.NaN,
+        val faceScale: Float = Float.NaN,
+        val headRollDeg: Float = Float.NaN,
     )
 
     enum class Status { ACCEPTED, TOO_FEW_SAMPLES }
@@ -50,6 +54,10 @@ class FixationWindowFilter(
         val medianEye1Y: Float = Float.NaN,
         val medianEye2X: Float = Float.NaN,
         val medianEye2Y: Float = Float.NaN,
+        val medianFaceCenterX: Float = Float.NaN,
+        val medianFaceCenterY: Float = Float.NaN,
+        val medianFaceScale: Float = Float.NaN,
+        val medianHeadRollDeg: Float = Float.NaN,
     )
 
     fun filter(samples: List<Sample>): Result {
@@ -77,6 +85,8 @@ class FixationWindowFilter(
             rawCount, retained.size,
             medianFinite(retained.map { it.eye1X }), medianFinite(retained.map { it.eye1Y }),
             medianFinite(retained.map { it.eye2X }), medianFinite(retained.map { it.eye2Y }),
+            medianFinite(retained.map { it.faceCenterX }), medianFinite(retained.map { it.faceCenterY }),
+            medianFinite(retained.map { it.faceScale }), medianFinite(retained.map { it.headRollDeg }),
         )
     }
 
@@ -92,6 +102,8 @@ class FixationWindowFilter(
             rawCount, samples.size,
             medianFinite(samples.map { it.eye1X }), medianFinite(samples.map { it.eye1Y }),
             medianFinite(samples.map { it.eye2X }), medianFinite(samples.map { it.eye2Y }),
+            medianFinite(samples.map { it.faceCenterX }), medianFinite(samples.map { it.faceCenterY }),
+            medianFinite(samples.map { it.faceScale }), medianFinite(samples.map { it.headRollDeg }),
         )
     }
 

@@ -14,22 +14,33 @@ data class CalibrationSample(
     val eye1Y: Float = Float.NaN,
     val eye2X: Float = Float.NaN,
     val eye2Y: Float = Float.NaN,
+    val faceCenterX: Float = Float.NaN,
+    val faceCenterY: Float = Float.NaN,
+    val faceScale: Float = Float.NaN,
+    val headRollDeg: Float = Float.NaN,
 ) {
     val hasPerEye: Boolean
         get() = eye1X.isFinite() && eye1Y.isFinite() && eye2X.isFinite() && eye2Y.isFinite()
+
+    val posture: PostureFeatures
+        get() = PostureFeatures(faceCenterX, faceCenterY, faceScale, headRollDeg)
 }
 
 internal object CalibrationCsvCodec {
-    const val HEADER = "screen_x,screen_y,gaze_x,gaze_y,eye1_x,eye1_y,eye2_x,eye2_y"
+    const val HEADER = "screen_x,screen_y,gaze_x,gaze_y,eye1_x,eye1_y,eye2_x,eye2_y," +
+        "face_center_x,face_center_y,face_scale,head_roll_deg"
 
     fun encode(sample: CalibrationSample): String =
         "${sample.screenX},${sample.screenY},${sample.gazeX},${sample.gazeY}," +
-            "${sample.eye1X},${sample.eye1Y},${sample.eye2X},${sample.eye2Y}"
+            "${sample.eye1X},${sample.eye1Y},${sample.eye2X},${sample.eye2Y}," +
+            "${sample.faceCenterX},${sample.faceCenterY},${sample.faceScale},${sample.headRollDeg}"
 
-    /** Accept both legacy four-column and per-eye eight-column calibrations. */
+    /** Accept legacy four/eight-column and posture-aware twelve-column calibrations. */
     fun decode(line: String): CalibrationSample {
         val values = line.split(',')
-        require(values.size == 4 || values.size == 8) { "Expected 4 or 8 calibration columns" }
+        require(values.size == 4 || values.size == 8 || values.size == 12) {
+            "Expected 4, 8, or 12 calibration columns"
+        }
         return CalibrationSample(
             screenX = values[0].toFloat(),
             screenY = values[1].toFloat(),
@@ -39,6 +50,10 @@ internal object CalibrationCsvCodec {
             eye1Y = values.getOrNull(5)?.toFloat() ?: Float.NaN,
             eye2X = values.getOrNull(6)?.toFloat() ?: Float.NaN,
             eye2Y = values.getOrNull(7)?.toFloat() ?: Float.NaN,
+            faceCenterX = values.getOrNull(8)?.toFloat() ?: Float.NaN,
+            faceCenterY = values.getOrNull(9)?.toFloat() ?: Float.NaN,
+            faceScale = values.getOrNull(10)?.toFloat() ?: Float.NaN,
+            headRollDeg = values.getOrNull(11)?.toFloat() ?: Float.NaN,
         )
     }
 }
