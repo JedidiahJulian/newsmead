@@ -368,6 +368,18 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 
 **Next inquiry:** Collect one telemetry-OFF ordinary calibration and immediate telemetry-OFF nine-point test. Evaluate flag availability and false-positive behavior before allowing posture status to influence any downstream event.
 
+### 2026-08-29 — Posture-departure shadow control evaluated
+
+**Question:** Is the calibration-pose shadow status available during a normal OFF run, and does it identify the targets with poor coordinates well enough to justify any downstream reliability action?
+
+**Action:** Collected `posture-shadow_tel-off_cal_1` and the immediate `posture-shadow_tel-off_test_1` with embedded `detailed_off`, `quadratic_average`, no affine correction, and `posture_affects_gaze_output: false`. Compared posture summaries target by target with the unchanged spatial metrics and with adjacent-run throughput.
+
+**Evidence:** E-043. The calibration produced a complete 16-point posture profile; all 145 live samples were assessed and none were unavailable. The monitor marked 31/145 (21.4%) out of range, exclusively for `face_center_x` during bottom-center (15/15) and bottom-right (16/16). Exceedance was modest (maximum 0.29 profile margins beyond the bound, approximately 0.0063 normalized frame width). Those flagged targets had 1.58- and 0.66-line vertical errors, while unflagged top-center was worst at 4.20 lines. Live median/max was 2.76/4.20 lines with 2/9 within 1.2; calibration LOO median/max was 2.43/6.24, held-out median/max 4.72/8.25, and drift 121 px. Calibration/test FPS was 20.65/20.40 versus 18.62/18.07 in the immediately preceding OFF pair, so the shadow calculation did not produce an observed throughput regression.
+
+**Interpretation:** Availability and persistence are verified, but this run provides no evidence that the current binary posture departure identifies inaccurate gaze. The temporal block at the final two targets is plausible as a small pose drift, yet it coincided with better—not worse—coordinates. Keep it as research evidence only; do not use it to exclude events or drive the adaptive interface, and do not tune a favorable threshold from this single participant/run.
+
+**Next inquiry:** Move to one reversible feature-geometry intervention that is participant-independent: a roll-aware eye-local iris displacement normalized by eye width, retaining two-eye averaging and every downstream mapper/filter/target/sequence component. Do not combine it with posture terms.
+
 ## Evidence Registry
 
 | ID | Date | Evidence source | Conditions | Artifact or location | Notes |
@@ -414,6 +426,7 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 | E-040 | 2026-08-29 | Upper-left acquisition-practice intervention | Static sequence/diff audit, focused gaze tests, APK assembly/install | Calibration activity and lightweight session fields | Adds one unrecorded upper-left practice before fit point 0; rejected per-eye runtime removed; prospective pair pending |
 | E-041 | 2026-08-29 | Prospective upper-left-practice evaluation and rollback | Galaxy A56; telemetry OFF calibration/test, quadratic mapper, no affine correction | `calibration_session_20260829_220839.json`, `gaze_accuracy_session_20260829_221046_730.json`; subsequent rollback build/install | Median improved but top-left and global tail did not; intervention rejected and original sequence restored |
 | E-042 | 2026-08-29 | Posture-departure shadow monitor | Static path audit, compile, gaze-focused JVM tests, APK assembly/install | Posture features/profile, additive calibration CSV fields, live assessment and lightweight summaries | Evidence-only; no coordinate/filter/mapper/AOI/scaffold effect; physical run pending |
+| E-043 | 2026-08-29 | Posture-departure shadow control | Galaxy A56; telemetry-OFF calibration/immediate test, quadratic mapper, no correction | `calibration_session_20260829_230755.json`, `gaze_accuracy_session_20260829_230917_726.json` | 145/145 assessed; flags confined to two relatively accurate final targets; shadow status not validated for downstream gating |
 
 ## Confirmed Findings
 
@@ -438,6 +451,7 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 19. The next isolated intervention changes only acquisition context: point 0 is preceded by an unrecorded fixation at the same upper-left coordinate while all recorded points and gaze math remain unchanged.
 20. Upper-left pre-acquisition did not improve live top-left error and worsened the live maximum, 2-D median, held-out tail, and drift despite improving the vertical median; the original sequence was restored.
 21. Posture-departure monitoring is implemented only as a shadow side channel. It does not compensate coordinates or exclude samples, and older calibrations correctly produce `UNAVAILABLE` until a posture-aware calibration is accepted (E-042).
+22. The first physical posture-shadow control had complete availability but its only flagged targets were relatively accurate; posture status must remain evidence-only rather than an AOI/scaffold reliability gate (E-043).
 17. The next controlled intervention uses a predictable row-major order and a fixed-center contracting hit-marker, with temporal/spatial order coupling documented as a tradeoff (E-031).
 18. Conversation-era commits did not change mapper/filter mathematics, and the replicated ON/OFF control found no material FPS, sample-count, or accuracy recovery with detailed telemetry disabled (E-032, E-034).
 19. Detailed telemetry materially increases artifact size, but it is not supported as the cause of the observed gaze-accuracy regression; keep it OFF for leaner routine runs rather than as an accuracy fix (E-034).

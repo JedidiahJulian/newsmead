@@ -12,7 +12,7 @@ This is the concise entrypoint for continuing NewsMead gaze-accuracy work in a n
 - Prior diagnostics commit: `79a5ceb` (`feat(gaze): add diagnostic telemetry and session logging`)
 - Broad initial diagnosis: complete
 - Required final control before estimator changes: complete; telemetry OFF did not materially restore FPS or accuracy
-- Current decision gate: per-eye mapping and upper-left pre-acquisition both failed prospectively; the direct quadratic mapper and original single-practice sequence remain active. The posture-departure shadow build is installed and awaits one on-device calibration/test evaluation.
+- Current decision gate: per-eye mapping and upper-left pre-acquisition both failed prospectively; the direct quadratic mapper and original single-practice sequence remain active. The posture-departure control is evaluated and remains shadow-only because its flags did not identify inaccurate targets.
 - Do not stage or commit unrelated dirty files or `diagnostics-local/` without explicit approval.
 
 ## Project goal and constraints
@@ -64,9 +64,9 @@ On August 29, per-eye aggregate persistence, legacy CSV compatibility, a small e
 
 ## Exact next action
 
-Collect one ordinary telemetry-OFF 16-point calibration and its immediate telemetry-OFF nine-point test on the installed posture-shadow build. The new full calibration is necessary because older 4/8-column calibration files contain no posture reference; it is not a request to repeat the rejected upper-left intervention. Use labels `posture-shadow_tel-off_cal_1` and `posture-shadow_tel-off_test_1`.
+The posture-shadow control is complete. Keep its fields for research evidence, but do not suppress coordinates or connect the flag to AOI/RSI/scaffold decisions: all 145 live samples were assessable, but the 31 flagged samples occurred only at bottom-center/right, whose vertical errors (1.58/0.66 lines) were substantially smaller than the unflagged 4.20-line maximum. This run therefore does not validate the binary flag as an unreliability gate.
 
-Evaluate only whether the shadow flag is available and behaves plausibly: report the per-point and whole-run in-range/out-of-range counts and which posture axes triggered, alongside the unchanged accuracy metrics. Do not suppress samples, change AOI/scaffold decisions, or claim an accuracy improvement from this run. If the shadow flag is mostly unavailable or marks ordinary calibration-like posture as out of range, adjust the monitoring envelope before any downstream use.
+The next proposed accuracy intervention should address feature geometry rather than fit more coefficients to confounded calibration data: replace each eye's single image-axis eyelid fraction with a roll-aware eye-local iris displacement normalized by eye width, while retaining two-eye averaging, the quadratic mapper, median/One Euro filters, target, timing, and sequence. Implement it as one reversible, explicitly logged candidate and evaluate one telemetry-OFF calibration/immediate-test pair; do not combine it with posture compensation or target changes.
 
 Keep `QUADRATIC_AVERAGE` active. Do not deploy another mapper from the retrospective ranking alone, and do not add the previously proposed automatic high-drift rejection: the later 201 px-drift quadratic calibration produced the best live result (0.76-line median, 1.04-line maximum), showing that such a rule would reject a demonstrably useful calibration.
 
@@ -120,6 +120,7 @@ Offline result:
 ## Verification state
 
 - The posture-shadow implementation compiles, all gaze-focused JVM tests pass, the debug APK assembles, and it is installed on the A56 with app data preserved (the 52-test full suite has the unrelated existing `FirebaseTest.createAccount` failure).
+- E-043 completed the physical shadow evaluation: 145/145 samples assessable, 31/145 flagged only on horizontal face-centre departure, and no relationship between the flag and worse target error. Calibration/test FPS was 20.65/20.40, above the immediately preceding E-041 OFF pair's 18.62/18.07, so no shadow-monitor throughput regression is indicated.
 - The August 29 quadratic-default rollback also passed all 46 gaze-focused JVM tests, assembled successfully, and was installed over the existing app with data preserved.
 - The subsequent quadratic-only upper-left-practice build passed the focused gaze tests, assembled successfully, and was installed with existing data preserved.
 - After E-041, the original one-practice sequence was rebuilt, passed the focused gaze tests, assembled, and installed with diagnostic data preserved.
