@@ -4,8 +4,6 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Matrix
 import android.hardware.camera2.CaptureRequest
 import android.os.SystemClock
 import android.util.Log
@@ -79,6 +77,7 @@ class MediaPipeRawGazeSource(
     private var inFlightSubmittedElapsedNs = 0L
     private var inFlightRotationDegrees = 0
     private val lifecycleLock = Any()
+    private val frameTransformer = ReusableArgbFrameTransformer()
 
     override fun setOnRawGaze(listener: LocalRawGazeSource.OnRawGaze) {
         this.listener = listener
@@ -247,7 +246,7 @@ class MediaPipeRawGazeSource(
             inFlightCaptureTimestampNs = imageProxy.imageInfo.timestamp
             inFlightSubmittedElapsedNs = SystemClock.elapsedRealtimeNanos()
             inFlightRotationDegrees = imageProxy.imageInfo.rotationDegrees
-            val bitmap = imageProxy.toBitmapArgb8888().uprightMirrored(inFlightRotationDegrees)
+            val bitmap = frameTransformer.copyAndTransform(imageProxy, inFlightRotationDegrees)
             val mpImage = BitmapImageBuilder(bitmap).build()
             landmarker.detectAsync(mpImage, nextTimestampMs())
         } catch (e: Exception) {
@@ -457,22 +456,6 @@ class MediaPipeRawGazeSource(
         }
         return blinkState
     }
-    private fun ImageProxy.toBitmapArgb8888(): Bitmap {
-        val plane = planes[0]
-        val buffer = plane.buffer
-        buffer.rewind()
-
-        val pixelStride = plane.pixelStride.coerceAtLeast(1)
-        val rowStride = plane.rowStride
-        val rowWidth = rowStride / pixelStride
-        val rowBitmap = Bitmap.createBitmap(rowWidth, height, Bitmap.Config.ARGB_8888)
-        rowBitmap.copyPixelsFromBuffer(buffer)
-        return if (rowWidth == width) {
-            rowBitmap
-        } else {
-            Bitmap.createBitmap(rowBitmap, 0, 0, width, height)
-        }
-    }
     private fun emitBlinkStats() {
         blinkStatsListener?.onBlinkStats(
             LocalRawGazeSource.BlinkStats(
@@ -505,15 +488,6 @@ class MediaPipeRawGazeSource(
             }
         }
         lastResultTimeMs = now
-    }
-
-    /** Rotate upright and mirror horizontally for the front camera (selfie view). */
-    private fun Bitmap.uprightMirrored(rotationDegrees: Int): Bitmap {
-        val matrix = Matrix().apply {
-            postRotate(rotationDegrees.toFloat())
-            postScale(-1f, 1f) // front camera: mirror horizontally
-        }
-        return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
     }
 
     private fun hasCameraPermission(): Boolean =
