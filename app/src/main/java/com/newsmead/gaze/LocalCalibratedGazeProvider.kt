@@ -64,11 +64,11 @@ class LocalCalibratedGazeProvider(
     override fun start(owner: LifecycleOwner) {
         started = true
         refreshSourceDiagnostics()
-        rawSource.setOnRawGaze { gazeX, gazeY, timestampMs ->
-            val mx = medianX.filter(gazeX)
-            val my = medianY.filter(gazeY)
-            val fx = smoothX.filter(mx, timestampMs)
-            val fy = smoothY.filter(my, timestampMs)
+        rawSource.setOnRawGaze { sample ->
+            val mx = medianX.filter(sample.gazeX)
+            val my = medianY.filter(sample.gazeY)
+            val fx = smoothX.filter(mx, sample.timestampMs)
+            val fy = smoothY.filter(my, sample.timestampMs)
             val screen = mapper.map(fx, fy)
             val corrected = correction?.apply(screen[0], screen[1]) ?: screen
             // Diagnostic: pair the raw feature with the mapped px so a persistent
@@ -82,7 +82,7 @@ class LocalCalibratedGazeProvider(
                     String.format(
                         Locale.US,
                         "raw=(%.4f, %.4f) filt=(%.4f, %.4f) -> screen=(%.0f, %.0f)%s",
-                        gazeX, gazeY, fx, fy, corrected[0], corrected[1],
+                        sample.gazeX, sample.gazeY, fx, fy, corrected[0], corrected[1],
                         if (correction != null) " [drift-corrected]" else "",
                     ),
                 )
@@ -91,10 +91,10 @@ class LocalCalibratedGazeProvider(
                 PipelineDiagnostics(
                     source = latestSourceDiagnostics?.takeIf {
                         it.outcome == LocalRawGazeSource.DiagnosticOutcome.EMITTED &&
-                            it.gazeX == gazeX && it.gazeY == gazeY
+                            it.gazeX == sample.gazeX && it.gazeY == sample.gazeY
                     },
-                    rawX = gazeX,
-                    rawY = gazeY,
+                    rawX = sample.gazeX,
+                    rawY = sample.gazeY,
                     medianX = mx,
                     medianY = my,
                     filteredX = fx,
@@ -104,7 +104,7 @@ class LocalCalibratedGazeProvider(
                     outputX = corrected[0],
                     outputY = corrected[1],
                     correctionActive = correction != null,
-                    outputTimestampMs = timestampMs,
+                    outputTimestampMs = sample.timestampMs,
                 ),
             )
             onGaze?.onGaze(corrected[0], corrected[1])

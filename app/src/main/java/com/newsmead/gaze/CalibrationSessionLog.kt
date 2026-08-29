@@ -49,6 +49,9 @@ class CalibrationSessionLog(
         root.put("density_dpi", densityDpi)
         root.put("order_seed", orderSeed)
         root.put("order_mode", orderMode)
+        root.put("practice_target_count", 1)
+        root.put("upper_left_practice_before_first_fit", false)
+        root.put("requested_mapping_mode", MAPPING_MODE)
         root.put("camera_frames_retained", false)
         root.put(
             "processing_path",
@@ -78,6 +81,10 @@ class CalibrationSessionLog(
         noFace: Long,
         featureX: Float,
         featureY: Float,
+        eye1X: Float,
+        eye1Y: Float,
+        eye2X: Float,
+        eye2Y: Float,
         dispersionX: Float,
         dispersionY: Float,
         fpsSummary: FpsSummary?,
@@ -101,6 +108,7 @@ class CalibrationSessionLog(
                 put("blink_dropped", blinkDropped)
                 put("no_face", noFace)
                 put("aggregated_feature", featureArray(featureX, featureY))
+                put("aggregated_per_eye_feature", featureArray(eye1X, eye1Y, eye2X, eye2Y))
                 put("dispersion_feature", featureArray(dispersionX, dispersionY))
                 put("fps_summary", fpsSummary?.toJson() ?: JSONObject.NULL)
                 if (detailedTelemetryEnabled) {
@@ -145,6 +153,7 @@ class CalibrationSessionLog(
             "fit",
             JSONObject().apply {
                 put("points_used", pointsUsed)
+                put("active_mapping_mode", MAPPING_MODE)
                 putNum("loo_median_px", summary.medianErrorPx)
                 putNum("loo_p95_px", summary.p95ErrorPx)
                 putNum("loo_max_px", summary.maxErrorPx)
@@ -247,6 +256,13 @@ class CalibrationSessionLog(
             put(if (y.isFinite()) y.toDouble() else JSONObject.NULL)
         }
 
+    private fun featureArray(a: Float, b: Float, c: Float, d: Float): JSONArray =
+        JSONArray().apply {
+            listOf(a, b, c, d).forEach { value ->
+                put(if (value.isFinite()) value.toDouble() else JSONObject.NULL)
+            }
+        }
+
     private fun LocalRawGazeSource.Diagnostics.toJson(): JSONObject =
         JSONObject().apply {
             put("sequence", sequence)
@@ -298,5 +314,6 @@ class CalibrationSessionLog(
 
     companion object {
         private const val TAG = "GazeCalib"
+        private const val MAPPING_MODE = "quadratic_average"
     }
 }

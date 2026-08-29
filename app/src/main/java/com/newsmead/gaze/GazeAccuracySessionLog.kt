@@ -47,6 +47,7 @@ class GazeAccuracySessionLog(
         root.put("density_dpi", densityDpi)
         root.putNum("line_height_px", lineHeightPx)
         root.put("calibration_point_count", calibrationPointCount)
+        root.put("active_mapping_mode", MAPPING_MODE)
         root.put("drift_correction_active", activeCorrection != null)
         root.put("drift_correction", activeCorrection?.toJson() ?: JSONObject.NULL)
         root.put("camera_frames_retained", false)
@@ -232,5 +233,6 @@ class GazeAccuracySessionLog(
 
     companion object {
         private const val TAG = "GazeDiagnostics"
+        private const val MAPPING_MODE = "quadratic_average"
     }
 }

@@ -26,7 +26,15 @@ class FixationWindowFilter(
     private val minSamples: Int = MIN_SAMPLES,
 ) {
 
-    data class Sample(val timestampMs: Long, val x: Float, val y: Float)
+    data class Sample(
+        val timestampMs: Long,
+        val x: Float,
+        val y: Float,
+        val eye1X: Float = Float.NaN,
+        val eye1Y: Float = Float.NaN,
+        val eye2X: Float = Float.NaN,
+        val eye2Y: Float = Float.NaN,
+    )
 
     enum class Status { ACCEPTED, TOO_FEW_SAMPLES }
 
@@ -38,6 +46,10 @@ class FixationWindowFilter(
         val dispersionY: Float,
         val rawCount: Int,
         val retainedCount: Int,
+        val medianEye1X: Float = Float.NaN,
+        val medianEye1Y: Float = Float.NaN,
+        val medianEye2X: Float = Float.NaN,
+        val medianEye2Y: Float = Float.NaN,
     )
 
     fun filter(samples: List<Sample>): Result {
@@ -63,6 +75,8 @@ class FixationWindowFilter(
             median(retained.map { it.x }), median(retained.map { it.y }),
             standardDeviation(retained.map { it.x }), standardDeviation(retained.map { it.y }),
             rawCount, retained.size,
+            medianFinite(retained.map { it.eye1X }), medianFinite(retained.map { it.eye1Y }),
+            medianFinite(retained.map { it.eye2X }), medianFinite(retained.map { it.eye2Y }),
         )
     }
 
@@ -76,6 +90,8 @@ class FixationWindowFilter(
             median(samples.map { it.x }), median(samples.map { it.y }),
             standardDeviation(samples.map { it.x }), standardDeviation(samples.map { it.y }),
             rawCount, samples.size,
+            medianFinite(samples.map { it.eye1X }), medianFinite(samples.map { it.eye1Y }),
+            medianFinite(samples.map { it.eye2X }), medianFinite(samples.map { it.eye2Y }),
         )
     }
 
@@ -95,6 +111,11 @@ class FixationWindowFilter(
         val sorted = values.sorted()
         val n = sorted.size
         return if (n % 2 == 1) sorted[n / 2] else (sorted[n / 2 - 1] + sorted[n / 2]) / 2f
+    }
+
+    private fun medianFinite(values: List<Float>): Float {
+        val finite = values.filter { it.isFinite() }
+        return if (finite.isEmpty()) Float.NaN else median(finite)
     }
 
     private fun standardDeviation(values: List<Float>): Float {

@@ -325,7 +325,17 @@ class MediaPipeRawGazeSource(
             eyeOpenness = eyeOpenness,
         )
         emitBlinkStats()
-        listener?.onRawGaze(gaze[4], gaze[5], System.currentTimeMillis())
+        listener?.onRawGaze(
+            LocalRawGazeSource.Sample(
+                gazeX = gaze[4],
+                gazeY = gaze[5],
+                timestampMs = System.currentTimeMillis(),
+                eye1X = gaze[0],
+                eye1Y = gaze[1],
+                eye2X = gaze[2],
+                eye2Y = gaze[3],
+            ),
+        )
     }
     /** Average (normalized) position over a contiguous landmark range. */
     private fun center(lm: List<NormalizedLandmark>, range: IntRange): FloatArray {

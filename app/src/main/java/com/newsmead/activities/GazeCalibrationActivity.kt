@@ -132,7 +132,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private fun startRawGazeSource() {
         rawGazeSource?.stop()
         rawGazeSource = LocalGazeSources.create(this).also { source ->
-            source.setOnRawGaze { x, y, ts -> runOnUiThread { collector.onRawSample(x, y, ts) } }
+            source.setOnRawGaze { sample -> runOnUiThread { collector.onRawSample(sample) } }
             source.setOnFps { fps ->
                 runOnUiThread {
                     showFps(fps)
@@ -347,8 +347,16 @@ class GazeCalibrationActivity : AppCompatActivity() {
         when (pres.kind) {
             Kind.PRACTICE -> Unit
             Kind.FIT -> {
-                fitPairs[pres.gridIndex] =
-                    CalibrationSample(pres.point.x, pres.point.y, result.medianX, result.medianY)
+                fitPairs[pres.gridIndex] = CalibrationSample(
+                    pres.point.x,
+                    pres.point.y,
+                    result.medianX,
+                    result.medianY,
+                    result.medianEye1X,
+                    result.medianEye1Y,
+                    result.medianEye2X,
+                    result.medianEye2Y,
+                )
                 if (pres.gridIndex == driftGridIndex && driftFirst == null) {
                     driftFirst = floatArrayOf(result.medianX, result.medianY)
                 }
@@ -643,6 +651,10 @@ class GazeCalibrationActivity : AppCompatActivity() {
             noFace = noFace,
             featureX = result.medianX,
             featureY = result.medianY,
+            eye1X = result.medianEye1X,
+            eye1Y = result.medianEye1Y,
+            eye2X = result.medianEye2X,
+            eye2Y = result.medianEye2Y,
             dispersionX = result.dispersionX,
             dispersionY = result.dispersionY,
             fpsSummary = pointFps.snapshot(),

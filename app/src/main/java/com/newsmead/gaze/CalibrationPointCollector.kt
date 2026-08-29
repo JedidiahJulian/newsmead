@@ -30,9 +30,25 @@ class CalibrationPointCollector(
     private var onDone: ((FixationWindowFilter.Result) -> Unit)? = null
 
     /** Forward every raw gaze sample here; buffered only during the SAMPLE window. */
-    fun onRawSample(x: Float, y: Float, timestampMs: Long) {
-        if (collecting) buffer.add(FixationWindowFilter.Sample(timestampMs, x, y))
+    fun onRawSample(sample: LocalRawGazeSource.Sample) {
+        if (collecting) {
+            buffer.add(
+                FixationWindowFilter.Sample(
+                    timestampMs = sample.timestampMs,
+                    x = sample.gazeX,
+                    y = sample.gazeY,
+                    eye1X = sample.eye1X,
+                    eye1Y = sample.eye1Y,
+                    eye2X = sample.eye2X,
+                    eye2Y = sample.eye2Y,
+                ),
+            )
+        }
     }
+
+    /** Screen-space compatibility path used by the nine-point accuracy collector. */
+    fun onRawSample(x: Float, y: Float, timestampMs: Long) =
+        onRawSample(LocalRawGazeSource.Sample(x, y, timestampMs))
 
     /** Passive notification used to align diagnostic telemetry with SAMPLE only. */
     fun setOnSampleWindowChanged(listener: (Boolean) -> Unit) {

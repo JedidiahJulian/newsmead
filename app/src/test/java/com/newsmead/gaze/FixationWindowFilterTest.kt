@@ -45,6 +45,36 @@ class FixationWindowFilterTest {
     }
 
     @Test
+    fun aggregatesPerEyeFeaturesUsingTheSameRetainedSamples() {
+        val samples = steady(30, 0, 0.5f, 0.3f).map { sample ->
+            sample.copy(
+                eye1X = sample.x - 0.04f,
+                eye1Y = sample.y - 0.03f,
+                eye2X = sample.x + 0.04f,
+                eye2Y = sample.y + 0.03f,
+            )
+        }.toMutableList()
+        samples[15] = FixationWindowFilter.Sample(
+            timestampMs = 15 * 33L,
+            x = 0.9f,
+            y = 0.8f,
+            eye1X = 9f,
+            eye1Y = 9f,
+            eye2X = 9f,
+            eye2Y = 9f,
+        )
+
+        val result = filter.filter(samples)
+
+        assertEquals(FixationWindowFilter.Status.ACCEPTED, result.status)
+        assertEquals(25, result.retainedCount)
+        assertEquals(0.46f, result.medianEye1X, 0.005f)
+        assertEquals(0.27f, result.medianEye1Y, 0.005f)
+        assertEquals(0.54f, result.medianEye2X, 0.005f)
+        assertEquals(0.33f, result.medianEye2Y, 0.005f)
+    }
+
+    @Test
     fun tooFewSamples() {
         val result = filter.filter(steady(5, 0, 0.5f, 0.3f))
         assertEquals(FixationWindowFilter.Status.TOO_FEW_SAMPLES, result.status)

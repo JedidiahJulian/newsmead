@@ -8,8 +8,21 @@ import androidx.lifecycle.LifecycleOwner
  * calibration: gaze_x,gaze_y before screen mapping.
  */
 interface LocalRawGazeSource {
+    data class Sample(
+        val gazeX: Float,
+        val gazeY: Float,
+        val timestampMs: Long,
+        val eye1X: Float = Float.NaN,
+        val eye1Y: Float = Float.NaN,
+        val eye2X: Float = Float.NaN,
+        val eye2Y: Float = Float.NaN,
+    ) {
+        val hasPerEye: Boolean
+            get() = eye1X.isFinite() && eye1Y.isFinite() && eye2X.isFinite() && eye2Y.isFinite()
+    }
+
     fun interface OnRawGaze {
-        fun onRawGaze(gazeX: Float, gazeY: Float, timestampMs: Long)
+        fun onRawGaze(sample: Sample)
     }
 
     /** Optional monitor of the tracker's processing frame rate (results/sec). */
