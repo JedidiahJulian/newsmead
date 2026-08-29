@@ -129,7 +129,8 @@ class GazeOverlayView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         drawScaffold(canvas)
-        captionText?.let { canvas.drawText(it, 24f, height - dp(20f), captionPaint) }
+        // Above the article body, next to the FPS readout - never over the text.
+        captionText?.let { canvas.drawText(it, 24f, 104f, captionPaint) }
         if (!debugVisualsEnabled) return
         fpsText?.let { canvas.drawText(it, 24f, 60f, fpsPaint) }
         if (!hasPoint) return
@@ -227,17 +228,21 @@ class GazeOverlayView @JvmOverloads constructor(
     }
 
     private fun drawCue(canvas: Canvas, pointsUp: Boolean, y: Float) {
-        val centerX = (visibleTextRect.left - loc[0]).toFloat() + dp(22f)
-        val size = dp(13f)
+        // Sits in the margin beside the text column so it never covers the words.
+        // Narrow enough to fit the gutter, then made taller to stay readable.
+        val columnLeft = (visibleTextRect.left - loc[0]).toFloat()
+        val halfWidth = (columnLeft / 2f - dp(1f)).coerceIn(dp(4f), dp(9f))
+        val centerX = (columnLeft - columnLeft / 2f).coerceAtLeast(halfWidth + dp(1f))
+        val halfHeight = halfWidth * 1.6f
         cuePath.reset()
         if (pointsUp) {
-            cuePath.moveTo(centerX, y - size)
-            cuePath.lineTo(centerX - size, y + size)
-            cuePath.lineTo(centerX + size, y + size)
+            cuePath.moveTo(centerX, y - halfHeight)
+            cuePath.lineTo(centerX - halfWidth, y + halfHeight)
+            cuePath.lineTo(centerX + halfWidth, y + halfHeight)
         } else {
-            cuePath.moveTo(centerX, y + size)
-            cuePath.lineTo(centerX - size, y - size)
-            cuePath.lineTo(centerX + size, y - size)
+            cuePath.moveTo(centerX, y + halfHeight)
+            cuePath.lineTo(centerX - halfWidth, y - halfHeight)
+            cuePath.lineTo(centerX + halfWidth, y - halfHeight)
         }
         cuePath.close()
         setOpacity(reentryCuePaint, REENTRY_CUE_ALPHA)

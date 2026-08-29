@@ -151,7 +151,8 @@ The controller remembers the last line observed during low-instability reading.
 Loss evidence is recorded when gaze remains off text for at least 800 ms and
 returns at least two lines away from that anchor. If the smoothed index is also
 at least 2.5, the anchor line is emphasized. When it is outside the visible
-region, an up/down arrow indicates its direction.
+region, an up/down arrow indicates its direction. The arrow is drawn in the
+margin beside the text column, never over the words.
 
 The app never auto-scrolls during re-entry support because unexpected movement
 could further disorient the reader. A regression alone does not activate Level 4;
