@@ -312,6 +312,22 @@ suppress gaze coordinates, or affect AOI/RSI/scaffold decisions. It therefore ca
 reported as an accuracy improvement. Existing four/eight-column calibrations remain valid and
 produce `UNAVAILABLE` posture status until a normal new calibration supplies the extra fields.
 
+### 7.4 Reversible eye-local raw-feature candidate (added 2026-08-30)
+
+The prospective `eye_local_width_average_v1` mode projects each iris centre onto the
+aspect-correct corner-to-corner eye axis and its downward perpendicular, normalizing both
+displacements by eye width. This removes global image roll and avoids using a single moving
+upper/lower eyelid pair as the vertical denominator. The two per-eye values are still averaged
+to the same two-dimensional mapper input; the polynomial, regularization, filters, correction,
+sampling, targets, and order are unchanged.
+
+`raw_feature_mode` is written into both session-log types. An app-private
+`calibration_feature_mode.txt` sidecar is written only when calibration is accepted. Accuracy
+testing and article gaze refuse to start when the active raw mode does not match the saved
+calibration. A pre-sidecar calibration is conservatively identified as the original
+`eyelid_fraction_average` mode. This makes the intervention and rollback explicit rather than
+silently mapping incompatible feature coordinates.
+
 ---
 
 ## 8. Implementation notes

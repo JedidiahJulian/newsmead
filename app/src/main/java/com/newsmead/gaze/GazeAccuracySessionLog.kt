@@ -26,6 +26,7 @@ class GazeAccuracySessionLog(
     calibrationPointCount: Int,
     activeCorrection: DriftCorrection?,
     postureProfile: PostureProfile?,
+    rawFeatureMode: String,
 ) {
 
     private val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
@@ -49,6 +50,7 @@ class GazeAccuracySessionLog(
         root.putNum("line_height_px", lineHeightPx)
         root.put("calibration_point_count", calibrationPointCount)
         root.put("active_mapping_mode", MAPPING_MODE)
+        root.put("raw_feature_mode", rawFeatureMode)
         root.put("drift_correction_active", activeCorrection != null)
         root.put("drift_correction", activeCorrection?.toJson() ?: JSONObject.NULL)
         root.put("posture_shadow_mode", true)
@@ -57,7 +59,7 @@ class GazeAccuracySessionLog(
         root.put("camera_frames_retained", false)
         root.put(
             "processing_path",
-            "raw_average -> median_7 -> one_euro -> quadratic_mapper -> optional_affine_correction",
+            "$rawFeatureMode -> eye_average -> median_7 -> one_euro -> quadratic_mapper -> optional_affine_correction",
         )
         root.put("points", points)
         flush()

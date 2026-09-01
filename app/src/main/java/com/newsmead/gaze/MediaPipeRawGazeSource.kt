@@ -49,6 +49,7 @@ import kotlin.math.min
 class MediaPipeRawGazeSource(
     private val context: Context,
     private val modelAssetPath: String = MODEL_ASSET_PATH,
+    private val featureMode: RawGazeFeatureMode = RawGazeFeatureMode.EYE_LOCAL_WIDTH_AVERAGE_V1,
 ) : LocalRawGazeSource {
 
     private val appContext = context.applicationContext
@@ -209,7 +210,16 @@ class MediaPipeRawGazeSource(
 
         provider.unbindAll()
         provider.bindToLifecycle(owner, CameraSelector.DEFAULT_FRONT_CAMERA, analysis)
-        Log.i(TAG, String.format(Locale.US, "Local MediaPipe raw gaze source started; blinkClose=%.3f blinkOpen=%.3f", StudyConfig.GAZE_BLINK_CLOSE_THRESHOLD, StudyConfig.GAZE_BLINK_OPEN_THRESHOLD))
+        Log.i(
+            TAG,
+            String.format(
+                Locale.US,
+                "Local MediaPipe raw gaze source started; feature=%s blinkClose=%.3f blinkOpen=%.3f",
+                featureMode.logLabel,
+                StudyConfig.GAZE_BLINK_CLOSE_THRESHOLD,
+                StudyConfig.GAZE_BLINK_OPEN_THRESHOLD,
+            ),
+        )
     }
 
     private fun analyze(imageProxy: ImageProxy) {
@@ -292,7 +302,7 @@ class MediaPipeRawGazeSource(
 
         val leftIris = center(face, LEFT_IRIS)
         val rightIris = center(face, RIGHT_IRIS)
-        val gaze = computeGazeDetails(face, leftIris, rightIris)
+        val gaze = computeGazeDetails(face, leftIris, rightIris, input.width, input.height)
         val posture = computePosture(face, input.width, input.height)
 
         // Drop blink frames: during a blink the iris/eyelid landmarks are
@@ -395,17 +405,61 @@ class MediaPipeRawGazeSource(
         lm: List<NormalizedLandmark>,
         irisA: FloatArray,
         irisB: FloatArray,
+        frameWidth: Int,
+        frameHeight: Int,
     ): FloatArray {
         val eye1cx = (lm[EYE1_CORNER_A].x() + lm[EYE1_CORNER_B].x()) / 2f
         val (iris1, iris2) =
             if (abs(irisA[0] - eye1cx) <= abs(irisB[0] - eye1cx)) irisA to irisB else irisB to irisA
 
-        val h1 = frac(iris1[0], lm[EYE1_CORNER_A].x(), lm[EYE1_CORNER_B].x())
-        val v1 = frac(iris1[1], lm[EYE1_LID_TOP].y(), lm[EYE1_LID_BOTTOM].y())
-        val h2 = frac(iris2[0], lm[EYE2_CORNER_A].x(), lm[EYE2_CORNER_B].x())
-        val v2 = frac(iris2[1], lm[EYE2_LID_TOP].y(), lm[EYE2_LID_BOTTOM].y())
+        val (h1, v1, h2, v2) = when (featureMode) {
+            RawGazeFeatureMode.EYELID_FRACTION_AVERAGE -> floatArrayOf(
+                frac(iris1[0], lm[EYE1_CORNER_A].x(), lm[EYE1_CORNER_B].x()),
+                frac(iris1[1], lm[EYE1_LID_TOP].y(), lm[EYE1_LID_BOTTOM].y()),
+                frac(iris2[0], lm[EYE2_CORNER_A].x(), lm[EYE2_CORNER_B].x()),
+                frac(iris2[1], lm[EYE2_LID_TOP].y(), lm[EYE2_LID_BOTTOM].y()),
+            )
+            RawGazeFeatureMode.EYE_LOCAL_WIDTH_AVERAGE_V1 -> {
+                val eye1 = eyeLocalFeature(
+                    lm,
+                    iris1,
+                    EYE1_CORNER_A,
+                    EYE1_CORNER_B,
+                    frameWidth,
+                    frameHeight,
+                )
+                val eye2 = eyeLocalFeature(
+                    lm,
+                    iris2,
+                    EYE2_CORNER_A,
+                    EYE2_CORNER_B,
+                    frameWidth,
+                    frameHeight,
+                )
+                floatArrayOf(eye1.horizontal, eye1.vertical, eye2.horizontal, eye2.vertical)
+            }
+        }
         return floatArrayOf(h1, v1, h2, v2, (h1 + h2) / 2f, (v1 + v2) / 2f)
     }
+
+    private fun eyeLocalFeature(
+        lm: List<NormalizedLandmark>,
+        iris: FloatArray,
+        cornerA: Int,
+        cornerB: Int,
+        frameWidth: Int,
+        frameHeight: Int,
+    ): EyeLocalGazeGeometry.Feature = EyeLocalGazeGeometry.feature(
+        iris = EyeLocalGazeGeometry.Point(iris[0] * frameWidth, iris[1] * frameHeight),
+        cornerA = EyeLocalGazeGeometry.Point(
+            lm[cornerA].x() * frameWidth,
+            lm[cornerA].y() * frameHeight,
+        ),
+        cornerB = EyeLocalGazeGeometry.Point(
+            lm[cornerB].x() * frameWidth,
+            lm[cornerB].y() * frameHeight,
+        ),
+    )
 
     /** Fraction of [v] between bounds [a] and [b] (order-independent). */
     private fun frac(v: Float, a: Float, b: Float): Float {

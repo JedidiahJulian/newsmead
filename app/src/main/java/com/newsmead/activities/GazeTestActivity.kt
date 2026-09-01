@@ -128,6 +128,13 @@ class GazeTestActivity : AppCompatActivity() {
             binding.gatePanel.visibility = View.VISIBLE
             return
         }
+        if (!CalibrationStore.isCompatibleWithActiveFeatureMode(this)) {
+            binding.hintText.text = "This gaze build uses a new raw feature geometry. Run full calibration first."
+            binding.accuracyButton.visibility = View.GONE
+            binding.btnFullRecal.visibility = View.VISIBLE
+            binding.gatePanel.visibility = View.VISIBLE
+            return
+        }
         calibrationPointCount = samples.size
         postureProfile = PostureProfile.fromCalibration(samples)
         val mapper = try {
@@ -245,6 +252,7 @@ class GazeTestActivity : AppCompatActivity() {
             calibrationPointCount = calibrationPointCount,
             activeCorrection = activeCorrection,
             postureProfile = postureProfile,
+            rawFeatureMode = LocalGazeSources.ACTIVE_FEATURE_MODE.logLabel,
         )
         targets = computeTargets(w, h)
         observations.clear()

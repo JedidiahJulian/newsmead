@@ -380,6 +380,30 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 
 **Next inquiry:** Move to one reversible feature-geometry intervention that is participant-independent: a roll-aware eye-local iris displacement normalized by eye width, retaining two-eye averaging and every downstream mapper/filter/target/sequence component. Do not combine it with posture terms.
 
+### 2026-08-30 — Roll-aware eye-local raw-feature candidate implemented
+
+**Question:** Can a participant-independent eye-local coordinate improve the unstable vertical feature without adding calibration coefficients or fitting the participant's posture?
+
+**Action:** Added `eye_local_width_average_v1` as the active reversible raw-feature mode. For each eye, iris displacement is projected onto the corner-to-corner eye axis and its downward perpendicular in aspect-correct pixel coordinates, then normalized by eye width. The two eyes are still averaged before the unchanged live filters and quadratic mapper. The original `eyelid_fraction_average` path remains available as the rollback enum value. Calibration and accuracy logs now persist `raw_feature_mode`, and `calibration_feature_mode.txt` prevents candidate/rollback builds from silently consuming an incompatible saved calibration.
+
+**Evidence:** E-044. Pure JVM tests confirm that the candidate output is invariant to translation, uniform scale, roll, and MediaPipe eye-corner index order. All gaze-focused JVM tests and `assembleDebug` pass, and the APK was installed over the A56 app with data/logs preserved. Static diff confirms no changes to `GazeMapper`, `FixationWindowFilter`, `MedianFilter`, `OneEuroFilter`, `DriftCorrection`, or `CalibrationView`; calibration target order/timing is unchanged. Physical calibration/test evidence remains pending.
+
+**Interpretation:** Unlike the failed per-eye mapper, this is a bounded raw-geometry intervention with the same two-dimensional averaged input and the same six-coefficient quadratic mapper. It is not personalized to the researcher: eye-width normalization and eye-local rotation use the same computation for every face. Improvement is not claimed until one prospective pair succeeds.
+
+**Next inquiry:** Collect one telemetry-OFF calibration labelled `eye-local-v1_tel-off_cal_1` and immediate telemetry-OFF test labelled `eye-local-v1_tel-off_test_1`; do not apply affine correction. Compare live median/max and regional vertical errors with the restored quadratic and posture-shadow runs, then keep or roll back the feature mode.
+
+### 2026-09-01 — Eye-local raw-feature candidate succeeds prospectively
+
+**Question:** Does the roll-aware eye-local feature improve vertical accuracy in a prospective run, and does the result repeat rather than depend on one favorable calibration?
+
+**Action:** Collected two complete telemetry-OFF calibration/immediate-test pairs. The first (`eye-local-v1_tel-off_cal_1` / `eye-local-v1_tel-off_test_1`) is the pre-specified primary result; the separately calibrated `_cal_2` / `_test_2` pair is treated only as a repeatability check. All four artifacts embed `raw_feature_mode: eye_local_width_average_v1`, `quadratic_average`, and no affine correction.
+
+**Evidence:** E-045. The primary calibration produced 0.85-line LOO median, 1.84-line LOO max, 0.82-line held-out median, and 1.31-line held-out max. Its live test produced 0.62-line vertical median and 2.07-line max, with 6/9 targets within 1.2 lines and 209/334 px 2-D median/max. The repeat calibration produced 0.73/1.76-line LOO median/max and 1.03/1.90-line held-out median/max; its live test produced 0.96/1.51-line median/max, 7/9 within 1.2, and 126/216 px 2-D median/max. FPS remained comparable at 18.68/20.50 and 19.53/19.29 for the two calibration/test pairs. The first run retained a systematic 108–226 px left bias, while the repeat's horizontal signs were mixed and smaller overall. The second run's affine leave-one-out estimate was 117 px versus its measured 126 px median, so applying it is not justified by a meaningful expected gain.
+
+**Interpretation:** The candidate passes the prospective keep decision. Both live medians and maxima improve over the preceding posture-shadow baseline (2.76/4.20 lines) and restored quadratic sanity run (1.35/2.58), and the improvement appears in calibration LOO, held-out, and live paths. This is strong within-device/participant evidence for retaining the geometry, not proof of cross-participant performance or direct reading compatibility. Remaining horizontal error may still limit word-level use. The posture shadow again failed as a quality proxy: 88.5% of samples were flagged in the accurate primary test and none in the similarly accurate repeat.
+
+**Next inquiry:** Stop repeating dot-grid runs for score selection. Keep the eye-local feature, leave posture shadow non-operative, and validate actual reading-line assignment plus word/line scaffold behavior. Only pursue a separate horizontal intervention if that direct validation shows the remaining horizontal error materially harms the intended reading measures.
+
 ## Evidence Registry
 
 | ID | Date | Evidence source | Conditions | Artifact or location | Notes |
@@ -427,6 +451,8 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 | E-041 | 2026-08-29 | Prospective upper-left-practice evaluation and rollback | Galaxy A56; telemetry OFF calibration/test, quadratic mapper, no affine correction | `calibration_session_20260829_220839.json`, `gaze_accuracy_session_20260829_221046_730.json`; subsequent rollback build/install | Median improved but top-left and global tail did not; intervention rejected and original sequence restored |
 | E-042 | 2026-08-29 | Posture-departure shadow monitor | Static path audit, compile, gaze-focused JVM tests, APK assembly/install | Posture features/profile, additive calibration CSV fields, live assessment and lightweight summaries | Evidence-only; no coordinate/filter/mapper/AOI/scaffold effect; physical run pending |
 | E-043 | 2026-08-29 | Posture-departure shadow control | Galaxy A56; telemetry-OFF calibration/immediate test, quadratic mapper, no correction | `calibration_session_20260829_230755.json`, `gaze_accuracy_session_20260829_230917_726.json` | 145/145 assessed; flags confined to two relatively accurate final targets; shadow status not validated for downstream gating |
+| E-044 | 2026-08-30 | Roll-aware eye-local raw-feature candidate | Static path audit, pure geometry/focused gaze JVM tests, APK assembly/install | `RawGazeFeatureMode.kt`, MediaPipe feature extraction, calibration-mode sidecar and explicit log field | Reversible raw geometry only; mapper/filter/target/sequence unchanged; evaluated in E-045 |
+| E-045 | 2026-09-01 | Prospective eye-local candidate evaluation | Galaxy A56; two telemetry-OFF calibration/immediate-test pairs; no correction | `calibration_session_20260901_191457.json`, `gaze_accuracy_session_20260901_191648_408.json`, `calibration_session_20260901_191802.json`, `gaze_accuracy_session_20260901_191926_612.json` | Vertical improvement repeats; candidate retained; remaining horizontal/read-context limits documented |
 
 ## Confirmed Findings
 
@@ -452,6 +478,8 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 20. Upper-left pre-acquisition did not improve live top-left error and worsened the live maximum, 2-D median, held-out tail, and drift despite improving the vertical median; the original sequence was restored.
 21. Posture-departure monitoring is implemented only as a shadow side channel. It does not compensate coordinates or exclude samples, and older calibrations correctly produce `UNAVAILABLE` until a posture-aware calibration is accepted (E-042).
 22. The first physical posture-shadow control had complete availability but its only flagged targets were relatively accurate; posture status must remain evidence-only rather than an AOI/scaffold reliability gate (E-043).
+23. The eye-local candidate changes only the two raw averaged iris features and is explicitly bound to its calibration mode; it has passed local invariance/compile tests but has no accuracy evidence until its prospective pair is collected (E-044).
+24. Two prospective eye-local pairs substantially improved vertical calibration and live accuracy, supporting retention on the A56; typical horizontal error remains too large to assume word-level compatibility without direct reading validation (E-045).
 17. The next controlled intervention uses a predictable row-major order and a fixed-center contracting hit-marker, with temporal/spatial order coupling documented as a tradeoff (E-031).
 18. Conversation-era commits did not change mapper/filter mathematics, and the replicated ON/OFF control found no material FPS, sample-count, or accuracy recovery with detailed telemetry disabled (E-032, E-034).
 19. Detailed telemetry materially increases artifact size, but it is not supported as the cause of the observed gaze-accuracy regression; keep it OFF for leaner routine runs rather than as an accuracy fix (E-034).

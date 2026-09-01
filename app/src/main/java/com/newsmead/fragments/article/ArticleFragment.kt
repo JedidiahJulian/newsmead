@@ -810,6 +810,15 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             Toast.makeText(context, "Run gaze calibration before live reading", Toast.LENGTH_LONG).show()
             return
         }
+        if (!CalibrationStore.isCompatibleWithActiveFeatureMode(requireContext())) {
+            Log.w("GazeAOI", "Calibration raw-feature mode does not match active tracker")
+            Toast.makeText(
+                context,
+                "Gaze tracker changed; run gaze calibration before live reading",
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
         try {
             val rawSource = LocalGazeSources.create(requireContext())
             rawSource.setOnFps { fps -> activity?.runOnUiThread { gazeOverlay?.setFps(fps) } }

@@ -63,19 +63,25 @@ object CalibrationStore {
 
     private const val TAG = "GazeCalib"
     private const val CSV_NAME = "calibration_16point.csv"
+    private const val FEATURE_MODE_NAME = "calibration_feature_mode.txt"
     private const val LEGACY_WIFI_CSV_NAME = "calibration_wifi.csv"
     private const val DRIFT_CSV_NAME = "drift_correction.csv"
     private const val DRIFT_HEADER = "cx0,cx1,cx2,cy0,cy1,cy2,timestamp_ms,pre_median_px,post_median_px"
     private const val RECAL_LOG_NAME = "recalibration_log.csv"
     private const val RECAL_LOG_HEADER = "timestamp_ms,outcome,pre_median_px,post_median_px"
 
-    fun save(context: Context, samples: List<CalibrationSample>) {
+    fun save(
+        context: Context,
+        samples: List<CalibrationSample>,
+        featureMode: RawGazeFeatureMode = LocalGazeSources.ACTIVE_FEATURE_MODE,
+    ) {
         val file = File(context.filesDir, CSV_NAME)
         val text = buildString {
             append(CalibrationCsvCodec.HEADER).append('\n')
             samples.forEach { append(CalibrationCsvCodec.encode(it)).append('\n') }
         }
         file.writeText(text)
+        File(context.filesDir, FEATURE_MODE_NAME).writeText(featureMode.logLabel + '\n')
         Log.i(TAG, "Wrote ${samples.size} calibration pairs to ${file.absolutePath}")
         // A fresh full calibration supersedes any drift correction fitted on top
         // of the previous one.
@@ -88,6 +94,23 @@ object CalibrationStore {
         if (!file.exists()) return null
         return read(file)
     }
+
+    /**
+     * Calibrations created before feature-mode metadata used the original
+     * eyelid-fraction geometry. This prevents a candidate build or rollback
+     * from silently mapping incompatible raw features through the saved fit.
+     */
+    fun loadFeatureMode(context: Context): String {
+        val file = File(context.filesDir, FEATURE_MODE_NAME)
+        return if (file.exists()) {
+            file.readText().trim().ifEmpty { RawGazeFeatureMode.EYELID_FRACTION_AVERAGE.logLabel }
+        } else {
+            RawGazeFeatureMode.EYELID_FRACTION_AVERAGE.logLabel
+        }
+    }
+
+    fun isCompatibleWithActiveFeatureMode(context: Context): Boolean =
+        loadFeatureMode(context) == LocalGazeSources.ACTIVE_FEATURE_MODE.logLabel
 
     // --- Drift correction (fitted from the gaze accuracy test) --------------
 

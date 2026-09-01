@@ -261,6 +261,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
             densityDpi = resources.displayMetrics.densityDpi,
             orderSeed = FIXED_ORDER_SEED,
             orderMode = "fixed_row_major",
+            rawFeatureMode = LocalGazeSources.ACTIVE_FEATURE_MODE.logLabel,
         )
         logFinished = false
         Log.i(TAG, "Sequence started: mode=fixed_row_major drift=$driftGridIndex order=$order")
@@ -531,7 +532,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
 
     private fun acceptCalibration() {
         val ordered = fitPairs.entries.sortedBy { it.key }.map { it.value }
-        CalibrationStore.save(this, ordered)
+        CalibrationStore.save(this, ordered, LocalGazeSources.ACTIVE_FEATURE_MODE)
         sessionLog?.finish("accepted", runFps.snapshot())
         logFinished = true
         binding.gatePanel.visibility = View.GONE

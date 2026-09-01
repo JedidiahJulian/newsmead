@@ -25,6 +25,7 @@ class CalibrationSessionLog(
     densityDpi: Int,
     orderSeed: Long,
     orderMode: String,
+    rawFeatureMode: String,
 ) {
 
     private val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
@@ -52,10 +53,11 @@ class CalibrationSessionLog(
         root.put("practice_target_count", 1)
         root.put("upper_left_practice_before_first_fit", false)
         root.put("requested_mapping_mode", MAPPING_MODE)
+        root.put("raw_feature_mode", rawFeatureMode)
         root.put("camera_frames_retained", false)
         root.put(
             "processing_path",
-            "raw_eye_features -> eye_average -> fixation_window_aggregate -> quadratic_mapper_for_validation",
+            "$rawFeatureMode -> eye_average -> fixation_window_aggregate -> quadratic_mapper_for_validation",
         )
         root.put("points", points)
         root.put("validation", validation)

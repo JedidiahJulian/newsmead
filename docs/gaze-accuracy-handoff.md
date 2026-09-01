@@ -6,13 +6,13 @@ This is the concise entrypoint for continuing NewsMead gaze-accuracy work in a n
 
 ## Current checkpoint
 
-- Date: 2026-08-29
+- Date: 2026-09-01
 - Branch: `gaze-pipeline-improvements`
-- Latest committed gaze checkpoint: `aad7b53` (`docs(gaze): record accuracy intervention outcomes`)
+- Latest committed gaze checkpoint: `d75907c` (`docs(gaze): record posture shadow control`); the successful eye-local candidate is currently uncommitted
 - Prior diagnostics commit: `79a5ceb` (`feat(gaze): add diagnostic telemetry and session logging`)
 - Broad initial diagnosis: complete
 - Required final control before estimator changes: complete; telemetry OFF did not materially restore FPS or accuracy
-- Current decision gate: per-eye mapping and upper-left pre-acquisition both failed prospectively; the direct quadratic mapper and original single-practice sequence remain active. The posture-departure control is evaluated and remains shadow-only because its flags did not identify inaccurate targets.
+- Current decision gate: the roll-aware eye-local raw-feature candidate succeeded in two prospective calibration/test pairs and is retained. Posture-departure status remains evidence-only.
 - Do not stage or commit unrelated dirty files or `diagnostics-local/` without explicit approval.
 
 ## Project goal and constraints
@@ -66,7 +66,11 @@ On August 29, per-eye aggregate persistence, legacy CSV compatibility, a small e
 
 The posture-shadow control is complete. Keep its fields for research evidence, but do not suppress coordinates or connect the flag to AOI/RSI/scaffold decisions: all 145 live samples were assessable, but the 31 flagged samples occurred only at bottom-center/right, whose vertical errors (1.58/0.66 lines) were substantially smaller than the unflagged 4.20-line maximum. This run therefore does not validate the binary flag as an unreliability gate.
 
-The next proposed accuracy intervention should address feature geometry rather than fit more coefficients to confounded calibration data: replace each eye's single image-axis eyelid fraction with a roll-aware eye-local iris displacement normalized by eye width, while retaining two-eye averaging, the quadratic mapper, median/One Euro filters, target, timing, and sequence. Implement it as one reversible, explicitly logged candidate and evaluate one telemetry-OFF calibration/immediate-test pair; do not combine it with posture compensation or target changes.
+Keep `eye_local_width_average_v1` active. Do not request another calibration-grid repeat merely to improve the score, and do not apply the second run's affine candidate: its leave-one-out 2-D estimate is 117 px versus the measured 126 px median, a marginal expected gain with mixed regional horizontal signs.
+
+The next validation should test the retained candidate in the actual reading context, especially line assignment and whether the remaining 126–209 px typical horizontal error is acceptable for the intended word/line scaffolds. The two grid runs establish a substantial and repeated vertical improvement but do not by themselves establish reading-line or word-level compatibility.
+
+The candidate replaces each eye's single image-axis eyelid fraction with a roll-aware eye-local iris displacement normalized by eye width. It retains two-eye averaging, the quadratic mapper, median/One Euro filters, target, timing, sequence, posture shadow channel, and affine layer. Logs identify `raw_feature_mode: eye_local_width_average_v1`; a sidecar binds the saved calibration to that mode so rollback cannot silently use incompatible features.
 
 Keep `QUADRATIC_AVERAGE` active. Do not deploy another mapper from the retrospective ranking alone, and do not add the previously proposed automatic high-drift rejection: the later 201 px-drift quadratic calibration produced the best live result (0.76-line median, 1.04-line maximum), showing that such a rule would reject a demonstrably useful calibration.
 
@@ -121,6 +125,8 @@ Offline result:
 
 - The posture-shadow implementation compiles, all gaze-focused JVM tests pass, the debug APK assembles, and it is installed on the A56 with app data preserved (the 52-test full suite has the unrelated existing `FirebaseTest.createAccount` failure).
 - E-043 completed the physical shadow evaluation: 145/145 samples assessable, 31/145 flagged only on horizontal face-centre departure, and no relationship between the flag and worse target error. Calibration/test FPS was 20.65/20.40, above the immediately preceding E-041 OFF pair's 18.62/18.07, so no shadow-monitor throughput regression is indicated.
+- E-044 implements the eye-local candidate behind one mode switch. Pure geometry tests verify translation/scale/roll and eye-corner-order invariance; all gaze-focused JVM tests and APK assembly pass, and the APK is installed on the A56 with app data preserved. Static diff confirms the mapper, fixation filter, temporal filters, target view, correction, and sequence are unchanged.
+- E-045 prospectively validates the candidate. Primary live vertical median/max was 0.62/2.07 lines and the independent repeat was 0.96/1.51, versus 2.76/4.20 in the preceding posture-shadow baseline and 1.35/2.58 in the restored quadratic sanity run. Candidate calibration LOO medians were 0.85/0.73 lines and held-out medians were 0.82/1.03. Retain the candidate, while documenting remaining horizontal bias and the lack of direct reading validation.
 - The August 29 quadratic-default rollback also passed all 46 gaze-focused JVM tests, assembled successfully, and was installed over the existing app with data preserved.
 - The subsequent quadratic-only upper-left-practice build passed the focused gaze tests, assembled successfully, and was installed with existing data preserved.
 - After E-041, the original one-practice sequence was rebuilt, passed the focused gaze tests, assembled, and installed with diagnostic data preserved.
