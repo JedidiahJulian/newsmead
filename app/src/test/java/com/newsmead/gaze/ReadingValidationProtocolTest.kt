@@ -1,0 +1,68 @@
+package com.newsmead.gaze
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class ReadingValidationProtocolTest {
+    private val lines = (0 until 20).map { line ->
+        ReadingValidationLine(
+            lineIndex = line,
+            words = listOf(
+                ReadingValidationWord("left$line", line * 30, line * 30 + 6),
+                ReadingValidationWord("middle$line", line * 30 + 8, line * 30 + 16),
+                ReadingValidationWord("right$line", line * 30 + 18, line * 30 + 25),
+            ),
+        )
+    }
+
+    @Test
+    fun variantsUseSameTargetsButDifferentFirstRegion() {
+        val a = ReadingValidationProtocol.localizationCheckpoints(lines, "A")
+        val b = ReadingValidationProtocol.localizationCheckpoints(lines, "B")
+
+        assertEquals(ReadingValidationProtocol.REQUIRED_CHECKPOINTS, a.size)
+        assertEquals(a.map { it.id }.toSet(), b.map { it.id }.toSet())
+        assertNotEquals(a.first().region, b.first().region)
+        assertEquals("top_left", a.first().region)
+    }
+
+    @Test
+    fun localizationMetricsUseOnlyMeasurementSamples() {
+        val checkpoint = ReadingValidationProtocol.localizationCheckpoints(lines, "A").first()
+        val metrics = ReadingValidationMetrics()
+        metrics.record(
+            checkpoint,
+            TextTarget(
+                checkpoint.lineIndex,
+                lines.size,
+                checkpoint.targetStart,
+                checkpoint.targetEnd,
+            ),
+        )
+        metrics.record(checkpoint, TextTarget(checkpoint.lineIndex + 1, lines.size))
+        metrics.record(checkpoint, TextTarget.INVALID)
+
+        val summary = metrics.summary()
+        assertEquals(3, summary.measuredSamples)
+        assertEquals(2, summary.validSamples)
+        assertEquals(1.0 / 3.0, summary.exactLineAccuracy, 0.0001)
+        assertEquals(2.0 / 3.0, summary.withinOneLineAccuracy, 0.0001)
+        assertEquals(1.0 / 3.0, summary.exactWordAccuracy, 0.0001)
+        assertTrue(summary.p95AbsoluteLineError!! >= summary.medianAbsoluteLineError!!)
+    }
+
+    @Test
+    fun guidedLineTargetsHaveNoWordAccuracyDenominator() {
+        val checkpoint = ReadingValidationProtocol.lineReadingCheckpoints(lines, "A").first()
+        val metrics = ReadingValidationMetrics()
+        metrics.record(checkpoint, TextTarget(checkpoint.lineIndex, lines.size))
+
+        val summary = metrics.summary()
+        assertEquals(ReadingValidationCheckpoint.TargetKind.LINE_READING, checkpoint.targetKind)
+        assertEquals(1.0, summary.exactLineAccuracy, 0.0001)
+        assertEquals(0, summary.wordMeasuredSamples)
+        assertEquals(0.0, summary.exactWordAccuracy, 0.0001)
+    }
+}

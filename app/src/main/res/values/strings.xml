@@ -15,6 +15,13 @@
     <string name="calib_practice_label">Practice point - follow the dot</string>
     <string name="calib_drift_label">One more - look at the dot</string>
     <string name="calib_validation_progress">Accuracy check - point %1$d / %2$d</string>
+    <string name="reading_validation_title">Structured reading validation</string>
+    <string name="reading_validation_start">Start validation</string>
+    <string name="reading_validation_stop">Stop validation</string>
+    <string name="reading_vertical_alignment_target">Vertical alignment reference target</string>
+    <string name="reading_validation_menu">Gaze diagnostics</string>
+    <string name="reading_validation_accuracy_option">Nine-point accuracy check</string>
+    <string name="reading_validation_reading_option">Structured reading validation</string>
     <string name="calib_excluded_notice">Point skipped after 2 tries</string>
     <string name="calib_gate_title">Calibration quality check</string>
     <string name="calib_gate_summary">Fit error (leave-one-out):\nmedian %1$.0f px (%2$.1f lines) - P95 %3$.0f px (%4$.1f lines)\nValidation (%5$d pts): median %6$.0f px (%7$.1f lines)\nExcluded points: %8$d</string>

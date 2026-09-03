@@ -44,6 +44,9 @@
         <activity
             android:name=".activities.GazeTestActivity"
             android:exported="true" />
+        <activity
+            android:name=".activities.ReadingValidationActivity"
+            android:exported="true" />
     </application>
 
 </manifest>

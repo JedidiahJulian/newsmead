@@ -217,6 +217,16 @@ pathway, but the run correctly remained at NONE because confidence was below
 0.65. Keep gaze on article text for a complete 10-second rolling window before
 classifying that outcome as a controller or renderer failure.
 
+### Known-target reading accuracy gate
+
+Adaptive testing is paused until the dedicated `ReadingValidationActivity`
+demonstrates acceptable known-target accuracy. It contains an unscored visible-
+dot preview, an identical three-reference vertical-alignment OFF/ON control,
+eight highlighted-word fixations, and six highlighted physical-line reading
+trials. It contains no adaptive or unconstrained-reading phase and makes no
+claim about inferred free-reading intent. See
+`docs/reading-validation-protocol.md` for the procedure and interpretation gate.
+
 ## Observed Gaze-Pipeline Limitation
 
 Physical-device testing on 2026-07-20 showed that a scaffold could trigger while

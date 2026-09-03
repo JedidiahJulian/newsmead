@@ -9,6 +9,8 @@ This directory contains the supporting documentation for the NewsMead gaze-drive
 - [Gaze Diagnostics Log](gaze-diagnostics-log.md): evidence log for the exploratory investigation of the current gaze system before proposing changes.
 - [Reading Stability Index](reading-stability-index.md): RSI logs, event meanings, score interpretation, and caveats.
 - [Adaptive Visual Scaffolding](adaptive-visual-scaffolding.md): four manuscript levels, adaptive controller, validation modes, logs, and outstanding research decisions.
+- [Known-Target Reading Accuracy Protocol](reading-validation-protocol.md): visible-dot setup preview, guarded vertical-alignment OFF/ON control, and highlighted word/physical-line accuracy trials with synchronized persistent records.
+- [Offset-Only Reading Replay](gaze-offset-replay.md): completed six-recording comparison, geometry verification, regional failures, and limits of the retrospective evidence; no new app correction retained.
 - [Gaze Model Replacement Plan](gaze-model-replacement.md): candidate backends, evidence, benchmark-capture requirements, fair-comparison protocol, and replacement acceptance gate.
 - [Manuscript-Implementation Alignment](manuscript-implementation-alignment.md): living insertion guide for keeping manuscript wording, formulas, methods, limitations, and implementation decisions synchronized.
 - [Session Setup](session-setup.md): device/session setup notes for running the prototype.

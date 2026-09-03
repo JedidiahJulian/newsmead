@@ -18,6 +18,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.appcompat.app.AlertDialog
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -26,6 +27,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
 import com.newsmead.R
 import com.newsmead.activities.GazeTestActivity
+import com.newsmead.activities.ReadingValidationActivity
 import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.DatabaseHelper
@@ -264,7 +266,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
 
         binding.btnRunGazeTest.setOnClickListener {
-            launchGazeTest()
+            showGazeDiagnosticsMenu()
         }
 
         // Show more button to show more articles from source
@@ -504,6 +506,33 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         gazeProvider?.stop()
         gazeProvider = null
         startActivity(Intent(requireContext(), GazeTestActivity::class.java))
+    }
+
+    private fun showGazeDiagnosticsMenu() {
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.reading_validation_menu)
+            .setItems(
+                arrayOf(
+                    getString(R.string.reading_validation_accuracy_option),
+                    getString(R.string.reading_validation_reading_option),
+                ),
+            ) { _, which ->
+                when (which) {
+                    0 -> launchGazeTest()
+                    1 -> launchReadingValidation()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Stop live gaze, run the controlled reading protocol, then rebind on return. */
+    private fun launchReadingValidation() {
+        launchedCalibration = true
+        rsiInferencer?.flush()
+        gazeProvider?.stop()
+        gazeProvider = null
+        startActivity(Intent(requireContext(), ReadingValidationActivity::class.java))
     }
 
     private fun restartLiveGazeAfterCalibration() {

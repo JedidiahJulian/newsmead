@@ -6,13 +6,13 @@ This is the concise entrypoint for continuing NewsMead gaze-accuracy work in a n
 
 ## Current checkpoint
 
-- Date: 2026-09-01
+- Date: 2026-09-03
 - Branch: `gaze-pipeline-improvements`
-- Latest committed gaze checkpoint: `d75907c` (`docs(gaze): record posture shadow control`); the successful eye-local candidate is currently uncommitted
+- Latest committed gaze checkpoint: `469cb86` (`feat(gaze): adopt eye-local iris geometry`); reading validation and its experimental correction remain uncommitted
 - Prior diagnostics commit: `79a5ceb` (`feat(gaze): add diagnostic telemetry and session logging`)
 - Broad initial diagnosis: complete
 - Required final control before estimator changes: complete; telemetry OFF did not materially restore FPS or accuracy
-- Current decision gate: the roll-aware eye-local raw-feature candidate succeeded in two prospective calibration/test pairs and is retained. Posture-departure status remains evidence-only.
+- Current decision gate: retain the eye-local baseline. Three prospective OFF/ON pairs did not establish a reliable benefit for the session-global vertical gain/bias layer (E-048/E-049). The fixed reference-median offset-only replay is complete (E-050): some large aggregate improvements, but major regional failures remain. Neither global correction is retained for normal reading. No new phone run or runtime change is requested by the completed offline task. Posture shadow remains evidence-only and adaptive validation remains blocked.
 - Do not stage or commit unrelated dirty files or `diagnostics-local/` without explicit approval.
 
 ## Project goal and constraints
@@ -63,6 +63,14 @@ No uncommitted gaze source changes remained immediately after `e214eb6`; unrelat
 On August 29, per-eye aggregate persistence, legacy CSV compatibility, a small experimental per-eye mapper, and an offline candidate-comparison tool were added locally. After two prospective failures, the experimental mapper/factory/live filters were removed completely. Aggregate-only per-eye calibration evidence and the offline tool remain for research; the live runtime is again the direct quadratic mapper.
 
 ## Exact next action
+
+The user requested replication after the adverse first pair rather than treating one failure as conclusive. The two additional pairs are complete (E-049): `vert_on_2` then `vert_off_2`, and `vertical_off_4` then `vertical_on_4`. All four embedded modes are correct; the `_4` labels are valid and must not be renamed or excluded. All ON fits passed. The second ON run improved guided reading but harmed word targeting; the last ON run harmed both on its own samples. The method is not consistently beneficial, rather than universally ineffective.
+
+The authorized next step, a fixed offset-only offline comparison, is also complete (E-050). Each recording uses only its own three reference medians to calculate `offset = median(target_y - observed_y)`, with gain 1 and no sweep/cap/shrinkage. On identical samples, overall within-one-line accuracy changes 75.3->74.8, 70.5->53.7, 71.6->88.7, 83.1->68.6, 48.9->86.5, and 59.2->70.5 percent in chronological order. However, top-left within-one-line falls from 100% to 0% in three recordings, including one with a large aggregate gain. Do not deploy this simple offset or tune it against these answers.
+
+Exact next action: review `docs/gaze-offset-replay.md` and its aggregate JSON, keep experimental correction OFF for ordinary use, and select a bounded calibration-to-reading transfer investigation before another intervention. No new phone run is needed for the completed comparison. The offline task did not alter Android code, install a build, remove the experiment, stage, or commit anything. Do not claim exact-word replay: v4 lacks glyph geometry. The analyzer recovers actual 133 px interior line spacing instead of the nominal logged 137 px and reproduces all 10,580 measured base/effective assignments; the original Android exact-line scores remain valid.
+
+The notes below summarize earlier controls and are not requests to repeat them. Current decisions above supersede their historical next steps.
 
 The posture-shadow control is complete. Keep its fields for research evidence, but do not suppress coordinates or connect the flag to AOI/RSI/scaffold decisions: all 145 live samples were assessable, but the 31 flagged samples occurred only at bottom-center/right, whose vertical errors (1.58/0.66 lines) were substantially smaller than the unflagged 4.20-line maximum. This run therefore does not validate the binary flag as an unreliability gate.
 
@@ -116,10 +124,11 @@ Offline result:
 ## Files to read next
 
 1. `docs/gaze-accuracy-handoff.md` — this checkpoint.
-2. `docs/gaze-diagnostics-log.md` — full evidence registry E-001 through E-036.
+2. `docs/gaze-diagnostics-log.md` — evidence registry through E-050, including replication and offline replay.
 3. `docs/calibration-design.md` — current calibration and validation behavior.
 4. `docs/build-context.md` — architecture history and deployment constraints; note that portions are historical.
 5. `docs/gaze-model-replacement.md` — alternatives/proposal context only; do not jump to model replacement before completing the telemetry control and regression comparison.
+6. `docs/gaze-offset-replay.md` — completed offset-only analysis, geometry checks, limitations, and machine-readable aggregate results.
 
 ## Verification state
 
