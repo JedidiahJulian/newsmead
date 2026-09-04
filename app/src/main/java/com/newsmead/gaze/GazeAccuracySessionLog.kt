@@ -21,6 +21,8 @@ class GazeAccuracySessionLog(
     telemetryMode: DetailedTelemetryMode,
     screenWidthPx: Int,
     screenHeightPx: Int,
+    targetViewFrame: GazeCoordinateFrame,
+    calibrationFingerprint: String?,
     densityDpi: Int,
     lineHeightPx: Float,
     calibrationPointCount: Int,
@@ -39,6 +41,10 @@ class GazeAccuracySessionLog(
     init {
         root.put("session_id", "gaze_accuracy_session_$stamp")
         root.put("run_label", runLabel)
+        root.put("coordinate_space", GazeCoordinateContract.SPACE)
+        root.put("coordinate_schema_version", 1)
+        root.put("target_view_frame", targetViewFrame.toJson())
+        root.put("calibration_sha256", calibrationFingerprint ?: JSONObject.NULL)
         root.put("telemetry_mode", telemetryMode.logLabel)
         root.put("detailed_telemetry_enabled", detailedTelemetryEnabled)
         root.put("timestamp_start", isoTimestamp())
@@ -71,6 +77,9 @@ class GazeAccuracySessionLog(
         attempt: Int,
         targetX: Float,
         targetY: Float,
+        targetViewFrame: GazeCoordinateFrame,
+        localTargetX: Float,
+        localTargetY: Float,
         result: FixationWindowFilter.Result,
         fpsSummary: FpsSummary?,
         pipelineSamples: List<LocalCalibratedGazeProvider.PipelineDiagnostics>,
@@ -88,6 +97,9 @@ class GazeAccuracySessionLog(
                 put("status", result.status.name)
                 putNum("target_x", targetX)
                 putNum("target_y", targetY)
+                put("target_view_frame", targetViewFrame.toJson())
+                putNum("target_x_local_px", localTargetX)
+                putNum("target_y_local_px", localTargetY)
                 putNum("estimate_x", result.medianX)
                 putNum("estimate_y", result.medianY)
                 putNum("dx_px", dx)

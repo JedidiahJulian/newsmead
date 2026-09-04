@@ -833,19 +833,16 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
      * touch input; missing/invalid calibration must be fixed before reading.
      */
     private fun attachLiveGaze(onGaze: GazeProvider.OnGaze) {
+        val issue = CalibrationStore.compatibilityIssue(requireContext())
+        if (issue != null) {
+            Log.w("GazeAOI", issue)
+            Toast.makeText(context, "Run a fresh 16-point calibration before live reading", Toast.LENGTH_LONG).show()
+            return
+        }
         val samples = CalibrationStore.load(requireContext())
         if (samples == null) {
             Log.w("GazeAOI", "No calibration found; live gaze not started")
             Toast.makeText(context, "Run gaze calibration before live reading", Toast.LENGTH_LONG).show()
-            return
-        }
-        if (!CalibrationStore.isCompatibleWithActiveFeatureMode(requireContext())) {
-            Log.w("GazeAOI", "Calibration raw-feature mode does not match active tracker")
-            Toast.makeText(
-                context,
-                "Gaze tracker changed; run gaze calibration before live reading",
-                Toast.LENGTH_LONG,
-            ).show()
             return
         }
         try {

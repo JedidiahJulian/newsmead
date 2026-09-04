@@ -14,8 +14,8 @@ The design below revises the *procedure*; these integration facts are fixed:
 
 - **Capture:** `GazeCalibrationActivity` + `CalibrationView`; raw features arrive via
   `LocalRawGazeSource.onRawGaze(gazeX, gazeY, timestampMs)` from `MediaPipeRawGazeSource`.
-- **Raw feature is NOT pixels.** It is a normalized iris-in-eye ratio (~0–1 per axis:
-  corner-relative horizontal, eyelid-relative vertical, both eyes averaged). All pre-fit
+- **Raw feature is NOT pixels.** The active `eye_local_width_average_v1` mode uses
+  eye-axis iris displacement normalized by eye width, both eyes averaged (§7.4). All pre-fit
   thresholds (dispersion, drift) are therefore in **feature units**, convertible to px only
   after the mapper is fitted.
 - **Fit input:** `calibration_16point.csv` (the first four mapper columns remain
@@ -25,16 +25,24 @@ The design below revises the *procedure*; these integration facts are fixed:
   boundary gradient, capped at 1.5 z — the earlier hard clamp froze gaze at a drifting
   "invisible barrier") → `LocalCalibratedGazeProvider` → `ArticleFragment`. The current
   12-column schema appends per-eye and passive posture evidence; the mapper continues to use
-  only the original averaged gaze pair. The codec remains compatible with legacy four- and
-  eight-column files. The CSV still contains only fit points (never the drift-repeat or
+  only the original averaged gaze pair. The codec can parse legacy four- and
+  eight-column files, but runtime loading also requires current feature and coordinate
+  metadata (§7.5). The CSV still contains only fit points (never the drift-repeat or
   validation points). The session log (§6) is additive.
 - **Frame-level rejection that already exists:** no-face frames and blink frames
   (eye-aspect-ratio hysteresis, `StudyConfig.GAZE_BLINK_*`). MediaPipe Tasks FaceLandmarker
   exposes **no per-frame landmark confidence** — rejection is: no-face, blink, dispersion (§4).
   Nothing else is available.
-- **Throughput reality:** ~20–30 fps from the source *before* blink/no-face drops. All
-  sampling windows are **adaptive** (collect until target sample count or timeout), not
-  fixed-duration.
+- **Throughput reality:** approximately 15–30 fps from the source *before* blink/no-face
+  drops across the two tested phones. The SM-G991B reaches about 30 only without a detected
+  face and about 15–17 while running the 478-point landmark path (E-056). Sampling windows
+  are **adaptive** (collect until target sample count or timeout), not fixed-duration. A
+  temporary 64x64 two-eye CPU benchmark was computationally feasible on the A56 (E-057),
+  but it is not active: lightweight eye-ROI acquisition, full-screen feature compatibility,
+  accuracy, and end-to-end cross-device throughput remain required gates.
+- **FPS reporting cadence:** inference and raw-gaze delivery still run on every accepted
+  result, but the on-screen/lightweight FPS callback is capped at four updates per second.
+  This removes redundant UI/log work without changing samples, estimator output, or timing.
 - `GazeMapper` requires ≥6 points; `GazeTestActivity` (3×3 benchmark, px/cm conversion via
   DisplayMetrics) remains the independent accuracy test.
 
@@ -309,8 +317,8 @@ classified `IN_RANGE`, `OUT_OF_RANGE`, or `UNAVAILABLE` and summarized in diagno
 This classification is deliberately **shadow only** during evaluation. It does not enter the
 quadratic feature vector, alter median/One Euro filtering, change the affine drift layer,
 suppress gaze coordinates, or affect AOI/RSI/scaffold decisions. It therefore cannot be
-reported as an accuracy improvement. Existing four/eight-column calibrations remain valid and
-produce `UNAVAILABLE` posture status until a normal new calibration supplies the extra fields.
+reported as an accuracy improvement. Four/eight-column samples produce `UNAVAILABLE` posture
+status; runtime calibration compatibility is additionally governed by §7.4 and §7.5.
 
 ### 7.4 Reversible eye-local raw-feature candidate (added 2026-08-30)
 
@@ -329,6 +337,34 @@ calibration. A pre-sidecar calibration is conservatively identified as the origi
 silently mapping incompatible feature coordinates.
 
 ---
+
+### 7.5 Screen-coordinate contract (2026-09-03)
+
+The coordinate audit confirmed that an immersive window need not begin at screen `(0,0)`.
+Targets continue to be drawn at the unchanged local grid positions. Each presentation records
+the target view's measured `getLocationOnScreen()` origin and converts the target using
+`screen = local + origin`. Saved fit pairs, held-out scoring, nine-point errors and affine
+observations all use these screen coordinates. Screen gaze is converted back into the drawing
+view's local coordinates only when rendering. A changed origin/size between capture start and
+completion aborts that pass instead of accepting mixed coordinates.
+
+`CalibrationStore.saveScreenCalibration()` writes `calibration_coordinates.txt` only when a
+fresh calibration is accepted. Its `screen_px_v1` marker is bound by SHA256 to the CSV contents
+and raw-feature mode. Missing, unknown, or mismatched metadata prevents runtime use and prompts
+a fresh full calibration; old files and diagnostic logs are not migrated, relabelled or deleted.
+Drift correction has its own coordinate marker bound to both its contents and the calibration
+CSV. A normal accepted full calibration still clears the superseded active drift correction.
+
+Calibration and nine-point logs distinguish physical `screen_px` from `target_view_frame`
+(screen origin plus local width/height); each point retains local and screen targets and the
+measured frame. Accepted calibration logs include `saved_calibration_sha256`; live test logs
+include `calibration_sha256`. Reading schema v5 adds the same coordinate identifier/hash and
+root/viewport/text frame records, without changing protocol v4 timing, targets or parameters.
+
+`getGlobalVisibleRect()` is root-local. AOI clipping, overlay clipping and reading-reference
+placement add the root view's screen origin before combining it with screen gaze. No status-bar
+height or participant-derived offset is hard-coded. This corrects coordinate meaning; it is not
+a new mapper and is not proof of improved reading accuracy. See `gaze-coordinate-audit.md`.
 
 ## 8. Implementation notes
 

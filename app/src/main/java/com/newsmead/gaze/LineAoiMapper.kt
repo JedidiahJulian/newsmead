@@ -25,7 +25,7 @@ class LineAoiMapper(private val textView: TextView) {
     /** @return the 0-based line index under [screenY], or -1 if outside the text. */
     fun lineAt(screenY: Float): Int {
         val layout = textView.layout ?: return -1
-        if (!textView.getGlobalVisibleRect(visibleRect) ||
+        if (!textView.getVisibleRectOnScreen(visibleRect, loc) ||
             screenY < visibleRect.top || screenY >= visibleRect.bottom
         ) return -1
         textView.getLocationOnScreen(loc)

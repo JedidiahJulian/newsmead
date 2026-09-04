@@ -466,6 +466,246 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 
 **Next inquiry:** No new phone run for this candidate. Preserve the baseline and both experimental results; choose a bounded calibration-to-reading transfer investigation before the next intervention. No runtime removal or replacement was performed by this offline task.
 
+### 2026-09-03 — Fixed vertical-only mapper screen worsens calibration tails
+
+**Question:** Would removing horizontal-input dependence from predicted y reduce regional error, without changing the retained eye-local feature, x mapping, filters, or post-map correction?
+
+**Action:** Compared exactly the deployed six-term y polynomial and a three-term `1 + zy + zy^2` candidate, both ridge 1 with unpenalized intercept, fold-local population standardization/std floor 1e-6, Android Float boundaries, and the current 2.5-z tanh boundary-gradient extension. Included all 11 complete accepted eye-local calibrations on the phone (September 1–3), including earlier UI-development calibrations and the accepted September 3 01:12 calibration replaced before reading. Fit only the 16 saved aggregates; score 16 leave-one-out predictions and five separate held-out targets. No ridge sweep, reading-answer fit, outcome-based exclusion, or runtime intervention. Raw device payloads stayed in memory; only derived errors and provenance were saved.
+
+**Evidence:** E-051. Baseline predictions reproduce all 176 LOO x/y residual pairs and 55 held-out x/y prediction pairs exactly (462 scalar components; maximum delta 0 px). Candidate x is unchanged. Its LOO maximum worsens in 11/11 sessions; held-out maximum worsens in 8/11 and improves in three; no session improves both. The median session LOO maximum rises 193.0->322.3 px and held-out maximum 155.9->202.5 px. LOO medians improve in 4/11 and held-out medians in 6/11, showing why median-only selection is insufficient. In the calibration preceding `accuracy_v3`, top-left improves 177.6->4.1 px but row 3/column 1 worsens 144.9->331.9 px. In the latest calibration, held-out maximum improves while top-left worsens 45.3->234.9 px. All pointwise signed results, source hashes, and limitations are in `gaze-vertical-mapper-screen.md` and its aggregate JSON. Twelve new synthetic tests and eleven existing replay tests pass.
+
+**Interpretation:** Keep the current mapper; do not deploy this vertical-only candidate. Horizontal terms may be compensating for cross-axis eye geometry, not merely introducing harmful coupling, but the physical cause is not established. This closes a fixed candidate across repeated sessions, not all possible mapper improvements. These are calibration-aggregate errors from one participant/device, not live reading replay, population validation, or exact-line/word accuracy. P95 nearest-rank equals maximum with 16/five points.
+
+**Next inquiry:** Shift attention to upstream eye measurements: audit eye-local projection/normalization and available evidence for why vertical feature separation changes from calibration to reading. Do not ask for another run for the failed candidate, sweep parameters against these answers, add fixed-sequence posture coefficients, or change runtime without a specific new proposal. No Android source, build/install, calibration, git staging, or commit action occurred in this offline task; the user separately committed the preceding reading checkpoint as `ef8946f`.
+
+### 2026-09-03 — Eye-path audit confirms missing calibration screen-origin conversion
+
+**Question:** Do calibration and reading use different eye measurements, or does an implementation mismatch explain part of their transfer error?
+
+**Action:** Traced shared camera/eye-local extraction, calibration aggregation, live filtering, storage, nine-point scoring, and reading AOI/overlay coordinates. Re-read all 11 eye-local calibration aggregates in memory and matched remaining gaze-only debug samples to the two latest completed reading logs. After explicit user approval, briefly opened only the idle calibration screen for read-only window/view inspection, then closed it without pressing Start. No calibration/test was collected, and no raw payload or camera image was archived.
+
+**Evidence:** E-052. Calibration and reading use the same raw feature source. Both eyes' row-median vertical features rise top-to-bottom in all 11 calibrations; averaged row spans are 0.0526–0.0671. The latest reading pair has 59/61 matched measured debug probes across all 14 targets each, generally close raw/filtered medians but occasional differences up to 0.0055/0.0091, so sparse evidence does not rule out all filtering effects. The physical display is 1080x2340, but the calibration window frame is `[0,101][1080,2340]`, with root and CalibrationView at local `(0,0)` sized 1080x2239. Code stores local target coordinates without adding the measured view origin; reading consumes mapper output as full-screen coordinates. For the inspected layout, a center target at screen y=1220.5 is saved as y=1119.5. All 11 prior calibration logs record the same view dimensions, but omit origin metadata. The nine-point test also scores local targets, masking this mismatch when its inset matches calibration. The remaining MainActivity window has frame `[0,0][1080,2340]`. After closing calibration, the saved CSV remains float32-equal to the latest September 3 21:00 calibration's 16 FIT pairs; the feature sidecar is unchanged and no newer calibration file exists. Full evidence and API references are in `gaze-coordinate-audit.md`.
+
+**Interpretation:** This is a real coordinate-contract defect, not evidence for a new personalized offset or an estimator replacement. On this layout it omits a 101-px translation (about 0.76 actual reading line pitches), which can affect AOI assignment but cannot alone explain opposite top/bottom signs or larger regional failures. Correct coordinates can also expose compensating estimator errors, so do not guarantee accuracy gains. Prior grid results remain local-space evidence; reading results describe the app actually tested, now with this limitation documented. Earlier raw-range interpretations (E-046) must account for physical target positions and the omitted origin before attributing differences to eye geometry. No old result is discarded or silently relabelled. The calibration-only mapper screen (E-051) remains a comparison within a common target space.
+
+**Next inquiry:** With separate implementation approval, make stored/validated calibration targets true screen coordinates using measured view origins, update nine-point scoring/affine targets and local drawing, version coordinate compatibility, and normalize visible rectangles into screen space for AOI/overlay/reference use. Do not hard-code 101 px or silently migrate legacy files with unknown origins. Preserve eye features, mapper formula, filters, camera, physical target pattern, and timing. Verify layout conversions before another ordinary fresh calibration and existing OFF reading test. No runtime fix, build/install, staging, or commit occurred during this audit.
+
+### 2026-09-03 — Approved screen-coordinate repair (E-053)
+
+The user approved implementation after E-052. Calibration targets are converted from unchanged
+local drawing positions using the measured view origin. Saved FIT pairs, held-out validation,
+nine-point scoring and affine observations all use screen pixels. Gaze drawing subtracts its
+own view origin; AOI/overlay clipping and reading references normalize root-local visible
+rectangles into screen space. No 101-px constant, fitted offset, new eye feature, mapper formula,
+filter, camera or calibration-sequence change is included.
+
+Calibration coordinate metadata (`screen_px_v1`) is hash-bound to CSV contents and raw-feature
+mode. Incompatible legacy files are preserved but refused, with a fresh-calibration prompt.
+Drift metadata is also bound to the matching calibration. Logs retain measured origins, local
+and screen targets, physical display dimensions and calibration hashes; reading log schema 5
+retains protocol 4. Captures whose start/end view frames differ cannot be saved/applied.
+
+Verification: 67 gaze JVM tests and all four Android storage/layout tests pass; debug app and
+test APK assemble and are installed. The initial locked-phone layout attempt failed with
+`NoActivityResumedException`; after unlocking, the full four-test rerun passed in 2.052 seconds.
+The calibration frame is `(0,101,1080,2239)`, display `1080x2340`, converted center `(540,1220.5)`.
+Reading's root is `(0,0)` and its idle visible viewport is `[0,259][1080,1632]`. An inset fixture
+at screen `(91,272)` validates visible-rectangle conversion, line/word AOIs before/after 165 px
+scrolling, and both dot views' screen-to-local drawing. The actual accuracy screen displays the
+fresh-calibration warning with only Full recalibration available; it was closed without Start.
+All 105 existing gaze/calibration artifacts retain their pre-install SHA256 hashes after final
+installation and testing. Test saves use only temporary cache directories, never participant
+files. The real calibration was not replaced, no participant run was collected, and nothing
+was staged or committed. This is an implementation checkpoint, not accuracy evidence.
+
+Next: a user-performed fresh telemetry-OFF full
+calibration and existing alignment-OFF reading test (`coords_v1_tel-off_cal_1`,
+`coords_v1_off_reading_1`). Keep older results; do not silently rescore them or revive the
+unsupported global corrections based on this repair alone.
+
+### 2026-09-04 — Screen-coordinate repair evaluated twice on the Galaxy A56 (E-054)
+
+**Question:** After E-053, does a fresh screen-coordinate calibration transfer to the existing
+known-target reading test, and is the result repeatable enough to support a reading-accuracy
+claim?
+
+**Action:** Collected two separate telemetry-OFF 16-point calibration plus immediate
+alignment-OFF reading pairs on the Galaxy A56. Pair 1 is
+`coords_v1_tel-off_cal_1` / `coords_v1_off_reading_1`; pair 2 is
+`coords_v1_tel-off_cal_2` / `coords_v1_off_reading_2`. Both calibrations were accepted and both
+14-checkpoint reading sessions completed. The logs embed `screen_px_v1`,
+`eye_local_width_average_v1`, `quadratic_average`, no nine-point affine correction, no reading
+vertical alignment, and calibration-content hashes that link each reading run to its immediately
+preceding calibration. All seven archived files are retained under
+`diagnostics-local/2026-09-04/coords-v1-a56/`; nothing was renamed, overwritten, staged, or
+committed.
+
+**Evidence:** Pair 1 calibration averaged 20.28 FPS, had 0.51/2.77-line LOO median/max,
+2.59/5.08-line held-out median/max, and 332 px high drift. Its reading run measured 861 samples,
+91.8% valid output, 9.1% exact-line and 36.5% within-one-line accuracy, 0% exact-word accuracy,
+11.3%/26.9% guided exact/within-one accuracy, and 2/4-line median/P95 absolute error. Measured
+reading FPS was 18.40 median and 15.45 at P05. Pair 2 calibration averaged 20.17 FPS, had
+0.40/1.60-line LOO median/max, 0.55/1.28-line held-out median/max, and 45.6 px non-high drift.
+Its reading run measured 875 samples with 100% valid output, 36.0% exact-line and 85.4%
+within-one-line accuracy, 13.1% exact-word accuracy, 45.5%/95.0% guided exact/within-one
+accuracy, and 1/2-line median/P95 absolute error. Measured reading FPS was 18.54 median and
+15.44 at P05.
+
+**Interpretation:** Pair 2 is the strongest current post-repair A56 reference, but pair 1 must
+remain included. The large same-build spread means the coordinate repair is operational and can
+support a strong run, but it does not by itself establish repeatable exact-line or word accuracy.
+The repair must not be credited with all of pair 2's improvement, and neither pair may be
+discarded during later FPS work. Together they define the preserved pre-performance-change
+accuracy baseline.
+
+**Next inquiry:** A second-device run was planned to test cross-device behavior, using a fresh
+device-specific calibration and the same build. E-055 supersedes that immediate action because
+the second device exposed a performance-readiness failure before an official accuracy run began.
+
+### 2026-09-04 — Second-device accuracy run paused for FPS and thermal readiness (E-055)
+
+**Question:** Is the current build operationally comparable on the second Android phone before
+collecting cross-device accuracy evidence?
+
+**Action:** Connected a Samsung SM-G991B by USB and verified `com.newsmead` version 0.2. The
+installed base APK SHA256 exactly matched the preserved local tested APK:
+`ce6b064588921049156ab4cc063c7c2bd225be11a9a3a90b979932ff234d356f`. Read-only logcat
+inspection confirmed the GPU delegate and a 640x480 CameraX analysis frame rotated 270 degrees.
+Before calibration, the user observed approximately 16 FPS with substantial visible lag. ADB
+reported Battery Saver off, Android thermal status 3 (severe), 41.3 C skin, 45.0 C application
+processor, and 39.5 C battery. No official second-phone calibration or reading accuracy run was
+started or accepted for this comparison.
+
+**Evidence:** The second phone ran the intended APK, GPU path, and 640x480 input, so the observed
+lag is not explained by installing the wrong build, CPU-delegate fallback, or silent low-resolution
+negotiation. Static inspection shows that the camera is requested at exactly 30 FPS while results
+arrive more slowly; each accepted RGBA frame is copied and CPU-rotated/mirrored before asynchronous
+GPU inference, while busy frames are dropped. The closest historical lower-resolution and current
+640x480 sessions are not a controlled resolution-only comparison: apparent median/tail changes are
+smaller than or entangled with known session variability and later eye-feature changes. A specific
+accuracy gain from 640x480 is therefore unproven.
+
+**Interpretation:** The hot-device observation alone cannot separate pre-existing heat from heat
+caused by NewsMead, and it does not estimate cool-device steady-state FPS. It is nevertheless a
+valid readiness failure: cross-device accuracy collected while the UI visibly lags and Android is
+severely throttling would confound device generalization with runtime performance. Do not label the
+aborted observation as accuracy evidence and do not ask the user to manage an elaborate cooling
+ritual as the product solution.
+
+**Next inquiry:** Pause new accuracy interventions and cross-device accuracy collection. Profile
+and implement a bounded performance-only change first, prioritizing avoidable frame conversion,
+copy, UI, and logging work. Preserve the active eye-local estimator, quadratic mapper, temporal
+filters, 640x480 request during the first optimization pass, calibration target/order/timing, and
+reading protocol. Verify source-output equivalence and tests before a short performance check on
+both phones. Reconsider adaptive or lower analysis resolution only if optimized 640x480 remains
+unsustainable; do not claim a resolution accuracy benefit without a controlled comparison.
+
+### 2026-09-04 — Bounded 640x480 performance profile and first pass (E-056)
+
+**Question:** Can avoidable conversion and per-frame callback work recover operational face-visible
+throughput on the SM-G991B without changing resolution or gaze/calibration behavior?
+
+**Action:** Measured a cool-start calibration-screen baseline without pressing Start. Before the
+baseline Android reported thermal status 1, 38.7 C application processor, 37.1 C skin, and 36.6 C
+battery. With a face visible, twelve successive MediaPipe log samples ranged from 14.0 to 15.5 FPS.
+The NewsMead process used approximately one CPU core. Android frame rendering remained healthy:
+13/588 frames were janky (2.21%), the UI median was 5 ms and P95 was 10 ms. During the short run the
+phone rose to thermal status 2, 51.4 C application processor, 41.8 C skin, and 38.6 C battery.
+
+A local ART trace and static call-path inspection showed CameraX converting to RGBA, followed by a
+reusable 1.2 MB bitmap copy and CPU draw for rotation/mirroring before packet submission. The ART
+trace's instrumented interval was only 81.6 ms, so it is supporting call-path evidence rather than a
+reliable end-to-end time allocation; asynchronous native face inference is not ranked by that trace.
+Three temporary no-calibration comparisons were then evaluated: dense RGBA camera-buffer submission
+at 640x480, the same direct path at 320x240, and the proven bitmap/640x480 path with MediaPipe's CPU
+delegate. The direct path failed source-equivalence review because the result coordinate convention
+changed the derived openness geometry, so it was rejected independently of speed. The lower input
+and CPU delegate were also rejected for failing to recover throughput. All temporary source changes
+were removed. The only retained runtime change throttles the FPS display/lightweight FPS logger from
+every result to four callbacks per second; it cannot affect raw gaze, mapping, filtering, targets,
+order, timing, or the reading protocol.
+
+**Verification:** The final restored source passes all 67 gaze-focused JVM tests and the debug APK
+assembles. The final APK SHA256 is
+`e8d86c7631b1e121143b40abefb901dc50a33a0a274ef57eb050d1a01fb233fa`; `adb install -r` preserved
+app data, and the installed base APK hash matches exactly. At 640x480/GPU, no-face results reached
+approximately 30 FPS while face-visible results remained approximately 15.3-17.1 FPS. The temporary
+320x240/direct run remained approximately 14.5-18.3 FPS, and the temporary 640x480/CPU run remained
+approximately 14.9-17.5 FPS. A later unmatched thermal snapshot was status 1, 45.8 C application
+processor, 39.3 C skin, and 36.8 C battery. No calibration or accuracy run was started or saved.
+
+The final restored APK was then installed on the A56 with data preserved and its installed hash also
+matched exactly. Starting at thermal status 0, its 79 face-visible FPS samples had median 18.5, mean
+18.73, P05 15.2, P95 24.2, and range 14.9-27.2. The process used approximately 118% of one CPU core.
+After the short screen, Android still reported thermal status 0, with current 34.3 C application
+processor and 32.7 C skin. The app was closed without pressing Start; no calibration or accuracy run
+was created.
+
+**Interpretation:** Avoidable app-side copy/callback work is not the main cause. The sharp difference
+between no-face and face-visible throughput, plus the lack of meaningful recovery at 320x240 or on
+the CPU delegate, isolates the remaining limit primarily to the 478-point face-landmark workload.
+The direct-buffer approach is not safe to retain merely for its small apparent speed change because
+it failed the source-output contract. Lower resolution is also not justified as a speed fix on this
+phone. Cross-device accuracy therefore remains paused. Do not present the unmatched thermal readings
+as a controlled heat improvement.
+
+**Next inquiry:** The two-phone performance gate is complete. Do not spend another accuracy run on
+the current backend while expecting 30 FPS, and do not repeat the rejected resolution/delegate/direct
+experiments. Decide whether the product accepts an approximately 15 FPS floor (18.5 median on the
+A56) for the current 478-point model. If broad-device responsiveness is required, evaluate a smaller
+eye/face landmark backend in a shadow benchmark first, keeping the current pipeline as the reference
+and making no mapper/filter/target/timing change until output compatibility and accuracy are measured.
+
+### 2026-09-05 — Legacy iris-model feasibility and bounded shadow comparison (E-057)
+
+**Question:** Is MediaPipe's smaller 64x64 eye-landmark model computationally feasible on the A56,
+and can its iris centre reproduce the active eye-local raw feature closely enough to justify a
+reversible hybrid prototype without changing the current gaze output?
+
+**Action:** Used the official legacy MediaPipe iris landmark model only as a temporary benchmark
+asset. The model was run twice per observation (one crop per eye) through the Play Services LiteRT
+CPU runtime. An isolated benchmark first measured pre-prepared 64x64 inputs, then a reusable
+640x480-to-eye-crop path including rotation, crop, pixel extraction, float conversion, and both-eye
+inference. A temporary in-app shadow then used the current Face Landmarker eye corners to construct
+MediaPipe-style rotated square eye ROIs, ran the small model on the same accepted frames, and compared
+its two-eye eye-local feature with the current 478-point result. The shadow never emitted gaze,
+altered calibration, mapping, filters, targets, sequence, timing, or persisted participant data.
+
+**Evidence:** On the cool A56, two-eye inference over prepared inputs averaged 4.144 ms (3.954 ms
+median, 5.636 ms P95). Two repetitions of the reusable synthetic end-to-end crop plus inference path
+averaged 5.851 and 6.123 ms, with 6.696 and 7.285 ms P95; preprocessing averaged approximately
+1.27 ms. The Play Services GPU delegate was unavailable in this configuration, but CPU execution was
+well below a 33.3 ms frame budget. The real face-visible shadow completed 120 post-warm-up frames:
+added comparison latency averaged 10.908 ms (14.018 ms P95); median absolute raw-feature differences
+were 0.0133 horizontal and 0.0137 vertical, with P95 differences 0.0656 and 0.0507. The user held a
+mostly central fixation, so the observed horizontal/vertical correlations of 0.615/0.519 do not have
+enough feature-range coverage to be treated as a full-screen compatibility or accuracy score. Android
+thermal status remained 0 during the isolated benchmark. No calibration or accuracy pass was started.
+
+**Interpretation:** The candidate passes the compute-feasibility and central-feature sanity gates,
+but not the replacement gate. Its real shadow cost is small enough to warrant a reversible hybrid
+prototype, while the stationary-centre comparison cannot establish full-range feature equivalence,
+calibration compatibility, screen accuracy, or cross-device generalization. The legacy iris pipeline
+also depends on face/eye ROI acquisition; the benchmark supplied those corners from the expensive
+reference model and therefore did not yet remove the 478-point bottleneck. The official legacy
+solution is maintained as-is, so it is evidence/prototyping material rather than an automatic
+production dependency choice.
+
+**Cleanup and next inquiry:** Removed the temporary iris source, runtime dependency, Windows/device
+model copies, and Android benchmark package. The existing calibration and accuracy files remained in
+app-private storage. A clean rebuild passed all 67 gaze-focused JVM tests; the final APK SHA256 was
+`2a5230601ee8b4bc228ff03631338c8bb567a8a220cfbea4eda922d88a411989`, and the installed A56 APK
+matched it exactly. The active calibration SHA256 remained
+`713adc47a00e84d1c3b346985ace4d13d09b7652a34c7e35e0438761a2d85343` before and after installation.
+The clean rebuild's whole-file hash differs from E-056 because generated build metadata was recreated;
+source and dependency checks, rather than the historical APK hash, verify removal of the temporary
+runtime. Rebuild and installation verification are also recorded in the handoff verification state.
+Next, design a reversible hybrid that uses a lightweight face/eye detector for ROI acquisition, runs
+the 64x64 eye model per camera frame, and uses the 478-point reference only for bootstrap/periodic
+shadow comparison. It must remain non-authoritative until moving full-screen targets demonstrate
+compatible raw features and held-out calibration/live accuracy, and until both phones show a material
+throughput improvement.
+
 ## Evidence Registry
 
 | ID | Date | Evidence source | Conditions | Artifact or location | Notes |
@@ -520,6 +760,13 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 | E-048 | 2026-09-02 | First prospective reading-surface vertical alignment pair | Galaxy A56; one telemetry-OFF calibration; OFF then ON; no affine correction | `diagnostics-local/calibration_session_20260902_212424.json`, `diagnostics-local/reading_validation_session_20260902_212604_503.jsonl`, `diagnostics-local/reading_validation_session_20260902_212925_888.jsonl` | Adverse first result retained; user-requested replications follow in E-049 |
 | E-049 | 2026-09-03 | Two unchanged vertical-alignment replications | Galaxy A56; telemetry OFF; ON->OFF then OFF->ON in separate sessions; no affine correction | App-private reading files `20260903_011603_530`, `011909_341`, `210221_564`, `210447_787`; identities/hashes in offset replay JSON | Second ON helps guided reading but harms words; latest ON harms its own baseline; no reliable cross-task benefit |
 | E-050 | 2026-09-03 | Fixed offset-only offline screen | All six v4 recordings; references-only median shift; no new phone run | `tools/gaze/replay_reading_offsets.py`, `docs/gaze-offset-replay.md`, aggregate JSON | 10,580 reconstructed assignments match; 11 pure tests pass; aggregate gains coexist with major regional failures; no app implementation |
+| E-051 | 2026-09-03 | Fixed vertical-only quadratic screen | All 11 complete accepted eye-local calibrations; ridge 1, LOO and separate validation; no phone run | `tools/gaze/compare_vertical_mapper.py`, `docs/gaze-vertical-mapper-screen.md`, aggregate JSON | Baseline exact parity on 231 coordinate pairs; LOO maxima worse 11/11, held-out maxima worse 8/11; mapper unchanged; 12 new tests pass |
+| E-052 | 2026-09-03 | Eye-path and coordinate-contract audit | Shared source audit; 11 calibration aggregates; sparse latest-pair probes; user-approved idle-screen geometry inspection | `docs/gaze-coordinate-audit.md`; A56 window/view bounds | Confirmed calibration origin y=101 omitted from stored targets; reading expects screen pixels; no new calibration or runtime repair; saved data preserved |
+| E-053 | 2026-09-03 | Screen-coordinate repair | Approved implementation; 67 JVM and four on-device storage/layout tests pass | Coordinate helpers, store tests and `GazeScreenCoordinatesTest`; design §7.5 | Installed; legacy warning verified; 105 existing file hashes unchanged; no participant accuracy result yet |
+| E-054 | 2026-09-04 | Screen-coordinate repair physical evaluation | Galaxy A56; two fresh telemetry-OFF calibration/immediate alignment-OFF reading pairs | `diagnostics-local/2026-09-04/coords-v1-a56/` | Both pairs preserved; pair 1 weak/high-drift and pair 2 strong/low-drift; repeatability remains unresolved |
+| E-055 | 2026-09-04 | Second-device performance-readiness check | Samsung SM-G991B; exact tested APK; GPU; 640x480; no official accuracy run | Read-only package/hash, MediaPipe logcat, battery and thermal inspection | About 16 FPS with visible lag and severe thermal status; cross-device accuracy paused for bounded FPS optimization |
+| E-056 | 2026-09-04 | Two-phone performance profile and temporary comparisons | SM-G991B plus A56; cool-start 640/GPU checks; direct-buffer, 320/direct, and 640/CPU temporary screens; no calibration started | ART trace, gfx/CPU/thermal snapshots, source audit, 67 final JVM tests, APK build/install/hash, MediaPipe logcat | Temporary paths rejected and safe 640/GPU restored; face-visible throughput is about 15-17 FPS on SM-G991B and 18.5 median on cool A56; current 478-point backend is the limit |
+| E-057 | 2026-09-05 | 64x64 two-eye model feasibility and same-frame shadow | Galaxy A56; CPU LiteRT; isolated synthetic crop/inference plus 120 real face-visible shadow frames; no calibration started | Temporary benchmark output and `IrisShadow` logcat; summary retained in this entry | Two-eye compute is feasible; central raw-feature deltas are small enough for a hybrid prototype, but ROI acquisition and full-range accuracy remain unproved; temporary runtime/model removed; clean APK restored and installed |
 
 ## Confirmed Findings
 
@@ -556,6 +803,7 @@ Use one entry for each inspection, diagnostic run, or newly discovered line of i
 22. Top-left was the worst vertical live target in four of the five recent valid runs, making it the clearest recurring regional failure for the next bounded analysis (E-034, E-036).
 23. Across those five pairs, top-left was also the worst calibration LOO target in every run, while mapper conditioning and held-out validation did not rank the later live tails (E-037).
 24. No saved calibration metric reliably selects a good immediate live run. High drift is the only directional warning observed, so it can support a conservative redo/abort rule but not an accuracy claim (E-037).
+25. The legacy 64x64 two-eye model is computationally feasible on the A56 and locally tracks the current raw feature near centre, but it has not yet demonstrated independent eye-ROI acquisition, full-screen compatibility, accuracy, or a production throughput gain (E-057).
 
 ## Open Questions
 

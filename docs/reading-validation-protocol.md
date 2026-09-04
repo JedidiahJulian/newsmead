@@ -4,7 +4,11 @@ Current status (2026-09-03): the v4 gain/bias experiment has completed three pai
 without establishing reliable benefit. A fixed offset-only offline replay also
 retains major regional failures; see [gaze-offset-replay.md](gaze-offset-replay.md).
 Keep the experimental correction OFF for ordinary use. The procedure below
-documents the evaluated protocol, not a request for another repetition.
+documents the evaluated protocol. The approved E-053 screen-coordinate repair is now
+implemented, built, layout-verified and installed; its next evaluation is one fresh telemetry-OFF
+16-point calibration followed immediately by this existing test with alignment **OFF**.
+Use `coords_v1_tel-off_cal_1` and `coords_v1_off_reading_1`. Do not perform the historical ON
+repeat in step 13 for this evaluation, and do not apply a nine-point affine correction.
 
 ## Purpose and boundary
 
@@ -126,6 +130,12 @@ Stopping early writes an `interrupted` session. Timestamped filenames ensure
 that retries never overwrite earlier records.
 
 ## Persistent data
+
+The coordinate repair uses log schema **5**, while the target/timing protocol remains **4**.
+New logs declare `coordinate_space: screen_px_v1`, the accepted calibration CSV's SHA256,
+physical display dimensions, and measured root/viewport/text coordinate frames at reference
+setup and measurement boundaries. These fields distinguish repaired runs from historical
+local/screen-mixed recordings; old recordings are preserved, not silently rescored.
 
 Each run writes:
 

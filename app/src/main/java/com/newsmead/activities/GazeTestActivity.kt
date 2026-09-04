@@ -32,6 +32,9 @@ import com.newsmead.gaze.DetailedTelemetryMode
 import com.newsmead.gaze.FixationWindowFilter
 import com.newsmead.gaze.FpsSummaryAccumulator
 import com.newsmead.gaze.GazeMapper
+import com.newsmead.gaze.GazeCoordinateFrame
+import com.newsmead.gaze.gazeCoordinateFrame
+import com.newsmead.gaze.physicalDisplaySize
 import com.newsmead.gaze.GazeProvider
 import com.newsmead.gaze.GazeAccuracySessionLog
 import com.newsmead.gaze.LocalCalibratedGazeProvider
@@ -68,6 +71,7 @@ class GazeTestActivity : AppCompatActivity() {
     private var targets: List<PointF> = emptyList()
     private var pointIndex = 0
     private var attempts = 0
+    private lateinit var presentationFrame: GazeCoordinateFrame
     private val observations = ArrayList<DriftCorrection.Observation>()
     private val observationTargetIndices = ArrayList<Int>()
 
@@ -121,16 +125,16 @@ class GazeTestActivity : AppCompatActivity() {
     }
 
     private fun startGaze() {
+        val issue = CalibrationStore.compatibilityIssue(this)
         val samples = CalibrationStore.load(this)
-        if (samples == null) {
-            binding.hintText.text = getString(com.newsmead.R.string.gaze_test_no_calibration)
-            binding.btnFullRecal.visibility = View.VISIBLE
-            binding.gatePanel.visibility = View.VISIBLE
-            return
-        }
-        if (!CalibrationStore.isCompatibleWithActiveFeatureMode(this)) {
-            binding.hintText.text = "This gaze build uses a new raw feature geometry. Run full calibration first."
+        if (issue != null || samples == null) {
+            provider?.stop()
+            binding.hintText.text = ""
+            binding.gateText.text = issue ?: getString(com.newsmead.R.string.gaze_test_no_calibration)
             binding.accuracyButton.visibility = View.GONE
+            binding.btnRemeasure.visibility = View.GONE
+            binding.btnApply.visibility = View.GONE
+            binding.btnRevert.visibility = View.GONE
             binding.btnFullRecal.visibility = View.VISIBLE
             binding.gatePanel.visibility = View.VISIBLE
             return
@@ -189,7 +193,7 @@ class GazeTestActivity : AppCompatActivity() {
     }
 
     private fun onGaze(x: Float, y: Float) {
-        binding.gazeDot.setGaze(x, y)
+        binding.gazeDot.setGazeScreen(x, y)
         // Feed the shared collector the MAPPED screen px (not raw features): the
         // drift correction is affine in screen space, so we measure there.
         collector.onRawSample(x, y, System.currentTimeMillis())
@@ -241,12 +245,15 @@ class GazeTestActivity : AppCompatActivity() {
         configureDetailedTelemetry()
         runFps.reset()
         runPosture.reset()
+        val displaySize = binding.calibrationView.physicalDisplaySize()
         accuracySessionLog = GazeAccuracySessionLog(
             context = this,
             runLabel = runLabel,
             telemetryMode = telemetryMode,
-            screenWidthPx = w,
-            screenHeightPx = h,
+            screenWidthPx = displaySize.x,
+            screenHeightPx = displaySize.y,
+            targetViewFrame = binding.calibrationView.gazeCoordinateFrame(),
+            calibrationFingerprint = CalibrationStore.fingerprint(this),
             densityDpi = resources.displayMetrics.densityDpi,
             lineHeightPx = lineHeightPx,
             calibrationPointCount = calibrationPointCount,
@@ -282,7 +289,17 @@ class GazeTestActivity : AppCompatActivity() {
         binding.hintText.text =
             getString(com.newsmead.R.string.gaze_test_accuracy_progress, pointIndex + 1, targets.size)
         updateMiniMap()
+        presentationFrame = binding.calibrationView.gazeCoordinateFrame()
         collector.capture(p.x, p.y) { result ->
+            if (binding.calibrationView.gazeCoordinateFrame() != presentationFrame) {
+                pendingCorrection = null
+                accuracySessionLog?.finish("coordinate_frame_changed", runFps.snapshot(), runPosture.snapshot())
+                binding.calibrationView.hideTarget()
+                binding.calibrationView.setMiniMap(emptyList())
+                binding.gateText.text = "The target view moved during capture. Measure again before applying a correction."
+                showGate(canApply = false)
+                return@capture
+            }
             if (result.status == FixationWindowFilter.Status.ACCEPTED) {
                 onPointCaptured(result)
             } else {
@@ -293,27 +310,31 @@ class GazeTestActivity : AppCompatActivity() {
 
     private fun onPointCaptured(result: FixationWindowFilter.Result) {
         val p = targets[pointIndex]
+        val screen = presentationFrame.toScreen(p.x, p.y)
         accuracySessionLog?.logPoint(
             pointIndex = pointIndex,
             attempt = attempts + 1,
-            targetX = p.x,
-            targetY = p.y,
+            targetX = screen.x,
+            targetY = screen.y,
+            targetViewFrame = presentationFrame,
+            localTargetX = p.x,
+            localTargetY = p.y,
             result = result,
             fpsSummary = pointFps.snapshot(),
             pipelineSamples = pointPipelineSamples.toList(),
             sourceEvents = pointSourceEvents.toList(),
             postureSummary = pointPosture.snapshot(),
         )
-        observations.add(DriftCorrection.Observation(result.medianX, result.medianY, p.x, p.y))
+        observations.add(DriftCorrection.Observation(result.medianX, result.medianY, screen.x, screen.y))
         observationTargetIndices.add(pointIndex)
-        val err = hypot(result.medianX - p.x, result.medianY - p.y)
+        val err = hypot(result.medianX - screen.x, result.medianY - screen.y)
         Log.i(
             TAG,
             String.format(
                 Locale.US,
                 "point %d/%d target=(%.0f, %.0f) est=(%.0f, %.0f) err=%.0f px dy=%.0f retained=%d",
-                pointIndex + 1, targets.size, p.x, p.y, result.medianX, result.medianY,
-                err, result.medianY - p.y, result.retainedCount,
+                pointIndex + 1, targets.size, screen.x, screen.y, result.medianX, result.medianY,
+                err, result.medianY - screen.y, result.retainedCount,
             ),
         )
         handler.postDelayed({ advance() }, CONFIRM_MS)
@@ -321,11 +342,15 @@ class GazeTestActivity : AppCompatActivity() {
 
     private fun onPointFailed(result: FixationWindowFilter.Result) {
         val p = targets[pointIndex]
+        val screen = presentationFrame.toScreen(p.x, p.y)
         accuracySessionLog?.logPoint(
             pointIndex = pointIndex,
             attempt = attempts + 1,
-            targetX = p.x,
-            targetY = p.y,
+            targetX = screen.x,
+            targetY = screen.y,
+            targetViewFrame = presentationFrame,
+            localTargetX = p.x,
+            localTargetY = p.y,
             result = result,
             fpsSummary = pointFps.snapshot(),
             pipelineSamples = pointPipelineSamples.toList(),

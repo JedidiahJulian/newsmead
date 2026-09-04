@@ -26,6 +26,7 @@ class CalibrationSessionLog(
     orderSeed: Long,
     orderMode: String,
     rawFeatureMode: String,
+    targetViewFrame: GazeCoordinateFrame,
 ) {
 
     private val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
@@ -38,6 +39,9 @@ class CalibrationSessionLog(
 
     init {
         root.put("session_id", "calibration_session_$stamp")
+        root.put("coordinate_space", GazeCoordinateContract.SPACE)
+        root.put("coordinate_schema_version", 1)
+        root.put("target_view_frame", targetViewFrame.toJson())
         root.put("run_label", runLabel)
         root.put("telemetry_mode", telemetryMode.logLabel)
         root.put("detailed_telemetry_enabled", detailedTelemetryEnabled)
@@ -72,6 +76,9 @@ class CalibrationSessionLog(
         status: String,
         screenX: Float,
         screenY: Float,
+        targetViewFrame: GazeCoordinateFrame,
+        localTargetX: Float,
+        localTargetY: Float,
         presentationIndex: Int,
         practice: Boolean,
         driftRepeat: Boolean,
@@ -104,6 +111,9 @@ class CalibrationSessionLog(
                 put("status", status)
                 putNum("screen_x", screenX)
                 putNum("screen_y", screenY)
+                put("target_view_frame", targetViewFrame.toJson())
+                putNum("target_x_local_px", localTargetX)
+                putNum("target_y_local_px", localTargetY)
                 put("presentation_index", presentationIndex)
                 put("practice", practice)
                 put("drift_repeat", driftRepeat)
@@ -133,6 +143,11 @@ class CalibrationSessionLog(
                 }
             },
         )
+        flush()
+    }
+
+    fun logSavedCalibration(fingerprint: String?) {
+        root.put("saved_calibration_sha256", fingerprint ?: JSONObject.NULL)
         flush()
     }
 

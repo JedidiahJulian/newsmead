@@ -33,6 +33,9 @@ import com.newsmead.gaze.DetailedTelemetryMode
 import com.newsmead.gaze.FixationWindowFilter
 import com.newsmead.gaze.FpsSummaryAccumulator
 import com.newsmead.gaze.GazeMapper
+import com.newsmead.gaze.GazeCoordinateFrame
+import com.newsmead.gaze.gazeCoordinateFrame
+import com.newsmead.gaze.physicalDisplaySize
 import com.newsmead.gaze.LocalGazeSources
 import com.newsmead.gaze.LocalRawGazeSource
 import com.newsmead.gaze.PostureProfile
@@ -71,6 +74,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private var presIndex = 0
     private var attempts = 0
     private var presentationCounter = 0
+    private lateinit var presentationFrame: GazeCoordinateFrame
     private var started = false
 
     // Results
@@ -242,6 +246,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
         // Fixed row-major order restores the original, predictable traversal for
         // older adults: top-left to top-right, then each following row.
         val order = gridPoints.indices.toList()
+        val displaySize = view.physicalDisplaySize()
 
         presentations.clear()
         presentations.add(
@@ -256,8 +261,9 @@ class GazeCalibrationActivity : AppCompatActivity() {
             context = this,
             runLabel = runLabel,
             telemetryMode = telemetryMode,
-            screenWidthPx = view.width,
-            screenHeightPx = view.height,
+            screenWidthPx = displaySize.x,
+            screenHeightPx = displaySize.y,
+            targetViewFrame = view.gazeCoordinateFrame(),
             densityDpi = resources.displayMetrics.densityDpi,
             orderSeed = FIXED_ORDER_SEED,
             orderMode = "fixed_row_major",
@@ -297,9 +303,17 @@ class GazeCalibrationActivity : AppCompatActivity() {
         binding.statusText.text = ""
         updateProgressText(pres)
         updateMiniMap()
+        presentationFrame = binding.calibrationView.gazeCoordinateFrame()
         // The shared collector runs APPEAR -> HOLD -> SETTLE -> SAMPLE -> CONFIRM
         // and filters the samples; we own only the per-point outcome policy.
         collector.capture(pres.point.x, pres.point.y) { result ->
+            if (binding.calibrationView.gazeCoordinateFrame() != presentationFrame) {
+                showAbort(fitPairs.size, "coordinate_frame_changed_during_capture")
+                sessionLog?.finish("coordinate_frame_changed", runFps.snapshot())
+                logFinished = true
+                binding.gateText.text = "The calibration view moved during capture. Redo all before saving."
+                return@capture
+            }
             if (result.status == FixationWindowFilter.Status.ACCEPTED) {
                 recordSuccess(result)
                 handler.postDelayed({ advance() }, CONFIRM_MS)
@@ -346,12 +360,13 @@ class GazeCalibrationActivity : AppCompatActivity() {
 
     private fun recordSuccess(result: FixationWindowFilter.Result) {
         val pres = presentations[presIndex]
+        val screen = presentationFrame.toScreen(pres.point.x, pres.point.y)
         when (pres.kind) {
             Kind.PRACTICE -> Unit
             Kind.FIT -> {
                 fitPairs[pres.gridIndex] = CalibrationSample(
-                    pres.point.x,
-                    pres.point.y,
+                    screen.x,
+                    screen.y,
                     result.medianX,
                     result.medianY,
                     result.medianEye1X,
@@ -370,26 +385,26 @@ class GazeCalibrationActivity : AppCompatActivity() {
             Kind.DRIFT_REPEAT -> driftSecond = floatArrayOf(result.medianX, result.medianY)
             Kind.VALIDATION -> {
                 val mapped = fittedMapper?.map(result.medianX, result.medianY) ?: return
-                val errPx = hypot(mapped[0] - pres.point.x, mapped[1] - pres.point.y)
+                val errPx = hypot(mapped[0] - screen.x, mapped[1] - screen.y)
                 val validationIndex = validationObservations.size
                 validationObservations.add(
                     ReadingSpatialMetrics.Observation(
                         id = validationIndex,
                         label = validationLabel(validationIndex),
-                        targetX = pres.point.x,
-                        targetY = pres.point.y,
+                        targetX = screen.x,
+                        targetY = screen.y,
                         predictedX = mapped[0],
                         predictedY = mapped[1],
                     ),
                 )
                 sessionLog?.addValidationPoint(
-                    pres.point.x,
-                    pres.point.y,
+                    screen.x,
+                    screen.y,
                     mapped[0],
                     mapped[1],
                     errPx,
                     errPx / lineHeightPx,
-                    kotlin.math.abs(mapped[1] - pres.point.y) / lineHeightPx,
+                    kotlin.math.abs(mapped[1] - screen.y) / lineHeightPx,
                 )
             }
         }
@@ -398,7 +413,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
             String.format(
                 Locale.US,
                 "%s grid=%d screen=(%.0f, %.0f) gaze=(%.4f, %.4f) raw=%d retained=%d disp=(%.4f, %.4f)",
-                pres.kind, pres.gridIndex, pres.point.x, pres.point.y,
+                pres.kind, pres.gridIndex, screen.x, screen.y,
                 result.medianX, result.medianY, result.rawCount, result.retainedCount,
                 result.dispersionX, result.dispersionY,
             ),
@@ -518,9 +533,10 @@ class GazeCalibrationActivity : AppCompatActivity() {
         binding.gatePanel.visibility = View.VISIBLE
     }
 
-    private fun showAbort(usablePoints: Int) {
+    private fun showAbort(usablePoints: Int, flag: String = "insufficient_points") {
         binding.calibrationView.hideTarget()
-        sessionLog?.addFlag("insufficient_points")
+        binding.btnRedoWorst.visibility = View.GONE
+        sessionLog?.addFlag(flag)
         binding.progressText.text = getString(com.newsmead.R.string.calib_gate_title)
         binding.gateText.text = getString(com.newsmead.R.string.calib_aborted, usablePoints, gridPoints.size)
         binding.gateText.setTextColor(RED_COLOR)
@@ -532,7 +548,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
 
     private fun acceptCalibration() {
         val ordered = fitPairs.entries.sortedBy { it.key }.map { it.value }
-        CalibrationStore.save(this, ordered, LocalGazeSources.ACTIVE_FEATURE_MODE)
+        CalibrationStore.saveScreenCalibration(this, ordered, LocalGazeSources.ACTIVE_FEATURE_MODE)
+        sessionLog?.logSavedCalibration(CalibrationStore.fingerprint(this))
         sessionLog?.finish("accepted", runFps.snapshot())
         logFinished = true
         binding.gatePanel.visibility = View.GONE
@@ -640,13 +657,17 @@ class GazeCalibrationActivity : AppCompatActivity() {
             if (start != null && end != null) end.blinkDroppedFrames - start.blinkDroppedFrames else 0L
         val noFace =
             if (start != null && end != null) end.noFaceFrames - start.noFaceFrames else 0L
+        val screen = presentationFrame.toScreen(pres.point.x, pres.point.y)
         sessionLog?.logPoint(
             pointId = pres.gridIndex,
             kind = pres.kind.name,
             attempt = attempt,
             status = result.status.name,
-            screenX = pres.point.x,
-            screenY = pres.point.y,
+            screenX = screen.x,
+            screenY = screen.y,
+            targetViewFrame = presentationFrame,
+            localTargetX = pres.point.x,
+            localTargetY = pres.point.y,
             presentationIndex = presentationCounter++,
             practice = pres.kind == Kind.PRACTICE,
             driftRepeat = pres.kind == Kind.DRIFT_REPEAT,

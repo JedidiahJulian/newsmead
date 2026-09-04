@@ -64,13 +64,16 @@ object CalibrationStore {
     private const val TAG = "GazeCalib"
     private const val CSV_NAME = "calibration_16point.csv"
     private const val FEATURE_MODE_NAME = "calibration_feature_mode.txt"
+    private const val COORDINATE_METADATA_NAME = "calibration_coordinates.txt"
+    private const val DRIFT_COORDINATE_METADATA_NAME = "drift_correction_coordinates.txt"
     private const val LEGACY_WIFI_CSV_NAME = "calibration_wifi.csv"
     private const val DRIFT_CSV_NAME = "drift_correction.csv"
     private const val DRIFT_HEADER = "cx0,cx1,cx2,cy0,cy1,cy2,timestamp_ms,pre_median_px,post_median_px"
     private const val RECAL_LOG_NAME = "recalibration_log.csv"
     private const val RECAL_LOG_HEADER = "timestamp_ms,outcome,pre_median_px,post_median_px"
 
-    fun save(
+    /** Accept only targets already converted from their drawing view to screen pixels. */
+    fun saveScreenCalibration(
         context: Context,
         samples: List<CalibrationSample>,
         featureMode: RawGazeFeatureMode = LocalGazeSources.ACTIVE_FEATURE_MODE,
@@ -86,10 +89,15 @@ object CalibrationStore {
         // A fresh full calibration supersedes any drift correction fitted on top
         // of the previous one.
         clearDriftCorrection(context)
+        // Publish last: an interrupted save must not certify incompatible data.
+        File(context.filesDir, COORDINATE_METADATA_NAME).writeText(
+            GazeCoordinateContract.encode(calibrationPayload(text, featureMode.logLabel)),
+        )
     }
 
-    /** Returns the saved samples, or null if the file is missing/unparseable. */
+    /** Returns only samples verified for the active feature and screen-coordinate contracts. */
     fun load(context: Context): List<CalibrationSample>? {
+        if (compatibilityIssue(context) != null) return null
         val file = File(context.filesDir, CSV_NAME)
         if (!file.exists()) return null
         return read(file)
@@ -112,6 +120,32 @@ object CalibrationStore {
     fun isCompatibleWithActiveFeatureMode(context: Context): Boolean =
         loadFeatureMode(context) == LocalGazeSources.ACTIVE_FEATURE_MODE.logLabel
 
+    /** Read-only: never migrate, relabel or delete an old calibration. */
+    fun compatibilityIssue(context: Context): String? {
+        val file = File(context.filesDir, CSV_NAME)
+        if (!file.exists()) return "Run a full 16-point calibration before using gaze."
+        return try {
+            if (!isCompatibleWithActiveFeatureMode(context)) {
+                "The eye-measurement format changed. Run a fresh 16-point calibration."
+            } else if (!GazeCoordinateContract.matches(
+                    File(context.filesDir, COORDINATE_METADATA_NAME).takeIf { it.exists() }?.readText(),
+                    calibrationPayload(file.readText(), loadFeatureMode(context)),
+                )) {
+                "The screen-coordinate format changed or the saved calibration is incompatible. Run a fresh 16-point calibration. Existing diagnostic logs are preserved."
+            } else null
+        } catch (e: Exception) {
+            "The saved calibration cannot be verified. Run a fresh 16-point calibration."
+        }
+    }
+
+    fun fingerprint(context: Context): String? =
+        File(context.filesDir, CSV_NAME).takeIf { it.exists() }?.let { GazeCoordinateContract.fingerprint(it.readText()) }
+
+    private fun calibrationPayload(csv: String, featureMode: String) = "$featureMode\n$csv"
+
+    private fun driftPayload(context: Context, driftCsv: String): String =
+        "${fingerprint(context)}\n$driftCsv"
+
     // --- Drift correction (fitted from the gaze accuracy test) --------------
 
     fun saveDriftCorrection(
@@ -120,6 +154,7 @@ object CalibrationStore {
         preMedianPx: Float,
         postMedianPx: Float,
     ) {
+        require(compatibilityIssue(context) == null) { "A screen-coordinate calibration is required" }
         val file = File(context.filesDir, DRIFT_CSV_NAME)
         val cx = correction.coeffX
         val cy = correction.coeffY
@@ -127,6 +162,9 @@ object CalibrationStore {
             DRIFT_HEADER + '\n' +
                 "${cx[0]},${cx[1]},${cx[2]},${cy[0]},${cy[1]},${cy[2]}," +
                 "${System.currentTimeMillis()},$preMedianPx,$postMedianPx\n",
+        )
+        File(context.filesDir, DRIFT_COORDINATE_METADATA_NAME).writeText(
+            GazeCoordinateContract.encode(driftPayload(context, file.readText())),
         )
         Log.i(
             TAG,
@@ -136,9 +174,14 @@ object CalibrationStore {
 
     /** Returns the saved drift correction, or null if absent/unparseable. */
     fun loadDriftCorrection(context: Context): DriftCorrection? {
+        if (compatibilityIssue(context) != null) return null
         val file = File(context.filesDir, DRIFT_CSV_NAME)
         if (!file.exists()) return null
         return try {
+            if (!GazeCoordinateContract.matches(
+                    File(context.filesDir, DRIFT_COORDINATE_METADATA_NAME).takeIf { it.exists() }?.readText(),
+                    driftPayload(context, file.readText()),
+                )) return null
             val parts = file.readLines()[1].split(",")
             DriftCorrection(
                 doubleArrayOf(parts[0].toDouble(), parts[1].toDouble(), parts[2].toDouble()),
@@ -155,6 +198,7 @@ object CalibrationStore {
         if (file.exists() && file.delete()) {
             Log.i(TAG, "Cleared drift correction (superseded)")
         }
+        File(context.filesDir, DRIFT_COORDINATE_METADATA_NAME).delete()
     }
 
     /**

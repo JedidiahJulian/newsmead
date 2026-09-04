@@ -76,6 +76,7 @@ class MediaPipeRawGazeSource(
     private var diagnosticSequence = 0L
     private var lastOpenness = Float.NaN
     private var lastResultTimeMs = 0L
+    private var lastFpsCallbackElapsedNs = 0L
     private var inFlightCaptureTimestampNs = 0L
     private var inFlightSubmittedElapsedNs = 0L
     private var inFlightRotationDegrees = 0
@@ -274,7 +275,7 @@ class MediaPipeRawGazeSource(
         val resultElapsedNs = SystemClock.elapsedRealtimeNanos()
         totalResults += 1
         updateFps()
-        fpsListener?.onFps(fps)
+        emitFpsIfDue(resultElapsedNs)
         val face = result.faceLandmarks().firstOrNull()
         if (face == null) {
             noFaceFrames += 1
@@ -595,6 +596,18 @@ class MediaPipeRawGazeSource(
         lastResultTimeMs = now
     }
 
+    /** UI and lightweight logs need a readable summary, not one callback per result. */
+    private fun emitFpsIfDue(resultElapsedNs: Long) {
+        val callback = fpsListener ?: return
+        if (
+            lastFpsCallbackElapsedNs == 0L ||
+            resultElapsedNs - lastFpsCallbackElapsedNs >= FPS_CALLBACK_INTERVAL_NS
+        ) {
+            lastFpsCallbackElapsedNs = resultElapsedNs
+            callback.onFps(fps)
+        }
+    }
+
     private fun hasCameraPermission(): Boolean =
         ContextCompat.checkSelfPermission(appContext, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
@@ -608,6 +621,7 @@ class MediaPipeRawGazeSource(
         private const val MODEL_ASSET_PATH = "face_landmarker.task"
         private const val CAMERA_PERMISSION_REQUEST = 4104
         private const val RAW_LOG_INTERVAL = 15
+        private const val FPS_CALLBACK_INTERVAL_NS = 250_000_000L
 
         // 478-landmark model: iris points are contiguous ranges (inclusive).
         private val LEFT_IRIS = 468..472

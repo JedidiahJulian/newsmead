@@ -23,6 +23,9 @@ import androidx.core.widget.NestedScrollView
 import com.newsmead.data.StudyConfig
 import com.newsmead.databinding.ActivityReadingValidationBinding
 import com.newsmead.gaze.CalibrationStore
+import com.newsmead.gaze.gazeCoordinateFrame
+import com.newsmead.gaze.getVisibleRectOnScreen
+import com.newsmead.gaze.physicalDisplaySize
 import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.GazeOverlayView
 import com.newsmead.gaze.GazeTargetStabilizer
@@ -127,9 +130,14 @@ class ReadingValidationActivity : AppCompatActivity() {
     }
 
     private fun showRunSetup() {
+        val issue = CalibrationStore.compatibilityIssue(this)
         val samples = CalibrationStore.load(this)
-        if (samples == null || !CalibrationStore.isCompatibleWithActiveFeatureMode(this)) {
-            Toast.makeText(this, "Run a compatible 16-point calibration first", Toast.LENGTH_LONG).show()
+        if (issue != null || samples == null) {
+            AlertDialog.Builder(this)
+                .setTitle("Fresh calibration required")
+                .setMessage(issue ?: "The saved calibration cannot be read. Run a fresh 16-point calibration.")
+                .setPositiveButton("OK", null)
+                .show()
             return
         }
         val runNumber = getPreferences(MODE_PRIVATE).getInt(PREF_RUN_COUNT, 0) + 1
@@ -201,15 +209,17 @@ class ReadingValidationActivity : AppCompatActivity() {
         }
 
         val display = resources.displayMetrics
+        val displaySize = binding.root.physicalDisplaySize()
         sessionLog = ReadingValidationSessionLog(
             context = this,
             runLabel = runLabel,
             orderVariant = orderVariant,
-            screenWidthPx = display.widthPixels,
-            screenHeightPx = display.heightPixels,
+            screenWidthPx = displaySize.x,
+            screenHeightPx = displaySize.y,
             densityDpi = display.densityDpi,
             rawFeatureMode = LocalGazeSources.ACTIVE_FEATURE_MODE.logLabel,
             calibrationPointCount = calibrationPointCount,
+            calibrationFingerprint = CalibrationStore.fingerprint(this),
             driftCorrectionActive = CalibrationStore.loadDriftCorrection(this) != null,
             verticalAlignmentMode = verticalAlignmentMode,
         ).also {
@@ -300,15 +310,20 @@ class ReadingValidationActivity : AppCompatActivity() {
                 programmaticScrollUntilMs = System.currentTimeMillis() + 1_000L
                 binding.nsvValidationText.scrollTo(0, 0)
                 binding.root.post {
-                    prepareVerticalReferences()
-                    runCountdown { startVerticalReference(0) }
+                    if (prepareVerticalReferences()) runCountdown { startVerticalReference(0) }
                 }
             }
             .show()
     }
 
-    private fun prepareVerticalReferences() {
-        binding.nsvValidationText.getGlobalVisibleRect(readingVisibleRect)
+    private fun prepareVerticalReferences(): Boolean {
+        if (!binding.nsvValidationText.getVisibleRectOnScreen(readingVisibleRect)) {
+            sessionLog?.finish("reading_surface_not_visible", metrics.summary())
+            Toast.makeText(this, "Reading surface unavailable. Please reopen the test.", Toast.LENGTH_LONG).show()
+            finish()
+            return false
+        }
+        logCoordinateFrames()
         val centerX = readingVisibleRect.exactCenterX()
         val top = readingVisibleRect.top.toFloat()
         val height = readingVisibleRect.height().toFloat()
@@ -320,6 +335,7 @@ class ReadingValidationActivity : AppCompatActivity() {
         verticalAggregates.clear()
         verticalAlignmentFit = null
         verticalCorrection = null
+        return true
     }
 
     private fun startVerticalReference(index: Int) {
@@ -345,6 +361,7 @@ class ReadingValidationActivity : AppCompatActivity() {
         )
 
         handler.postDelayed({
+            logCoordinateFrames()
             trialState = ReadingValidationTrialState.MEASURE
             activeVerticalSamples.clear()
             sessionLog?.logProtocolState(
@@ -484,8 +501,17 @@ class ReadingValidationActivity : AppCompatActivity() {
         val target = binding.verticalAlignmentTarget
         val width = target.measuredWidth.takeIf { it > 0 } ?: target.layoutParams.width
         val height = target.measuredHeight.takeIf { it > 0 } ?: target.layoutParams.height
-        target.translationX = reference.targetX - rootLocation[0] - width / 2f
-        target.translationY = reference.targetY - rootLocation[1] - height / 2f
+        target.x = reference.targetX - rootLocation[0] - width / 2f
+        target.y = reference.targetY - rootLocation[1] - height / 2f
+    }
+
+    private fun logCoordinateFrames() {
+        sessionLog?.logCoordinateFrames(
+            phase, stepId,
+            binding.root.gazeCoordinateFrame(),
+            binding.nsvValidationText.gazeCoordinateFrame(),
+            binding.tvValidationText.gazeCoordinateFrame(),
+        )
     }
 
     private fun startWordCheckpoint(index: Int) {
@@ -511,6 +537,7 @@ class ReadingValidationActivity : AppCompatActivity() {
         )
 
         handler.postDelayed({
+            logCoordinateFrames()
             trialState = ReadingValidationTrialState.MEASURE
             sessionLog?.logProtocolState(
                 phase,
@@ -570,6 +597,7 @@ class ReadingValidationActivity : AppCompatActivity() {
         )
 
         handler.postDelayed({
+            logCoordinateFrames()
             trialState = ReadingValidationTrialState.MEASURE
             sessionLog?.logProtocolState(
                 phase,

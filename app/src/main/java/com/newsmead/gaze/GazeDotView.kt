@@ -27,6 +27,7 @@ class GazeDotView @JvmOverloads constructor(
     private var estX: Float? = null
     private var estY: Float? = null
     private var fpsText: String? = null
+    private val drawingLocation = IntArray(2)
 
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(150, 0, 200, 255)
@@ -56,7 +57,8 @@ class GazeDotView @JvmOverloads constructor(
         strokeWidth = 4f
     }
 
-    fun setGaze(px: Float, py: Float) {
+    /** Live pipeline outputs are absolute screen pixels, not canvas coordinates. */
+    fun setGazeScreen(px: Float, py: Float) {
         x = px
         y = py
         invalidate()
@@ -68,7 +70,7 @@ class GazeDotView @JvmOverloads constructor(
         invalidate()
     }
 
-    /** Accuracy-test target the user is asked to fixate. */
+    /** Optional accuracy target in this canvas's local coordinates. */
     fun setTarget(px: Float, py: Float) {
         targetX = px
         targetY = py
@@ -81,7 +83,7 @@ class GazeDotView @JvmOverloads constructor(
         invalidate()
     }
 
-    /** Where the estimate landed for the point just measured (accuracy harness). */
+    /** Optional captured estimate in this canvas's local coordinates. */
     fun setEstimate(px: Float, py: Float) {
         estX = px
         estY = py
@@ -111,8 +113,9 @@ class GazeDotView @JvmOverloads constructor(
             if (tx != null && ty != null) canvas.drawLine(tx, ty, ex, ey, missPaint)
             canvas.drawCircle(ex, ey, EST_RADIUS, estPaint)
         }
-        val px = (x ?: return).coerceIn(0f, width.toFloat())
-        val py = (y ?: return).coerceIn(0f, height.toFloat())
+        getLocationOnScreen(drawingLocation)
+        val px = ((x ?: return) - drawingLocation[0]).coerceIn(0f, width.toFloat())
+        val py = ((y ?: return) - drawingLocation[1]).coerceIn(0f, height.toFloat())
         canvas.drawCircle(px, py, RADIUS, dotPaint)
     }
 

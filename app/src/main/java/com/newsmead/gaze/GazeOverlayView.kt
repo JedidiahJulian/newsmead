@@ -250,7 +250,7 @@ class GazeOverlayView @JvmOverloads constructor(
     }
 
     private fun prepareGeometry(textView: TextView): Boolean {
-        if (!textView.getGlobalVisibleRect(visibleTextRect)) return false
+        if (!textView.getVisibleRectOnScreen(visibleTextRect, loc)) return false
         getLocationOnScreen(loc)
         textView.getLocationOnScreen(textLoc)
         return true

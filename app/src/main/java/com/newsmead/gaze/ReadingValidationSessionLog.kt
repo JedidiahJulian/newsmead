@@ -25,6 +25,7 @@ class ReadingValidationSessionLog(
     densityDpi: Int,
     rawFeatureMode: String,
     calibrationPointCount: Int,
+    calibrationFingerprint: String?,
     driftCorrectionActive: Boolean,
     verticalAlignmentMode: ReadingVerticalAlignmentMode,
 ) {
@@ -40,6 +41,8 @@ class ReadingValidationSessionLog(
             JSONObject().apply {
                 put("record_type", "session_start")
                 put("schema_version", SCHEMA_VERSION)
+                put("coordinate_space", GazeCoordinateContract.SPACE)
+                put("calibration_sha256", calibrationFingerprint ?: JSONObject.NULL)
                 put("protocol_version", ReadingValidationProtocol.VERSION)
                 put("session_id", sessionId)
                 put("run_label", runLabel)
@@ -67,6 +70,20 @@ class ReadingValidationSessionLog(
             },
             flush = true,
         )
+    }
+
+    fun logCoordinateFrames(
+        phase: ReadingValidationPhase,
+        stepId: String,
+        rootFrame: GazeCoordinateFrame,
+        viewportFrame: GazeCoordinateFrame,
+        textFrame: GazeCoordinateFrame,
+    ) = event("coordinate_frames") {
+        put("phase", phase.name)
+        put("step_id", stepId)
+        put("root_view_frame", rootFrame.toJson())
+        put("viewport_frame", viewportFrame.toJson())
+        put("text_view_frame", textFrame.toJson())
     }
 
     fun logLayout(
@@ -273,7 +290,7 @@ class ReadingValidationSessionLog(
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).format(Date(timestampMs))
 
     companion object {
-        const val SCHEMA_VERSION = 4
+        const val SCHEMA_VERSION = 5
         private const val TAG = "ReadingValidation"
     }
 }

@@ -1,5 +1,33 @@
 # NewsMead — Progress Notes
 
+## 2026-09-03 - Replicated vertical control and offset-only offline screening
+
+At the user's request, retained the original experiment unchanged for two more pairs rather than ending evaluation after one adverse run. The second ON run helped guided reading but hurt word targeting; the third harmed accuracy on its own samples. Then evaluated one fixed median-reference offset rule across all six recordings. It improves some aggregate scores strongly but turns top-left within-one-line accuracy from 100% to 0% in three recordings, so it is not ready for implementation. The line-only replay reconstructs actual layout geometry and reproduces all 10,580 base/effective assignments; all 11 pure analyzer tests pass. Detailed findings and aggregate results are in `gaze-offset-replay.md`. Newer raw logs were read from the phone in memory, not copied into OneDrive. No Android source/build/install or git staging/commit change was made.
+
+## 2026-09-02 - Reading-surface vertical alignment rejected
+
+The protocol-v4 telemetry-OFF pair completed under one fresh calibration and no nine-point correction. ON passed the original three-reference guards, but the same-sample counterfactual showed a harmful trade: raw word exact-line accuracy rose from 13.1% to 35.7%, while guided within-one-line accuracy fell from 74.6% to 29.2%, overall within-one-line fell from 70.5% to 47.8%, and corrected validity fell to 80.2%. One bottom-line checkpoint became entirely invalid. The global session y gain/bias candidate is rejected; do not repeat or tune it from this run. Restore the uncorrected reading path before the next bounded upstream intervention.
+
+## 2026-09-01 - Known-target reading accuracy instrument
+
+Device smoke testing rejected the initial free-reading/adaptive protocol as confusing and unable to establish independent reading ground truth. Replaced it with an accuracy-only instrument: unscored visible-dot preview, eight highlighted A/B word fixations, and six highlighted physical-line reading trials; timestamped numeric-only JSONL remains, while adaptive validation is explicitly deferred. The first accuracy-only v2 device run was also rejected because changing instructions and timing status remained visible below the passage during active targets and competed for the participant's gaze. Protocol v3 presents instructions only in centered between-section dialogs and hides the entire control panel while targets are active. Its first valid run showed only 40.5% guided exact-line and 10.9% exact-word accuracy with vertical center compression. Protocol v4 adds an unvalidated control: OFF and ON collect identical top/middle/bottom live reading-surface references, while only ON may apply a fixed-guard, session-only vertical gain/bias layer; estimator, quadratic mapper, temporal filters, and existing affine persistence are unchanged.
+
+## 2026-08-28 - Five-pair offline tail analysis
+
+Compared the five valid recent calibration/immediate-test pairs from app-private aggregate logs without collecting another run or copying participant artifacts. Mapper conditioning and held-out errors did not rank the later live tails. Top-left was the worst calibration LOO point in all five runs and the worst live point in four, confirming a systematic region/first-target weakness rather than a bad-session selector. High drift was the only directional warning, but low drift still allowed a 3.04-line live tail. The next isolated change is therefore a conservative gate rule: high drift forces one Redo All; a second high-drift result aborts and retains the prior calibration. This is not an accuracy guarantee, and no estimator/mapper/filter/target/order change is authorized by this finding.
+
+## 2026-08-28 - Fresh-session handheld repeatability check
+
+The independent telemetry-OFF calibration/test pair completed correctly with no affine correction: 25.6 FPS, 12 retained test samples median, 1.55-line vertical median, and a 4.87-line top-left maximum. Typical error remains substantially better than E-030, but severe calibration/held-out tails returned (LOO max 6.24 lines; held-out median/max 4.49/7.44), so the current path is improved but not repeatable enough for exact-line claims; no further phone run or code change yet.
+
+## 2026-08-24 - Centered pre-run countdown
+
+Added a centered 3–2–1 countdown before full calibration, calibration redo paths, and every nine-point measurement so capture no longer begins immediately after the setup dialog or gate action. The countdown is outside all target/sample timing and does not change estimator, mapper, filters, order, or per-target behavior; all gaze JVM tests and `assembleDebug` pass, and the build is installed on the A56.
+
+## 2026-08-24 - Detailed telemetry ON/OFF control
+
+Added labelled ON/OFF selection to full calibration and the nine-point check. OFF removes per-frame source/pipeline callbacks and arrays while both modes retain point metrics plus constant-memory FPS summaries; estimator, mapper, filters, target, timings, and order are unchanged. Focused and all gaze JVM tests plus `assembleDebug` pass. Two valid natural-handheld calibration/test pairs per mode showed no OFF FPS or accuracy recovery, so detailed telemetry is closed as the regression cause; the mismatched `off_cal_redo-1` attempt is excluded by its embedded ON mode.
+
 ## 2026-07-26 - DEMO_CYCLE scaffold mode for presentation recording
 
 Added `StudyConfig.ScaffoldMode.DEMO_CYCLE` (+ `SCAFFOLD_DEMO_LEVEL_DURATION_MS`
@@ -122,6 +150,49 @@ compileDebugKotlin + all com.newsmead.gaze.* pass. Re-test on A56.
   assembleDebug OK. On-device: test -> apply -> back should now show the live
   dot resume within ~1s and reflect the correction; confirm via `GazeMap` log
   showing the "[drift-corrected]" suffix during reading.
+
+## 2026-07-25 - Corrected stale tracker documentation (GazeFollower -> MediaPipe)
+
+`docs/build-context.md` and `CLAUDE.md` both still declared GazeFollower-over-WiFi
+the "confirmed, final tracker" and instructed *not* to build MediaPipe/CameraX
+code here - contradicted by the code since 2026-07-06 (WiFiGazeProvider.kt and
+GazeStream.kt deleted, MediaPipeRawGazeSource.kt active) and by
+implementation-spec.md, which calls MediaPipe "the current tracker."
+
+Both updated. The STATUS UPDATE in build-context.md is now a **tracker decision
+history table** (MediaPipe on-device failed -> MobileGaze/TFLite failed ->
+GazeFollower passed and was adopted -> reverted to on-device MediaPipe on
+deployability grounds), kept deliberately because it is the evidence trail for
+the manuscript's "alternatives considered" section. Recorded explicitly that the
+revert traded raw accuracy for deployability (no co-located laptop per session)
+and is NOT an accuracy improvement, and that accuracy remains the binding
+limitation with word/exact-line claims conditional on pilot validation. Stage
+3's historical FAILED verdict is retained with a "superseded" note rather than
+deleted. Deliverables checklist corrected (Stages 4-5 complete; accuracy
+re-measurement and target-age validation outstanding).
+
+Also fixed `docs/session-setup.md` steps 3-4: calibration now launches from the
+**home screen**, not the article page; the article top-bar control is the 9-point
+accuracy check.
+
+Follow-up same day: Stage 4 and Stage 5 section headers in build-context.md also
+corrected (were "[ACTIVE - CURRENT WORK]" and "[NOT STARTED]"; both are complete
+- Stage 5 is `ReadingStateInferencer.kt` + `WindowedStabilityEstimator.kt`).
+
+Working figures/assumptions recorded for now, both to be confirmed later:
+- **Stage 3 vertical error: ~1.1-2.3 cm** (per James). Other figures recorded
+  elsewhere in the repo differ (prototype 16-point R1 vertical 0.60 cm / R2
+  2.30 cm; newsmead 3-run vertical median 0.67-1.01 cm) and all predate the
+  2026-07-24 calibration rebuild. Re-measure on the current build and make every
+  doc + the manuscript cite one set.
+- **The manuscript is assumed to still describe the GazeFollower/laptop
+  architecture and to need revision.** NOT verified - `Manuscript_Updated.pdf`
+  is password-protected and could not be read from here. Confirm by searching it
+  for "GazeFollower", "WiFi", "laptop".
+
+Defense prep: expect "your own docs say this tracker failed validation" - answer
+is the deployability trade, the calibration rebuild, and the limitation being
+retained rather than claimed solved.
 
 ## 2026-07-25 - Section 4.3.2 manuscript draft for the gaze/calibration system
 
