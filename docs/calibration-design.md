@@ -37,9 +37,14 @@ The design below revises the *procedure*; these integration facts are fixed:
   drops across the two tested phones. The SM-G991B reaches about 30 only without a detected
   face and about 15–17 while running the 478-point landmark path (E-056). Sampling windows
   are **adaptive** (collect until target sample count or timeout), not fixed-duration. A
-  temporary 64x64 two-eye CPU benchmark was computationally feasible on the A56 (E-057),
-  but it is not active: lightweight eye-ROI acquisition, full-screen feature compatibility,
-  accuracy, and end-to-end cross-device throughput remain required gates.
+  non-authoritative BlazeFace plus 64x64 two-eye shadow sustained about 22.88 fps on a warmed
+  SM-G991B, but its recursively refined crop failed replicated A56 compatibility (E-061/E-062).
+  A detector-anchored, one-step size-only crop also failed two A56 checks (E-063). Both candidates
+  remain rejected and cannot emit gaze. A detector-anchored, non-recursive centre-and-size
+  re-extraction preserved intended target order in two A56 runs but failed replicated SM-G991B
+  horizontal geometry (E-064-E-066). The BlazeFace/periodic-crop replacement branch is rejected and
+  must remain non-authoritative; ordinary use should return to the 478-point path without shadow
+  inference.
 - **FPS reporting cadence:** inference and raw-gaze delivery still run on every accepted
   result, but the on-screen/lightweight FPS callback is capped at four updates per second.
   This removes redundant UI/log work without changing samples, estimator output, or timing.

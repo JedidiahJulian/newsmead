@@ -100,6 +100,9 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.camera:camera-core:1.3.4")
     implementation("com.google.mediapipe:tasks-vision:0.10.29")
+    // Reversible hybrid-eye shadow: bundle the CPU runtime so testing does not require
+    // Google Play Services. A universal debug APK carries every ABI; release app bundles do not.
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
 
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")

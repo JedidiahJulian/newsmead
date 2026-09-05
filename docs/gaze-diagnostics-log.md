@@ -706,6 +706,357 @@ shadow comparison. It must remain non-authoritative until moving full-screen tar
 compatible raw features and held-out calibration/live accuracy, and until both phones show a material
 throughput improvement.
 
+### 2026-09-05 — Independent-ROI hybrid prototype and A56 full-screen shadow (E-058)
+
+**Question:** Can a lightweight face detector acquire both eye ROIs without the 478-point model,
+run the 64x64 iris model at camera rate, and preserve the reference feature's full-screen ordering?
+
+**Action:** Added a development-only shadow using the official short-range BlazeFace detector for
+face/eye locations and the official 64x64 iris landmark model for each eye. Both run on a single
+lower-priority CPU worker with a bundled TensorFlow Lite runtime. The current 478-point GPU Face
+Landmarker still runs every accepted frame and remains the only source delivered to the mapper,
+filters, calibration collector, visible dot, and accuracy calculation. The nine-point logger now
+associates same-frame shadow records with the existing target SAMPLE windows even when detailed
+telemetry is OFF. No camera images are retained.
+
+**Evidence:** The face-visible A56 preview initialized both models and, after warm-up, usually
+completed the independent candidate at approximately 28-31 frames/s with zero busy drops and zero
+invalid results. The target-linked telemetry-OFF run `hybrid_shadow_fullscreen_a56_1` completed with
+198 shadow samples. Its active-pipeline FPS summary was 29.52 mean (25.27 minimum, 30.55 maximum),
+while candidate work averaged 17.800 ms with 22.396 ms P95. Across same-frame samples, absolute
+candidate/reference differences were 0.0210/0.0403 horizontal median/P95 and 0.0383/0.0611 vertical;
+pooled correlations were 0.8014 horizontal and 0.8339 vertical. Correlation across the nine target
+medians was 0.8811 horizontal and 0.9158 vertical. Candidate medians preserved ordered left/centre/
+right and top/middle/bottom movement, but used a visibly compressed and shifted raw-feature range.
+All 71 gaze-focused JVM tests pass and the debug APK assembles. The calibration SHA256 remained
+`713adc47a00e84d1c3b346985ace4d13d09b7652a34c7e35e0438761a2d85343` before and after installation
+and the run; the app was left closed.
+
+**Interpretation and boundary:** Independent ROI acquisition and A56 full-screen raw-feature
+compatibility are now supported, but direct substitution into the existing reference calibration is
+not: the candidate's range differs. The user correctly noted that the saved calibration was about one
+day old. Therefore this run's screen-coordinate accuracy is excluded from candidate evaluation; it
+is not a prospective calibration/accuracy result. The raw same-frame comparison remains valid because
+both extractors observed the same frames and were grouped by known targets. With explicit user
+authorization, the numeric-only JSON was copied to
+`diagnostics-local/2026-09-05/hybrid-shadow/gaze_accuracy_session_20260905_175438_286.json`; its local
+SHA256 matches the app-private original at
+`cb579bc0c50cd410e9bd9ad8f692698a790e0429b8ef23958e7b786681378664`.
+
+**Next inquiry:** Keep the candidate non-authoritative. Repeat only the face-visible performance
+preview on the SM-G991B to establish cross-device candidate throughput; no calibration is needed for
+that check. Then design and validate a conservative candidate-to-reference feature alignment or
+candidate-specific calibration path before routing any candidate output. Only after that offline/
+shadow gate passes should a fresh telemetry-OFF 16-point calibration and immediate nine-point test be
+used as the prospective accuracy gate.
+
+### 2026-09-05 — SM-G991B candidate throughput and periodic face ROI (E-059)
+
+**Question:** Does the independent candidate materially improve face-visible throughput on the
+slower SM-G991B, and can redundant face detection be reduced without changing the authoritative
+gaze pipeline?
+
+**Action:** First ran the candidate-only 640x480 performance preview with BlazeFace on every accepted
+frame. The preview emits no gaze and does not read or write calibration. Then changed only the shadow
+backend so BlazeFace refreshes the face/eye ROI every fourth accepted candidate frame and the most
+recent ROI is reused between refreshes. The two 64x64 iris passes still run on every accepted
+candidate frame. The 478-point estimator, mapper, filters, target, sequence, timing, posture monitor,
+and affine layer were not changed, and the candidate remains non-authoritative.
+
+**Evidence:** Before periodic ROI reuse, the steady face-visible interval completed 885 candidate
+frames in 51.038 seconds, or approximately 17.34 FPS. It busy-dropped 644 of 1,529 candidate frame
+opportunities (42.1%). After the change, the stable interval from completed sample 30 to sample 930
+completed 900 frames in 34.656 seconds, or approximately 25.97 FPS. It busy-dropped 138 of 1,038
+opportunities (13.3%). The user's visible range was 25-31 FPS. Seven consecutive 120-frame backend
+summaries reported 25% detector-run fractions, zero invalid results, and candidate work means from
+11.36 to 19.55 ms after the transition. Initial no-face/warm-up time and a later face-loss interruption
+are excluded from the steady calculation. The saved SM-G991B calibration SHA256 remained
+`77b92423326b912c9eaa30dcdba48d1cb45ba046729bde6370eee1ab575caf17`, and the app was closed.
+
+**Interpretation and boundary:** Periodic ROI reuse materially improves isolated candidate
+throughput on the SM-G991B: sustained completion increased about 50% relative to the every-frame
+detector candidate and now exceeds the approximately 15-17 FPS reference preview. This closes the
+bounded cross-device compute question, not the gaze-accuracy question. Reusing an ROI changes its
+freshness during eye/head movement, and the A56 target-linked result in E-058 used every-frame face
+detection. Therefore E-058 cannot validate the optimized cadence, and this preview contains no
+coordinate-accuracy evidence.
+
+**Next inquiry:** Keep the reference authoritative. On the currently connected SM-G991B, run one
+telemetry-OFF target-linked nine-point shadow session with the periodic-ROI build. The saved
+calibration may remain in place because only same-frame candidate/reference raw-feature compatibility
+is being evaluated; exclude its screen-coordinate score. If target ordering and regional agreement
+remain acceptable, repeat the same compatibility check on the A56 before designing feature alignment
+or a candidate-specific calibration path.
+
+### 2026-09-05 — SM-G991B periodic coarse-ROI compatibility replication (E-060)
+
+**Question:** Does the faster every-fourth-frame BlazeFace cadence preserve the reference raw
+feature's moving-target pattern on the SM-G991B?
+
+**Action:** Ran two unchanged telemetry-OFF nine-point shadow sessions,
+`hybrid_periodic_fullscreen_g991b_1` and `hybrid_periodic_fullscreen_g991b_2`. The reference remained
+authoritative, the saved calibration was not replaced, and its displayed screen-coordinate scores
+are excluded. Both sessions compare candidate and reference features derived from the same submitted
+frames inside the existing target SAMPLE windows.
+
+**Evidence:** Run 1 saved 147 shadow samples and produced target-median candidate/reference
+correlations of 0.388 horizontal and 0.800 vertical. Run 2 saved 142 and produced 0.190 horizontal
+and 0.777 vertical. Across the two sessions, the reference target pattern repeated at 0.908/0.854
+horizontal/vertical correlation, while the candidate repeated at only 0.251/0.600. Run 1's freshly
+detected and cached subsets had horizontal correlations of 0.350 and 0.489 respectively; freshly
+detected samples were therefore not better than cached samples inside that run. The session SHA256
+values are `eb1535d532e98db4a046a254f5b187fd72b30c5c74ae3fa605c3ad62837cbc24` and
+`d53b913339bc2becb21b2223ca5280218a69ea3276ddfeebc2b3a8279fa5f72c`.
+
+**Interpretation and boundary:** The periodic coarse detector ROI fails the replicated SM-G991B
+moving-target feature gate. The four-frame reuse is not isolated as the cause: coarse BlazeFace eye
+geometry is also used on refresh frames, and those samples were no better. Do not route this version
+to the mapper or collect a candidate calibration.
+
+**Next inquiry:** Retain the successful periodic compute cadence but replace the repeatedly coarse
+eye crop with an eye-corner-refined ROI derived from the iris model output, following the official
+iris ROI geometry. Keep this change inside the non-authoritative shadow and repeat the same gate.
+
+### 2026-09-05 — Eye-corner-refined ROI and replicated SM-G991B gate (E-061)
+
+**Question:** Can a tight, model-derived eye ROI restore feature ordering without losing the
+candidate's throughput advantage?
+
+**Action:** Added a bounded shadow-only feedback crop. Each 64x64 iris result projects its two eye
+corners back into the source frame and refines the next crop; BlazeFace remains the every-fourth-frame
+safety refresh. The crop uses the official MediaPipe iris graph's two-corner, square, 2.3x ROI rule
+([source](https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/modules/iris_landmark/iris_landmark_landmarks_to_roi.pbtxt)),
+with conservative centre/scale/rotation blending to prevent a single outlier from running away. This
+does not change the active 478-point estimator, mapper, filters, target, sequence, timing, posture
+monitor, affine layer, or gaze output.
+
+**Evidence:** All 74 gaze-focused JVM tests pass and the debug APK assembles with SHA256
+`470f416ee85a3ea38ef94dc59e8e16f850ce150515c726a0991009e6c5743139`; the five protected active
+pipeline files have no diff. Two telemetry-OFF target-linked sessions saved 136 and 148 shadow
+samples. Run 1 (`hybrid_refined_roi_g991b_1`) produced target-median H/V correlations of 0.904/0.895.
+Run 2 was accidentally labelled `hybrid_refined_roi_g911b_2`; its embedded mode/outcome are correct,
+so the label is retained and the run is included. It produced 0.778/0.967. Candidate target patterns
+repeated across the two runs at 0.808 horizontal and 0.932 vertical, and every row/column preserved
+the correct overall direction. The visible/recorded active FPS was 15.19 and 14.47 respectively.
+Those screens ran the authoritative 478-point reference and the candidate shadow together; because
+candidate submission follows an accepted reference result, these values measure the dual shadow
+configuration rather than candidate-only throughput. Their SHA256 values are
+`52a1fe929eefd569c87fa7cbc9a81a9b6a51f3abb1bfd470a14e96f41e5eb574` and
+`77cc9ffef7b2ffa2bd0435b295d8a76f37e1be121373d2ad755a71368270149c`.
+
+The subsequent candidate-only preview completed 1,080 face-visible frames from sample 30 to 1,110
+in 47.195 seconds, or approximately 22.88 FPS, with 334 busy drops among 1,414 opportunities (23.6%).
+The user observed 21-27 FPS. The phone was moderately warm after the repeated tests: Android thermal
+status 2, battery 37.4 C, and skin 39.3 C. This is below the earlier cooler 25.97 FPS result but still
+materially above the approximately 15-17 FPS reference. The calibration SHA256 remained
+`77b92423326b912c9eaa30dcdba48d1cb45ba046729bde6370eee1ab575caf17`, all four session hashes
+remained stable across installation, and the app was closed.
+
+**Interpretation and boundary:** The refined candidate passes the replicated SM-G991B raw-feature
+and warm-device throughput gates. This is still shadow evidence, not candidate screen-coordinate
+accuracy: the old reference calibration's displayed scores are excluded, the candidate has a
+different feature range, and it has never controlled gaze output. The 14.47-15.19 FPS target-linked
+runs also do not demonstrate a production speed improvement: only the isolated preview establishes
+the candidate's 22.88 FPS potential. End-to-end throughput must be measured again if candidate output
+is ever routed experimentally.
+
+**Next inquiry:** Install the same build on the A56 with app data preserved and repeat the
+telemetry-OFF target-linked nine-point raw-feature check. If one run passes, replicate it once, then
+confirm candidate-only A56 throughput. Only after both phones pass should feature alignment or a
+candidate-specific calibration path be designed.
+
+### 2026-09-06 — Recursive eye-corner ROI A56 replication (E-062)
+
+**Question:** Does the recursively refined eye-corner ROI that passed on the SM-G991B generalize to
+the A56?
+
+**Action:** Installed the exact E-061 APK with A56 data preserved and ran two unchanged
+telemetry-OFF target-linked sessions: `hybrid_refined_roi_a56_1` and
+`hybrid_refined_roi_a56_2`. The reference remained authoritative; no calibration or correction was
+created, and the saved reference calibration's displayed coordinate scores are excluded.
+
+**Evidence:** Run 1 saved 174 shadow samples at 26.48 active FPS and produced target-median H/V
+candidate/reference correlations of 0.090/0.634. Run 2 saved 194 at 27.96 active FPS and produced
+0.653/0.922. Across the two runs, the reference target pattern repeated at 0.991/0.991 H/V while the
+candidate repeated at only 0.703/0.543. In run 1, freshly detected versus recursively cached target
+agreement was 0.735/0.150 versus -0.098/0.940; in run 2 it was 0.896/0.734 versus 0.473/0.828. Thus
+cached horizontal agreement was weak in both repetitions even though vertical behavior differed.
+The session SHA256 values are `53cd6d2d634515f214492ba0cfc8b594fbcadce914e21ecc3c4284de8bf1ab07`
+and `8b5b72d251d26cfda973d0b81618a2817ec2f3e12e46d728a49ce6234d920f5b`. The calibration SHA256
+remained `713adc47a00e84d1c3b346985ace4d13d09b7652a34c7e35e0438761a2d85343`.
+
+**Interpretation and boundary:** Recursive centre/scale/rotation feedback is not cross-device
+reliable and is rejected despite its replicated SM-G991B result. This does not reject the 64x64 iris
+candidate or periodic detector cadence. It specifically rejects allowing the candidate's own corner
+output to repeatedly translate and rotate its future crop.
+
+**Next inquiry:** Test one detector-anchored, non-recursive refinement: BlazeFace continues to set
+eye centre and roll every fourth accepted frame, while the current detector frame's iris-corner
+distance tightens only the size of the next three cached crops. Do not update that cached crop again
+from its own outputs. Keep the candidate shadow-only and repeat the A56 target gate before returning
+to the SM-G991B.
+
+### 2026-09-06 — Detector-anchored size-only ROI A56 replication (E-063)
+
+**Question:** Does removing recursive centre/rotation feedback while retaining a one-step
+iris-corner size refinement produce a repeatable A56 candidate feature?
+
+**Action:** Ran two unchanged telemetry-OFF target-linked sessions,
+`hybrid_anchored_roi_a56_1` and `hybrid_anchored_roi_a56_2`, using the detector-anchored
+size-only APK from E-062. BlazeFace supplied eye centre and roll every fourth accepted frame; only
+the detected frame's iris-corner distance set the cached crop size. The reference remained
+authoritative, no calibration or correction was created, and the displayed coordinate scores from
+the old reference calibration are excluded. With user authorization, both numeric artifacts were
+copied to `diagnostics-local/2026-09-06/hybrid-shadow/`.
+
+**Evidence:** Run 1 saved 178 shadow samples at 26.38 active FPS and produced target-median H/V
+candidate/reference correlations of 0.635/0.479. Run 2 saved 179 at 27.36 active FPS and produced
+-0.049/0.396. The reference target pattern repeated across the two runs at 0.860/0.996 H/V, while
+the candidate repeated at -0.240/0.229. Fresh detector-frame target agreement was 0.529/0.692 then
+-0.064/0.517; cached size-refined agreement was 0.699/0.402 then -0.055/0.294. Candidate work
+averaged 13.95 and 13.75 ms, with detector-frame shares of 24.7% and 25.1%. Session SHA256 values
+are `49887c7ad453a5687581534bea25e61c93814c023d1c3de84269ab6170db238c` and
+`7b43cf52673f29372eb63a883e6a134f2d0f45bc61f9e896b9691b2989e6800c`. The calibration SHA256
+remained `713adc47a00e84d1c3b346985ace4d13d09b7652a34c7e35e0438761a2d85343` in both runs.
+
+**Interpretation and boundary:** The size-only anchored crop is rejected after two A56 failures.
+Neither the detector frames nor cached frames preserve reliable two-axis target geometry, so the
+failure cannot be attributed only to recursive crop walking. This still does not reject the 64x64
+iris model itself: E-058 showed that the A56 every-frame coarse path can preserve target order, and
+E-061 showed that eye-corner centring can recover the SM path. It rejects this particular attempt to
+combine coarse detector centres with periodic size-only reuse. No production gaze component changed.
+
+**Next inquiry:** Before another physical run, implement one bounded shadow candidate that combines
+the two useful observations without recursion: on each BlazeFace refresh, obtain iris corners from
+the detector crop, derive one corrected centre and official 2.3x corner-distance size from that
+detector-anchored crop, re-extract once, and cache that corrected crop until the next detector
+refresh. Never update centre, size, or roll from cached-frame outputs. Log numeric crop correction
+magnitudes so device-specific instability can be diagnosed without retaining images. Run the same
+two-run A56 gate before returning to the SM-G991B; do not alter the authoritative source, mapper,
+filters, targets, sequence, timing, posture monitor, or affine layer.
+
+### 2026-09-06 — Detector-anchored one-step re-extraction implementation (E-064)
+
+**Question:** Can eye-corner centring be recovered without the recursive crop walk rejected in
+E-062 or the coarse-centre limitation exposed in E-063?
+
+**Action:** Replaced the size-only shadow refinement with a detector-anchored one-step re-extraction.
+On each fourth-frame BlazeFace refresh, the first two iris passes project each decoded corner
+midpoint back through the detector crop's scale and roll, derive the official 2.3x corner-distance
+square, and bound implausible centre/size changes. The candidate immediately re-extracts both eyes
+once from those corrected crops and caches them for the next three frames. Cached-frame output can
+never update centre, size, or roll. Numeric per-eye centre shift, side ratio, re-extraction status,
+and re-extraction time are persisted; no camera image is retained.
+
+**Evidence:** All 75 gaze-focused JVM tests pass, including direct checks of centre projection
+through detector roll, official size, size bounding, and severe-centre rejection. The debug APK
+assembles with SHA256 `ea5475d5705f0a0eb260191c8f8dea62d66e03716f6f74ee8d6d276caf6fa214`.
+It was installed on the A56 with `-r`, and the installed base APK has the same hash. Before and after
+installation, the calibration and two E-063 session hashes remained respectively
+`713adc47a00e84d1c3b346985ace4d13d09b7652a34c7e35e0438761a2d85343`,
+`49887c7ad453a5687581534bea25e61c93814c023d1c3de84269ab6170db238c`, and
+`7b43cf52673f29372eb63a883e6a134f2d0f45bc61f9e896b9691b2989e6800c`. The five protected
+authoritative mapper/provider/filter files have no diff.
+
+**Interpretation and boundary:** This is a genuine acquisition improvement candidate, not a
+production gaze change. It addresses the specific cross-device ROI failure while preserving the
+successful periodic compute design, but it has no accuracy evidence yet. The 478-point reference
+still exclusively controls calibration, mapping, filtering, visible gaze, and accuracy scores.
+
+**Next inquiry:** On the A56, run two unchanged telemetry-OFF target-linked nine-point shadows,
+starting with `hybrid_reextract_roi_a56_1`. Do not recalibrate, apply correction, or interpret the
+displayed old-calibration coordinate score. Evaluate same-frame target agreement, repeatability,
+re-extraction success/correction magnitudes, and active throughput before any SM-G991B run.
+
+### 2026-09-06 — One-step re-extraction replicated A56 gate (E-065)
+
+**Question:** Does the detector-anchored one-step centre/size re-extraction preserve repeatable
+full-screen target geometry on the A56 without sacrificing throughput?
+
+**Action:** Ran two unchanged telemetry-OFF target-linked sessions,
+`hybrid_reextract_roi_a56_1` and `hybrid_reextract_roi_a56_2`. The E-064 version and crop mode are
+embedded in both artifacts. The reference remained authoritative, no calibration or correction was
+created, and the displayed old-calibration coordinate scores are excluded. Both numeric artifacts
+were copied with authorization to `diagnostics-local/2026-09-06/hybrid-shadow/`.
+
+**Evidence:** Run 1 saved 173 shadow samples at 28.76 active FPS. Candidate/reference target-median
+H/V correlations were 0.863/0.922, while candidate/intended-target correlations were 0.876/0.965.
+Run 2 saved 179 samples at 28.38 active FPS. Candidate/reference correlations fell to 0.535/0.499,
+but candidate/intended-target correlations remained 0.825/0.902. In that second run the reference's
+own intended-target H/V correlations were only 0.830/0.684, so the weak vertical candidate/reference
+comparison does not by itself identify a candidate ordering failure. Across runs, reference target
+patterns repeated at 0.948/0.770 H/V and candidate patterns at 0.829/0.903. Candidate column and row
+medians remained monotonic in both runs.
+
+Re-extraction succeeded on all 42/42 and 46/46 detector frames. Detector-frame target agreement was
+0.896/0.897 then 0.337/0.593; cached-frame agreement was 0.854/0.933 then 0.669/0.497. Right/left
+median centre shifts were 6.52/3.89 px then 6.51/2.23 px, and median side ratios were 0.843/0.828
+then 0.861/0.814. Median re-extraction cost was 9.33 and 10.00 ms on detector frames. Total candidate
+work averaged 15.29 and 15.80 ms, with approximately 31.95 and 31.71 ms P95. Session SHA256 values
+are `6e37125cef9a43f68a1bc0cfc054749b3044d9ddc6baa484899b91fddc4d9d05` and
+`297a3cc849c934e3af6dd398aa3c3f5855f3ed8c21c94a9f9d88d20cd88ccc9a`. The calibration SHA256
+remained `713adc47a00e84d1c3b346985ace4d13d09b7652a34c7e35e0438761a2d85343`.
+
+**Interpretation and boundary:** The candidate passes the bounded A56 ordering/throughput gate for
+cross-device evaluation: it preserves the intended two-axis target order twice, its own vertical
+pattern is more repeatable than the reference in this pair, all re-extractions succeed, and active
+throughput stays near camera rate. This is not a production accuracy pass. The weaker second-run
+candidate/reference correlations and detector/cached subset variability remain material, the raw
+range differs, and no candidate calibration or screen-coordinate mapping exists.
+
+**Next inquiry:** Install the exact E-064 APK on the SM-G991B with app data preserved and run two
+unchanged telemetry-OFF target-linked sessions labelled `hybrid_reextract_roi_g991b_1` and
+`hybrid_reextract_roi_g991b_2`. Exclude the displayed old-calibration coordinate score. Require
+intended-target ordering, inter-run repeatability, successful re-extraction, and materially better
+throughput than the 15-17 FPS reference before designing candidate alignment or calibration.
+
+### 2026-09-06 — One-step re-extraction replicated SM-G991B gate (E-066)
+
+**Question:** Does the exact one-step re-extraction build that passed the bounded A56 gate preserve
+two-axis target geometry on the SM-G991B?
+
+**Action:** Verified the SM-G991B calibration and all four prior E-060/E-061 artifact hashes,
+installed the exact E-064 APK with data preserved, and verified those hashes again. Ran two unchanged
+telemetry-OFF target-linked sessions, `hybrid_reextract_roi_g991b_1` and
+`hybrid_reextract_roi_g991b_2`. The reference remained authoritative; no calibration or correction
+was created, and displayed old-calibration coordinate scores are excluded. Both numeric artifacts
+were copied with authorization to `diagnostics-local/2026-09-06/hybrid-shadow/`.
+
+**Evidence:** Run 1 saved 146 samples at 15.50 dual-pipeline FPS. Candidate/intended-target H/V
+correlations were 0.154/0.939 and candidate/reference correlations were -0.005/0.930. Run 2 saved
+146 samples at 14.88 dual-pipeline FPS. Candidate/intended-target H/V correlations were 0.733/0.980
+and candidate/reference correlations were 0.508/0.656. Candidate target patterns repeated across
+runs at only 0.513 horizontal but 0.905 vertical; reference repeatability was 0.817/0.594. Candidate
+horizontal column medians were effectively flat in run 1 (`0.4875, 0.4891, 0.4856`) and became
+ordered only in run 2 (`0.4878, 0.4879, 0.5118`). Candidate vertical row medians were monotonic in
+both runs.
+
+Re-extraction succeeded on all 36/36 and 34/34 detector frames. Right/left median centre shifts were
+6.79/2.74 px then 5.93/2.62 px, and median side ratios were 0.861/0.812 then 0.848/0.808. Median
+re-extraction cost rose from 13.55 to 16.44 ms; total candidate work averaged 20.52/28.87 ms with
+43.22/57.13 ms P95. The reported 15.50/14.88 FPS is the authoritative 478-point path and candidate
+shadow running together, not candidate-only throughput; a separate speed screen is unnecessary after
+the feature gate failure. Session SHA256 values are
+`9434d18ebb35ccd286964ffcfe1ba851f399abca4065475d9a5b9e7d7b752bac` and
+`f6df3939ab9df4cc83364ebb7571c96ede73995d30684ad71423fee7dcf6aef3`. The calibration SHA256
+remained `77b92423326b912c9eaa30dcdba48d1cb45ba046729bde6370eee1ab575caf17`.
+
+**Interpretation and boundary:** The one-step re-extraction candidate fails the replicated
+cross-device horizontal gate and is rejected. The result is not explained by re-extraction failure,
+recursive crop walking, or vertical feature loss: every re-extraction succeeded and vertical target
+order was excellent. Coarse BlazeFace eye anchoring plus this 64x64 iris path does not provide
+reliable horizontal geometry across both phones under the tested architecture. Do not tune this
+candidate against the SM recordings, create a candidate calibration, route it to gaze output, or run
+another repetition. This does not prove that every use of the iris model is impossible, but it closes
+the current BlazeFace/periodic-crop replacement branch.
+
+**Next inquiry:** Disable the rejected hybrid shadow by default so ordinary reading uses only the
+authoritative path, but retain the research harness and prior evidence. Before another full target or
+calibration run, test only the compute cost of the official compact `face_landmark.tflite` model on
+the SM-G991B. If it leaves sufficient frame budget for two iris passes, use its eye-corner landmarks
+instead of BlazeFace eye centres in a new candidate-only three-position horizontal gate on both
+phones. Stop before full calibration if either compute or horizontal ordering fails.
+
 ## Evidence Registry
 
 | ID | Date | Evidence source | Conditions | Artifact or location | Notes |
@@ -767,6 +1118,15 @@ throughput improvement.
 | E-055 | 2026-09-04 | Second-device performance-readiness check | Samsung SM-G991B; exact tested APK; GPU; 640x480; no official accuracy run | Read-only package/hash, MediaPipe logcat, battery and thermal inspection | About 16 FPS with visible lag and severe thermal status; cross-device accuracy paused for bounded FPS optimization |
 | E-056 | 2026-09-04 | Two-phone performance profile and temporary comparisons | SM-G991B plus A56; cool-start 640/GPU checks; direct-buffer, 320/direct, and 640/CPU temporary screens; no calibration started | ART trace, gfx/CPU/thermal snapshots, source audit, 67 final JVM tests, APK build/install/hash, MediaPipe logcat | Temporary paths rejected and safe 640/GPU restored; face-visible throughput is about 15-17 FPS on SM-G991B and 18.5 median on cool A56; current 478-point backend is the limit |
 | E-057 | 2026-09-05 | 64x64 two-eye model feasibility and same-frame shadow | Galaxy A56; CPU LiteRT; isolated synthetic crop/inference plus 120 real face-visible shadow frames; no calibration started | Temporary benchmark output and `IrisShadow` logcat; summary retained in this entry | Two-eye compute is feasible; central raw-feature deltas are small enough for a hybrid prototype, but ROI acquisition and full-range accuracy remain unproved; temporary runtime/model removed; clean APK restored and installed |
+| E-058 | 2026-09-05 | Independent-ROI hybrid and target-linked full-screen shadow | Galaxy A56; BlazeFace plus two 64x64 iris passes on CPU; reference remains authoritative; telemetry OFF; day-old calibration | App-private original plus authorized hash-matched copy under `diagnostics-local/2026-09-05/hybrid-shadow/` | Candidate sustains near camera rate and preserves full-screen target ordering with 0.881/0.916 target-median H/V correlation; range differs, so direct substitution and this run's coordinate accuracy are excluded |
+| E-059 | 2026-09-05 | Candidate-only cross-device throughput and periodic face ROI | SM-G991B; 640x480; BlazeFace every frame followed by every fourth frame; no gaze output or calibration run | `HybridEyePerformanceActivity` logcat summaries; numeric results retained in this entry | Periodic ROI raises stable candidate completion from about 17.34 to 25.97 FPS and reduces busy-drop share from 42.1% to 13.3%; optimized full-screen feature compatibility remains unproved |
+| E-060 | 2026-09-05 | Replicated periodic coarse-ROI target compatibility | SM-G991B; two telemetry-OFF nine-point shadows; reference authoritative; old calibration score excluded | Four app-private session/hash identities retained in E-060/E-061 | Candidate target H/V agreement is 0.388/0.800 then 0.190/0.777; coarse ROI version rejected before candidate calibration |
+| E-061 | 2026-09-05 | Eye-corner-refined ROI, replicated compatibility, and warm throughput | SM-G991B; two telemetry-OFF nine-point shadows plus candidate-only preview; reference authoritative | App-private numeric sessions plus logcat; hashes and statistics retained in this entry | Target H/V agreement recovers to 0.904/0.895 and 0.778/0.967; warm candidate sustains 22.88 FPS; A56 replication remains required |
+| E-062 | 2026-09-06 | Recursive eye-corner ROI A56 replication | A56; two telemetry-OFF nine-point shadows; reference authoritative; coordinate scores excluded | App-private numeric sessions; hashes and statistics retained in this entry | Candidate H/V target agreement is 0.090/0.634 then 0.653/0.922; cached horizontal behavior fails twice; recursive refinement rejected |
+| E-063 | 2026-09-06 | Detector-anchored size-only ROI A56 replication | A56; two telemetry-OFF nine-point shadows; reference authoritative; coordinate scores excluded | App-private originals plus authorized copies under `diagnostics-local/2026-09-06/hybrid-shadow/` | Candidate H/V target agreement is 0.635/0.479 then -0.049/0.396; inter-run repeatability is -0.240/0.229; size-only refinement rejected |
+| E-064 | 2026-09-06 | Detector-anchored one-step centre/size re-extraction | Shadow-only implementation, 75 gaze JVM tests, APK build/install/hash and data-preservation checks | Hybrid geometry/backend/sample logger and A56 debug APK | Installed APK matches `ea5475d...a214`; calibration and E-063 files unchanged; physical A56 gate pending |
+| E-065 | 2026-09-06 | Replicated one-step re-extraction A56 gate | A56; two telemetry-OFF nine-point shadows; reference authoritative; coordinate scores excluded | App-private originals plus authorized copies under `diagnostics-local/2026-09-06/hybrid-shadow/` | Candidate/intended-target H/V is 0.876/0.965 then 0.825/0.902 at 28.76/28.38 FPS; conditional A56 pass for SM replication |
+| E-066 | 2026-09-06 | Replicated one-step re-extraction SM-G991B gate | SM-G991B; exact E-064 APK; two telemetry-OFF nine-point shadows; coordinate scores excluded | App-private originals plus authorized copies under `diagnostics-local/2026-09-06/hybrid-shadow/` | Candidate/intended horizontal is 0.154 then 0.733 and repeats at 0.513; cross-device candidate rejected despite strong vertical order |
 
 ## Confirmed Findings
 
@@ -803,7 +1163,13 @@ throughput improvement.
 22. Top-left was the worst vertical live target in four of the five recent valid runs, making it the clearest recurring regional failure for the next bounded analysis (E-034, E-036).
 23. Across those five pairs, top-left was also the worst calibration LOO target in every run, while mapper conditioning and held-out validation did not rank the later live tails (E-037).
 24. No saved calibration metric reliably selects a good immediate live run. High drift is the only directional warning observed, so it can support a conservative redo/abort rule but not an accuracy claim (E-037).
-25. The legacy 64x64 two-eye model is computationally feasible on the A56 and locally tracks the current raw feature near centre, but it has not yet demonstrated independent eye-ROI acquisition, full-screen compatibility, accuracy, or a production throughput gain (E-057).
+25. The legacy 64x64 two-eye model is computationally feasible on both tested phones. Periodic face-ROI reuse raises isolated SM-G991B candidate throughput to about 25.97 FPS, but optimized full-screen feature compatibility and prospective accuracy remain unproved (E-057-E-059).
+26. A periodically reused coarse BlazeFace eye ROI fails replicated SM-G991B target compatibility, while an official-geometry eye-corner-refined ROI restores target ordering in two runs and retains about 22.88 FPS on the warmed phone. The candidate remains non-authoritative pending A56 replication and a valid calibration path (E-060/E-061).
+27. Recursive eye-corner crop feedback does not generalize to the A56: the reference repeats almost exactly across two runs, but candidate horizontal/vertical patterns do not, and cached horizontal agreement remains weak. This motivated the detector-anchored, non-recursive size-refinement test recorded in E-063 (E-062).
+28. Detector-anchored size-only refinement also fails two A56 target checks. Both fresh and cached subsets are unreliable and the candidate target pattern does not repeat, so the next candidate must recover eye-corner centring in one detector-anchored step without allowing cached outputs to recursively move their own crops (E-063).
+29. Detector-anchored one-step centre/size re-extraction is implemented only in the shadow and preserves the authoritative pipeline. Its geometry/build/data-preservation checks pass, but it has no physical compatibility evidence until the replicated A56 gate is completed (E-064).
+30. One-step re-extraction preserves intended horizontal/vertical target ordering in two A56 runs and remains near camera rate. Its weaker second-run agreement with a vertically weak reference prevents a production claim but does not block an exact-build SM-G991B replication (E-065).
+31. The same one-step build fails replicated SM-G991B horizontal geometry despite complete re-extraction and strong vertical ordering. The current BlazeFace/periodic-crop hybrid branch is rejected as non-generalizable and must not control gaze or remain active during ordinary reading tests (E-066).
 
 ## Open Questions
 

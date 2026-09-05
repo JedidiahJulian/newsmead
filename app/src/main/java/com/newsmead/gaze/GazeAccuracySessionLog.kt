@@ -61,6 +61,14 @@ class GazeAccuracySessionLog(
         root.put("drift_correction", activeCorrection?.toJson() ?: JSONObject.NULL)
         root.put("posture_shadow_mode", true)
         root.put("posture_affects_gaze_output", false)
+        root.put("hybrid_eye_shadow_enabled", com.newsmead.data.StudyConfig.GAZE_HYBRID_SHADOW_ENABLED)
+        root.put("hybrid_eye_shadow_affects_gaze_output", false)
+        root.put("hybrid_eye_shadow_reference", "face_landmarker_478_gpu")
+        root.put(
+            "hybrid_eye_shadow_candidate",
+            "blazeface_short_range_plus_iris_64_cpu_detector_anchored_reextract_v1",
+        )
+        root.put("hybrid_eye_shadow_crop_mode", "detector_anchored_one_step_center_size")
         root.put("posture_profile", postureProfile?.toJson() ?: JSONObject.NULL)
         root.put("camera_frames_retained", false)
         root.put(
@@ -84,6 +92,7 @@ class GazeAccuracySessionLog(
         fpsSummary: FpsSummary?,
         pipelineSamples: List<LocalCalibratedGazeProvider.PipelineDiagnostics>,
         sourceEvents: List<LocalRawGazeSource.Diagnostics>,
+        hybridEyeSamples: List<HybridEyeShadowSample>,
         postureSummary: PostureSummary,
     ) {
         val accepted = result.status == FixationWindowFilter.Status.ACCEPTED
@@ -111,6 +120,10 @@ class GazeAccuracySessionLog(
                 put("collector_retained_count", result.retainedCount)
                 put("fps_summary", fpsSummary?.toJson() ?: JSONObject.NULL)
                 put("posture_shadow_summary", postureSummary.toJson())
+                put("hybrid_eye_shadow_sample_count", hybridEyeSamples.size)
+                put("hybrid_eye_shadow_samples", JSONArray().apply {
+                    hybridEyeSamples.forEach { put(it.toJson()) }
+                })
                 if (detailedTelemetryEnabled) {
                     put("pipeline_samples", JSONArray().apply {
                         pipelineSamples.forEach { put(it.toJson()) }
@@ -235,6 +248,27 @@ class GazeAccuracySessionLog(
             putNum("head_roll_deg", headRollDeg)
             put("busy_dropped_frames_cumulative", busyDroppedFrames)
         }
+
+    private fun HybridEyeShadowSample.toJson(): JSONObject = JSONObject().apply {
+        put("capture_timestamp_ns", captureTimestampNs)
+        put("result_elapsed_ns", resultElapsedNs)
+        putNum("reference_horizontal", referenceHorizontal)
+        putNum("reference_vertical", referenceVertical)
+        putNum("candidate_horizontal", candidateHorizontal)
+        putNum("candidate_vertical", candidateVertical)
+        putNum("right_eye_openness", rightEyeOpenness)
+        putNum("left_eye_openness", leftEyeOpenness)
+        put("face_detector_ran", faceDetectorRan)
+        put("detector_reextract_applied", detectorReextractApplied)
+        putNum("right_crop_center_shift_px", rightCropCenterShiftPx)
+        putNum("left_crop_center_shift_px", leftCropCenterShiftPx)
+        putNum("right_crop_side_ratio", rightCropSideRatio)
+        putNum("left_crop_side_ratio", leftCropSideRatio)
+        putNum("total_ms", totalMs)
+        putNum("detector_ms", detectorMs)
+        putNum("eye_ms", eyeMs)
+        putNum("reextract_ms", reextractMs)
+    }
 
     private fun DriftCorrection.toJson(): JSONObject = JSONObject().apply {
         put("coeff_x", JSONArray().apply { coeffX.forEach { put(it) } })

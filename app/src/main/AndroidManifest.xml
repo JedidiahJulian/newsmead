@@ -47,6 +47,10 @@
         <activity
             android:name=".activities.ReadingValidationActivity"
             android:exported="true" />
+        <!-- Researcher-only candidate throughput preview. It cannot emit gaze or write calibration. -->
+        <activity
+            android:name=".activities.HybridEyePerformanceActivity"
+            android:exported="true" />
     </application>
 
 </manifest>

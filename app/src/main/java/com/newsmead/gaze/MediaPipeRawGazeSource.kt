@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.hardware.camera2.CaptureRequest
 import android.os.SystemClock
 import android.util.Log
@@ -59,6 +60,7 @@ class MediaPipeRawGazeSource(
     private var fpsListener: LocalRawGazeSource.OnFps? = null
     private var blinkStatsListener: LocalRawGazeSource.OnBlinkStats? = null
     @Volatile private var diagnosticsListener: LocalRawGazeSource.OnDiagnostics? = null
+    @Volatile private var hybridEyeDiagnosticsListener: LocalRawGazeSource.OnHybridEyeDiagnostics? = null
     private var faceLandmarker: FaceLandmarker? = null
     private var cameraProvider: ProcessCameraProvider? = null
     private var stopped = true
@@ -80,8 +82,10 @@ class MediaPipeRawGazeSource(
     private var inFlightCaptureTimestampNs = 0L
     private var inFlightSubmittedElapsedNs = 0L
     private var inFlightRotationDegrees = 0
+    @Volatile private var inFlightHybridBitmap: Bitmap? = null
     private val lifecycleLock = Any()
     private val frameTransformer = ReusableArgbFrameTransformer()
+    private var hybridEyeShadow: HybridEyeShadowBackend? = null
 
     override fun setOnRawGaze(listener: LocalRawGazeSource.OnRawGaze) {
         this.listener = listener
@@ -103,6 +107,10 @@ class MediaPipeRawGazeSource(
         diagnosticsListener = null
     }
 
+    override fun setOnHybridEyeDiagnostics(listener: LocalRawGazeSource.OnHybridEyeDiagnostics?) {
+        hybridEyeDiagnosticsListener = listener
+    }
+
     override fun start(owner: LifecycleOwner) {
         if (!hasCameraPermission()) {
             requestCameraPermissionIfPossible()
@@ -111,6 +119,11 @@ class MediaPipeRawGazeSource(
         }
 
         stopped = false
+        if (StudyConfig.GAZE_HYBRID_SHADOW_ENABLED && hybridEyeShadow == null) {
+            hybridEyeShadow = HybridEyeShadowBackend(appContext) { sample ->
+                hybridEyeDiagnosticsListener?.onDiagnostics(sample)
+            }
+        }
         try {
             faceLandmarker = createFaceLandmarker()
         } catch (e: Exception) {
@@ -139,6 +152,10 @@ class MediaPipeRawGazeSource(
             cameraProvider = null
             faceLandmarker?.close()
             faceLandmarker = null
+            inFlightHybridBitmap = null
+            hybridEyeShadow?.close()
+            hybridEyeShadow = null
+            hybridEyeDiagnosticsListener = null
         }
     }
 
@@ -172,6 +189,7 @@ class MediaPipeRawGazeSource(
             .setResultListener { result, input -> onFaceLandmarkerResult(result, input) }
             .setErrorListener { error ->
                 busy.set(false)
+                inFlightHybridBitmap = null
                 Log.e(TAG, "FaceLandmarker error", error)
             }
             .build()
@@ -260,10 +278,12 @@ class MediaPipeRawGazeSource(
             inFlightSubmittedElapsedNs = SystemClock.elapsedRealtimeNanos()
             inFlightRotationDegrees = imageProxy.imageInfo.rotationDegrees
             val bitmap = frameTransformer.copyAndTransform(imageProxy, inFlightRotationDegrees)
+            inFlightHybridBitmap = if (hybridEyeShadow != null) bitmap else null
             val mpImage = BitmapImageBuilder(bitmap).build()
             landmarker.detectAsync(mpImage, nextTimestampMs())
         } catch (e: Exception) {
             busy.set(false)
+            inFlightHybridBitmap = null
             Log.e(TAG, "Failed to analyze camera frame", e)
         } finally {
             imageProxy.close()
@@ -271,12 +291,20 @@ class MediaPipeRawGazeSource(
     }
 
     private fun onFaceLandmarkerResult(result: FaceLandmarkerResult, input: MPImage) {
+        val face = result.faceLandmarks().firstOrNull()
+        // Copy before releasing the source busy guard; the frame transformer reuses its bitmap.
+        val hybridBitmap = if (face != null && hybridEyeShadow?.canAcceptFrame() == true) {
+            inFlightHybridBitmap?.copy(Bitmap.Config.ARGB_8888, false)
+        } else {
+            null
+        }
+        val hybridCaptureTimestampNs = inFlightCaptureTimestampNs
+        inFlightHybridBitmap = null
         busy.set(false)
         val resultElapsedNs = SystemClock.elapsedRealtimeNanos()
         totalResults += 1
         updateFps()
         emitFpsIfDue(resultElapsedNs)
-        val face = result.faceLandmarks().firstOrNull()
         if (face == null) {
             noFaceFrames += 1
             emitDiagnostics(
@@ -290,6 +318,7 @@ class MediaPipeRawGazeSource(
             return
         }
         if (face.size <= MIN_REQUIRED_LANDMARK_INDEX) {
+            hybridBitmap?.recycle()
             noFaceFrames += 1
             emitDiagnostics(
                 outcome = LocalRawGazeSource.DiagnosticOutcome.INSUFFICIENT_LANDMARKS,
@@ -313,6 +342,7 @@ class MediaPipeRawGazeSource(
         val openness = (eyeOpenness[0] + eyeOpenness[1]) / 2f
         lastOpenness = openness
         if (updateBlink(openness)) {
+            hybridBitmap?.recycle()
             blinkDroppedFrames += 1
             emitDiagnostics(
                 outcome = LocalRawGazeSource.DiagnosticOutcome.BLINK_DROPPED,
@@ -325,6 +355,15 @@ class MediaPipeRawGazeSource(
             )
             emitBlinkStats()
             return
+        }
+
+        if (hybridBitmap != null) {
+            hybridEyeShadow?.submit(
+                bitmap = hybridBitmap,
+                referenceHorizontal = gaze[4],
+                referenceVertical = gaze[5],
+                captureTimestampNs = hybridCaptureTimestampNs,
+            ) ?: hybridBitmap.recycle()
         }
 
         if (++resultCount % RAW_LOG_INTERVAL == 0) {

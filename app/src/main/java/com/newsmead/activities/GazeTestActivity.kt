@@ -37,6 +37,7 @@ import com.newsmead.gaze.gazeCoordinateFrame
 import com.newsmead.gaze.physicalDisplaySize
 import com.newsmead.gaze.GazeProvider
 import com.newsmead.gaze.GazeAccuracySessionLog
+import com.newsmead.gaze.HybridEyeShadowSample
 import com.newsmead.gaze.LocalCalibratedGazeProvider
 import com.newsmead.gaze.LocalGazeSources
 import com.newsmead.gaze.LocalRawGazeSource
@@ -88,6 +89,7 @@ class GazeTestActivity : AppCompatActivity() {
     @Volatile private var sampleWindowActive = false
     private val pointPipelineSamples = ArrayList<LocalCalibratedGazeProvider.PipelineDiagnostics>()
     private val pointSourceEvents = ArrayList<LocalRawGazeSource.Diagnostics>()
+    private val pointHybridEyeSamples = ArrayList<HybridEyeShadowSample>()
     private val pointFps = FpsSummaryAccumulator()
     private val runFps = FpsSummaryAccumulator()
     private val pointPosture = PostureSummaryAccumulator()
@@ -112,6 +114,7 @@ class GazeTestActivity : AppCompatActivity() {
             if (active) {
                 pointPipelineSamples.clear()
                 pointSourceEvents.clear()
+                pointHybridEyeSamples.clear()
                 pointFps.reset()
                 pointPosture.reset()
             }
@@ -150,6 +153,11 @@ class GazeTestActivity : AppCompatActivity() {
         }
         provider?.stop()
         val rawSource = LocalGazeSources.create(this)
+        rawSource.setOnHybridEyeDiagnostics { sample ->
+            runOnUiThread {
+                if (sampleWindowActive) pointHybridEyeSamples.add(sample)
+            }
+        }
         rawSource.setOnFps { fps ->
             runOnUiThread {
                 binding.gazeDot.setFps(fps)
@@ -323,6 +331,7 @@ class GazeTestActivity : AppCompatActivity() {
             fpsSummary = pointFps.snapshot(),
             pipelineSamples = pointPipelineSamples.toList(),
             sourceEvents = pointSourceEvents.toList(),
+            hybridEyeSamples = pointHybridEyeSamples.toList(),
             postureSummary = pointPosture.snapshot(),
         )
         observations.add(DriftCorrection.Observation(result.medianX, result.medianY, screen.x, screen.y))
@@ -355,6 +364,7 @@ class GazeTestActivity : AppCompatActivity() {
             fpsSummary = pointFps.snapshot(),
             pipelineSamples = pointPipelineSamples.toList(),
             sourceEvents = pointSourceEvents.toList(),
+            hybridEyeSamples = pointHybridEyeSamples.toList(),
             postureSummary = pointPosture.snapshot(),
         )
         attempts++

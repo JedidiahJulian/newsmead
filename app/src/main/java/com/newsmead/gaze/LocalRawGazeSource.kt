@@ -93,11 +93,17 @@ interface LocalRawGazeSource {
         fun onDiagnostics(diagnostics: Diagnostics)
     }
 
+    /** Development-only same-frame comparison; it never replaces [OnRawGaze]. */
+    fun interface OnHybridEyeDiagnostics {
+        fun onDiagnostics(sample: HybridEyeShadowSample)
+    }
+
     fun setOnRawGaze(listener: OnRawGaze)
     fun setOnFps(listener: OnFps) {}
     fun setOnBlinkStats(listener: OnBlinkStats) {}
     fun setOnDiagnostics(listener: OnDiagnostics) {}
     fun clearOnDiagnostics() {}
+    fun setOnHybridEyeDiagnostics(listener: OnHybridEyeDiagnostics?) {}
     fun start(owner: LifecycleOwner)
     fun stop()
 }

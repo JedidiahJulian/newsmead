@@ -109,4 +109,10 @@ object StudyConfig {
      */
     const val GAZE_BLINK_CLOSE_THRESHOLD = 0.04f
     const val GAZE_BLINK_OPEN_THRESHOLD = 0.055f
+
+    /**
+     * Development-only, non-authoritative BlazeFace + 64x64 iris comparison.
+     * The current 478-point source remains the only producer of gaze coordinates.
+     */
+    const val GAZE_HYBRID_SHADOW_ENABLED = false
 }
