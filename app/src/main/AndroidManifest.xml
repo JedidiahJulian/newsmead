@@ -51,6 +51,14 @@
         <activity
             android:name=".activities.HybridEyePerformanceActivity"
             android:exported="true" />
+        <!-- Researcher-only raw horizontal gate; no mapper, gaze output, or calibration access. -->
+        <activity
+            android:name=".activities.CompactFaceHorizontalGateActivity"
+            android:exported="true" />
+        <!-- Standalone compact-candidate fit/held-out gate; never saves app calibration. -->
+        <activity
+            android:name=".activities.CompactFaceCalibrationGateActivity"
+            android:exported="true" />
     </application>
 
 </manifest>

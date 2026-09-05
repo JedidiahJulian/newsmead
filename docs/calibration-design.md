@@ -44,7 +44,12 @@ The design below revises the *procedure*; these integration facts are fixed:
   re-extraction preserved intended target order in two A56 runs but failed replicated SM-G991B
   horizontal geometry (E-064-E-066). The BlazeFace/periodic-crop replacement branch is rejected and
   must remain non-authoritative; ordinary use should return to the 478-point path without shadow
-  inference.
+  inference. A separate compact 468-landmark face-corner + iris candidate restores repeated
+  horizontal ordering on both phones (E-067/E-068), but its full candidate remains only 15.5 FPS on
+  SM versus 27.0 on A56 in the first gate. Bulk float packing subsequently reduces sustained SM
+  work to 23.38/41.81 ms median/P95 and raises window FPS to 20.13 average (E-069). It remains
+  researcher-only and uncalibrated pending standalone fit/held-out validation; it cannot yet replace
+  the authoritative path.
 - **FPS reporting cadence:** inference and raw-gaze delivery still run on every accepted
   result, but the on-screen/lightweight FPS callback is capped at four updates per second.
   This removes redundant UI/log work without changing samples, estimator output, or timing.
@@ -370,6 +375,35 @@ root/viewport/text frame records, without changing protocol v4 timing, targets o
 placement add the root view's screen origin before combining it with screen gaze. No status-bar
 height or participant-derived offset is hard-coded. This corrects coordinate meaning; it is not
 a new mapper and is not proof of improved reading accuracy. See `gaze-coordinate-audit.md`.
+
+### 7.6 Isolated compact-candidate calibration gate (2026-09-06)
+
+`CompactFaceCalibrationGateActivity` is a researcher-only evaluation surface for the compact
+face-corner plus two-eye iris candidate. It deliberately reuses the current one-centre practice,
+16 fixed row-major fit targets, five held-out targets, collector timing, robust aggregation, and
+six-term ridge quadratic. Its mapper exists only in memory and its numeric JSON is separate from
+normal calibration logs. It must not call `CalibrationStore`, write `calibration_16point.csv`, emit
+participant gaze, or enter reading/AOI decisions.
+
+The first SM-G991B gate accepted all targets but produced 1.75/2.22/2.22-line held-out vertical
+median/P95/max and 1.48/4.98/4.98-line LOO values. Its unchanged replication improved to
+0.83/2.09/2.09 held-out and 1.01/3.24/3.24 LOO lines. The raw fit-grid shape repeats, but the
+regional signed-error pattern does not and neither run satisfies the provisional 1.2-line
+all-target reference. This permits one unchanged A56 generalization gate—not parameter tuning or
+runtime integration. The saved normal calibration hash was unchanged after both runs. Run labels
+are optional launch-intent metadata; there is no editable label field in this isolated activity.
+
+The first A56 gate reached 30.00 mean completion FPS but produced 2.89/4.76/4.76-line held-out
+vertical median/P95/max and only 0.778 vertical fit-target correlation. It is retained as an adverse
+first cross-device result and authorizes one unchanged A56 replication under the same isolation
+boundary. It does not authorize mapper/model tuning or replacement of the normal pipeline.
+
+The unchanged A56 replication and one additional sanity run produced held-out vertical median/max
+of 3.31/6.80 and 4.68/6.45 lines while retaining approximately 30 FPS. All three adverse A56 runs
+remain in the evidence set. This closes the compact candidate for runtime integration: its
+performance result is useful, but its calibration accuracy does not generalize across the tested
+phones. The isolated activity and numeric artifacts may be retained for audit; they must not affect
+normal calibration or gaze output.
 
 ## 8. Implementation notes
 

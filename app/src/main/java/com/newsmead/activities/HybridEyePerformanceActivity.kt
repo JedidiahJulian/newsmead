@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.hardware.camera2.CaptureRequest
 import android.os.Bundle
 import android.os.SystemClock
+import android.util.Log
 import android.util.Range
 import android.util.Size
 import android.view.Gravity
@@ -28,9 +29,14 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.newsmead.gaze.HybridEyeShadowBackend
 import com.newsmead.gaze.ReusableArgbFrameTransformer
+import org.tensorflow.lite.DataType
+import org.tensorflow.lite.Interpreter
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.math.ceil
 
 /**
  * Researcher-only candidate throughput screen. It never emits gaze and never reads or writes a
@@ -68,8 +74,145 @@ class HybridEyePerformanceActivity : AppCompatActivity() {
                 )
             },
         )
-        if (hasCameraPermission()) startCandidatePreview() else requestCameraPermission()
+        if (intent.getBooleanExtra(EXTRA_FACE_LANDMARK_COMPUTE_ONLY, false)) {
+            startFaceLandmarkComputeBenchmark()
+        } else if (hasCameraPermission()) {
+            startCandidatePreview()
+        } else {
+            requestCameraPermission()
+        }
     }
+
+    /**
+     * Times only the official compact face-landmark TFLite graph on a fixed in-memory tensor.
+     * This path never opens CameraX, creates a gaze backend, or touches calibration storage.
+     */
+    private fun startFaceLandmarkComputeBenchmark() {
+        statusText.text = "Official face-landmark compute gate\n\nWarming up…\n\nNo camera · no gaze · no calibration access"
+        cameraExecutor.execute {
+            try {
+                val modelBytes = assets.open(FACE_LANDMARK_MODEL_ASSET).use { it.readBytes() }
+                val modelBuffer = ByteBuffer.allocateDirect(modelBytes.size)
+                    .order(ByteOrder.nativeOrder())
+                    .put(modelBytes)
+                    .also { it.rewind() }
+
+                val initStartNs = SystemClock.elapsedRealtimeNanos()
+                Interpreter(
+                    modelBuffer,
+                    Interpreter.Options().setNumThreads(FACE_LANDMARK_THREADS),
+                ).use { interpreter ->
+                    val initMs = nsToMs(SystemClock.elapsedRealtimeNanos() - initStartNs)
+                    require(interpreter.inputTensorCount == 1) {
+                        "Expected one input tensor, found ${interpreter.inputTensorCount}"
+                    }
+                    val inputTensor = interpreter.getInputTensor(0)
+                    require(inputTensor.dataType() == DataType.FLOAT32) {
+                        "Expected FLOAT32 input, found ${inputTensor.dataType()}"
+                    }
+                    val input = ByteBuffer.allocateDirect(inputTensor.numBytes())
+                        .order(ByteOrder.nativeOrder())
+                    while (input.remaining() >= FLOAT_BYTES) input.putFloat(SYNTHETIC_PIXEL_VALUE)
+                    input.rewind()
+
+                    val outputs = mutableMapOf<Int, Any>()
+                    repeat(interpreter.outputTensorCount) { index ->
+                        outputs[index] = ByteBuffer
+                            .allocateDirect(interpreter.getOutputTensor(index).numBytes())
+                            .order(ByteOrder.nativeOrder())
+                    }
+                    val outputShapes = (0 until interpreter.outputTensorCount).joinToString("; ") { index ->
+                        "${interpreter.getOutputTensor(index).shape().contentToString()}:" +
+                            interpreter.getOutputTensor(index).dataType()
+                    }
+
+                    repeat(FACE_LANDMARK_WARMUP_RUNS) {
+                        runFaceLandmarkInference(interpreter, input, outputs)
+                    }
+
+                    val latenciesMs = DoubleArray(FACE_LANDMARK_MEASURED_RUNS)
+                    repeat(FACE_LANDMARK_MEASURED_RUNS) { index ->
+                        val startNs = SystemClock.elapsedRealtimeNanos()
+                        runFaceLandmarkInference(interpreter, input, outputs)
+                        latenciesMs[index] = nsToMs(SystemClock.elapsedRealtimeNanos() - startNs)
+                    }
+                    val sorted = latenciesMs.sortedArray()
+                    val medianMs = percentile(sorted, 0.50)
+                    val p95Ms = percentile(sorted, 0.95)
+                    val meanMs = latenciesMs.average()
+                    val medianBudgetMs = FRAME_BUDGET_MS - medianMs
+                    val p95BudgetMs = FRAME_BUDGET_MS - p95Ms
+                    val inputShape = inputTensor.shape().contentToString()
+                    val result = String.format(
+                        Locale.US,
+                        "Official face-landmark compute gate\n\n" +
+                            "Model: %s (%d bytes)\nCPU threads: %d\nInput: %s FLOAT32\nOutputs: %s\n\n" +
+                            "Initialization: %.2f ms\nInference median: %.2f ms\nInference P95: %.2f ms\nInference mean: %.2f ms\n" +
+                            "50 ms budget left: %.2f ms median / %.2f ms P95\n\n" +
+                            "%d warm-up + %d measured runs\nNo camera · no gaze · no calibration access",
+                        FACE_LANDMARK_MODEL_ASSET,
+                        modelBytes.size,
+                        FACE_LANDMARK_THREADS,
+                        inputShape,
+                        outputShapes,
+                        initMs,
+                        medianMs,
+                        p95Ms,
+                        meanMs,
+                        medianBudgetMs,
+                        p95BudgetMs,
+                        FACE_LANDMARK_WARMUP_RUNS,
+                        FACE_LANDMARK_MEASURED_RUNS,
+                    )
+                    Log.i(
+                        TAG,
+                        String.format(
+                            Locale.US,
+                            "FACE_LANDMARK_COMPUTE_V1 model_bytes=%d threads=%d input=%s outputs=%s " +
+                                "init_ms=%.3f median_ms=%.3f p95_ms=%.3f mean_ms=%.3f " +
+                                "budget_left_median_ms=%.3f budget_left_p95_ms=%.3f warmup=%d measured=%d",
+                            modelBytes.size,
+                            FACE_LANDMARK_THREADS,
+                            inputShape.replace(" ", ""),
+                            outputShapes.replace(" ", ""),
+                            initMs,
+                            medianMs,
+                            p95Ms,
+                            meanMs,
+                            medianBudgetMs,
+                            p95BudgetMs,
+                            FACE_LANDMARK_WARMUP_RUNS,
+                            FACE_LANDMARK_MEASURED_RUNS,
+                        ),
+                    )
+                    runOnUiThread { statusText.text = result }
+                }
+            } catch (error: Throwable) {
+                Log.e(TAG, "FACE_LANDMARK_COMPUTE_V1 failed", error)
+                runOnUiThread {
+                    statusText.text = "Official face-landmark compute gate\n\nFAILED\n${error.message}\n\nNo camera · no gaze · no calibration access"
+                }
+            }
+        }
+    }
+
+    private fun runFaceLandmarkInference(
+        interpreter: Interpreter,
+        input: ByteBuffer,
+        outputs: MutableMap<Int, Any>,
+    ) {
+        input.rewind()
+        outputs.values.forEach { (it as ByteBuffer).rewind() }
+        interpreter.runForMultipleInputsOutputs(arrayOf(input), outputs)
+    }
+
+    private fun percentile(sorted: DoubleArray, fraction: Double): Double {
+        if (sorted.isEmpty()) return Double.NaN
+        val index = (ceil(sorted.size * fraction).toInt() - 1).coerceIn(sorted.indices)
+        return sorted[index]
+    }
+
+    private fun nsToMs(ns: Long): Double = ns / 1_000_000.0
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -188,7 +331,16 @@ class HybridEyePerformanceActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val TAG = "HybridEyePerformance"
         private const val CAMERA_PERMISSION_REQUEST = 4105
         private const val UI_INTERVAL_NS = 250_000_000L
+        private const val EXTRA_FACE_LANDMARK_COMPUTE_ONLY = "face_landmark_compute_only"
+        private const val FACE_LANDMARK_MODEL_ASSET = "face_landmark.tflite"
+        private const val FACE_LANDMARK_THREADS = 2
+        private const val FACE_LANDMARK_WARMUP_RUNS = 20
+        private const val FACE_LANDMARK_MEASURED_RUNS = 100
+        private const val FLOAT_BYTES = 4
+        private const val SYNTHETIC_PIXEL_VALUE = 0.5f
+        private const val FRAME_BUDGET_MS = 50.0
     }
 }

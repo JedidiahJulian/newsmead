@@ -1057,6 +1057,234 @@ the SM-G991B. If it leaves sufficient frame budget for two iris passes, use its 
 instead of BlazeFace eye centres in a new candidate-only three-position horizontal gate on both
 phones. Stop before full calibration if either compute or horizontal ordering fails.
 
+### 2026-09-06 — Official compact face-landmark compute gate (E-067)
+
+**Question:** Is the official compact 468-landmark face model itself too expensive to justify a
+face-corner-driven iris candidate on the slower SM-G991B?
+
+**Action:** Added an explicit compute-only mode to the researcher performance activity, bundled the
+official 1,242,398-byte `face_landmark.tflite` artifact (SHA256
+`1055cb9d4a9ca8b8c688902a3a5194311138ba256bcc94e336d8373a5f30c814`), and ran 20 warm-up plus
+100 measured CPU inferences with two threads on a fixed in-memory `[1,192,192,3]` float tensor. The
+mode never requested camera access, created gaze output, or read/wrote calibration.
+
+**Evidence:** On SM-G991B, interpreter initialization took 12.56 ms; inference median/P95/mean was
+3.09/3.58/3.49 ms. The graph exposed the expected 1,404-float landmark output and one-float face
+presence output. The benchmark-only APK SHA256 was
+`82fccc15ba505917affca0d692ccbdd4f45037512d2e4013f93d50dd03f0b678`. The existing calibration
+SHA256 remained `77b92423326b912c9eaa30dcdba48d1cb45ba046729bde6370eee1ab575caf17`.
+
+**Interpretation and boundary:** The compact graph passes the compute gate decisively, leaving about
+46.4 ms at P95 inside the provisional 50 ms frame budget before crop preparation and the two iris
+passes. This is not a full-pipeline throughput or gaze-accuracy result.
+
+**Next inquiry:** Build one candidate-only, no-calibration horizontal gate that uses the compact
+model's actual eye-corner landmarks to create the official 2.3x iris ROIs. Run once per phone before
+any full grid or candidate mapper.
+
+### 2026-09-06 — Compact face-corner + iris cross-device horizontal gate (E-068)
+
+**Question:** Does replacing coarse BlazeFace eye centres with compact face-mesh eye corners restore
+repeatable horizontal iris geometry on both tested phones?
+
+**Action:** Added a researcher-only three-position gate using periodic BlazeFace face localization,
+the compact 468-point face model, canonical mesh eye corners, and two 64x64 iris passes. The fixed
+sequence presents left/centre/right twice after a pre-run instruction screen and 3-2-1 countdown.
+It saves raw numeric samples and component timings but has no mapper, calibrated provider, gaze dot,
+correction, or calibration-store dependency. One unchanged run was completed on each phone.
+
+**Evidence:** SM-G991B accepted 6/6 presentations with target/candidate horizontal correlation
+0.977. Its paired left presentations were 0.4948/0.4912, centres 0.5167/0.5103, and rights
+0.5297/0.5246. Full candidate median/P95 work was 33.55/61.26 ms and active FPS was 15.53. A56
+accepted 6/6 with correlation 0.994; paired left values were 0.4700/0.4703, centres 0.4836/0.4869,
+and rights 0.4995/0.5029. Its work was 22.26/43.32 ms and active FPS 27.05. Artifacts are preserved
+under `diagnostics-local/2026-09-06/compact-face/` with SHA256
+`ac7e5d9d00fae3363b47b9244c6f236027a6776ad5512dce56920589a2f0058f` (SM) and
+`eb554d07db507aa0a43e6f2f04bfc6f82542a4b67ef0c45d49c2e112929dd09d` (A56). Calibration hashes
+remained `77b924...af17` and `713adc...5343`. The gate APK SHA256 was
+`e4b66e48b833286d47b6f2827fc61eb855429647c4e735147854b9bc5a113ce0`; 80 gaze-focused JVM
+tests passed.
+
+**Interpretation and boundary:** Compact face corners resolve the earlier cross-device horizontal
+geometry failure strongly enough to retain this architecture as a research candidate. They do not
+yet solve SM throughput: its full candidate remains at the same roughly 15-16 FPS tier as the
+authoritative 478-point path. On cached SM frames, total work was 32.28 ms median; face
+crop/preparation/inference was 16.76 ms and two-eye iris crop/preparation/inference was 16.27 ms.
+The 3.09 ms isolated face-graph result identifies image extraction/float packing as a bounded next
+optimization target. No candidate calibration or screen-coordinate accuracy claim is authorized.
+
+**Next inquiry:** Optimize only candidate tensor preparation with preallocated normalized float
+arrays and bulk copies, then run a no-target SM performance preview. Preserve the geometry and stop
+before a participant repeat or full calibration if throughput does not materially improve.
+
+### 2026-09-06 — Compact-candidate bulk tensor preparation (E-069)
+
+**Question:** Can the compact candidate materially improve SM throughput without changing its
+models, crops, landmark indices, or raw feature geometry?
+
+**Action:** Replaced individual RGB `ByteBuffer.putFloat` calls with preallocated float arrays, a
+256-value normalization table, bit-extracted channels, and bulk `FloatBuffer.put`. Added 120-frame
+candidate-only timing summaries. Installed the exact build on SM-G991B, opened only the pre-run
+screen, and collected 11 face-visible windows without pressing Start or creating a target artifact.
+
+**Evidence:** Across 1,320 valid frames, the median of window medians was 23.38 ms and the median of
+window P95s was 41.81 ms, versus 33.55/61.26 ms in the E-068 SM target gate. Face
+crop/preparation/inference fell from 16.77 to 8.00 ms median; the two iris passes fell from 16.32 to
+14.42 ms. Window FPS averaged 20.13, median 19.24, and ranged 17.07-24.54. The optimized APK SHA256
+was `31b5a3be1ce2c6b0847480fd6e02fa904702db1fa1ee9838fe1ce826b74214ac`. The preserved log SHA256
+is `8b069f806ea4b99df01dce371faf7cf9080618ac1766c3cbd8020cde7caf48f0`; the SM calibration SHA256
+remained `77b92423326b912c9eaa30dcdba48d1cb45ba046729bde6370eee1ab575caf17`. All 80 gaze-focused JVM
+tests and APK assembly passed.
+
+**Interpretation and boundary:** This is a material candidate-only improvement: median work fell
+about 30% and P95 about 32%, while sustained FPS improved beyond the prior 15-17 tier. It does not
+reach a stable 30 FPS and does not prove mapped accuracy. Because the transformation is only an
+equivalent input-packing implementation and the E-068 geometry passed on both phones, the next gate
+is standalone candidate calibration rather than another three-position repetition.
+
+**Next inquiry:** Add a researcher-only 16-point fit plus five held-out validation points on SM. Fit
+the existing quadratic only in memory, save a separate numeric artifact, and never overwrite the
+authoritative calibration or route candidate output into reading.
+
+### 2026-09-06 — First standalone compact-candidate calibration gate (E-070)
+
+**Question:** Can the optimized compact face-corner/iris feature support the current six-term ridge
+quadratic across the full screen on SM-G991B without touching the authoritative calibration?
+
+**Action:** Added and ran a separate researcher-only calibration activity. After an instruction
+screen and 3-2-1 countdown, it uses one unrecorded centre practice, the unchanged 16 fixed row-major
+fit targets, and five held-out centre/quadrant targets. It uses the existing collector timing and
+`GazeMapper`, fits only in memory, writes a standalone numeric artifact, and has no calibrated gaze
+provider or calibration-store dependency. The run label was `compact_face_cal_sm_1`.
+
+**Evidence:** All 16 fit and five held-out targets were accepted on their first attempts. LOO
+vertical median/P95/max was 1.48/4.98/4.98 lines (176/594/594 px), with 2-D median/P95/max
+215/595/595 px. Held-out vertical median/P95/max was 1.75/2.22/2.22 lines (208/264/264 px), with
+2-D median/P95/max 253/311/311 px. Held-out signed `(dx,dy)` was centre `(-161,-27)`, top-left
+`(-185,+250)`, top-right `(-252,-19)`, bottom-left `(-82,+264)`, and bottom-right `(-114,+208)` px.
+Fit-feature target correlations were 0.908 horizontal and 0.944 vertical. The run retained 395
+numeric samples; candidate work was 21.84/36.96 ms median/P95, with 22.82 median and 23.54 mean
+completion FPS from 480x640 source frames. The artifact is preserved under
+`diagnostics-local/2026-09-06/compact-face/` with SHA256
+`c68200eb01405ec1c97576d9d09febc47322d861b5288aa80c6e9cc4e7a04ca6`. The authoritative
+`calibration_16point.csv` remained `77b92423326b912c9eaa30dcdba48d1cb45ba046729bde6370eee1ab575caf17`,
+and the app was closed.
+
+**Interpretation and boundary:** This first run is adverse against the provisional 1.2-line
+all-target spatial reference and does not establish an accuracy improvement. It is not simply the
+historical first/top-left failure: all five held-out horizontal errors point left, while the largest
+vertical errors occur at top-left and both lower quadrants. That pattern is compatible with
+post-fit/session shift and/or mapper instability, but one run cannot distinguish them. The candidate
+remains isolated and non-authoritative; no reading or cross-participant claim follows.
+
+**Next inquiry:** Retain this run and perform exactly one unchanged SM-G991B replication labelled
+`compact_face_cal_sm_2`. Compare every fit/held-out target and performance result before either an
+A56 gate or rejection; do not tune the model against this first run.
+
+### 2026-09-06 — Replicated SM compact-candidate calibration gate (E-071)
+
+**Question:** Does the materially adverse first SM candidate calibration repeat under the exact same
+model, mapper, target, timing, and device conditions?
+
+**Action:** Repeated the standalone 16+5 activity unchanged. The launch omitted its optional
+`run_label` intent extra, so the artifact correctly contains the default label
+`compact_face_calibration`; this activity has no editable label field. The unique timestamp/file and
+completion order identify it as the second run, and the missing custom label does not invalidate or
+require repeating the measurement.
+
+**Evidence:** All 16 fit and five held-out targets again passed on their first attempts. LOO vertical
+median/P95/max improved to 1.01/3.24/3.24 lines, with 2-D median/P95/max 161/416/416 px. Held-out
+vertical median/P95/max improved to 0.83/2.09/2.09 lines, with 2-D median/P95/max 100/251/251 px.
+Held-out signed `(dx,dy)` was centre `(-103,+180)`, top-left `(-8,+77)`, top-right `(-23,-97)`,
+bottom-left `(+36,-249)`, and bottom-right `(+2,-99)` px. Across the two runs, fit-feature patterns
+correlate at 0.941 H and 0.840 V, but the mean feature position shifted -0.0256 H/+0.0172 V and the
+held-out signed vertical error pattern correlates at -0.456. The run retained 407 samples; candidate
+work was 17.42/31.95 ms median/P95 and completion FPS was 27.97 median/27.85 mean. Its preserved
+artifact SHA256 is `cf635b8c6efb7c8becfaba7f829a5fcc58c79d7f1ea761390f5359e71f14aee4`.
+The real calibration remained `77b92423326b912c9eaa30dcdba48d1cb45ba046729bde6370eee1ab575caf17`,
+and the app was closed.
+
+**Interpretation and boundary:** The second run is materially better, and the raw full-grid feature
+shape plus roughly 28 FPS throughput justify retaining the architecture through one A56 gate. It is
+not a repeatable accuracy pass: neither SM run keeps every held-out target within the provisional
+1.2-line reference, the worst held-out vertical error remains about 2.1 lines in both, and the
+regional signed-error pattern moves substantially between runs. No runtime integration, mapper
+tuning, reading test, or accuracy-improvement claim is authorized.
+
+**Next inquiry:** Run one unchanged standalone candidate calibration on A56 with the label supplied
+through the launch intent as `compact_face_cal_a56_1`. Compare it with both SM runs before deciding
+whether one A56 replication is warranted.
+
+### 2026-09-06 — First A56 compact-candidate calibration gate (E-072)
+
+**Question:** Does the isolated compact candidate retain useful full-screen geometry and accuracy on
+the second phone while preserving its expected throughput advantage?
+
+**Action:** Installed the exact E-070/E-071 build on A56 with `adb install -r`, after recording the
+existing app and calibration hashes. Verified the installed APK matched local SHA256
+`f417ceece6d6654e9b66f0f1e153be7b084baf605c78f241b53414c9856426fb` and the calibration was
+unchanged, then launched the isolated activity with embedded label `compact_face_cal_a56_1`. No
+normal calibration or authoritative gaze path was used.
+
+**Evidence:** All 16 fit and five held-out targets were accepted on their first attempts. LOO
+vertical median/P95/max was 2.89/8.11/8.11 lines, with 2-D median/P95/max 348/963/963 px. Held-out
+vertical median/P95/max was 2.89/4.76/4.76 lines, with 2-D median/P95/max 448/633/633 px. Held-out
+signed `(dx,dy)` was centre `(-289,+343)`, top-left `(-287,+564)`, top-right `(-379,+323)`,
+bottom-left `(-168,-1)`, and bottom-right `(+52,+384)` px. Fit-feature target correlation was 0.931
+horizontal but only 0.778 vertical; the first two vertical row means slightly reverse (0.42 then
+0.41) before rising to 0.43/0.46. The run retained 444 samples. Candidate work was 17.32/27.23 ms
+median/P95, with 30.40 median and 30.00 mean completion FPS. The artifact is preserved under
+`diagnostics-local/2026-09-06/compact-face/` with SHA256
+`5500a2623fa32065481bc58ebf24404be49b5ae5388d71d19f64e4610221157e`. The real A56 calibration
+remained `713adc47a00e84d1c3b346985ace4d13d09b7652a34c7e35e0438761a2d85343`, and the app was closed.
+
+**Interpretation and boundary:** Throughput reaches the desired camera-rate tier on A56, but this
+first full-screen accuracy result is clearly adverse. Weak vertical target ordering within the fit
+data means the failure cannot be attributed only to the quadratic mapper or held-out temporal drift.
+Consistent with the preregistered replication rule, retain rather than invalidate this run and make
+one unchanged A56 replication. It does not authorize integration or tuning.
+
+**Next inquiry:** Repeat once on A56 under the same setup with embedded label
+`compact_face_cal_a56_2`. If that run is also adverse, close the candidate; if it improves, compare
+both rather than discarding the first.
+
+### 2026-09-06 — Replicated A56 failure and third sanity run (E-073)
+
+**Question:** Was the adverse first A56 compact calibration a bad single run, or does full-screen
+accuracy fail to repeat even though candidate throughput reaches camera rate?
+
+**Action:** Collected the planned unchanged replication as `compact_face_cal_a56_2`. At the user's
+request, retained that result and collected one additional unchanged sanity run as
+`compact_face_cal_a56_3`, with the decision rule fixed in advance: a good third run would establish
+instability rather than erase the first two; another poor run would close the candidate. No normal
+calibration, candidate change, or mapper tuning occurred.
+
+**Evidence:** Run 2 accepted all targets but produced LOO vertical median/max 1.74/6.13 lines and
+held-out median/max 3.31/6.80 lines (2-D median/max 748/1,160 px). Its five held-out `(dx,dy)` errors
+were `(+46,+806)`, `(+142,+392)`, `(+1145,-184)`, `(+271,+62)`, and `(-73,-744)` px. Run 3 again
+accepted all targets but produced LOO 1.66/6.70 lines and held-out 4.68/6.45 lines (2-D median/max
+560/766 px); held-out errors were `(+37,+765)`, `(+154,+678)`, `(+77,+555)`, `(+109,+62)`, and
+`(+122,-48)` px. Run 2 fit-target H/V correlations were 0.937/0.909; run 3 was 0.846/0.911, showing
+that apparently ordered fit geometry did not prevent severe immediate held-out errors. Run 2/3 mean
+completion FPS was 30.26/30.48 and median/P95 candidate work was 16.83/27.22 and 16.66/27.50 ms.
+The A56 run-2/run-3 artifacts are preserved with SHA256
+`3324ffd8c16b8c10cd82dfbaa6d73247032ba805d5e2916d7b970fb139116f64` and
+`62786459f4b4b5e799d967f560d38e27b5f2bd9563b28d76b469b532d10a6b83`. The normal A56 calibration
+remained `713adc47a00e84d1c3b346985ace4d13d09b7652a34c7e35e0438761a2d85343` after all three runs.
+
+**Interpretation and decision:** The compact candidate meets the A56 throughput objective but fails
+the replicated cross-device accuracy gate. Across all three A56 runs, held-out vertical median/max
+was 2.89/4.76, 3.31/6.80, and 4.68/6.45 lines. The third run confirms rather than rescues the failure;
+no run may be discarded. Because runs 2 and 3 can have strong fit-target vertical correlation yet
+catastrophic immediate held-out errors, a mapper-only retune against these five answers is not a
+credible general solution. Reject runtime integration and close this compact-candidate branch.
+Retain its harness/artifacts as evidence that the speed improvement is real but insufficient.
+
+**Next inquiry:** Stop candidate phone tests. Checkpoint the isolated research harness and evidence,
+excluding private artifacts, then resume accuracy work on the authoritative 478-point eye-local path.
+Prioritize calibration-to-reading stability; do not repeat the rejected compact/hybrid, lower-input,
+delegate, mapper, simple-offset, posture-coefficient, or target-order experiments.
+
 ## Evidence Registry
 
 | ID | Date | Evidence source | Conditions | Artifact or location | Notes |
@@ -1127,6 +1355,13 @@ phones. Stop before full calibration if either compute or horizontal ordering fa
 | E-064 | 2026-09-06 | Detector-anchored one-step centre/size re-extraction | Shadow-only implementation, 75 gaze JVM tests, APK build/install/hash and data-preservation checks | Hybrid geometry/backend/sample logger and A56 debug APK | Installed APK matches `ea5475d...a214`; calibration and E-063 files unchanged; physical A56 gate pending |
 | E-065 | 2026-09-06 | Replicated one-step re-extraction A56 gate | A56; two telemetry-OFF nine-point shadows; reference authoritative; coordinate scores excluded | App-private originals plus authorized copies under `diagnostics-local/2026-09-06/hybrid-shadow/` | Candidate/intended-target H/V is 0.876/0.965 then 0.825/0.902 at 28.76/28.38 FPS; conditional A56 pass for SM replication |
 | E-066 | 2026-09-06 | Replicated one-step re-extraction SM-G991B gate | SM-G991B; exact E-064 APK; two telemetry-OFF nine-point shadows; coordinate scores excluded | App-private originals plus authorized copies under `diagnostics-local/2026-09-06/hybrid-shadow/` | Candidate/intended horizontal is 0.154 then 0.733 and repeats at 0.513; cross-device candidate rejected despite strong vertical order |
+| E-067 | 2026-09-06 | Official compact face-landmark compute gate | SM-G991B; fixed in-memory tensor; 20 warm-up + 100 measured CPU runs; no camera/calibration/gaze | Researcher performance activity and logcat | Face graph median/P95 3.09/3.58 ms; compute gate passed |
+| E-068 | 2026-09-06 | Compact face-corner + iris horizontal gate | One six-presentation left/centre/right candidate-only run per phone; no mapper or calibration access | Authorized copies under `diagnostics-local/2026-09-06/compact-face/` | H correlation 0.977 SM and 0.994 A56; geometry passes, but full candidate is only 15.5 FPS on SM versus 27.0 on A56 |
+| E-069 | 2026-09-06 | Bulk compact-candidate tensor preparation | SM-G991B; 11 no-target face-visible 120-frame windows; no calibration/gaze output | `diagnostics-local/2026-09-06/compact-face/compact_face_perf_sm_bulk_v2.txt` | Median work 23.38 ms, P95 41.81 ms, mean window FPS 20.13; bounded performance gate passes |
+| E-070 | 2026-09-06 | First standalone compact-candidate calibration | SM-G991B; in-memory 16-point quadratic plus five held-out targets; authoritative calibration untouched | `diagnostics-local/2026-09-06/compact-face/compact_face_calibration_20260905_184207_compact_face_cal_sm_1.json` | Held-out vertical median/max 1.75/2.22 lines and all five dx values leftward; adverse first run retained for one unchanged replication |
+| E-071 | 2026-09-06 | Replicated standalone compact-candidate calibration | SM-G991B; exact candidate and protocol unchanged; default embedded label retained | `diagnostics-local/2026-09-06/compact-face/compact_face_calibration_20260905_184855_compact_face_calibration.json` | Held-out median improves to 0.83 lines but maximum remains 2.09; raw grid shape repeats while regional signed errors do not; conditional A56 gate only |
+| E-072 | 2026-09-06 | First A56 standalone compact-candidate calibration | A56; exact SM-gate APK and protocol; normal calibration untouched | `diagnostics-local/2026-09-06/compact-face/compact_face_calibration_20260905_185734_compact_face_cal_a56_1.json` | Candidate reaches 30.00 mean FPS but held-out median/max is 2.89/4.76 lines and vertical grid correlation is 0.778; retained for one unchanged replication |
+| E-073 | 2026-09-06 | A56 compact-candidate replication plus sanity run | A56; unchanged run 2 and user-requested unchanged run 3; all earlier failures retained | Two preserved artifacts under `diagnostics-local/2026-09-06/compact-face/` | Approximately 30 FPS repeats, but held-out median/max worsens to 3.31/6.80 and 4.68/6.45 lines; cross-device accuracy gate fails and candidate closes |
 
 ## Confirmed Findings
 
@@ -1170,6 +1405,13 @@ phones. Stop before full calibration if either compute or horizontal ordering fa
 29. Detector-anchored one-step centre/size re-extraction is implemented only in the shadow and preserves the authoritative pipeline. Its geometry/build/data-preservation checks pass, but it has no physical compatibility evidence until the replicated A56 gate is completed (E-064).
 30. One-step re-extraction preserves intended horizontal/vertical target ordering in two A56 runs and remains near camera rate. Its weaker second-run agreement with a vertically weak reference prevents a production claim but does not block an exact-build SM-G991B replication (E-065).
 31. The same one-step build fails replicated SM-G991B horizontal geometry despite complete re-extraction and strong vertical ordering. The current BlazeFace/periodic-crop hybrid branch is rejected as non-generalizable and must not control gaze or remain active during ordinary reading tests (E-066).
+32. The official compact 468-landmark face graph is not itself the SM bottleneck: isolated CPU inference is 3.09 ms median and 3.58 ms P95 (E-067).
+33. Compact face-mesh eye corners followed by the existing iris model restore strong, repeated horizontal ordering on both SM-G991B and A56. This clears the bounded geometry gate but not full-pipeline throughput on SM; no candidate calibration or accuracy claim follows yet (E-068).
+34. Equivalent bulk float packing materially reduces compact-candidate SM work and raises sustained candidate-only throughput beyond the 15-17 FPS reference tier, clearing the bounded performance gate without changing candidate geometry (E-069).
+35. The first full-screen compact-candidate calibration misses the provisional all-target spatial reference despite accepting every target and preserving useful raw target order. Its held-out errors indicate a broad leftward shift and lower-region vertical misses rather than only a first/top-left failure, so it remains isolated pending one unchanged SM replication (E-070).
+36. The unchanged SM replication is much better typically and sustains about 28 FPS, but the worst held-out error remains about 2.1 lines and the target-wise error direction changes between runs. This supports one isolated A56 generalization gate, not integration or a repeatable accuracy claim (E-071).
+37. The first A56 compact calibration reaches approximately 30 FPS but has weak vertical grid ordering and severe LOO/held-out tails. It is an adverse accuracy result retained for one unchanged replication, not evidence to integrate or tune the candidate (E-072).
+38. Two further unchanged A56 runs retain approximately 30 FPS but reproduce severe full-screen errors, including 6.80- and 6.45-line held-out maxima. The compact architecture improves speed but fails replicated cross-device accuracy and must remain non-authoritative (E-073).
 
 ## Open Questions
 
