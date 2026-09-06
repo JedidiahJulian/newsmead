@@ -19,6 +19,12 @@ local.properties
 *.aab
 /debug
 
+# Local gaze diagnostics and generated analysis artifacts
+/diagnostics-local/
+/tmp/
+__pycache__/
+*.py[cod]
+
 # .DS_Store
 # /.idea/shelf
 # /confluence/target
