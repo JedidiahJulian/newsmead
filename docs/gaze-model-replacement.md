@@ -1,5 +1,13 @@
 # Gaze Model Replacement Plan
 
+> Status update, 2026-09-06: this is a historical proposal, not the current implementation
+> authorization. Read `gaze-mgazenet-handoff.md` for the source-backed next inquiry. Native
+> MGazeNet feasibility is now prioritized before custom network training. Rejection of the
+> laptop/WiFi GazeFollower arrangement does not exclude its underlying model running on-device.
+> The active eye feature is now roll-aware and eye-width-normalized, not the eyelid fraction
+> described below; the current camera request is 640x480. Claims below about training a new
+> model or adding reading-content priors are proposals only, not approved next actions.
+
 ## Objective
 
 Replace the current MediaPipe iris-landmark plus polynomial calibration backend

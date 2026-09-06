@@ -405,6 +405,26 @@ performance result is useful, but its calibration accuracy does not generalize a
 phones. The isolated activity and numeric artifacts may be retained for audit; they must not affect
 normal calibration or gaze output.
 
+E-075 interpretation qualification: these runs reject this implementation for integration,
+not every compact architecture. They did not include fresh matched baseline calibrations;
+they cannot show that the retained pipeline was more accurate in those same conditions or
+that the phone alone caused the difference.
+
+### 7.7 Repeated-target end-pose translation (offline rejection, 2026-09-06)
+
+A fixed offline candidate added the full raw feature difference between the repeated same-target
+observations to every 16-point fit aggregate before fitting the unchanged quadratic. The five later
+held-out points were not used for fitting or modified. Across all 13 eligible eye-local calibrations,
+typical vertical error often improved but the median session tail worsened and only 2/13 sessions
+improved vertical plus 2-D median/max together. This global translation is rejected. Do not add a
+scaled, capped, temporal, or single-axis variant selected against the same held-out answers.
+
+E-075 qualification: this was one constant translation of all fit features, not explicit
+head-pose compensation or per-point temporal dewarping. It does not exhaust other calibrated
+representations. Section 7.3 is likewise only a shadow flag, not a compensation experiment.
+The current next inquiry is native MGazeNet feasibility (`gaze-mgazenet-handoff.md`); none of
+these document changes modifies the active estimator, mapper, filters, or calibration sequence.
+
 ## 8. Implementation notes
 
 - State machine (§2.3): explicit enum owned by the activity (or a small controller class),

@@ -4,16 +4,21 @@
 
 This is the concise entrypoint for continuing NewsMead gaze-accuracy work in a new Codex task. Read this file first, then consult `gaze-diagnostics-log.md` only for detailed evidence.
 
+**2026-09-06 reassessment supersedes the earlier freeze-or-replace conclusion.** Read
+`gaze-mgazenet-handoff.md` next for the current objective, source-backed candidate,
+uncertainties, authorization boundary, and exact first action. Historical next steps below
+are not instructions to repeat completed phone runs.
+
 ## Current checkpoint
 
 - Date: 2026-09-06
 - Branch: `gaze-pipeline-improvements`
-- Latest committed gaze checkpoint: `03c74f3` (`feat(gaze): add hybrid tracking research harness`). The rejected BlazeFace/iris shadow is retained for evidence but disabled by default; the newer compact-face benchmark/gate work is uncommitted.
+- Latest committed gaze checkpoint: `6104d56` (`test(gaze): add compact tracking research evaluation`). Both rejected hybrid/compact paths are retained as isolated evidence; the ordinary gaze path is unchanged and the hybrid shadow is disabled by default.
 - Prior diagnostics commit: `79a5ceb` (`feat(gaze): add diagnostic telemetry and session logging`)
 - Broad initial diagnosis: complete
 - Required final control before estimator changes: complete; telemetry OFF did not materially restore FPS or accuracy
-- Current decision gate: closed. The compact 468-face/two-iris candidate solved much of the performance problem but failed replicated cross-device accuracy (E-067-E-073). Its two SM held-out vertical median/max results were 1.75/2.22 and 0.83/2.09 lines. Three A56 results were 2.89/4.76, 3.31/6.80, and 4.68/6.45 lines despite approximately 30 FPS in all A56 runs. The third sanity run confirms that the adverse A56 result is not a one-run anomaly. Do not integrate or tune this candidate against the collected answers. The 478-point eye-local path remains authoritative; both rejected hybrid/compact paths remain isolated research evidence.
-- Do not stage or commit unrelated dirty files or `diagnostics-local/` without explicit approval.
+- Current decision: the tested compact implementation (E-067-E-073) and fixed global translation (E-074) remain rejected for integration; this does not exhaust estimator improvements. E-075 records a source/code reassessment selecting native MGazeNet feasibility as the next inquiry, with properly evaluated pose compensation as an alternative. MGazeNet is not implemented or validated on either phone. The 478-point eye-local path remains the comparison baseline, not a certified final research instrument.
+- The user handles staging and commits themselves. Suggest explicit Windows CMD commands when requested; do not stage, commit, push, or include private artifacts automatically.
 
 ## Project goal and constraints
 
@@ -27,8 +32,15 @@ Current constraints:
 - Improve and diagnose the existing system before considering a new model.
 - Do not claim reading-line compatibility from spatial calibration alone.
 - Do not retain camera images under the current consent conditions.
+- Both Galaxy A56 and SM-G991B matter; do not solve the requirement by selecting only A56 or treating a 15-18 FPS floor as user-approved.
+- The latest authorization is to prepare this handoff, not to replace the runtime, install an APK, start camera capture, or collect a calibration.
 
-## What diagnostics established
+## Historical diagnostic findings (read chronologically)
+
+These numbered observations describe earlier checkpoints, not all current runtime properties.
+In particular, the current camera request is 640x480 (upright 480x640), the active feature is
+eye-local/width-normalized, and later runs did not establish a persistent regression. The
+current constraints and the reassessment above take precedence over historical proposals.
 
 1. The current tracker is substantially worse and less stable than the earlier recorded behavior. Historical A56 vertical error was approximately 0.67–1.01 cm, while recent fixed-phone live vertical medians were roughly 2.3–2.9 rendered line-heights with tails above eight lines.
 2. Median-only reporting hid severe regional failures. The new validation reports every target, signed dx/dy, vertical error in line-heights, median/P95/max, threshold counts, worst region, coverage, and drift.
@@ -64,6 +76,15 @@ On August 29, per-eye aggregate persistence, legacy CSV compatibility, a small e
 
 ## Exact next action
 
+Continue with the bounded **native MGazeNet feasibility audit** in
+`gaze-mgazenet-handoff.md`. Verify the public model/version, preprocessing and calibration
+contract, usage terms, and Android runtime requirements before proposing an isolated benchmark.
+Do not restore the laptop/WiFi backend, request another calibration, or switch the active
+estimator at task startup. The failed posture warning flag was not a compensation test; native
+MGazeNet was not ruled out by rejection of the laptop arrangement. No MGazeNet gain is established.
+
+## Completed controls and historical decisions
+
 The user requested replication after the adverse first pair rather than treating one failure as conclusive. The two additional pairs are complete (E-049): `vert_on_2` then `vert_off_2`, and `vertical_off_4` then `vertical_on_4`. All four embedded modes are correct; the `_4` labels are valid and must not be renamed or excluded. All ON fits passed. The second ON run improved guided reading but harmed word targeting; the last ON run harmed both on its own samples. The method is not consistently beneficial, rather than universally ineffective.
 
 The authorized next step, a fixed offset-only offline comparison, is also complete (E-050). Each recording uses only its own three reference medians to calculate `offset = median(target_y - observed_y)`, with gain 1 and no sweep/cap/shrinkage. On identical samples, overall within-one-line accuracy changes 75.3->74.8, 70.5->53.7, 71.6->88.7, 83.1->68.6, 48.9->86.5, and 59.2->70.5 percent in chronological order. However, top-left within-one-line falls from 100% to 0% in three recordings, including one with a large aggregate gain. Do not deploy this simple offset or tune it against these answers.
@@ -78,7 +99,11 @@ The requested post-repair evaluation is complete twice on the A56 (E-054). Pair 
 
 The standalone compact-candidate calibration gate is implemented and its first two SM-G991B runs are preserved as E-070/E-071. All 16 fit and five held-out targets were accepted on their first attempts in both runs. Run 1 held-out signed errors were centre -161/-27 px, top-left -185/+250 px, top-right -252/-19 px, bottom-left -82/+264 px, and bottom-right -114/+208 px. Run 2 improved its held-out vertical median from 1.75 to 0.83 lines and 2-D median from 253 to 100 px, while its vertical maximum remained 2.09 lines. Its errors were centre -103/+180 px, top-left -8/+77 px, top-right -23/-97 px, bottom-left +36/-249 px, and bottom-right +2/-99 px. The raw fit patterns repeat substantially, but the held-out error pattern does not; this is not a stable accuracy improvement yet. Neither artifact read or wrote the calibration store, and the real calibration hash remained unchanged.
 
-Exact next action: stop compact-candidate phone runs and retain all five full-screen artifacts, including every adverse result. Keep the candidate isolated and `GAZE_HYBRID_SHADOW_ENABLED` false; do not route it into normal calibration, reading, AOI, or scaffold decisions. Before starting another estimator intervention, checkpoint the uncommitted research harness and documentation separately from private `diagnostics-local/`, `tmp/`, and `tools/gaze/__pycache__/`. Then return to the authoritative 478-point eye-local pipeline and choose the next accuracy work from calibration-to-reading stability rather than another mapper fit or target-order variation. The approximately 15-18 FPS reference floor is documented but acceptable for this research path until a replacement passes accuracy as well as speed.
+E-074 closure: the compact research harness is checkpointed at `6104d56`, and the fixed
+end-pose translation screen is complete and rejected. Do not tune fractions/caps/axes against
+its held-out answers. The earlier inference that this required freezing the system or abandoning
+all small improvements is withdrawn by E-075. Keep the current pipeline unchanged during the
+next feasibility audit; ordinary calibration repeats alone are not an accuracy intervention.
 
 These analysis tasks did not stage or commit anything; the user committed the previous reading checkpoint separately. Do not claim reading accuracy from the mapper screen: reading logs lack raw input for that replay. Also do not claim exact-word offset replay: v4 lacks glyph geometry. The offset analyzer reproduces the original app assignments; E-052 now qualifies their interpretation as the behavior of an app with a coordinate-contract defect, not grounds to discard or silently rescore historical recordings.
 
@@ -100,7 +125,10 @@ The rollback sanity check is complete; do not request another run merely because
 
 The upper-left-practice intervention is complete and rejected. Its live median improved from 1.35 to 0.96 lines, but top-left worsened from 2.52 to 2.78, the maximum worsened from 2.58 to 3.53, the 2-D median worsened from 215 to 343 px, and calibration held-out median/max worsened to 5.72/10.12 lines with 850 px drift. The original single-center-practice sequence was rebuilt, retested, and installed. Do not repeat this intervention.
 
-The app-private `calibration_16point.csv` still contains the calibration collected during the intervention; installing a rollback does not rewrite calibration data. Its source JSON is preserved. Do not overwrite it automatically from tooling. A future ordinary user calibration will replace it through the normal application flow.
+At that historical rollback, the app-private `calibration_16point.csv` still contained the
+intervention calibration. This is not a current device-state claim. Installing a rollback does
+not rewrite calibration data; verify present hashes before future device work and never replace
+calibration automatically from tooling.
 
 Both modes must retain lightweight evidence:
 
@@ -130,19 +158,19 @@ Offline result:
 
 1. No saved calibration metric reliably predicted the live tail across the five pairs.
 2. Mapper conditioning and held-out validation were not useful selectors.
-3. High drift was directional but imperfect and supports only the narrow redo/abort stopping rule above.
+3. High drift was directional but imperfect in those five pairs. Later evidence invalidated automatic high-drift rejection: the 201 px-drift run had the best live result. Keep drift as evidence, not an automatic stopping or sample-suppression rule.
 4. Top-left was systematically weak in both calibration LOO and live testing; fixed row-major order confounds screen region with first-target timing.
 
 ## Files to read next
 
 1. `docs/gaze-accuracy-handoff.md` — this checkpoint.
-2. `docs/gaze-diagnostics-log.md` — evidence registry through E-066, including the replicated cross-device hybrid rejection.
-3. `docs/calibration-design.md` — current calibration and validation behavior.
-4. `docs/build-context.md` — architecture history and deployment constraints; note that portions are historical.
-5. `docs/gaze-model-replacement.md` — alternatives/proposal context only; do not jump to model replacement before completing the telemetry control and regression comparison.
-6. `docs/gaze-offset-replay.md` — completed offset-only analysis, geometry checks, limitations, and machine-readable aggregate results.
-7. `docs/gaze-vertical-mapper-screen.md` — completed 11-calibration fixed vertical-only screen, baseline parity, regional tails, and next upstream focus.
-8. `docs/gaze-coordinate-audit.md` — completed eye-path audit, confirmed A56 view/screen mismatch, data preservation, interpretation limits, and proposed coordinate-contract repair.
+2. `docs/gaze-mgazenet-handoff.md` — current next-task brief; read before acting on any historical proposal.
+3. `docs/gaze-diagnostics-log.md` — evidence registry through E-075; E-075 is a reassessment, not a new measurement.
+4. `docs/calibration-design.md` — calibration and validation behavior; newer entries and code supersede historical descriptions.
+5. `docs/build-context.md` — architecture history and deployment constraints; laptop rejection does not establish native MGazeNet infeasibility.
+6. `docs/gaze-model-replacement.md` — historical alternatives/proposal only; custom training and content-aware estimation are not authorized next steps.
+7. `docs/gaze-offset-replay.md` and `docs/gaze-vertical-mapper-screen.md` — completed narrow offline screens, parity, and limitations.
+8. `docs/gaze-coordinate-audit.md` — historical coordinate defect; the approved E-053 repair is already implemented.
 
 ## Verification state
 

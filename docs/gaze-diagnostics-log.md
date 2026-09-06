@@ -13,6 +13,7 @@ The diagnostics are exploratory. Checks will follow the evidence found in the cu
 - **Status:** Fresh-session check complete; typical error remains improved, but calibration/live tails are not repeatable enough for exact-line use
 - **Current backend:** MediaPipe Face Landmarker with iris-relative features, participant calibration, and screen-coordinate output
 - **Repository state:** Code/document checkpoints are kept separate from numeric participant artifacts; those artifacts remain local and must stay unstaged
+- **Latest inquiry (2026-09-06, E-075):** Native MGazeNet feasibility, not runtime replacement yet. The tested compact and constant-shift candidates remain rejected, but the earlier inference that all practical improvements were exhausted is withdrawn. Read `gaze-mgazenet-handoff.md` before acting on historical next steps.
 
 ## Investigation Boundaries
 
@@ -1285,6 +1286,76 @@ excluding private artifacts, then resume accuracy work on the authoritative 478-
 Prioritize calibration-to-reading stability; do not repeat the rejected compact/hybrid, lower-input,
 delegate, mapper, simple-offset, posture-coefficient, or target-order experiments.
 
+### 2026-09-06 — Fixed end-pose feature-translation screen (E-074)
+
+**Question:** Can the existing repeated same-target drift measurement translate the 16 calibration
+features into the end-of-calibration pose and improve transfer to the five later held-out targets?
+
+**Action:** Implemented an offline-only analyzer for one preregistered candidate. It adds the complete
+raw two-axis `second - first` same-target feature vector once to every fit aggregate, then fits the
+unchanged six-term ridge quadratic. Held-out observations and answers remain untouched. No fraction,
+cap, axis choice, ridge value, or alternative is searched. Included all 13 accepted complete
+eye-local calibrations from September 1–4, including both post-coordinate-repair sessions and every
+high-error/high-drift result. Phone payloads were read in memory; only derived results and hashes are
+retained.
+
+**Evidence:** The analyzer reproduces all 273 logged baseline prediction pairs exactly (0 px maximum
+parity delta). Candidate held-out vertical median improves in 10/13 sessions, but maximum improves in
+only 7/13; both improve in 5/13. Requiring vertical and 2-D median/max together leaves only 2/13
+session wins. Across equally weighted sessions, median vertical median changes 97.4→85.9 px while
+median vertical maximum worsens 155.9→183.8 px. Median 2-D median changes 147.4→137.8 px and median
+2-D maximum 204.8→205.6 px. All 27 offline gaze-analysis tests pass. The complete derived report is
+`docs/gaze-end-pose-translation-screen-2026-09-06.json` (SHA256
+`60c40404cd0eac19c4f8d16c6fa0c3ebad1afc4315e50131aa0af426bccbb238`); the readable decision table
+is in `docs/gaze-end-pose-translation-screen.md`.
+
+**Interpretation and decision:** The repeated target identifies real feature movement, but applying
+one global end-pose translation trades typical error against regional tails. The large improvement
+in the poor September 4 02:42 calibration does not generalize. Reject this correction and do not tune
+scaled, capped, or single-axis variants against the same answers. No Android code, installed app,
+calibration, or gaze output changed.
+
+**Next inquiry (superseded by E-075):** The original closure proposed freezing the retained
+pipeline or a separate model replacement. That inference exceeded this experiment's scope.
+E-074 rejects one constant-shift correction, not all small corrections or pose compensation.
+Do not request another calibration repetition as though repetition itself were an intervention.
+
+### 2026-09-06 — Evidence reassessment and native MGazeNet handoff (E-075)
+
+**Question:** Have the practical options actually been exhausted, and which next inquiry best
+addresses on-device accuracy and throughput across both phones without repeating failed work?
+
+**Action:** At the user's request, revisited the handoff, relevant diagnostic/calibration records,
+active eye geometry and mapper, historical laptop bridge, model-replacement proposal, thesis
+tracking/validation sections, and primary model sources. The user subsequently requested a
+handoff for a fresh task. No phone interaction, camera capture, calibration, benchmark, or app
+source modification occurred in this review or handoff preparation.
+
+**Evidence and interpretation:** E-043 evaluated a posture envelope flag, not coordinate
+compensation. E-038 changed both separate-eye inputs and mapping family; its failures cannot
+exclude all uses of per-eye information. E-074 shifted all fit features by one constant vector,
+not a measured per-point temporal/pose transform. E-070-E-073 repeatedly failed the candidate's
+spatial gate, but lacked fresh matched reference calibrations and cannot establish the baseline
+as superior under those same sessions or isolate device causality. These qualifications retain
+every recorded adverse result and do not promote any rejected candidate.
+
+The historical `tools/gazefollower_stream.py` used a laptop webcam/UDP arrangement. In contrast,
+upstream GazeFollower exposes a pretrained MGazeNet `base.mnn` and reference estimator/calibrator;
+associated research includes smartphone MNN deployment. The public model's accuracy and full-path
+speed on A56/SM-G991B are unknown. Public/source versions, weights, processing conventions,
+calibration, and usage terms must be pinned before an implementation. Source links and audit
+details are recorded in `gaze-mgazenet-handoff.md`.
+
+**Decision:** Withdraw the categorical freeze/exhaustion conclusion. Select a bounded native
+MGazeNet feasibility audit as the next inquiry, with correctly evaluated limited pose compensation
+as a second option. Keep the existing 478-point path as an unchanged comparison baseline, not a
+certified research instrument. The latest authorization is documentation/handoff preparation;
+obtain direction on the bounded implementation proposal before changing/installing the app.
+
+**Next inquiry:** Verify exact model, preprocessing, calibration, and Android runtime requirements;
+propose a source-equivalent isolated full-path benchmark before requesting accuracy runs. Neither
+published model-only speed nor historical laptop accuracy establishes a phone improvement.
+
 ## Evidence Registry
 
 | ID | Date | Evidence source | Conditions | Artifact or location | Notes |
@@ -1362,6 +1433,8 @@ delegate, mapper, simple-offset, posture-coefficient, or target-order experiment
 | E-071 | 2026-09-06 | Replicated standalone compact-candidate calibration | SM-G991B; exact candidate and protocol unchanged; default embedded label retained | `diagnostics-local/2026-09-06/compact-face/compact_face_calibration_20260905_184855_compact_face_calibration.json` | Held-out median improves to 0.83 lines but maximum remains 2.09; raw grid shape repeats while regional signed errors do not; conditional A56 gate only |
 | E-072 | 2026-09-06 | First A56 standalone compact-candidate calibration | A56; exact SM-gate APK and protocol; normal calibration untouched | `diagnostics-local/2026-09-06/compact-face/compact_face_calibration_20260905_185734_compact_face_cal_a56_1.json` | Candidate reaches 30.00 mean FPS but held-out median/max is 2.89/4.76 lines and vertical grid correlation is 0.778; retained for one unchanged replication |
 | E-073 | 2026-09-06 | A56 compact-candidate replication plus sanity run | A56; unchanged run 2 and user-requested unchanged run 3; all earlier failures retained | Two preserved artifacts under `diagnostics-local/2026-09-06/compact-face/` | Approximately 30 FPS repeats, but held-out median/max worsens to 3.31/6.80 and 4.68/6.45 lines; cross-device accuracy gate fails and candidate closes |
+| E-074 | 2026-09-06 | Fixed end-pose feature-translation screen | 13 accepted complete A56 eye-local calibrations; unchanged quadratic; phone inputs read in memory | `docs/gaze-end-pose-translation-screen.md` plus derived JSON | Typical vertical error improves often, but median tail worsens and only 2/13 sessions improve all selected vertical/2-D metrics; candidate rejected |
+| E-075 | 2026-09-06 | Evidence/source reassessment and handoff; no new measurement | Repository, thesis, and primary upstream model/code review | `docs/gaze-mgazenet-handoff.md` | Freeze/exhaustion inference withdrawn; native MGazeNet feasibility selected, not implemented or validated; pose compensation remains untested |
 
 ## Confirmed Findings
 
@@ -1412,6 +1485,7 @@ delegate, mapper, simple-offset, posture-coefficient, or target-order experiment
 36. The unchanged SM replication is much better typically and sustains about 28 FPS, but the worst held-out error remains about 2.1 lines and the target-wise error direction changes between runs. This supports one isolated A56 generalization gate, not integration or a repeatable accuracy claim (E-071).
 37. The first A56 compact calibration reaches approximately 30 FPS but has weak vertical grid ordering and severe LOO/held-out tails. It is an adverse accuracy result retained for one unchanged replication, not evidence to integrate or tune the candidate (E-072).
 38. Two further unchanged A56 runs retain approximately 30 FPS but reproduce severe full-screen errors, including 6.80- and 6.45-line held-out maxima. The compact architecture improves speed but fails replicated cross-device accuracy and must remain non-authoritative (E-073).
+39. Translating every calibration feature by the complete repeated-target drift vector improves typical held-out vertical error in many sessions but fails to control vertical and 2-D tails. This fixed global correction is rejected and must not be tuned against the same records; it does not test measured-pose or time-dependent compensation (E-074/E-075).
 
 ## Open Questions
 
@@ -1433,4 +1507,5 @@ delegate, mapper, simple-offset, posture-coefficient, or target-order experiment
 4. Do not allow session median alone to produce a favorable assessment; report and consider every target, tail error, region, drift, and coverage (E-022, E-024, E-028, E-029).
 5. Prioritize older-adult target predictability for the next controlled comparison by restoring fixed row-major order and replacing continuous pulsing with a one-way pre-sample contraction around a fixed reticle (E-031).
 6. Do not use calibration LOO, held-out error, or mapper conditioning to claim that a run will have a small live tail; the five-pair comparison does not support that inference (E-037).
-7. Before changing calibration math, make the existing high-drift flag a stopping rule: Redo All once instead of saving; if the repeat also flags high drift, abort and retain the prior calibration. This is risk control, not a line-accuracy gate (E-037).
+7. The E-037 proposal to make high drift an automatic stopping rule was superseded by later evidence: a 201 px-drift calibration produced the best live result (0.76-line median/1.04 maximum). Keep drift as evidence; do not implement automatic rejection or sample suppression from that rule.
+8. E-075 selects native MGazeNet feasibility, not a model promotion. Preserve failed variants and the current comparison baseline; do not equate absence of a successful small correction with proof that improvements are exhausted.
