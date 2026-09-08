@@ -79,8 +79,17 @@ assign no gate. All host verification passed. After separate authorization, the
 exact signed APK pair received a setup-only A56 check: all four harness tests
 passed in 2.976 seconds with CAMERA runtime grant false and effective app-op
 `ignore`; no record was created and the packages were force-stopped. No camera
-or personal calibration was used. A matching G991B setup check, CAMERA grant,
-or any participant run remains a new explicit authorization boundary.
+or personal calibration was used. The first matching G991B check then retained
+a 3/4 failure: its layout resolved the four-way near-centre tie as `fit_10`
+instead of the frozen `fit_6`. The isolated controller now selects `fit_6`
+explicitly; the active tracker remains unchanged. After all 147 JVM and 49
+Python tests passed again, corrected app hash
+`2fba004144d705102c76c76b25ab6c8426892797fb6a2f923bb45d8c4230ccab`
+passed all four G991B setup tests in 2.629 seconds with CAMERA still denied, no
+record, and processes stopped. Since the earlier A56 check used the pre-repair
+app, repeating the setup-only test there with the corrected hash is the remaining
+device boundary. CAMERA grant or any participant run remains separately
+unauthorized.
 
 ## Goal and authority
 

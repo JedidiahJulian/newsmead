@@ -1,7 +1,6 @@
 package com.newsmead.mgazenetbenchmark
 
 import java.security.MessageDigest
-import kotlin.math.hypot
 import kotlin.math.sqrt
 
 /** Isolated MGazeNet calibration observability using NewsMead's 16-point structure. */
@@ -23,10 +22,9 @@ class CalibrationAuditSession(val layout: AccuracySession.Layout, val runLabel: 
     private val grid = activeGrid(layout)
     val fitPoints = listOf(FitPoint("practice",layout.fromFraction(.5,.5),true)) +
         grid.mapIndexed { index, point -> FitPoint("fit_${index+1}",point,false) }
-    val driftFitId = grid.indices.minByOrNull { index ->
-        val p = grid[index]; hypot(p.x-(layout.viewport.left+layout.viewport.right)/2,
-            p.y-(layout.viewport.top+layout.viewport.bottom)/2)
-    }!!.let { "fit_${it+1}" }
+    // Four grid points are mathematically tied around centre. Freeze the row-major
+    // first candidate so floating-point/layout differences cannot change the protocol.
+    val driftFitId = DRIFT_FIT_ID
     val verificationBlocks = buildList {
         add(VerificationBlock("drift_repeat_$driftFitId","drift_repeat",
             fitPoints.first { it.id == driftFitId }.point))
@@ -57,6 +55,7 @@ class CalibrationAuditSession(val layout: AccuracySession.Layout, val runLabel: 
         require(runLabel.isNotBlank() && runLabel.length <= 120)
         require(grid.size == 16 && grid.distinct().size == 16)
         require(fitPoints.filterNot { it.practice }.map { it.id } == (1..16).map { "fit_$it" })
+        require(fitPoints.first { it.id == driftFitId }.point == grid[5])
         require(verificationBlocks.map { it.point }.distinct().size == verificationBlocks.size)
         require(verificationBlocks.drop(1).none { block -> grid.any { it == block.point } })
         fitPoints.filterNot { it.practice }.forEach { rows[it.id] = mutableListOf() }
@@ -251,6 +250,7 @@ class CalibrationAuditSession(val layout: AccuracySession.Layout, val runLabel: 
         const val VERIFY_DRAIN_MS = 250.0
         const val FEATURE_COUNT = 258
         const val EYE_AREA_MIN = 10.0
+        const val DRIFT_FIT_ID = "fit_6"
         val GRID_FRACTIONS = listOf(.1,.3667,.6333,.9)
         val VALIDATION_FRACTIONS = listOf(.5 to .5,.25 to .25,.75 to .25,.25 to .75,.75 to .75)
 

@@ -1,10 +1,11 @@
 # MGazeNet calibration observability v3 software checkpoint — 2026-09-09
 
 Status: the isolated input-only calibration audit is implemented and
-host-verified. A subsequently authorized setup-only check passed on the A56
-with CAMERA denied. No camera, participant calibration or personal data was
-used. The work does not modify the active NewsMead tracker or calibration store
-or assign an accuracy gate.
+host-verified. Authorized setup-only checks passed on the A56 and, after one
+retained cross-layout protocol failure and repair, on the G991B with CAMERA
+denied. No camera, participant calibration or personal data was used. The work
+does not modify the active NewsMead tracker or calibration store or assign an
+accuracy gate. The corrected exact-APK recheck remains pending on the A56.
 
 Read after `gaze-mgazenet-post-pilot-review.md`. This is the current MGazeNet
 continuation point.
@@ -96,7 +97,7 @@ The following checks passed on 2026-09-09:
 - debug and instrumentation APK assembly;
 - `git diff --check`.
 
-The signed artifacts used for the A56 setup check are:
+The signed pre-repair artifacts used for the A56 setup check were:
 
 - app APK SHA-256
   `7af28170f07e6fe4fcd661b8489b5fa329e6bdda129d25f7ea218bb53b3465d4`;
@@ -145,6 +146,41 @@ test package were force-stopped and the benchmark process was confirmed absent.
 The app-op display retained an older historical `allow` timestamp/duration from
 the previous authorized pilot; it did not advance during this setup check.
 
+## G991B setup check and retained protocol repair
+
+The same pre-repair APK pair was then installed as an in-place update on the
+G991B (`SM-G991B`, serial `R5CR60YSJ2X`). CAMERA was first confirmed with runtime
+grant `false` and effective app-op `ignore`. The first `AccuracyHarnessTest` run
+retained a real failure: 3/4 tests passed, while the artificial geometry test
+reported expected `fit_6` but actual `fit_10`. No record was created and no test
+pressed Start.
+
+The cause was confined to the isolated v3 controller. It selected the repeated
+target by the smallest physical-pixel distance among four mathematically tied
+near-centre grid points. Floating-point/layout differences broke that tie
+differently on the two phones. `CalibrationAuditSession` now freezes the
+row-major first candidate explicitly as `DRIFT_FIT_ID = "fit_6"`; an invariant
+also binds it to grid entry 6. The report and offline reader already required
+that identity. The active NewsMead tracker was inspected because its procedure
+motivated this check, but it was not modified.
+
+After the repair, all 147 JVM tests and all 49 Python tests passed again, the
+Kotlin synthetic report again passed independent Python validation, and both
+APKs assembled. The corrected signed artifacts are:
+
+- app APK SHA-256
+  `2fba004144d705102c76c76b25ab6c8426892797fb6a2f923bb45d8c4230ccab`;
+- instrumentation APK SHA-256
+  `1557e96565df7d72a3d5cd3eecc5a5b753da543aedb76e8a6b846f0f5a350899`.
+
+The corrected app updated in place and the unchanged test APK remained valid.
+The same four setup-only tests then passed in 2.629 seconds. The v3 setup created
+no record, retained the fixed 16-point order, exact `fit_6` repeat and five
+disjoint validation positions, and never requested CAMERA. Afterward, CAMERA
+was explicitly revoked and set to `ignore`, its runtime grant was confirmed
+`false`, both packages were force-stopped and the benchmark process was absent.
+The older app-op `allow` timestamp/duration did not advance.
+
 ## Files in this checkpoint
 
 - `CalibrationAuditEngine.kt`: pure whole-target-fold audit and memory cleanup;
@@ -161,9 +197,10 @@ the previous authorized pilot; it did not advance during this setup check.
 
 ## Authorization boundary and next decision
 
-The software checkpoint and A56 camera-disabled setup check are complete. Do not
-grant CAMERA, run a personal calibration, collect a v3 record, change a
-threshold, promote MGazeNet or modify the active tracker without a new explicit
-authorization. A matching setup-only check on the G991B, if desired, is the
-remaining camera-disabled device boundary; it is not a participant run and does
-not authorize one.
+The software checkpoint and corrected G991B camera-disabled setup check are
+complete. Do not grant CAMERA, run a personal calibration, collect a v3 record,
+change a threshold, promote MGazeNet or modify the active tracker without a new
+explicit authorization. Because the repair changed the app APK after the A56
+check, the remaining device step is to repeat the same setup-only test on the
+A56 using the corrected hash above. It is not a participant run and does not
+authorize one.
