@@ -147,15 +147,16 @@ exact hashed v2 package. This confirms the tested presentation geometry and
 setup behavior on these two layouts. It does not measure gaze accuracy or
 authorize a personal trial.
 
-**Pilot collection follow-up:** after separate authorization, SM-G991B session
-1 and session 2 completed under the opposite order plans with fresh calibrations.
-Their immutable numeric records, full target tables, fixed-age sensitivity
-results and between-session comparison are documented in
-`gaze-mgazenet-stationary-pilot-results.md`. Both are retained without a gate or
-promotion decision. Both occurred under subsequently disclosed severe fatigue;
-the results file records why this is a validity limitation rather than a basis
-for deleting or correcting them. A56 collection remains pending separate
-authorization and is paused while that fatigue continues.
+**Pilot collection follow-up:** after separate authorization, both SM-G991B
+sessions and A56 session 1 completed with fresh calibrations under their
+predeclared order plans. Their immutable numeric records, full target tables,
+fixed-age sensitivity results and comparison are documented in
+`gaze-mgazenet-stationary-pilot-results.md`. All are retained without a gate or
+promotion decision. The sessions occurred in the disclosed severe-fatigue
+context; the results file records why this is a validity limitation rather than
+a basis for deleting or correcting them. CAMERA was revoked and the app was
+force-stopped after each. Only A56 reverse-then-forward remains; it requires
+rest/repositioning and a new explicit readiness/comfort authorization.
 
 ## Remaining authorization boundary
 
