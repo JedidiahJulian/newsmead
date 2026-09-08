@@ -75,9 +75,12 @@ five held-out validation positions while retaining MGazeNet's incompatible
 258-value inputs and RBF SVRs. It performs sixteen whole-target-held-out folds
 of 675 training rows each, then fits all 720 rows and records six diagnostic-only
 checks. The numeric schema/scorer retain no features or personal model and
-assign no gate. All host verification passed; no phone, camera or personal
-calibration was used. Installation and any device action remain a new explicit
-authorization boundary.
+assign no gate. All host verification passed. After separate authorization, the
+exact signed APK pair received a setup-only A56 check: all four harness tests
+passed in 2.976 seconds with CAMERA runtime grant false and effective app-op
+`ignore`; no record was created and the packages were force-stopped. No camera
+or personal calibration was used. A matching G991B setup check, CAMERA grant,
+or any participant run remains a new explicit authorization boundary.
 
 ## Goal and authority
 
