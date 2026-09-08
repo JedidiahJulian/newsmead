@@ -40,11 +40,16 @@ order choice for the exact hashed APK pair. No personal calibration occurred;
 participant collection remains a separate later authorization.
 
 **Pilot-results follow-up:** `gaze-mgazenet-stationary-pilot-results.md` records
-the authorized, completed SM-G991B session 1. It retains all twenty target
-blocks, extreme spatial tails and the fixed four-age availability table. No
-gate was assigned and CAMERA was revoked afterward. Continue with the
-predeclared fresh reverse-then-forward SM-G991B session 2 after rest; do not tune
-or rerun session 1.
+both authorized SM-G991B sessions with fresh calibrations and opposite order
+plans. It retains all target blocks, extreme spatial tails, fixed four-age
+availability tables and the reversal of signed bias between sessions. No gate
+was assigned and CAMERA was revoked after each. Do not tune or rerun either
+session. The participant subsequently disclosed severe fatigue and roughly two
+weeks without good sleep during both runs; session 2 otherwise used the same
+reported conditions but occurred at night in a slightly dimmer lighted room.
+Treat both as fatigue-context feasibility evidence and do not causally subtract
+fatigue from tracker error. The two A56 sessions remain pending separate
+authorization and are paused rather than being solicited during ongoing fatigue.
 
 ## Goal and authority
 

@@ -1,25 +1,34 @@
-# MGazeNet stationary pilot results — 2026-09-08
+# MGazeNet stationary pilot results — 2026-09-08 to 2026-09-09
 
-Status: prospective descriptive pilot in progress. SM-G991B session 1 is
-complete and retained; its counterbalanced fresh session 2 has not yet run.
+Status: prospective descriptive pilot in progress. Both predeclared fresh
+SM-G991B sessions are complete and retained; the two A56 sessions have not run.
 No accuracy gate or promotion decision is assigned. Read after
 `gaze-mgazenet-stationary-v2.md`.
 
-## Declared conditions
+## Session 1 declared conditions
 
 The participant reported no glasses, a viewing distance around 30 cm with
 ordinary somewhat-closer/somewhat-farther variation, a lighted room, and medium
-screen brightness described as neither too bright nor too dark. These are
-participant descriptions, not instrument measurements. Natural small distance
-variation was not treated as a protocol failure or estimated from face scale.
+screen brightness described as neither too bright nor too dark. The participant
+later disclosed being very fatigued during both sessions, without good sleep for
+approximately two weeks and without expecting that to resolve soon. This is a
+self-reported condition, not a measured sleep or clinical assessment. Natural
+small distance variation was not treated as a protocol failure or estimated
+from face scale.
+
+Fatigue could affect target fixation, blinks, eye movement, posture and task
+compliance, but this harness cannot quantify those pathways or subtract them
+from tracker error. Both runs are therefore fatigue-context feasibility evidence,
+not clean rested-condition estimator benchmarks. The disclosure does not justify
+discarding unfavorable samples or retroactively correcting either run.
 
 ## SM-G991B session 1 — forward then reverse
 
-Run label: `g991b_s1_forward_reverse`  
-Session ID: `1788837575199_9f02f7ae-9d34-4ac2-8f7b-6beedde25cf3`  
-Outcome: complete  
-Report SHA-256: `d21aac066af1c3af0a4e88a790b7a9102ec09062590cd2e0b73c90eef956f39f`  
-Offline summary SHA-256: `f39db85fdc8e15ff1729523c5d5acd025eeea4ed5047d97125df3ee7096afb2e`
+- Run label: `g991b_s1_forward_reverse`
+- Session ID: `1788837575199_9f02f7ae-9d34-4ac2-8f7b-6beedde25cf3`
+- Outcome: complete
+- Report SHA-256: `d21aac066af1c3af0a4e88a790b7a9102ec09062590cd2e0b73c90eef956f39f`
+- Offline summary SHA-256: `f39db85fdc8e15ff1729523c5d5acd025eeea4ed5047d97125df3ee7096afb2e`
 
 The integrity-checked numeric record and derived summary are retained under
 `diagnostics-local/2026-09-08/mgazenet-stationary-v2/sm-g991b/session-1-forward-reverse/`.
@@ -139,18 +148,165 @@ frames are not observable. No resource-close error occurred. These counters
 span practice, calibration, settling and validation, so they are operational
 context rather than a test-window sample denominator.
 
+## SM-G991B session 2 — reverse then forward
+
+- Run label: `g991b_s2_reverse_forward`
+- Session ID: `1788888496569_3a72ea87-d398-48b8-b6cb-6012dcbae791`
+- Outcome: complete
+- Report SHA-256: `449f98623549c27479f60d82959468efc89a8f515a696a8d5764bdd13184169a`
+- Offline summary SHA-256: `523988b9dbeab891bbf10da6889fad769d7648c514868772384685b8765fd565`
+
+The integrity-checked record and summary are retained under
+`diagnostics-local/2026-09-09/mgazenet-stationary-v2/sm-g991b/session-2-reverse-forward/`.
+The record independently verifies `reverse_then_forward`, all twenty blocks,
+the same v2 pipeline and layout contract, and a fresh 585-row calibration. Its
+fit digest,
+`a09923f85f3ecc0e78b642709b05b93baf7654e753e483ddc7fd44a14cb52580`,
+differs from session 1. All thirteen fit targets and the practice target accepted
+45 rows without an eligibility rejection.
+
+The participant retrospectively confirmed the same no-glasses, approximate
+distance, room lighting and medium-brightness conditions for session 2. It was
+nighttime and the room was slightly dimmer, though still lighted and not reported
+as a large change. The same severe-fatigue disclosure applies to this run.
+
+### Session and sweep summaries
+
+All 20 blocks and 10 locations contributed. Across 50,000 ms of measurement,
+349 results were received and all had admitted coordinates. Five coordinates
+were outside every text band; they remain in spatial error but are not counted
+as correct line assignments. There were no explicit null results. Thirty-three
+outputs arrived after their capture window ended.
+
+| Scope | Coordinates | mean dx px | mean dy px | 2-D median / P95 / max px | vertical median / P95 / max lines | exact line | within one line | age median / P95 / max ms |
+| --- | ---: | ---: | ---: | --- | --- | ---: | ---: | --- |
+| Whole session | 349 | -59.5 | +101.1 | 154.1 / 276.5 / 1443.7 | 0.87 / 1.90 / 12.12 | 33.5% | 83.1% | 237.9 / 307.0 / 332.8 |
+| Sweep 1, reverse | 180 | -6.8 | +80.1 | 125.8 / 229.1 / 304.0 | 0.76 / 1.69 / 2.18 | 37.2% | 86.7% | 228.3 / 270.5 / 322.3 |
+| Sweep 2, forward | 169 | -115.6 | +123.4 | 183.2 / 308.9 / 1443.7 | 1.00 / 2.11 / 12.12 | 29.6% | 79.3% | 245.4 / 311.5 / 332.8 |
+
+Target-balanced results across ten contributing locations were: mean location
+median/P95/maximum 2-D error 147.9/331.2/412.7 px; mean location
+median/P95/maximum vertical error 0.81/2.18/2.82 lines; mean signed X/Y bias
+-59.6/+99.9 px; mean exact-line fraction 33.6%; and mean within-one-line
+fraction 83.5%.
+
+### Per-target/sweep spatial results
+
+| Block | n | dx / dy px | 2-D median / P95 / max px | vertical median / P95 / max lines | exact / within-one | SDx / SDy px |
+| --- | ---: | --- | --- | --- | --- | --- |
+| S1 grid 44 | 18 | -38.5 / -0.2 | 33.7 / 130.5 / 130.5 | 0.08 / 0.25 / 0.25 | 100% / 100% | 34.8 / 15.9 |
+| S1 grid 38 | 18 | -52.6 / +13.2 | 53.5 / 124.4 / 124.4 | 0.18 / 0.50 / 0.50 | 94.4% / 100% | 31.4 / 23.4 |
+| S1 grid 33 | 18 | +164.9 / +41.0 | 165.4 / 304.0 / 304.0 | 0.40 / 1.38 / 1.38 | 66.7% / 100% | 39.9 / 51.8 |
+| S1 grid 31 | 18 | +42.5 / -41.0 | 78.5 / 134.6 / 134.6 | 0.34 / 0.79 / 0.79 | 77.8% / 100% | 55.0 / 25.7 |
+| S1 grid 24 | 17 | +84.1 / +100.9 | 130.2 / 210.6 / 210.6 | 0.86 / 1.17 / 1.17 | 0% / 100% | 52.9 / 19.0 |
+| S1 grid 22 | 18 | +1.0 / +103.6 | 111.6 / 171.4 / 171.4 | 0.78 / 1.43 / 1.43 | 0% / 100% | 47.6 / 35.4 |
+| S1 grid 15 | 18 | -22.1 / +107.8 | 117.6 / 186.2 / 186.2 | 0.91 / 1.57 / 1.57 | 11.1% / 94.4% | 40.5 / 33.1 |
+| S1 grid 13 | 18 | -53.4 / +128.9 | 147.5 / 230.7 / 230.7 | 1.06 / 1.77 / 1.77 | 22.2% / 72.2% | 47.8 / 60.8 |
+| S1 grid 8 | 19 | -104.8 / +185.0 | 205.9 / 281.3 / 281.3 | 1.53 / 1.95 / 1.95 | 0% / 31.6% | 25.2 / 22.9 |
+| S1 grid 2 | 18 | -78.9 / +157.0 | 174.9 / 267.5 / 267.5 | 1.28 / 2.18 / 2.18 | 0% / 72.2% | 16.8 / 48.1 |
+| S2 grid 2 | 18 | -96.6 / +153.8 | 181.8 / 244.9 / 244.9 | 1.31 / 1.85 / 1.85 | 0% / 77.8% | 15.1 / 30.7 |
+| S2 grid 8 | 18 | -17.9 / +344.2 | 195.3 / 1443.7 / 1443.7 | 1.63 / 12.12 / 12.12 | 0% / 38.9% | 73.7 / 362.8 |
+| S2 grid 13 | 17 | -90.4 / +74.5 | 133.2 / 164.6 / 164.6 | 0.49 / 1.20 / 1.20 | 52.9% / 100% | 34.6 / 43.9 |
+| S2 grid 15 | 18 | -33.2 / +176.9 | 172.3 / 297.0 / 297.0 | 1.44 / 2.43 / 2.43 | 0% / 55.6% | 58.1 / 48.5 |
+| S2 grid 22 | 15 | -164.3 / +135.9 | 200.9 / 317.8 / 317.8 | 1.08 / 2.00 / 2.00 | 0% / 86.7% | 45.3 / 46.9 |
+| S2 grid 24 | 16 | -197.6 / +165.9 | 265.2 / 362.8 / 362.8 | 1.35 / 2.19 / 2.19 | 0% / 75.0% | 65.9 / 40.2 |
+| S2 grid 31 | 17 | -110.9 / +85.4 | 143.2 / 377.0 / 377.0 | 0.61 / 2.63 / 2.63 | 41.2% / 88.2% | 71.2 / 81.9 |
+| S2 grid 33 | 17 | -137.4 / +79.7 | 172.9 / 269.4 / 269.4 | 0.75 / 1.40 / 1.40 | 35.3% / 100% | 69.5 / 40.8 |
+| S2 grid 38 | 16 | -107.1 / -1.8 | 136.6 / 182.1 / 182.1 | 0.26 / 1.20 / 1.20 | 68.8% / 75.0% | 51.0 / 46.2 |
+| S2 grid 44 | 17 | -222.6 / -1.8 | 226.7 / 344.6 / 344.6 | 0.12 / 0.32 / 0.32 | 100% / 100% | 42.2 / 19.4 |
+
+Sweep-2 grid 8 contains three >400 px samples 280-547 ms into its stable
+measurement window; the largest is 1,443.7 px/12.12 lines. All have finite
+coordinates and capture/output clocks and are retained. Five session coordinates
+are off the rendered text bands. As in session 1, participant movement/compliance
+and tracker error cannot be separated post hoc.
+
+### Same-location bias change
+
+Values are sweep 2 minus sweep 1 coordinate-mean signed bias within session 2.
+
+| Grid | ΔX px | ΔY px |
+| ---: | ---: | ---: |
+| 2 | -17.8 | -3.1 |
+| 8 | +86.9 | +159.2 |
+| 13 | -36.9 | -54.4 |
+| 15 | -11.1 | +69.1 |
+| 22 | -165.3 | +32.2 |
+| 24 | -281.6 | +65.1 |
+| 31 | -153.4 | +126.4 |
+| 33 | -302.3 | +38.7 |
+| 38 | -54.5 | -15.0 |
+| 44 | -184.1 | -1.6 |
+
+### Fixed freshness sensitivity
+
+| Maximum capture age | coordinate availability | exact-line availability | within-one-line availability |
+| ---: | ---: | ---: | ---: |
+| 50 ms | 0% | 0% | 0% |
+| 100 ms | 0% | 0% | 0% |
+| 200 ms | 0.0005% | 0% | 0.0005% |
+| 500 ms | 87.45% | 29.09% | 72.68% |
+
+The worst 500 ms within-block unavailable interval was 392.2 ms. CameraX
+delivered 3,495 analyzer arrivals and 1,834 were observed busy drops (52.5%).
+No resource-close error occurred.
+
+## Between-session comparison
+
+| Metric | Session 1 F→R | Session 2 R→F |
+| --- | ---: | ---: |
+| Coordinates / off-text / null | 375 / 0 / 0 | 349 / 5 / 0 |
+| Mean signed X bias | +44.4 px | -59.5 px |
+| Mean signed Y bias | -75.3 px | +101.1 px |
+| 2-D median / P95 / max | 108.8 / 232.2 / 979.2 px | 154.1 / 276.5 / 1443.7 px |
+| Vertical median / P95 / max | 0.76 / 1.82 / 8.30 lines | 0.87 / 1.90 / 12.12 lines |
+| Exact line | 31.7% | 33.5% |
+| Within one line | 85.3% | 83.1% |
+| Output-age median / P95 | 219.8 / 281.1 ms | 237.9 / 307.0 ms |
+| 500 ms coordinate availability | 88.63% | 87.45% |
+| 500 ms exact-line availability | 28.21% | 29.09% |
+| 500 ms within-one-line availability | 76.42% | 72.68% |
+| Analyzer busy-drop fraction | 54.9% | 52.5% |
+
+The fresh calibration and reversed order did not reproduce a stable signed bias:
+both mean axes changed sign, while exact-line performance remained close to one
+third and within-one-line remained near 83-85%. Session 2 worsened the 2-D
+median/tail and output age. These two sessions therefore show material
+calibration/session variability; pooling their frames would hide that result.
+
+### Relation to the historical tracker evidence
+
+The 0.76 and 0.87-line session medians are within the better range previously
+recorded for other NewsMead gaze configurations. The retained eye-local work
+reported 0.62/2.07 and 0.96/1.51-line live median/maximum pairs (E-045); the
+stronger E-054 A56 reading run reported 1/2-line median/P95, 36.0% exact-line and
+85.4% within-one-line; and the stronger SM compact-candidate replication reported
+0.83/2.09-line held-out median/maximum (E-071). In that limited sense, the
+MGazeNet typical vertical errors are encouraging and broadly comparable.
+
+They are not a matched superiority result. The MGazeNet task uses stationary red
+points centered inside line bands, while E-054 used reading behavior and the
+historical target protocols, sample aggregation and runtime paths differ. The
+MGazeNet sessions also retain 8.30/12.12-line sample maxima, approximately
+31.7/33.5% exact-line assignment, opposite session-level signed bias and weak
+sub-200 ms availability. Therefore neither the median nor the historical range
+is enough to label the full signal accurate for reading events.
+
 ## Interpretation and next boundary
 
-This first session shows complete spatial coverage but substantial negative-Y
-bias through much of the layout, weak exact-line assignment, large regional
-variation, and output ages incompatible with the three lower sensitivity ages.
-The 85.3% within-one-line fraction does not erase 31.7% exact-line accuracy,
-the 1.82-line vertical P95, the 8.30-line maximum, or the availability result.
-It establishes neither reliable reading events nor a pass.
+The paired SM-G991B observations establish neither reliable reading events nor
+a pass. Within-one-line results do not erase roughly one-third exact-line
+accuracy, multi-line P95/max tails, weak sub-200 ms availability, regional
+variation, or the reversal of signed bias between fresh calibrations. No filter,
+correction, threshold or target was tuned after either run, and neither session
+will be repeated to obtain a favorable result.
 
-Do not tune, correct, filter or repeat this session to obtain a favorable result.
-The next predeclared observation is a fresh SM-G991B session 2 using reverse then
-forward order, after rest and ordinary repositioning, with the same reported
-conditions recorded again. That run requires another full calibration and
-should be reported separately before any cross-session conclusion. CAMERA was
-revoked and the isolated app was force-stopped after session 1 was preserved.
+The predeclared next observations remain two fresh A56 sessions, first forward
+then reverse and then reverse then forward after rest/repositioning. They are
+paused: continuing immediately while the participant reports severe ongoing
+fatigue would add an uncontrolled validity limitation and may add discomfort.
+Do not solicit or launch another personal run merely to complete the table.
+Camera use and personal calibration on that phone require a separate explicit
+authorization and refreshed condition/comfort confirmation. Keep the SM-G991B
+sessions separate in all later tables. CAMERA was revoked and the isolated app
+was force-stopped after each preserved session.

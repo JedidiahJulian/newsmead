@@ -148,10 +148,14 @@ setup behavior on these two layouts. It does not measure gaze accuracy or
 authorize a personal trial.
 
 **Pilot collection follow-up:** after separate authorization, SM-G991B session
-1 completed under the forward-then-reverse plan. Its immutable numeric record,
-full target table, fixed-age sensitivity results and limitations are documented
-in `gaze-mgazenet-stationary-pilot-results.md`. The result is retained without a
-gate or promotion decision; session 2 remains pending.
+1 and session 2 completed under the opposite order plans with fresh calibrations.
+Their immutable numeric records, full target tables, fixed-age sensitivity
+results and between-session comparison are documented in
+`gaze-mgazenet-stationary-pilot-results.md`. Both are retained without a gate or
+promotion decision. Both occurred under subsequently disclosed severe fatigue;
+the results file records why this is a validity limitation rather than a basis
+for deleting or correcting them. A56 collection remains pending separate
+authorization and is paused while that fatigue continues.
 
 ## Remaining authorization boundary
 
