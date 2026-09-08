@@ -147,6 +147,12 @@ exact hashed v2 package. This confirms the tested presentation geometry and
 setup behavior on these two layouts. It does not measure gaze accuracy or
 authorize a personal trial.
 
+**Pilot collection follow-up:** after separate authorization, SM-G991B session
+1 completed under the forward-then-reverse plan. Its immutable numeric record,
+full target table, fixed-age sensitivity results and limitations are documented
+in `gaze-mgazenet-stationary-pilot-results.md`. The result is retained without a
+gate or promotion decision; session 2 remains pending.
+
 ## Remaining authorization boundary
 
 Do not begin a personal trial from this checkpoint. The authorized camera-free

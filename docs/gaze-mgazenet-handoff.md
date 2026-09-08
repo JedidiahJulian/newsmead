@@ -39,6 +39,13 @@ layouts retain ten distinct repeated locations, no fit overlap and no default
 order choice for the exact hashed APK pair. No personal calibration occurred;
 participant collection remains a separate later authorization.
 
+**Pilot-results follow-up:** `gaze-mgazenet-stationary-pilot-results.md` records
+the authorized, completed SM-G991B session 1. It retains all twenty target
+blocks, extreme spatial tails and the fixed four-age availability table. No
+gate was assigned and CAMERA was revoked afterward. Continue with the
+predeclared fresh reverse-then-forward SM-G991B session 2 after rest; do not tune
+or rerun session 1.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,
