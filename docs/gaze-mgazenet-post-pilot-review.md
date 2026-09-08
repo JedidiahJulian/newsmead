@@ -1,7 +1,9 @@
 # MGazeNet post-pilot evidence review — 2026-09-09
 
-Status: camera-free review complete; bounded next software work proposed but not
-implemented. Read after `gaze-mgazenet-stationary-pilot-results.md`.
+Status: camera-free review complete. The subsequently authorized v3 software
+increment is implemented and host-verified; see
+`gaze-mgazenet-calibration-observability-v3.md`. Read after
+`gaze-mgazenet-stationary-pilot-results.md`.
 
 ## Decision
 
@@ -13,9 +15,9 @@ active tracker, select a favorable freshness threshold, subtract a post-hoc
 bias, or repeat a completed session.
 
 The primary next question is calibration/session repeatability, not framerate.
-The proposed next increment is a camera-free implementation of numeric
-calibration observability. It must be reviewed and verified in software before
-any new device or participant boundary is considered.
+The selected next increment was a camera-free implementation of numeric
+calibration observability. It has now been reviewed and verified in software;
+no new device or participant boundary is implied.
 
 ## Evidence reviewed
 
@@ -105,7 +107,7 @@ Upstream-style prediction on the same rows used for fitting would be a training
 residual, not validation. Randomly splitting adjacent frames would also leak
 target identity and temporal duplicates. Neither is an acceptable next metric.
 
-## Bounded next software proposal: calibration observability v3
+## Implemented bounded software proposal: calibration observability v3
 
 ### Goal
 
@@ -118,27 +120,43 @@ tune a correction or claim validation.
 1. Add a pure calibration-audit component to the benchmark module. It receives
    the in-memory feature rows and fixed target labels before they are destroyed.
    It must not access NewsMead calibration storage or the active tracker.
-2. Compute leave-one-**target-group**-out diagnostics: fit the unchanged SVR on
-   12 complete target groups and predict all 45 rows of the omitted target.
+2. Reuse the active NewsMead calibration's **procedure geometry**, not its
+   incompatible stored samples or mapper: a fixed row-major 4×4 grid at viewport
+   fractions `.10`, `.3667`, `.6333`, `.90`, followed by a repeat of the nearest
+   centre fit point and five held-out validation points at centre and quarter
+   diagonals. MGazeNet still collects its own 258-value features and fits its own
+   unchanged RBF SVRs. It does not read `calibration_16point.csv`, feed the active
+   two-feature quadratic mapper, or change active calibration behavior.
+3. Compute leave-one-**target-group**-out diagnostics: fit the unchanged SVR on
+   15 complete target groups and predict all 45 rows of the omitted target.
    Report target-balanced screen-pixel and normalized X/Y median/P95/max, with
    every target represented. Never split individual frames randomly.
-3. Record numeric collection health per fit target: time to obtain 45 accepted
+4. Record numeric collection health per fit target: time to obtain 45 accepted
    rows, rejection counts, output-age distribution, and scalar within-target
    feature dispersion. Do not retain feature vectors, landmarks, images or the
    personal model. Feature-space dispersion is descriptive and must not be
    called gaze error.
-4. Add six fixed post-fit verification anchors at unused grid indices
-   `3,7,20,26,39,43`, covering left/right and upper/middle/lower regions. Their
-   predictions are diagnostic-only: they do not refit, translate, correct or
-   select the model. They remain disjoint from the 13 fit positions and the ten
-   v2 pilot locations.
-5. Version the schema and bind audit method, anchor identities/order, screen
+5. Add the six fixed post-fit checks from the active procedure: `fit_6` repeated
+   as a near-centre drift observation, then held-out viewport fractions
+   `(.50,.50)`, `(.25,.25)`, `(.75,.25)`, `(.25,.75)`, `(.75,.75)`. The five
+   validation points remain disjoint from all 16 fit positions. Predictions are
+   diagnostic-only: they do not refit, translate, correct or select the model.
+6. Version the schema and bind audit method, target identities/order, screen
    geometry, pipeline identity and calibration digest into the manifest. Retain
    incomplete/failed attempts and make setup camera-off by default.
-6. Assign no numeric pass threshold in this implementation. The existing four
+7. Assign no numeric pass threshold in this implementation. The existing four
    sessions lack the required audit telemetry, so a threshold cannot be
    backfilled. Any later development threshold and confirmatory evaluation must
    be frozen before separate data are collected.
+
+The change from the initially proposed 13-fit/six-unused-anchor layout was made
+before any v3 data existed, in response to the design review asking whether the
+current 16-point NewsMead procedure should be reused. This improves procedural
+comparability without pretending the models share an input space. The active
+tracker maps one robustly aggregated two-value eye-local observation per target
+with a six-term quadratic ridge mapper; MGazeNet fits 45 rows of 258 values per
+target with two RBF EPS-SVRs. Those samples, files and mappers are not
+interchangeable.
 
 ### Software verification before any phone work
 
@@ -155,9 +173,10 @@ tune a correction or claim validation.
 - The offline reader must reproduce the numeric aggregates independently and
   emit no accuracy gate or promotion decision.
 
-The software checkpoint ends after host/JVM verification and documentation. It
-does not authorize installing a new APK, contacting a phone, opening a camera,
-running another calibration or changing the active tracker.
+The completed software checkpoint, exact tests and remaining boundary are in
+`gaze-mgazenet-calibration-observability-v3.md`. It does not authorize installing
+a new APK, contacting a phone, opening a camera, running another calibration or
+changing the active tracker.
 
 ## Explicitly rejected shortcuts
 
@@ -173,8 +192,7 @@ running another calibration or changing the active tracker.
 
 ## Authorization boundary
 
-The camera-free evidence review is complete. Implementing the isolated v3
-software proposal is the next separate change boundary. Device installation,
-camera checks, personal calibration, new data collection, model promotion and
-active-tracker changes remain unauthorized unless separately and explicitly
-approved after the software checkpoint.
+The camera-free evidence review and authorized v3 software implementation are
+complete. Device installation, camera checks, personal calibration, new data
+collection, model promotion and active-tracker changes remain unauthorized
+unless separately and explicitly approved after the software checkpoint.

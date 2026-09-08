@@ -67,6 +67,18 @@ verification anchors. It is not implemented or authorized by the review. Do
 not use pilot targets to fit a correction, optimize framerate first, contact a
 phone, or change the active tracker.
 
+**Calibration-observability v3 follow-up:**
+`gaze-mgazenet-calibration-observability-v3.md` is now the current continuation
+point. After explicit software authorization, the isolated benchmark adopted
+the active NewsMead procedure's 4×4 16-point geometry, near-centre repeat and
+five held-out validation positions while retaining MGazeNet's incompatible
+258-value inputs and RBF SVRs. It performs sixteen whole-target-held-out folds
+of 675 training rows each, then fits all 720 rows and records six diagnostic-only
+checks. The numeric schema/scorer retain no features or personal model and
+assign no gate. All host verification passed; no phone, camera or personal
+calibration was used. Installation and any device action remain a new explicit
+authorization boundary.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,

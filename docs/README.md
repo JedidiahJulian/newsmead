@@ -14,6 +14,7 @@ This directory contains the supporting documentation for the NewsMead gaze-drive
 - [Vertical-Only Mapper Screen](gaze-vertical-mapper-screen.md): completed 11-calibration comparison; removing horizontal terms worsens vertical tails, so the current mapper remains unchanged.
 - [Eye/Coordinate Audit](gaze-coordinate-audit.md): confirmed view-local versus screen-coordinate defect; device evidence and proposed measured-origin repair before further eye-feature changes.
 - [Gaze Model Replacement Plan](gaze-model-replacement.md): candidate backends, evidence, benchmark-capture requirements, fair-comparison protocol, and replacement acceptance gate.
+- [MGazeNet Calibration Observability v3](gaze-mgazenet-calibration-observability-v3.md): isolated 16-point whole-target audit, numeric evidence contract, host verification, and device authorization boundary.
 - [Manuscript-Implementation Alignment](manuscript-implementation-alignment.md): living insertion guide for keeping manuscript wording, formulas, methods, limitations, and implementation decisions synchronized.
 - [Session Setup](session-setup.md): device/session setup notes for running the prototype.
 

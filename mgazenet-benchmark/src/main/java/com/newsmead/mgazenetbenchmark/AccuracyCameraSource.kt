@@ -161,6 +161,23 @@ class AccuracyCameraSource(private val context: Context, private val owner: Life
             main.execute { complete(success) }
         }
     }
+    fun fitAudited(training: CalibrationAuditEngine.Training,
+                   complete: (CalibrationAuditEngine.Result?,Boolean) -> Unit) {
+        worker.execute {
+            var audit: CalibrationAuditEngine.Result? = null
+            val success = try {
+                if (stopped.get()) false else {
+                    audit = CalibrationAuditEngine { SvrCalibration() }.audit(training)
+                    if (stopped.get()) return@execute
+                    val (features,labels) = CalibrationAuditEngine.flattened(training)
+                    svr!!.fit(features,labels)
+                    true
+                }
+            } catch (_: Throwable) { false }
+            finally { CalibrationAuditEngine.clear(training) }
+            main.execute { complete(audit,success) }
+        }
+    }
     private fun error(e: Throwable) { main.execute { if (!stopped.get()) failed(e.toString()) } }
     /** Called on main. Drain analyzer submissions before releasing worker-owned resources. */
     fun close(complete: (Map<String,Any?>) -> Unit) {

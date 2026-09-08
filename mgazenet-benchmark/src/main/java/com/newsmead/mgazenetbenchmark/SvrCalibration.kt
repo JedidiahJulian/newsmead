@@ -7,7 +7,7 @@ import org.opencv.ml.Ml
 import org.opencv.ml.SVM
 
 /** In-memory reference-family SVR only. No load/save or access to NewsMead data. */
-class SvrCalibration : AutoCloseable {
+class SvrCalibration : CalibrationRegressor {
     private val x = create()
     private val y = create()
     private val row = Mat(1, 258, CvType.CV_32F)
@@ -16,7 +16,7 @@ class SvrCalibration : AutoCloseable {
         val vectors = svm.supportVectors
         try { vectors.rows() } finally { vectors.release() }
     }
-    fun fit(features: Array<FloatArray>, normalizedLabels: Array<FloatArray>) {
+    override fun fit(features: Array<FloatArray>, normalizedLabels: Array<FloatArray>) {
         trained = false
         require(features.isNotEmpty() && features.size == normalizedLabels.size)
         require(features.all { it.size == 258 && it.all(Float::isFinite) })
@@ -32,7 +32,7 @@ class SvrCalibration : AutoCloseable {
             trained = true
         } finally { samples.release(); labelsX.release(); labelsY.release() }
     }
-    fun predict(features: FloatArray): FloatArray {
+    override fun predict(features: FloatArray): FloatArray {
         check(trained)
         require(features.size == 258 && features.all(Float::isFinite))
         row.put(0, 0, features)

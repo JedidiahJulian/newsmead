@@ -45,6 +45,20 @@ class AccuracyHarnessTest {
         }
         assertEquals(before,directory.list()?.toSet() ?: emptySet<String>())
     }
+
+    @Test fun openingCalibrationAuditSetupKeepsCameraOffAndCreatesNoRecord() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val directory = File(instrumentation.targetContext.filesDir,"calibration-audit")
+        val before = directory.list()?.toSet() ?: emptySet()
+        ActivityScenario.launch(CalibrationAuditActivity::class.java).use { scenario ->
+            instrumentation.waitForIdleSync()
+            scenario.onActivity { activity ->
+                assertEquals(0,activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                assertEquals(0,descendants(activity.window.decorView).filterIsInstance<RadioButton>().size)
+            }
+        }
+        assertEquals(before,directory.list()?.toSet() ?: emptySet<String>())
+    }
     @Test fun insetViewUsesPhysicalScreenCoordinatesAndAcknowledgesDrawnTarget() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         var targetView: AccuracyTargetView? = null
@@ -78,6 +92,16 @@ class AccuracyHarnessTest {
                     repeated.size == 2 && repeated[0].point == repeated[1].point
                 })
                 view.target = session.target
+
+                val audit = CalibrationAuditSession(layout,"synthetic_view_only")
+                assertEquals(16,audit.fitPoints.count { !it.practice })
+                assertEquals("fit_6",audit.driftFitId)
+                assertEquals(6,audit.verificationBlocks.size)
+                assertEquals(audit.fitPoints.first { it.id == audit.driftFitId }.point,
+                    audit.verificationBlocks.first().point)
+                assertTrue(audit.verificationBlocks.drop(1).none { verification ->
+                    audit.fitPoints.filterNot { it.practice }.any { it.point == verification.point }
+                })
             }
             instrumentation.waitForIdleSync()
             // Force a UI draw traversal before checking the posted acknowledgement.

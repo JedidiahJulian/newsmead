@@ -170,5 +170,7 @@ stationary-point result does not establish natural-reading accuracy.
 
 The subsequent camera-free evidence review and bounded calibration-observability
 proposal are recorded in `gaze-mgazenet-post-pilot-review.md`. That proposal is
-not implemented by this checkpoint and supplies no device or participant
-authorization.
+historical to this v2 checkpoint. Its separately authorized implementation and
+host verification are recorded in
+`gaze-mgazenet-calibration-observability-v3.md`; that later checkpoint still
+supplies no device or participant authorization.
