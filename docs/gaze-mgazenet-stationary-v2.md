@@ -167,3 +167,8 @@ MGazeNet from this evidence. The next authorized activity is camera-free review
 of the retained evidence. Any new software or measurement phase requires an
 explicit bounded proposal and separate authorization. A software, geometry or
 stationary-point result does not establish natural-reading accuracy.
+
+The subsequent camera-free evidence review and bounded calibration-observability
+proposal are recorded in `gaze-mgazenet-post-pilot-review.md`. That proposal is
+not implemented by this checkpoint and supplies no device or participant
+authorization.

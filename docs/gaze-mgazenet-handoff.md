@@ -55,6 +55,18 @@ session 2 did not reproduce it: 1.21/2.26/4.66 lines and 14.8%/56.5%. This is
 neither a pass nor a device ranking. No more personal trials are authorized;
 the next boundary is a camera-free evidence review and explicit proposal.
 
+**Post-pilot review follow-up:** `gaze-mgazenet-post-pilot-review.md` completes
+that camera-free review. It finds meaningful stationary spatial signal but
+insufficient line-assignment repeatability, with vertical bias stable within
+each session and reversed between each phone's fresh sessions. The current
+calibration export cannot distinguish the stronger and weaker calibrations:
+it retains counts and a digest but no target-held-out quality diagnostic. The
+bounded proposed next change is isolated calibration observability v3 using
+leave-one-target-group-out SVR diagnostics and six fixed, non-correcting
+verification anchors. It is not implemented or authorized by the review. Do
+not use pilot targets to fit a correction, optimize framerate first, contact a
+phone, or change the active tracker.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,

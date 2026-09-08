@@ -537,3 +537,7 @@ all four sessions separate in later tables. CAMERA was revoked and the isolated
 app was force-stopped after every preserved session. The next boundary is a
 camera-free evidence review and an explicit proposal for any new software or
 measurement phase; this pilot supplies no advance authorization for one.
+
+**Review follow-up:** that camera-free evidence review and its bounded,
+not-yet-implemented calibration-observability proposal are in
+`gaze-mgazenet-post-pilot-review.md`.
