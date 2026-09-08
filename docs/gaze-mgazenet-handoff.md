@@ -40,19 +40,20 @@ order choice for the exact hashed APK pair. No personal calibration occurred;
 participant collection remains a separate later authorization.
 
 **Pilot-results follow-up:** `gaze-mgazenet-stationary-pilot-results.md` records
-both authorized SM-G991B sessions and A56 session 1, each with a fresh
-calibration and the predeclared order. It retains all target blocks, extreme
-spatial tails, fixed four-age availability tables, off-text results and signed
-bias changes. No gate was assigned and CAMERA was revoked after each. Do not
-tune or rerun a completed session. The participant disclosed severe fatigue and
-roughly two weeks without good sleep; the same no-glasses, approximate-distance,
-medium-brightness and slightly dimmer nighttime lighted-room conditions reported
-for G991B session 2 were prospectively declared for A56 session 1. Treat all
-three as fatigue-context feasibility evidence and do not causally subtract
-fatigue from tracker error. A56 session 1 produced a 0.59/1.53/6.19-line
-median/P95/max, 32.1% exact-line and 79.3% within-one-line result, but this is not
-a pass or device ranking. The remaining A56 reverse-then-forward session requires
-rest/repositioning and a new explicit readiness/comfort authorization.
+the complete two-phone pilot: two authorized sessions per phone, each with a
+fresh calibration and opposite predeclared order. It retains every target block,
+extreme spatial tails, fixed four-age availability tables, off-text results and
+signed bias changes. No gate was assigned and CAMERA was revoked after each. Do
+not tune or rerun a completed session. The participant disclosed severe fatigue
+and roughly two weeks without good sleep; the same no-glasses,
+approximate-distance, medium-brightness and slightly dimmer nighttime
+lighted-room conditions reported for G991B session 2 were prospectively declared
+for both A56 sessions. Treat all four as fatigue-context feasibility evidence
+and do not causally subtract fatigue from tracker error. A56 session 1 produced
+0.59/1.53/6.19-line median/P95/max and 32.1%/79.3% exact/within-one-line, but
+session 2 did not reproduce it: 1.21/2.26/4.66 lines and 14.8%/56.5%. This is
+neither a pass nor a device ranking. No more personal trials are authorized;
+the next boundary is a camera-free evidence review and explicit proposal.
 
 ## Goal and authority
 

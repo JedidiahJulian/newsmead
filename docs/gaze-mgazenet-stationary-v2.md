@@ -147,28 +147,23 @@ exact hashed v2 package. This confirms the tested presentation geometry and
 setup behavior on these two layouts. It does not measure gaze accuracy or
 authorize a personal trial.
 
-**Pilot collection follow-up:** after separate authorization, both SM-G991B
-sessions and A56 session 1 completed with fresh calibrations under their
-predeclared order plans. Their immutable numeric records, full target tables,
-fixed-age sensitivity results and comparison are documented in
+**Pilot collection follow-up:** after separate authorization, both sessions on
+both phones completed with fresh calibrations under opposite predeclared order
+plans. Their immutable numeric records, full target tables, fixed-age sensitivity
+results and comparison are documented in
 `gaze-mgazenet-stationary-pilot-results.md`. All are retained without a gate or
 promotion decision. The sessions occurred in the disclosed severe-fatigue
 context; the results file records why this is a validity limitation rather than
-a basis for deleting or correcting them. CAMERA was revoked and the app was
-force-stopped after each. Only A56 reverse-then-forward remains; it requires
-rest/repositioning and a new explicit readiness/comfort authorization.
+a basis for deleting or correcting them. A56 session 2 did not reproduce the
+stronger session-1 result. CAMERA was revoked and the app was force-stopped
+after every session.
 
-## Remaining authorization boundary
+## Completed collection boundary
 
-Do not begin a personal trial from this checkpoint. The authorized camera-free
-setup/geometry check has passed on both phones for the exact APK pair. The next
-boundary materially changes activity: it would press Start, request/use CAMERA,
-create fresh personal calibrations and collect stationary accuracy records.
-That participant collection requires a separate explicit authorization and the
-predeclared session labels/order plan before execution.
-
-After that check is retained and reviewed, the separate authorization question
-is whether to run the predeclared personal stationary pilot: two fresh sessions
-per phone, with the two opposite order plans, rest/repositioning, environmental
-notes, and every attempt retained. A software pass or geometry pass does not
-authorize or establish accuracy.
+The predeclared two-phone stationary pilot is complete. Do not run another
+personal trial, repeat an unfavorable session, tune the scorer, select a
+favorable freshness threshold, refit the model, pool sessions or promote
+MGazeNet from this evidence. The next authorized activity is camera-free review
+of the retained evidence. Any new software or measurement phase requires an
+explicit bounded proposal and separate authorization. A software, geometry or
+stationary-point result does not establish natural-reading accuracy.
