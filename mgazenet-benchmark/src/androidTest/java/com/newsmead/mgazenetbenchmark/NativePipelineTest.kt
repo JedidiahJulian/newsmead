@@ -48,6 +48,17 @@ class NativePipelineTest {
             assertEquals(1f,p.right[2*112*112],0f)
         }
     }
+    @Test fun externallyRecycledUprightBitmapIsRecreatedBeforeTheNextFrame() {
+        val raw = byteArrayOf(10,5,7,-1,20,5,7,-1)
+        CameraFrames().use { frames ->
+            val first = frames.copyRgba(ByteBuffer.wrap(raw),2,1,8,0)
+            first.recycle()
+            val second = frames.copyRgba(ByteBuffer.wrap(raw),2,1,8,0)
+            assertNotSame(first,second)
+            assertFalse(second.isRecycled)
+            assertEquals(listOf(10,20),(0..1).map { frames.rgb(second).rgb[it*3].toInt() and 255 })
+        }
+    }
     @Test fun modelHas258StableFeaturesAndRejectsBadInputBeforeJni() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         Preprocessor().use { prep -> MnnEstimator(context).use { model ->

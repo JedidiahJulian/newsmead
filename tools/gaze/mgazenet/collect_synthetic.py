@@ -24,7 +24,8 @@ def main():
     def read(name):
         return subprocess.run([args.adb,"-s",args.serial,"exec-out","run-as",PACKAGE,"cat",remote+name],check=True,capture_output=True).stdout
     raw = read("report.json"); report = json.loads(raw)
-    if report.get("mode")!="synthetic": raise ValueError("Only synthetic reports may be collected")
+    if report.get("mode") not in ("synthetic","synthetic_profile"):
+        raise ValueError("Only synthetic reports may be collected")
     files = {"report.json":raw}
     for fixture in report.get("fixtures",[]):
         for key in ("face","left","right","rect"):

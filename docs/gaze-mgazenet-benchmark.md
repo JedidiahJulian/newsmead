@@ -6,9 +6,24 @@ on `mgazenet-feasibility`. Read after `gaze-accuracy-handoff.md` and
 remain valid records; this document does not supersede their accuracy gates.
 
 **Current status: both phones pass camera-free native checks and synthetic
-numerical parity. Model-with-I/O timing is about 64 ms median on A56 and 22 ms
-on SM-G991B, before localization. Camera-path performance and gaze accuracy
-remain unmeasured. No production tracker promotion.**
+numerical parity. The bounded inference investigation is complete; foreground
+tests supersede the initial timings as a guide to configuration. Camera-path
+performance and gaze accuracy remain unmeasured. No production tracker promotion.**
+
+The user's clarified priority is accuracy and trustworthy reading measurement.
+Continue from [accuracy readiness](gaze-mgazenet-accuracy-readiness.md), which
+records the unresolved localizer, calibration eligibility, independent
+validation and reading-measurement requirements. Further speed optimization is
+not the automatic next step.
+
+The subsequent [accuracy harness checkpoint](gaze-mgazenet-accuracy-harness.md)
+implements the separate session and records completed camera-free setup/layout
+checks on both phones. Personal gaze accuracy and the real camera path remain
+untested; read that checkpoint before repeating earlier work.
+
+The subsequent [inference cost investigation](gaze-mgazenet-inference-profile.md)
+separates validation, copies and native execution and tests thread counts.
+The original timings below remain the original checkpoint evidence.
 
 ## Scope and isolation
 
@@ -363,11 +378,13 @@ comparator host suite now has 13 passing tests, including a non-finite
 low-reference case that cannot claim precision parity. Existing app source
 and the staging area remain unchanged.
 
-The feasibility decision is to retain this isolated research path and
+The decision at that checkpoint was to retain this isolated research path and
 investigate A56 inference cost before considering active tracker integration.
 Useful next controlled variables are true Android low-precision execution,
 thread/scheduling behavior, and model-versus-JNI cost separation, with the
 same numerical checks kept fixed. Only then can a camera-to-feature benchmark
 address localization overhead and freshness. Neither a working 258-value
 model nor these synthetic SVRs justify requesting participant calibration or
-claiming accurate responsive gaze across both phones.
+claiming accurate responsive gaze across both phones. That bounded inference
+investigation is now complete; the accuracy-readiness note above supplies the
+current continuation priority.

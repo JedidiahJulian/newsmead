@@ -8,6 +8,10 @@
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
     <application android:allowBackup="false" android:label="MGazeNet benchmark"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name=".InputCheckActivity" android:screenOrientation="portrait"
+            android:exported="false" />
+        <activity android:name=".AccuracyActivity" android:screenOrientation="portrait"
+            android:exported="false" />
         <activity android:name=".BenchmarkActivity" android:screenOrientation="portrait"
             android:exported="true">
             <intent-filter>

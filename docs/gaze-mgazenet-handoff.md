@@ -3,6 +3,33 @@
 Updated 2026-09-06. Read after `gaze-accuracy-handoff.md`.
 This brief supersedes conflicting historical freeze, replacement, and repeat-test proposals.
 
+**2026-09-07 continuation:** the authorized isolated benchmark and two-phone
+camera-free checks are now complete. Read `gaze-mgazenet-benchmark.md`, then
+`gaze-mgazenet-accuracy-readiness.md` for current evidence and next work. The user
+clarified that accuracy and trustworthy measurements take priority; further
+speed optimization is not the default next task. Historical authorization and
+pending-check statements below describe the original handoff, not present state.
+The next accuracy preparation checkpoint is `gaze-mgazenet-accuracy-protocol.md`:
+localizer adaptation audit and tested offline measurements, without camera or
+participant calibration runs.
+The implemented harness and latest device-check status are recorded in
+`gaze-mgazenet-accuracy-harness.md`; this is the current continuation entrypoint
+after the required historical handoff reading.
+
+**Protocol review follow-up:** `gaze-mgazenet-protocol-review.md` identifies
+the fixed-order/region confound, limits of stationary validation, and the bounded
+input-only check and subsequent pilot proposal. Its host-only scorer repairs
+close manifest-removal and target-geometry bypasses; 37 host tests pass. No new
+phone action or participant session occurred. Continue from that review rather
+than repeating the completed performance or setup checks.
+
+**Input-check implementation follow-up:** `gaze-mgazenet-input-check.md` records
+the completed software work, the retained first SM-G991B bitmap-lifetime failure
+and the retained next-frame recycled-buffer failure. The complete repair is
+host- and device-verified and completed the full input check on both phones.
+No personal calibration or accuracy trial occurred; continue from the input-check
+checkpoint before considering the prospective v2 pilot.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,

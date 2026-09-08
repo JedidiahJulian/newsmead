@@ -6,6 +6,10 @@ algorithms come from Gancheng Zhu's GazeFollower, pinned to
 Upstream declares Creative Commons Attribution–NonCommercial–ShareAlike 4.0.
 The adaptations in `GazeGeometry.kt`, `Preprocessor.kt`, and the corresponding
 reference preprocessing in `tools/gaze/mgazenet/reference.py` retain that license.
+`AccuracySession.kt` also adapts the source calibration target indices, grid
+fractions and timing under the same license. Changes include physical-screen
+labels for a measured viewport, draw-acknowledged target timing, finite deadlines,
+independent held-out windows and in-memory-only personal calibration.
 Changes include Kotlin/Android buffers, NCHW packing for the Session API,
 explicit invalid-input handling, and synthetic-only reference checks.
 

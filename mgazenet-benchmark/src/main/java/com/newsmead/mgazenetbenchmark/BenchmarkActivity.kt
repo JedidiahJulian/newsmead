@@ -19,6 +19,8 @@ class BenchmarkActivity : ComponentActivity() {
     private lateinit var status: TextView
     private lateinit var synthetic: Button
     private lateinit var camera: Button
+    private lateinit var accuracy: Button
+    private lateinit var inputCheck: Button
     private var cameraRun: CameraBenchmark? = null
     private val worker = Executors.newSingleThreadExecutor()
     private val cancelled = AtomicBoolean(false)
@@ -36,7 +38,7 @@ class BenchmarkActivity : ComponentActivity() {
         })
         status = TextView(this).apply {
             textSize = 16f
-            text = "Separate app. No reading output or participant calibration. Camera frames are never saved. Synthetic checks do not establish accuracy."
+            text = "Separate research app. Nothing starts automatically. Camera frames are never saved. Synthetic checks do not establish accuracy."
         }
         root.addView(status)
         synthetic = Button(this).apply { text = "Run synthetic checks and model timing"; setOnClickListener { runSynthetic() } }
@@ -48,14 +50,27 @@ class BenchmarkActivity : ComponentActivity() {
             }
         }
         root.addView(synthetic); root.addView(camera)
+        inputCheck = Button(this).apply {
+            text = "Open 20-second input-only setup (camera stays off)"
+            setOnClickListener { startActivity(android.content.Intent(this@BenchmarkActivity,InputCheckActivity::class.java)) }
+        }
+        root.addView(inputCheck)
+        accuracy = Button(this).apply {
+            text = "Open accuracy research setup (camera stays off)"
+            setOnClickListener { startActivity(android.content.Intent(this@BenchmarkActivity,AccuracyActivity::class.java)) }
+        }
+        root.addView(accuracy)
         root.addView(Button(this).apply { text = "Stop"; setOnClickListener {
             cancelled.set(true); cameraRun?.stop("user_stopped"); status.text = "Stopping…"
         } })
         setContentView(root)
         try { check(OpenCVLoader.initLocal()) { "OpenCV initialization failed" }; runtimeReady = true }
-        catch (e: Throwable) { status.text = e.toString(); synthetic.isEnabled = false; camera.isEnabled = false }
+        catch (e: Throwable) { status.text = e.toString(); enable(false) }
     }
-    private fun enable(enabled: Boolean) { synthetic.isEnabled = enabled; camera.isEnabled = enabled }
+    private fun enable(enabled: Boolean) {
+        synthetic.isEnabled = enabled; camera.isEnabled = enabled
+        inputCheck.isEnabled = enabled; accuracy.isEnabled = enabled
+    }
     private fun runSynthetic() {
         if (syntheticRunning || cameraRun != null) return
         cancelled.set(false); syntheticRunning = true; enable(false)

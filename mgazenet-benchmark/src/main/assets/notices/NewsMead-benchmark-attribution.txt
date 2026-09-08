@@ -7,6 +7,9 @@ Creative Commons Attribution-NonCommercial-ShareAlike 4.0.
 https://creativecommons.org/licenses/by-nc-sa/4.0/
 Modifications: Kotlin/Android crop buffers, explicit invalid-input handling,
 NCHW packing for MNN Session API, and synthetic fixture checks.
+AccuracySession also adapts calibration grid fractions, target indices and timing:
+physical-screen labels, draw acknowledgements, finite deadlines, held-out windows,
+and in-memory personal calibration. No upstream gaze accuracy is implied.
 These adaptations retain CC BY-NC-SA 4.0. Full upstream license is bundled.
 
 MNN 3.6.1, Alibaba, Apache License 2.0. Full license is bundled.

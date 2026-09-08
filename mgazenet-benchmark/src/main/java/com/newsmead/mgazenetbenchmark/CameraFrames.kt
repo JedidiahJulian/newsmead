@@ -8,7 +8,7 @@ import android.graphics.RectF
 import androidx.camera.core.ImageProxy
 import java.nio.ByteBuffer
 
-/** Upright RGB without selfie mirroring. Buffers owned until the current job ends. */
+/** Upright RGB without selfie mirroring. Media image wrappers may consume the returned bitmap. */
 class CameraFrames : AutoCloseable {
     private var row: Bitmap? = null
     private var upright: Bitmap? = null
@@ -49,8 +49,9 @@ class CameraFrames : AutoCloseable {
         val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
         matrix.mapRect(bounds)
         val w = bounds.width().toInt(); val h = bounds.height().toInt()
-        if (upright?.width != w || upright?.height != h) {
-            upright?.recycle(); upright = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        if (upright == null || upright!!.isRecycled || upright!!.width != w || upright!!.height != h) {
+            if (upright?.isRecycled == false) upright?.recycle()
+            upright = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         }
         Canvas(upright!!).apply {
             save(); translate(-bounds.left, -bounds.top); concat(this@CameraFrames.matrix)
