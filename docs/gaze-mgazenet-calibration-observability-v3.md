@@ -1,11 +1,11 @@
 # MGazeNet calibration observability v3 software checkpoint — 2026-09-09
 
 Status: the isolated input-only calibration audit is implemented and
-host-verified. Authorized setup-only checks passed on the A56 and, after one
-retained cross-layout protocol failure and repair, on the G991B with CAMERA
-denied. No camera, participant calibration or personal data was used. The work
-does not modify the active NewsMead tracker or calibration store or assign an
-accuracy gate. The corrected exact-APK recheck remains pending on the A56.
+host-verified. Authorized setup-only checks passed on both phones using the
+corrected exact APK pair, after one retained G991B cross-layout protocol failure
+and repair. CAMERA remained denied. No camera, participant calibration or
+personal data was used. The work does not modify the active NewsMead tracker or
+calibration store or assign an accuracy gate.
 
 Read after `gaze-mgazenet-post-pilot-review.md`. This is the current MGazeNet
 continuation point.
@@ -181,6 +181,23 @@ was explicitly revoked and set to `ignore`, its runtime grant was confirmed
 `false`, both packages were force-stopped and the benchmark process was absent.
 The older app-op `allow` timestamp/duration did not advance.
 
+## Corrected A56 exact-build parity check
+
+Because the first A56 pass used the pre-repair app, the corrected app and
+unchanged instrumentation APK were installed in place on the A56 under a final
+camera-disabled authorization. Their hashes exactly matched the corrected pair
+recorded above. CAMERA was confirmed with runtime grant `false` and effective
+app-op `ignore` before the test.
+
+All four `AccuracyHarnessTest` cases passed in 2.984 seconds. This independently
+confirmed the deterministic `fit_6` repeat, 16 fit positions, five disjoint
+validation points, physical-screen conversion, camera-off setup behavior and
+absence of a newly created record on the A56 layout. No test pressed Start or
+requested CAMERA. CAMERA was revoked and set to `ignore` again afterward, the
+runtime grant remained `false`, both packages were force-stopped and the
+benchmark process was confirmed absent. The historical app-op `allow` record
+did not advance.
+
 ## Files in this checkpoint
 
 - `CalibrationAuditEngine.kt`: pure whole-target-fold audit and memory cleanup;
@@ -197,10 +214,8 @@ The older app-op `allow` timestamp/duration did not advance.
 
 ## Authorization boundary and next decision
 
-The software checkpoint and corrected G991B camera-disabled setup check are
-complete. Do not grant CAMERA, run a personal calibration, collect a v3 record,
-change a threshold, promote MGazeNet or modify the active tracker without a new
-explicit authorization. Because the repair changed the app APK after the A56
-check, the remaining device step is to repeat the same setup-only test on the
-A56 using the corrected hash above. It is not a participant run and does not
-authorize one.
+The software checkpoint and corrected exact-build camera-disabled setup checks
+on both phones are complete. Do not grant CAMERA, run a personal calibration,
+collect a v3 record, change a threshold, promote MGazeNet or modify the active
+tracker without a new explicit authorization. A camera-enabled v3 measurement
+would be the next distinct boundary; these setup checks do not authorize it.

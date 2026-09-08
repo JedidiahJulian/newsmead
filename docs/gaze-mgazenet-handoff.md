@@ -87,8 +87,10 @@ Python tests passed again, corrected app hash
 `2fba004144d705102c76c76b25ab6c8426892797fb6a2f923bb45d8c4230ccab`
 passed all four G991B setup tests in 2.629 seconds with CAMERA still denied, no
 record, and processes stopped. Since the earlier A56 check used the pre-repair
-app, repeating the setup-only test there with the corrected hash is the remaining
-device boundary. CAMERA grant or any participant run remains separately
+app, the corrected exact pair was then rechecked on the A56: all four tests
+passed in 2.984 seconds with CAMERA denied, no record, and processes stopped.
+Both phones now pass the same deterministic build. The software and setup-only
+boundary is complete; CAMERA grant or any participant run remains separately
 unauthorized.
 
 ## Goal and authority
