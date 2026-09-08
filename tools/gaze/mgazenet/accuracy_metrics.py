@@ -10,9 +10,13 @@ import math
 import statistics
 from pathlib import Path
 
-HARNESS_PROTOCOL = "mgazenet_stationary_viewport_v1"
+HARNESS_PROTOCOL_V1 = "mgazenet_stationary_viewport_v1"
+HARNESS_PROTOCOL_V2 = "mgazenet_stationary_viewport_v2"
+HARNESS_PROTOCOLS = (HARNESS_PROTOCOL_V1, HARNESS_PROTOCOL_V2)
 FIT_GRID = (1, 5, 9, 12, 16, 19, 27, 30, 34, 37, 41, 45, 23)
-TEST_GRID = (2, 8, 13, 15, 31, 33, 38, 44)
+TEST_GRID_V1 = (2, 8, 13, 15, 31, 33, 38, 44)
+TEST_GRID_V2 = (2, 8, 13, 15, 22, 24, 31, 33, 38, 44)
+ANALYSIS_AGES_V2 = (50, 100, 200, 500)
 
 
 def require(condition, message):
@@ -61,8 +65,8 @@ def signed_distribution(values):
             "p95": ordered[math.ceil(.95 * len(ordered)) - 1], "max": ordered[-1]}
 
 
-def validate_target_geometry(report, manifest):
-    """Reconstruct the declared v1 targets independently of the predictions."""
+def validate_target_geometry(report, manifest, protocol):
+    """Reconstruct the declared targets independently of the predictions."""
     viewport = rectangle(manifest.get("viewport_screen_px"))
     screen = manifest.get("screen_px")
     require(isinstance(screen, list) and len(screen) == 2 and
@@ -89,13 +93,44 @@ def validate_target_geometry(report, manifest):
     require(all(p.get("practice") is t["practice"]
                 for p, t in zip(report["fit_points"], targets)), "Fit-point practice flag mismatch")
     blocks = report["blocks"]
-    require([b["id"] for b in blocks] == [f"test_{i}" for i in TEST_GRID],
-            "Changed held-out target contract")
+    if protocol == HARNESS_PROTOCOL_V1:
+        expected_grids = TEST_GRID_V1
+        require([b["id"] for b in blocks] == [f"test_{i}" for i in expected_grids],
+                "Changed held-out target contract")
+    else:
+        require(manifest.get("validation_locations") == list(TEST_GRID_V2) and
+                report.get("analysis_age_limits_ms") == list(ANALYSIS_AGES_V2) and
+                manifest.get("analysis_age_limits_ms") == list(ANALYSIS_AGES_V2) and
+                report.get("max_output_age_ms") is None,
+                "Changed v2 location or fixed-age analysis contract")
+        plans = {
+            "forward_then_reverse": ("forward", "reverse"),
+            "reverse_then_forward": ("reverse", "forward"),
+        }
+        order = report.get("validation_order")
+        require(order in plans and manifest.get("validation_order") == order and
+                manifest.get("sweep_directions") == list(plans[order]),
+                "Missing or changed counterbalanced order plan")
+        expected_grids = tuple(
+            grid for direction in plans[order]
+            for grid in (TEST_GRID_V2 if direction == "forward" else tuple(reversed(TEST_GRID_V2)))
+        )
+        expected_directions = tuple(direction for direction in plans[order] for _ in TEST_GRID_V2)
+        for position, (block, index, direction) in enumerate(zip(blocks, expected_grids, expected_directions)):
+            sweep = position // len(TEST_GRID_V2) + 1
+            within = position % len(TEST_GRID_V2) + 1
+            require(block.get("id") == f"sweep_{sweep}_test_{index}" and
+                    block.get("location_id") == f"test_{index}" and
+                    block.get("grid_index") == index and block.get("sweep") == sweep and
+                    block.get("sweep_direction") == direction and
+                    block.get("order_in_sweep") == within,
+                    "Changed v2 sweep, location, or order metadata")
+        require(len(blocks) == 2 * len(TEST_GRID_V2), "Changed v2 held-out block count")
     lines = blocks[0]["lines"]
     require(isinstance(lines, list) and len(lines) >= 5, "Insufficient harness line geometry")
     require([line["index"] for line in lines] == list(range(len(lines))), "Changed harness line indices")
     boxes = [rectangle(line["rect_px"]) for line in lines]
-    for block, index in zip(blocks, TEST_GRID):
+    for block, index in zip(blocks, expected_grids):
         require(block["lines"] == lines, "Line geometry changed within stationary session")
         point = grid(index)
         line = min(range(len(boxes)), key=lambda i: abs((boxes[i][1]+boxes[i][3])/2-point[1]))
@@ -105,8 +140,21 @@ def validate_target_geometry(report, manifest):
         require(block["region"] == f"grid_{index}" and block["target_line_index"] == line and
                 matches(block["target_px"], expected), "Held-out target does not match protocol geometry")
     points = [pair(b["target_px"]) for b in blocks]
-    require(len({tuple(p) for p in points}) == len(points), "Duplicate held-out target positions")
-    require(not any(matches(p, t["point_px"]) for p in points for t in targets[1:]),
+    if protocol == HARNESS_PROTOCOL_V1:
+        require(len({tuple(p) for p in points}) == len(points), "Duplicate held-out target positions")
+        location_points = points
+    else:
+        by_location = {}
+        for block, point in zip(blocks, points):
+            by_location.setdefault(block["location_id"], []).append(point)
+        require(len(by_location) == len(TEST_GRID_V2) and
+                all(len(repeated) == 2 and matches(repeated[0], repeated[1])
+                    for repeated in by_location.values()),
+                "Each v2 held-out location must occur exactly once in each sweep")
+        location_points = [repeated[0] for repeated in by_location.values()]
+        require(len({tuple(p) for p in location_points}) == len(TEST_GRID_V2),
+                "V2 held-out locations are not distinct after text clipping")
+    require(not any(matches(p, t["point_px"]) for p in location_points for t in targets[1:]),
             "Fit/test coordinate leakage")
 
 
@@ -139,7 +187,7 @@ def score_block(block, max_age):
 
     samples = block["samples"]
     require(isinstance(samples, list), "Expected sample list; empty blocks must remain")
-    events, dxs, dys, errors, vertical, ages = [], [], [], [], [], []
+    events, coordinates, dxs, dys, errors, vertical, ages = [], [], [], [], [], [], []
     valid = exact = adjacent = off_text = late = 0
     previous_capture = previous_output = -1
     for sample in samples:
@@ -155,6 +203,7 @@ def score_block(block, max_age):
         assigned = None
         if point is not None:
             point = pair(point)
+            coordinates.append(point)
             dx, dy = point[0] - target[0], point[1] - target[1]
             require(math.isfinite(dx) and math.isfinite(dy) and math.isfinite(math.hypot(dx, dy)),
                     "Coordinate error overflow")
@@ -192,7 +241,7 @@ def score_block(block, max_age):
         gaps.append(end-cursor)
     duration = end-start
     total = len(samples)
-    return {
+    result = {
         "id": block["id"], "region": block["region"], "planned_duration_ms": duration,
         "received_samples": total, "coordinate_samples": valid,
         "explicit_invalid_samples": total-valid, "off_text_coordinate_samples": off_text,
@@ -212,20 +261,173 @@ def score_block(block, max_age):
         "euclidean_px": distribution(errors), "absolute_vertical_lines": distribution(vertical),
         "output_age_ms": distribution(ages),
     }
+    if "location_id" in block:
+        result.update({
+            "within_one_line_fraction_of_coordinates": adjacent/valid if valid else None,
+            "coordinate_mean_px": ([statistics.mean(p[0] for p in coordinates),
+                                    statistics.mean(p[1] for p in coordinates)] if coordinates else None),
+            "signed_mean_bias_px": {"x": statistics.mean(dxs) if dxs else None,
+                                    "y": statistics.mean(dys) if dys else None},
+            "within_target_dispersion_px": {
+                "estimator": "sample_standard_deviation_n_minus_1", "n": len(coordinates),
+                "x_sd": statistics.stdev(p[0] for p in coordinates) if len(coordinates) >= 2 else None,
+                "y_sd": statistics.stdev(p[1] for p in coordinates) if len(coordinates) >= 2 else None,
+            },
+        })
+    for key in ("location_id", "grid_index", "sweep", "sweep_direction", "order_in_sweep"):
+        if key in block:
+            result[key] = block[key]
+    return result
+
+
+AVAILABILITY_KEYS = (
+    "fresh_coordinate_ms", "fresh_exact_line_ms", "fresh_within_one_line_ms",
+    "fresh_coordinate_time_fraction", "fresh_exact_line_time_fraction",
+    "fresh_within_one_line_time_fraction", "unavailable_ms", "longest_unavailable_ms",
+)
+
+
+def spatial_aggregate(blocks):
+    dxs, dys, errors, vertical, ages = [], [], [], [], []
+    exact = adjacent = coordinates = received = invalid = off_text = 0
+    for block in blocks:
+        target = pair(block["target_px"])
+        height = number(block["line_height_px"])
+        lines = [(line["index"], rectangle(line["rect_px"])) for line in block["lines"]]
+        target_line = block["target_line_index"]
+        received += len(block["samples"])
+        for sample in block["samples"]:
+            ages.append(number(sample["output_ms"])-number(sample["capture_ms"]))
+            point = sample["point_px"]
+            if point is None:
+                invalid += 1
+                continue
+            point = pair(point)
+            dx, dy = point[0]-target[0], point[1]-target[1]
+            assigned = next((index for index, box in lines if inside(point, box)), None)
+            dxs.append(dx); dys.append(dy); errors.append(math.hypot(dx, dy)); vertical.append(abs(dy)/height)
+            coordinates += 1
+            exact += assigned == target_line
+            adjacent += assigned is not None and abs(assigned-target_line) <= 1
+            off_text += assigned is None
+    signed_x = signed_distribution(dxs); signed_x["mean"] = statistics.mean(dxs) if dxs else None
+    signed_y = signed_distribution(dys); signed_y["mean"] = statistics.mean(dys) if dys else None
+    return {
+        "contributing_blocks": sum(any(s["point_px"] is not None for s in b["samples"]) for b in blocks),
+        "received_samples": received, "coordinate_samples": coordinates,
+        "explicit_invalid_samples": invalid, "off_text_coordinate_samples": off_text,
+        "signed_dx_px": signed_x, "signed_dy_px": signed_y,
+        "euclidean_px": distribution(errors), "absolute_vertical_lines": distribution(vertical),
+        "output_age_ms": distribution(ages),
+        "exact_line_fraction_of_received": exact/received if received else None,
+        "within_one_line_fraction_of_received": adjacent/received if received else None,
+        "exact_line_fraction_of_coordinates": exact/coordinates if coordinates else None,
+        "within_one_line_fraction_of_coordinates": adjacent/coordinates if coordinates else None,
+    }
+
+
+def v2_summary(report, scored_at_largest_age):
+    blocks = report["blocks"]
+    spatial_blocks = []
+    for scored in scored_at_largest_age:
+        spatial_blocks.append({key: value for key, value in scored.items() if key not in AVAILABILITY_KEYS})
+    sensitivity = []
+    for age in ANALYSIS_AGES_V2:
+        scored = [score_block(block, age) for block in blocks]
+        sensitivity.append({
+            "max_output_age_ms": age,
+            "planned_blocks": len(scored),
+            "blocks_without_coordinates": sum(b["coordinate_samples"] == 0 for b in scored),
+            "target_balanced": {key: statistics.mean(b[key] for b in scored) for key in
+                                ("fresh_coordinate_time_fraction", "fresh_exact_line_time_fraction",
+                                 "fresh_within_one_line_time_fraction")},
+            "blocks": [{"id": b["id"], **{key: b[key] for key in AVAILABILITY_KEYS}} for b in scored],
+        })
+    by_sweep = [{"sweep": sweep, **spatial_aggregate([b for b in blocks if b["sweep"] == sweep])}
+                for sweep in (1, 2)]
+    by_location = []
+    bias_changes = []
+    for location in (f"test_{index}" for index in TEST_GRID_V2):
+        repeated = [b for b in blocks if b["location_id"] == location]
+        by_location.append({"location_id": location, **spatial_aggregate(repeated)})
+        first, second = sorted(repeated, key=lambda b: b["sweep"])
+        first_scored = next(b for b in spatial_blocks if b["id"] == first["id"])
+        second_scored = next(b for b in spatial_blocks if b["id"] == second["id"])
+        first_bias, second_bias = first_scored["signed_mean_bias_px"], second_scored["signed_mean_bias_px"]
+        bias_changes.append({
+            "location_id": location,
+            "first_sweep_direction": first["sweep_direction"],
+            "second_sweep_direction": second["sweep_direction"],
+            "contributing_sweeps": int(first_bias["x"] is not None) + int(second_bias["x"] is not None),
+            "second_minus_first_mean_bias_px": {
+                "x": second_bias["x"]-first_bias["x"] if first_bias["x"] is not None and second_bias["x"] is not None else None,
+                "y": second_bias["y"]-first_bias["y"] if first_bias["y"] is not None and second_bias["y"] is not None else None,
+            },
+        })
+    contributing = [location for location in by_location if location["coordinate_samples"]]
+    return {
+        "schema": "mgazenet_accuracy_summary_v2", "evidence_kind": report["evidence_kind"],
+        "accuracy_gate_pass": None, "promotion_decision": "not_evaluated",
+        "scope": "Stationary instructed-point scoring; no verified fixation or natural-reading ground truth",
+        "provenance": {key: report[key] for key in
+                       ("protocol_id", "session_id", "device_id", "pipeline_id", "calibration_id")},
+        "validation_order": report["validation_order"],
+        "analysis_age_limits_ms": list(ANALYSIS_AGES_V2), "primary_freshness_threshold_ms": None,
+        "planned_blocks": len(spatial_blocks),
+        "planned_locations": len(TEST_GRID_V2),
+        "blocks_without_coordinates": sum(b["coordinate_samples"] == 0 for b in spatial_blocks),
+        "blocks": spatial_blocks,
+        "session_spatial": spatial_aggregate(blocks),
+        "sweep_spatial": by_sweep,
+        "location_spatial": by_location,
+        "target_balanced_spatial": {
+            "contributing_location_count": len(contributing),
+            "planned_location_count": len(TEST_GRID_V2),
+            "mean_location_median_euclidean_px": statistics.mean(
+                location["euclidean_px"]["median"] for location in contributing) if contributing else None,
+            "mean_location_p95_euclidean_px": statistics.mean(
+                location["euclidean_px"]["p95"] for location in contributing) if contributing else None,
+            "mean_location_max_euclidean_px": statistics.mean(
+                location["euclidean_px"]["max"] for location in contributing) if contributing else None,
+            "mean_location_median_absolute_vertical_lines": statistics.mean(
+                location["absolute_vertical_lines"]["median"] for location in contributing) if contributing else None,
+            "mean_location_p95_absolute_vertical_lines": statistics.mean(
+                location["absolute_vertical_lines"]["p95"] for location in contributing) if contributing else None,
+            "mean_location_max_absolute_vertical_lines": statistics.mean(
+                location["absolute_vertical_lines"]["max"] for location in contributing) if contributing else None,
+            "mean_location_signed_x_bias_px": statistics.mean(
+                location["signed_dx_px"]["mean"] for location in contributing) if contributing else None,
+            "mean_location_signed_y_bias_px": statistics.mean(
+                location["signed_dy_px"]["mean"] for location in contributing) if contributing else None,
+            "mean_location_exact_line_fraction_of_coordinates": statistics.mean(
+                location["exact_line_fraction_of_coordinates"] for location in contributing) if contributing else None,
+            "mean_location_within_one_line_fraction_of_coordinates": statistics.mean(
+                location["within_one_line_fraction_of_coordinates"] for location in contributing) if contributing else None,
+        },
+        "repeated_location_bias_change": bias_changes,
+        "freshness_sensitivity": sensitivity,
+        "limitations": ["Declared fit/test IDs do not independently prove provenance or participant compliance.",
+                        "The four freshness ages are fixed sensitivity columns, not accuracy thresholds.",
+                        "Time fractions describe bounded availability of the latest result, not eye position between samples.",
+                        "Within-target dispersion uses sample SD (n-1) and is undefined for fewer than two coordinates.",
+                        "No word, fixation, dwell, regression or population-validity claim is computed."],
+    }
 
 
 def evaluate(report):
-    require(report["schema"] == "mgazenet_accuracy_v1", "Unknown accuracy schema")
+    require(report["schema"] in ("mgazenet_accuracy_v1", "mgazenet_accuracy_v2"), "Unknown accuracy schema")
+    is_v2 = report["schema"] == "mgazenet_accuracy_v2"
     require(report.get("outcome", "complete") == "complete", "Incomplete session cannot be scored as completed")
     require(report["evidence_kind"] in ("synthetic_contract", "recorded"), "Unknown evidence kind")
     manifest_fields = {"calibration_manifest_json", "calibration_manifest_sha256",
                        "calibration_manifest", "pipeline_json"}
-    strict_harness = (report["evidence_kind"] == "recorded" or
-                      report.get("protocol_id") == HARNESS_PROTOCOL or
+    strict_harness = (is_v2 or report["evidence_kind"] == "recorded" or
+                      report.get("protocol_id") in HARNESS_PROTOCOLS or
                       bool(manifest_fields.intersection(report)))
     if strict_harness:
         require(manifest_fields.issubset(report), "Complete harness manifests required")
-        require(report.get("protocol_id") == HARNESS_PROTOCOL, "Unsupported recorded/harness protocol")
+        require(report.get("protocol_id") == (HARNESS_PROTOCOL_V2 if is_v2 else HARNESS_PROTOCOL_V1),
+                "Unsupported recorded/harness protocol")
         require(report.get("outcome") == "complete", "Harness completion must be explicit")
     if "calibration_manifest_json" in report:
         encoded = report["calibration_manifest_json"]
@@ -290,8 +492,14 @@ def evaluate(report):
             report["clock"] == "shared_monotonic_ms", "Incompatible coordinate or clock contract")
     for key in ("protocol_id", "session_id", "device_id", "pipeline_id", "calibration_id"):
         require(isinstance(report[key], str) and bool(report[key].strip()), "Missing provenance: " + key)
-    max_age = number(report["max_output_age_ms"])
-    require(max_age > 0, "Explicit positive freshness limit required; no default is selected")
+    if is_v2:
+        require(report.get("max_output_age_ms") is None and
+                report.get("analysis_age_limits_ms") == list(ANALYSIS_AGES_V2),
+                "V2 requires the four fixed sensitivity ages and no primary threshold")
+        max_age = ANALYSIS_AGES_V2[-1]
+    else:
+        max_age = number(report["max_output_age_ms"])
+        require(max_age > 0, "Explicit positive freshness limit required; no default is selected")
     fit_ids = report["fit_block_ids"]
     require(isinstance(fit_ids, list) and fit_ids and
             all(isinstance(i, str) and i for i in fit_ids) and len(fit_ids) == len(set(fit_ids)),
@@ -303,7 +511,7 @@ def evaluate(report):
             "Invalid or duplicated held-out block IDs")
     require(not set(ids).intersection(fit_ids), "Fit/test block leakage")
     if "calibration_manifest_json" in report:
-        validate_target_geometry(report, manifest)
+        validate_target_geometry(report, manifest, report["protocol_id"])
         screen = manifest.get("screen_px")
         require(isinstance(screen, list) and len(screen) == 2 and
                 all(type(v) is int and v > 0 for v in screen), "Invalid manifest screen")
@@ -327,6 +535,8 @@ def evaluate(report):
         require(number(block["start_ms"]) >= previous_end, "Overlapping or unordered blocks")
         results.append(score_block(block, max_age))
         previous_end = block["end_ms"]
+    if is_v2:
+        return v2_summary(report, results)
     return {
         "schema": "mgazenet_accuracy_summary_v1", "evidence_kind": report["evidence_kind"],
         "accuracy_gate_pass": None, "promotion_decision": "not_evaluated",

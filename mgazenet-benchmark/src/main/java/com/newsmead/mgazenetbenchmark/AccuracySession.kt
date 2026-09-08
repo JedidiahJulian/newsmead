@@ -7,7 +7,7 @@ import kotlin.math.abs
  * GazeFollower target indices/timing adapted under CC BY-NC-SA 4.0; see NOTICE.md.
  * Coordinates refer to the physical display, never an implicit view origin.
  */
-class AccuracySession(val layout: Layout, val maxAgeMs: Double, val runLabel: String) {
+class AccuracySession(val layout: Layout, val runLabel: String, val validationOrder: ValidationOrder) {
     data class Point(val x: Double, val y: Double)
     data class Rect(val left: Double, val top: Double, val right: Double, val bottom: Double) {
         fun contains(p: Point) = p.x >= left && p.x < right && p.y >= top && p.y < bottom
@@ -33,13 +33,20 @@ class AccuracySession(val layout: Layout, val maxAgeMs: Double, val runLabel: St
         fun pixels(p: FloatArray) = Point(p[0].toDouble()*screenWidth, p[1].toDouble()*screenHeight)
     }
     enum class Phase { CALIBRATION, FITTING, VALIDATION, COMPLETE, STOPPED, FAILED }
+    enum class SweepDirection(val code: String) { FORWARD("forward"), REVERSE("reverse") }
+    enum class ValidationOrder(val code: String, val directions: List<SweepDirection>) {
+        FORWARD_THEN_REVERSE("forward_then_reverse", listOf(SweepDirection.FORWARD, SweepDirection.REVERSE)),
+        REVERSE_THEN_FORWARD("reverse_then_forward", listOf(SweepDirection.REVERSE, SweepDirection.FORWARD))
+    }
     data class Target(val token: Int, val id: String, val point: Point, val practice: Boolean,
                       val testIndex: Int? = null)
     data class Frame(val captureMs: Double, val outputMs: Double, val features: FloatArray?,
                      val leftArea: Double, val rightArea: Double, val prediction: FloatArray?, val reason: String,
                      val cropSizes: List<List<Int>>? = null)
     data class Sample(val captureMs: Double, val outputMs: Double, val point: Point?, val reason: String)
-    data class TestBlock(val id: String, val region: String, val point: Point, val line: Int,
+    data class TestBlock(val id: String, val locationId: String, val gridIndex: Int,
+                         val sweep: Int, val sweepDirection: String, val orderInSweep: Int,
+                         val region: String, val point: Point, val line: Int,
                          var shownMs: Double? = null, var startMs: Double? = null, var endMs: Double? = null,
                          val samples: MutableList<Sample> = mutableListOf())
     data class FitPoint(val id: String, val point: Point, val practice: Boolean,
@@ -50,12 +57,16 @@ class AccuracySession(val layout: Layout, val maxAgeMs: Double, val runLabel: St
     val fitPoints = (listOf(23) + FIT_INDICES).mapIndexed { index, grid ->
         FitPoint(if (index == 0) "practice" else "fit_$grid", gridPoint(grid), index == 0)
     }
-    val blocks = TEST_INDICES.map { grid ->
-        val p = gridPoint(grid)
-        val line = layout.lines.indices.minByOrNull { abs((layout.lines[it].top+layout.lines[it].bottom)/2-p.y) }!!
-        val r = layout.lines[line]
-        val x = p.x.coerceIn(r.left + (r.right-r.left)*.02, r.right - (r.right-r.left)*.02)
-        TestBlock("test_$grid", "grid_$grid", Point(x,(r.top+r.bottom)/2),line)
+    val blocks = validationOrder.directions.flatMapIndexed { sweepIndex, direction ->
+        val sequence = if (direction == SweepDirection.FORWARD) TEST_LOCATIONS else TEST_LOCATIONS.reversed()
+        sequence.mapIndexed { orderIndex, grid ->
+            val p = gridPoint(grid)
+            val line = layout.lines.indices.minByOrNull { abs((layout.lines[it].top+layout.lines[it].bottom)/2-p.y) }!!
+            val r = layout.lines[line]
+            val x = p.x.coerceIn(r.left + (r.right-r.left)*.02, r.right - (r.right-r.left)*.02)
+            TestBlock("sweep_${sweepIndex+1}_test_$grid", "test_$grid", grid, sweepIndex+1,
+                direction.code, orderIndex+1, "grid_$grid", Point(x,(r.top+r.bottom)/2),line)
+        }
     }
     var phase = Phase.CALIBRATION; private set
     var failure: String? = null; private set
@@ -75,9 +86,14 @@ class AccuracySession(val layout: Layout, val maxAgeMs: Double, val runLabel: St
     var discardedFrames = 0; private set
 
     init {
-        require(maxAgeMs.isFinite() && maxAgeMs > 0 && maxAgeMs <= 60_000)
         require(runLabel.isNotBlank() && runLabel.length <= 120)
-        require(blocks.map { it.point }.distinct().size == blocks.size)
+        require(blocks.map { it.id }.distinct().size == blocks.size)
+        require(blocks.groupBy { it.locationId }.let { groups ->
+            groups.size == TEST_LOCATIONS.size && groups.values.all { repeated ->
+                repeated.size == 2 && repeated.map { it.point }.distinct().size == 1
+            }
+        })
+        require(blocks.distinctBy { it.locationId }.map { it.point }.distinct().size == TEST_LOCATIONS.size)
         require(blocks.none { b -> fitPoints.drop(1).any { it.point == b.point } })
     }
     private fun gridPoint(index: Int): Point {
@@ -193,7 +209,7 @@ class AccuracySession(val layout: Layout, val maxAgeMs: Double, val runLabel: St
     }
     fun terminal() = phase in listOf(Phase.COMPLETE,Phase.STOPPED,Phase.FAILED)
     companion object {
-        const val VERSION = "mgazenet_stationary_viewport_v1"
+        const val VERSION = "mgazenet_stationary_viewport_v2"
         const val FIT_SETTLE_MS = 1500.0
         const val FIT_WAIT_MS = 500.0
         const val FIT_SAMPLES = 45
@@ -202,6 +218,7 @@ class AccuracySession(val layout: Layout, val maxAgeMs: Double, val runLabel: St
         const val TEST_MEASURE_MS = 2500.0
         const val TEST_DRAIN_MS = 250.0
         val FIT_INDICES = listOf(1,5,9,12,16,19,27,30,34,37,41,45,23)
-        val TEST_INDICES = listOf(2,8,13,15,31,33,38,44)
+        val TEST_LOCATIONS = listOf(2,8,13,15,22,24,31,33,38,44)
+        val ANALYSIS_AGE_LIMITS_MS = listOf(50,100,200,500)
     }
 }

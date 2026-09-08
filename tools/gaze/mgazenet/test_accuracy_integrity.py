@@ -25,6 +25,51 @@ class AccuracyIntegrityTests(unittest.TestCase):
         path = Path(__file__).parent / "fixtures/accuracy-harness-kotlin-synthetic.json"
         return json.loads(path.read_text(encoding="utf-8"))
 
+    def v2_manifest_fixture(self, order="forward_then_reverse"):
+        directions = (["forward", "reverse"] if order == "forward_then_reverse"
+                      else ["reverse", "forward"])
+        report = self.manifest_fixture()
+        report.update(schema="mgazenet_accuracy_v2", protocol_id="mgazenet_stationary_viewport_v2",
+                      validation_order=order, max_output_age_ms=None,
+                      analysis_age_limits_ms=[50, 100, 200, 500])
+        manifest = report["calibration_manifest"]
+        manifest.update(protocol="mgazenet_stationary_viewport_v2",
+                        validation_locations=[2, 8, 13, 15, 22, 24, 31, 33, 38, 44],
+                        validation_order=order,
+                        sweep_directions=directions,
+                        analysis_age_limits_ms=[50, 100, 200, 500])
+        viewport = manifest["viewport_screen_px"]
+        lines = report["blocks"][0]["lines"]
+        boxes = [line["rect_px"] for line in lines]
+        locations = manifest["validation_locations"]
+        blocks = []
+        shown = 48582.0
+        for sweep, direction in enumerate(directions, start=1):
+            sequence = locations if direction == "forward" else list(reversed(locations))
+            for position, index in enumerate(sequence, start=1):
+                x_fraction = 50/1920 + ((index-1) % 9) * (1820/1920)/8
+                y_fraction = 50/1080 + ((index-1) // 9) * (980/1080)/4
+                raw = [viewport[0] + x_fraction*(viewport[2]-viewport[0]),
+                       viewport[1] + y_fraction*(viewport[3]-viewport[1])]
+                line = min(range(len(boxes)), key=lambda i: abs((boxes[i][1]+boxes[i][3])/2-raw[1]))
+                left, top, right, bottom = boxes[line]
+                point = [min(max(raw[0], left+(right-left)*.02), right-(right-left)*.02),
+                         (top+bottom)/2]
+                blocks.append({
+                    "id": f"sweep_{sweep}_test_{index}", "location_id": f"test_{index}",
+                    "grid_index": index, "sweep": sweep, "sweep_direction": direction,
+                    "order_in_sweep": position, "region": f"grid_{index}", "role": "held_out",
+                    "task": "stationary_point", "shown_ms": shown, "start_ms": shown+3000,
+                    "end_ms": shown+5500, "target_px": point, "target_line_index": line,
+                    "line_height_px": manifest["line_height_px"], "viewport_screen_px": viewport,
+                    "lines": lines, "samples": [],
+                })
+                shown += 5751
+        report["blocks"] = blocks
+        report["finished_ms"] = shown
+        self.bind_manifests(report)
+        return report
+
     def test_manifest_changes_or_misbound_session_are_rejected(self):
         report = self.manifest_fixture()
         self.assertIsNone(evaluate(report)["accuracy_gate_pass"])
@@ -100,6 +145,46 @@ class AccuracyIntegrityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             evaluate(report)
 
+    def test_v2_freezes_repeated_locations_orders_and_four_age_reporting(self):
+        report = self.v2_manifest_fixture()
+        first = report["blocks"][0]
+        second = next(block for block in report["blocks"] if block["location_id"] == first["location_id"] and block["sweep"] == 2)
+        first["samples"] = [
+            {"capture_ms": first["start_ms"]+10, "output_ms": first["start_ms"]+30,
+             "point_px": [first["target_px"][0]-4, first["target_px"][1]-2]},
+            {"capture_ms": first["start_ms"]+50, "output_ms": first["start_ms"]+70,
+             "point_px": [first["target_px"][0]+4, first["target_px"][1]+2]},
+        ]
+        second["samples"] = [
+            {"capture_ms": second["start_ms"]+10, "output_ms": second["start_ms"]+30,
+             "point_px": [second["target_px"][0]+10, second["target_px"][1]+6]},
+        ]
+        result = evaluate(report)
+        self.assertEqual("mgazenet_accuracy_summary_v2", result["schema"])
+        self.assertEqual(20, result["planned_blocks"])
+        self.assertEqual([50, 100, 200, 500], [row["max_output_age_ms"] for row in result["freshness_sensitivity"]])
+        self.assertIsNone(result["primary_freshness_threshold_ms"])
+        self.assertEqual(6.0, result["repeated_location_bias_change"][0]["second_minus_first_mean_bias_px"]["y"])
+        self.assertEqual(2, result["blocks"][0]["within_target_dispersion_px"]["n"])
+        self.assertEqual("sample_standard_deviation_n_minus_1",
+                         result["blocks"][0]["within_target_dispersion_px"]["estimator"])
+        self.assertEqual(18, result["blocks_without_coordinates"])
+        reverse = evaluate(self.v2_manifest_fixture("reverse_then_forward"))
+        self.assertEqual("reverse_then_forward", reverse["validation_order"])
+        self.assertEqual("reverse", reverse["blocks"][0]["sweep_direction"])
+
+    def test_v2_rejects_rehashed_order_location_and_age_changes(self):
+        for change in (
+            lambda r: r["blocks"][0].update(order_in_sweep=2),
+            lambda r: r["blocks"][0].update(location_id="test_8"),
+            lambda r: r["blocks"][0].update(sweep_direction="reverse"),
+            lambda r: r.update(analysis_age_limits_ms=[100, 200, 500]),
+            lambda r: r.update(max_output_age_ms=100),
+        ):
+            report = self.v2_manifest_fixture(); change(report)
+            with self.assertRaises(ValueError):
+                evaluate(report)
+
     def test_collector_retains_partial_record_but_refuses_hash_or_identity_change(self):
         report = {"schema": "mgazenet_accuracy_partial_v1", "session_id": "1_abc", "outcome": "stopped",
                   "camera_frames_retained": False}
@@ -110,6 +195,9 @@ class AccuracyIntegrityTests(unittest.TestCase):
             validate(raw, "0"*64, "1_abc")
         with self.assertRaises(ValueError):
             validate(raw, digest, "2_def")
+        report.update(schema="mgazenet_accuracy_partial_v2")
+        raw = json.dumps(report).encode(); digest = hashlib.sha256(raw).hexdigest()
+        self.assertEqual("stopped", validate(raw, digest, "1_abc")["outcome"])
 
 
 if __name__ == "__main__":

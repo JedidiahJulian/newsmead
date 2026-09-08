@@ -8,8 +8,8 @@ The user handles staging and commits; all earlier uncommitted work is retained.
 
 Follow-up: `gaze-mgazenet-protocol-review.md` reviews what this instrument can
 measure, fixes host-side manifest/geometry validation, and specifies the next
-input-only preparation. The v2 repeat/order pilot there is proposed, not
-implemented or run.
+input-only preparation. At this 2026-09-07 checkpoint the v2 repeat/order pilot
+was still proposed and had not been implemented or run.
 
 Input-check follow-up: `gaze-mgazenet-input-check.md` records the completed
 software implementation, the retained first SM-G991B software failure and its
@@ -18,9 +18,16 @@ regression and full 20-second input check on both phones. No personal calibratio
 or accuracy trial occurred; read the input-check checkpoint for timing, drops,
 eligibility and the A56 warm-up gap.
 
+Stationary-v2 follow-up: `gaze-mgazenet-stationary-v2.md` records the new
+ten-location/two-sweep protocol, neutral presentation text, strict report
+metadata and four-age offline sensitivity analysis. That software passes host
+verification and retains frozen v1 scoring. Its later camera-free A56
+and SM-G991B setup/geometry checks both pass for the same hashed APK pair. No
+personal calibration or accuracy trial has run.
+
 ## Implemented behavior
 
-- The benchmark launcher opens a separate accuracy setup screen. Opening setup
+- The v1 benchmark launcher opened a separate accuracy setup screen. Opening setup
   does not start a camera, initialize a personal calibration or create a report.
   Camera permission/start requires the explicit session button. Run label and
   protocol-defined analysis age limit are required; no numeric study threshold
@@ -37,7 +44,7 @@ eligibility and the A56 warm-up gap.
   screen** labels, including the target view's actual origin. Personal training
   arrays are erased after fitting/cancellation; no calibration model is saved
   or loaded, and another session must start fresh.
-- Validation uses eight held-out points, a fixed 3-second settle and 2.5-second
+- V1 validation used eight held-out points, a fixed 3-second settle and 2.5-second
   window per target. Empty targets remain. There is a 250 ms drain interval;
   delayed outputs are routed by capture timestamp to their original block,
   including final callbacks drained while the source closes. No interpolation,
@@ -99,16 +106,16 @@ positions and a digest of fit features/labels. The canonical manifest JSON is
 retained with its hash so the Python evaluator can verify it without assuming
 identical cross-language floating-point JSON formatting.
 
-The report now also retains the canonical pipeline JSON. The independent scorer
+The v1 report also retained the canonical pipeline JSON. The independent scorer
 checks its SHA-256 and exact equality with the calibration manifest, then checks
 duplicated protocol, device, coordinate, timing, geometry, fit-count and
 data-retention fields. Harness manifests are mandatory for recorded evidence;
-fit/test positions are reconstructed from the declared v1 layout and protocol.
+fit/test positions were reconstructed from the declared v1 layout and protocol.
 Recorded evidence must identify the pinned MGazeNet and
 Tasks localizer asset hashes. Signed X/Y summaries retain both error tails instead
 of allowing a near-zero median to hide opposing regional bias.
 
-Only completed records use `mgazenet_accuracy_v1`. Stopped/failed records use
+In v1, only completed records use `mgazenet_accuracy_v1`. Stopped/failed records use
 `mgazenet_accuracy_partial_v1` and keep all planned blocks, including unshown
 blocks with null timing. They must remain in the study record; they are not
 silently converted into successful low-coverage trials or discarded.

@@ -30,6 +30,15 @@ host- and device-verified and completed the full input check on both phones.
 No personal calibration or accuracy trial occurred; continue from the input-check
 checkpoint before considering the prospective v2 pilot.
 
+**Stationary v2 follow-up:** `gaze-mgazenet-stationary-v2.md` is now the current
+continuation point. The isolated app and offline scorer implement the reviewed
+ten-location/two-sweep protocol and pass host verification while retaining v1
+support. Its authorized camera-free setup/geometry check now also passes on the
+A56 and SM-G991B with CAMERA still disabled and no record created. Both actual
+layouts retain ten distinct repeated locations, no fit overlap and no default
+order choice for the exact hashed APK pair. No personal calibration occurred;
+participant collection remains a separate later authorization.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,

@@ -16,7 +16,8 @@ def validate(raw, expected_hash, run_id):
     if digest != expected_hash.strip():
         raise ValueError("Accuracy report hash mismatch")
     report = json.loads(raw)
-    if report.get("schema") not in ("mgazenet_accuracy_v1", "mgazenet_accuracy_partial_v1"):
+    if report.get("schema") not in ("mgazenet_accuracy_v1", "mgazenet_accuracy_partial_v1",
+                                     "mgazenet_accuracy_v2", "mgazenet_accuracy_partial_v2"):
         raise ValueError("Not an isolated accuracy record")
     if report.get("session_id") != run_id or report.get("camera_frames_retained") is not False:
         raise ValueError("Unexpected session identity or image retention")

@@ -10,6 +10,34 @@ now-built separate controller, setup/target UI, camera source and numeric export
 plus camera-free verification. The initial status above describes this protocol
 preparation checkpoint; no personal accuracy run has occurred.
 
+**Current v2 follow-up:** `gaze-mgazenet-stationary-v2.md` records the isolated
+v2 implementation and host verification. V1 remains accepted as frozen
+historical evidence. V2 uses ten repeated locations, explicit counterbalanced
+sweeps and the fixed 50/100/200/500 ms sensitivity table with no primary
+freshness threshold. No personal accuracy run has occurred.
+
+## V2 extension (implemented 2026-09-08)
+
+The tables below freeze the original v1 input and output contract. They are not
+silently reinterpreted. V2 uses schema `mgazenet_accuracy_v2`, protocol
+`mgazenet_stationary_viewport_v2`, and adds the following required fields:
+
+| Field | V2 contract |
+| --- | --- |
+| `validation_order` | Exactly `forward_then_reverse` or `reverse_then_forward`; must match the hashed manifest. |
+| `analysis_age_limits_ms` | Exactly `[50,100,200,500]`; `max_output_age_ms` is null because no column is primary. |
+| manifest `validation_locations` | Exactly `[2,8,13,15,22,24,31,33,38,44]`. |
+| manifest `sweep_directions` | The two directions implied by `validation_order`. |
+| block `location_id`, `grid_index` | Stable repeated-location identity and its frozen grid index. |
+| block `sweep`, `sweep_direction`, `order_in_sweep` | Exact counterbalanced presentation metadata; block IDs are unique across repeats. |
+
+V2 contains twenty ordered blocks and preserves the original 3,000/2,500/250 ms
+settle/measure/drain timing. Offline output separates invariant spatial metrics
+from the four availability views and reports the `n-1` within-target coordinate
+SD, repeated-location signed-bias change, and session/sweep/location and
+target-balanced summaries. See the v2 checkpoint for the complete implemented
+contract and verification boundary.
+
 ## Localizer decision
 
 Treat the existing Tasks-based candidate as an **explicit adaptation**, not an

@@ -1,7 +1,10 @@
 package com.newsmead.mgazenetbenchmark
 
 import android.view.WindowManager
+import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.RadioButton
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
@@ -10,6 +13,10 @@ import java.io.File
 
 /** Opens setup or an artificial target view only. Never clicks Start or requests a camera. */
 class AccuracyHarnessTest {
+    private fun descendants(view: View): List<View> = listOf(view) +
+        (if (view is ViewGroup) (0 until view.childCount).flatMap { descendants(view.getChildAt(it)) }
+         else emptyList())
+
     @Test fun openingInputCheckSetupKeepsCameraOffAndCreatesNoRecord() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val directory = File(instrumentation.targetContext.filesDir,"input-check")
@@ -31,6 +38,9 @@ class AccuracyHarnessTest {
             instrumentation.waitForIdleSync()
             scenario.onActivity { activity ->
                 assertEquals(0,activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                val orderChoices = descendants(activity.window.decorView).filterIsInstance<RadioButton>()
+                assertEquals(2,orderChoices.size)
+                assertTrue(orderChoices.none { it.isChecked })
             }
         }
         assertEquals(before,directory.list()?.toSet() ?: emptySet<String>())
@@ -54,9 +64,19 @@ class AccuracyHarnessTest {
                 val location = IntArray(2); view.getLocationOnScreen(location)
                 assertEquals(location[0] + 12.0*view.resources.displayMetrics.density,layout.viewport.left,.001)
                 assertEquals(location[1] + 12.0*view.resources.displayMetrics.density,layout.viewport.top,.001)
-                val session = AccuracySession(layout,100.0,"synthetic_view_only")
+                val session = AccuracySession(layout,"synthetic_view_only",
+                    AccuracySession.ValidationOrder.FORWARD_THEN_REVERSE)
                 assertEquals(session.fitPoints.first().point.y/layout.screenHeight,
                     layout.label(session.fitPoints.first().point)[1].toDouble(),1e-7)
+                val locations = session.blocks.distinctBy { it.locationId }
+                assertEquals(10,locations.size)
+                assertEquals(10,locations.map { it.point }.distinct().size)
+                assertTrue(locations.none { block ->
+                    session.fitPoints.filterNot { it.practice }.any { it.point == block.point }
+                })
+                assertTrue(session.blocks.groupBy { it.locationId }.values.all { repeated ->
+                    repeated.size == 2 && repeated[0].point == repeated[1].point
+                })
                 view.target = session.target
             }
             instrumentation.waitForIdleSync()

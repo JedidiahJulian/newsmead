@@ -20,8 +20,8 @@ class AccuracyTargetView(context: Context) : View(context) {
     var onGeometry: (AccuracySession.Layout) -> Unit = {}
 
     private fun lineText(): String {
-        var text = "Read"
-        val words = listOf("this","line","at","your","usual","pace.")
+        var text = "Reference"
+        val words = listOf("text","for","target","positioning.")
         for (word in words) {
             val candidate = "$text $word"
             if (textPaint.measureText(candidate) > width-2*margin) break

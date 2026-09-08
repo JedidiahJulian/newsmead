@@ -6,11 +6,25 @@ bitmap-lifetime software failure; the first repair exposed and retained the
 next-frame recycled-buffer failure. The complete repair subsequently passed its
 on-device regression test and full input check on both phones. Both showed
 nonempty eligible input; timing/drop findings and the A56 warm-up gap are in the
-input-check checkpoint. No accuracy or calibration run occurred. The prospective
-v2 pilot below remains unimplemented.
+input-check checkpoint. No accuracy or calibration run occurred.
+
+**V2 software follow-up:** `gaze-mgazenet-stationary-v2.md` records the now
+implemented and host-verified stationary v2 pilot. It freezes ten repeated
+locations, two counterbalanced sweeps, explicit order metadata, neutral text,
+and 50/100/200/500 ms sensitivity reporting without a primary threshold. The
+proposal below is retained as the design rationale; it is no longer
+unimplemented. No phone, camera or personal calibration was used for that
+software checkpoint.
+
+**Two-phone geometry follow-up:** the exact v2 package subsequently passed the
+authorized camera-free setup/geometry class on both A56 and SM-G991B. Each
+actual layout retained ten distinct repeated locations with no exact fit overlap;
+neither order was selected by default and no record was created. See
+`gaze-mgazenet-stationary-v2.md`. This is not a camera, calibration or accuracy
+result.
 
 Decision: continue with the isolated candidate, with accuracy and measurement
-validity first. The existing v1 harness is a stationary feasibility instrument;
+validity first. The original v1 harness was a stationary feasibility instrument;
 its software pass does not establish repeatability, reading accuracy or reliable
 event timing. No camera or personal calibration was run during this review.
 All proposed phone work below remains prospective, not an executed experiment.
@@ -30,6 +44,8 @@ All proposed phone work below remains prospective, not an executed experiment.
 These are code findings, not new measurements. Relevant sources are
 `AccuracySession.kt`, `AccuracyTargetView.kt`, `AccuracyCameraSource.kt`,
 `AccuracyReport.kt` and `tools/gaze/mgazenet/accuracy_metrics.py`.
+These findings describe the reviewed v1 implementation; the v2 follow-up above
+implements the specified repairs without reinterpreting v1 evidence.
 
 The distinction matters for NewsMead: E-054's stronger A56 run had 85.4%
 within-one-line accuracy but only 36.0% exact-line and 13.1% exact-word accuracy.
@@ -74,9 +90,8 @@ not trigger repeated personal calibrations. The older 125-second camera-timing
 screen lacks the needed eye-area diagnostics and uses different camera settings,
 so it is not a substitute for this check.
 
-The input-only mode is **not implemented by this review**. Preparing this small
-mode is the next concrete implementation; no more thread/precision benchmarks
-or repeated camera-free phone installations are needed beforehand.
+The input-only mode was **not implemented by this review**; its later completed
+implementation and both-phone findings are in `gaze-mgazenet-input-check.md`.
 
 ### 2. Freeze a v2 stationary pilot before collection
 
@@ -128,8 +143,10 @@ table on the same immutable capture/output records. None is a pass threshold;
 retain the full table rather than selecting the most favorable column. Spatial
 errors must be identical across columns. A future analysis tool should state
 the original recorded age parameter and each analysis override explicitly.
-The present v1 scorer still accepts one declared limit; this sweep is proposed,
-not implemented or run.
+The frozen v1 scorer still accepts its original one declared limit. The later v2
+scorer implements the exact four-column sweep without choosing a favorable
+column; see `gaze-mgazenet-stationary-v2.md`. It has not been used on a personal
+accuracy run.
 
 No universal success percentage can be derived from the available evidence.
 For a target centered in a band of height H, exact vertical assignment requires
@@ -169,7 +186,7 @@ separation independently of the predictions. It verifies internal consistency;
 hashes do not authenticate a participant's behavior or prevent an author from
 fabricating an entirely self-consistent file.
 
-All 37 host tests pass, with no skipped integrity test. The frozen Kotlin
+At this review checkpoint, all 37 host tests passed, with no skipped integrity test. The frozen Kotlin
 synthetic export is now a source-tree fixture so the integrity suite runs without
 a prior Gradle build. The current generated Kotlin export still passes the
 independent scorer and produces exactly the prior metrics. APK and Android
@@ -178,3 +195,6 @@ checks remain historical evidence and were not unnecessarily rerun.
 
 No installation, device contact, camera use, calibration, staging, or commit
 occurred in this review. The active tracker and all prior evidence are preserved.
+The later v2 software checkpoint reports 138 passing benchmark JVM tests and 41
+passing MGazeNet Python tests; those counts must not be attributed to this
+earlier review run.

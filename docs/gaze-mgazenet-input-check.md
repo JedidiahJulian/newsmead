@@ -203,9 +203,10 @@ removed from planned-time denominators.
 ## Authorization boundary
 
 The isolated input-only check is complete on both phones and does not need
-repetition unless a relevant source change or failure justifies it. The next
-methodological work is to review and freeze the proposed v2 stationary pilot and
-its analysis rules before any personal calibration or accuracy collection.
-This checkpoint does not authorize that calibration, accuracy trial, natural-
-reading evaluation or tracker promotion. Both failed attempts remain retained
-and cannot be excluded from the software-development history.
+repetition unless a relevant source change or failure justifies it. The v2
+stationary pilot and analysis rules were subsequently frozen and host-verified;
+continue at `gaze-mgazenet-stationary-v2.md`. Its next boundary is a separately
+authorized camera-free setup/geometry check on both layouts, not a personal
+trial. This checkpoint does not authorize calibration, accuracy collection,
+natural-reading evaluation or tracker promotion. Both failed attempts remain
+retained and cannot be excluded from the software-development history.

@@ -5,11 +5,13 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.text.InputType
+import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,7 +34,7 @@ class AccuracyActivity : ComponentActivity() {
     private var fitting = false
     private var pendingStart = false
     private var label = ""
-    private var age = 0.0
+    private var validationOrder: AccuracySession.ValidationOrder? = null
     private var openedAt = 0.0
     private var runId = ""
     private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -55,20 +57,32 @@ class AccuracyActivity : ComponentActivity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,48,24,24) }
         status = TextView(this).apply {
             textSize = 18f
-            text = "Accuracy research setup\n\nThis separate session uses its own calibration and held-out targets. Images and personal calibration models are not saved. No reading assistance is changed.\n\nOnly start when the research procedure is agreed."
+            text = "Accuracy research setup (stationary pilot v2)\n\nThis separate session uses its own calibration and two ordered sweeps over ten repeated held-out locations. Images and personal calibration models are not saved. No reading assistance is changed.\n\nSelect the preassigned session order. Only start when the research procedure is agreed."
         }
         val runLabel = EditText(this).apply { hint = "Research run label"; setSingleLine() }
-        val freshness = EditText(this).apply {
-            hint = "Analysis age limit in ms (from study protocol)"
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+        val forwardFirstId = View.generateViewId()
+        val reverseFirstId = View.generateViewId()
+        val orderGroup = RadioGroup(this).apply {
+            orientation = RadioGroup.VERTICAL
+            addView(RadioButton(this@AccuracyActivity).apply {
+                id = forwardFirstId; text = "Session 1 order: forward, then reverse"
+            })
+            addView(RadioButton(this@AccuracyActivity).apply {
+                id = reverseFirstId; text = "Session 2 order: reverse, then forward"
+            })
         }
         startButton = Button(this).apply {
             text = "Start separate calibration and accuracy check"
             setOnClickListener {
                 if (source != null || pendingStart) return@setOnClickListener
-                label = runLabel.text.toString().trim(); age = freshness.text.toString().toDoubleOrNull() ?: Double.NaN
-                if (label.isBlank() || label.length > 120 || !age.isFinite() || age <= 0 || age > 60_000) {
-                    status.text = "Enter a run label and the analysis age limit specified by the protocol. No default accuracy threshold is selected."
+                label = runLabel.text.toString().trim()
+                validationOrder = when (orderGroup.checkedRadioButtonId) {
+                    forwardFirstId -> AccuracySession.ValidationOrder.FORWARD_THEN_REVERSE
+                    reverseFirstId -> AccuracySession.ValidationOrder.REVERSE_THEN_FORWARD
+                    else -> null
+                }
+                if (label.isBlank() || label.length > 120 || validationOrder == null) {
+                    status.text = "Enter a run label and select the preassigned session order. No order is selected by default."
                     return@setOnClickListener
                 }
                 isEnabled = false
@@ -76,7 +90,7 @@ class AccuracyActivity : ComponentActivity() {
                 else { pendingStart = true; permission.launch(Manifest.permission.CAMERA) }
             }
         }
-        root.addView(status); root.addView(runLabel); root.addView(freshness); root.addView(startButton)
+        root.addView(status); root.addView(runLabel); root.addView(orderGroup); root.addView(startButton)
         root.addView(Button(this).apply { text = "Back"; setOnClickListener { finish() } })
         setContentView(root)
     }
@@ -103,7 +117,7 @@ class AccuracyActivity : ComponentActivity() {
             if (!closing) {
                 try {
                     pipeline = metadata
-                    session = AccuracySession(targetView!!.snapshot(),age,label)
+                    session = AccuracySession(targetView!!.snapshot(),label,validationOrder!!)
                     updateState()
                 } catch (e: Throwable) { finishRun("invalid_target_layout: $e",true) }
             }
@@ -130,7 +144,10 @@ class AccuracyActivity : ComponentActivity() {
                     current.fitted(success,AccuracyCameraSource.now()); if (!closing) updateState()
                 }
             }
-            AccuracySession.Phase.VALIDATION -> status.text = "Accuracy check: keep looking at the red target.\nTarget ${current.target!!.testIndex!!+1} / ${current.blocks.size}"
+            AccuracySession.Phase.VALIDATION -> {
+                val block = current.blocks[current.target!!.testIndex!!]
+                status.text = "Accuracy check: keep looking at the red target.\nSweep ${block.sweep} of 2 · location ${block.orderInSweep} of 10"
+            }
             AccuracySession.Phase.COMPLETE -> finishRun("complete",false)
             else -> finishRun(current.failure ?: "session_failed",true)
         }
@@ -145,7 +162,7 @@ class AccuracyActivity : ComponentActivity() {
             val current = session
             val payload = current?.let {
                 AccuracyReport.payload(it,runId,"${android.os.Build.MANUFACTURER}/${android.os.Build.MODEL}",pipeline).toMutableMap()
-            } ?: linkedMapOf<String,Any?>("schema" to "mgazenet_accuracy_partial_v1","outcome" to "failed",
+            } ?: linkedMapOf<String,Any?>("schema" to "mgazenet_accuracy_partial_v2","outcome" to "failed",
                 "session_id" to runId,"failure" to reason,"blocks" to emptyList<Any>(),"camera_frames_retained" to false)
             payload["camera_counters"] = counters
             Thread {
