@@ -176,6 +176,22 @@ bounded next candidate; it requires a camera-free threshold/confirmation
 proposal and new authorization. No additional collection or active-tracker
 change is authorized.
 
+**Direct-validation screen follow-up:**
+`gaze-mgazenet-direct-validation-screen-protocol.md` is now the current
+continuation point. The camera-free decision rejects LOO as a gate and freezes
+a development-only five-point vertical screen: all five targets complete, at
+least ten coordinate outputs each, target-balanced mean target-median error at
+most 1.0 line, and no target median above 1.2 lines. Retrospective classification
+is G991B R1 fail, A56 R1 pass, A56 R2 fail and G991B R2 pass; it is not
+confirmation because the rule was chosen after inspecting those reports. The
+reproducible evaluator leaves the accuracy gate null, assigns no promotion and
+passes the 61-test MGazeNet Python suite. A separate confirmation design is
+frozen, but its Android flow is not implemented. No phone was contacted and no
+CAMERA, participant session or active-tracker action is authorized. The next
+bounded step requires explicit approval for isolated confirmation-software and
+host-only verification; device setup and participant collection remain later
+authorization boundaries.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,

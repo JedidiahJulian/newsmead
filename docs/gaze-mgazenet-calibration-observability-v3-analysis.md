@@ -210,3 +210,20 @@ for separate confirmation or stop the MGazeNet route. Do not tune the current
 four reports, rerun A56 round 2, assign an LOO threshold, modify the active
 tracker, grant CAMERA or begin natural-reading trials without a new explicit
 proposal and authorization.
+
+## Camera-free direct-screen follow-up
+
+That decision is now frozen in
+`gaze-mgazenet-direct-validation-screen-protocol.md`. The development-only
+screen requires complete five-target coverage, at least ten admitted coordinates
+per target, target-balanced mean target-median vertical error no greater than
+one line and no target median above the historical provisional 1.2-line regional
+reference. It retrospectively classifies G991B R1 and A56 R2 as failures and A56
+R1 and G991B R2 as passes. Because the rule was selected after inspecting these
+four reports, that split is development evidence only, not confirmation.
+
+The independent evaluator and 61-test host suite are complete. It leaves the
+accuracy gate null and makes no promotion decision. The next separately
+authorized boundary is isolated confirmation-software implementation; no phone,
+CAMERA, calibration, natural-reading or active-tracker action follows from this
+analysis.

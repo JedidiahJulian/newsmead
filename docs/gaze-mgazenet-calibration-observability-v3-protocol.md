@@ -6,7 +6,9 @@ Read after `gaze-mgazenet-calibration-observability-v3.md`.
 
 Collection follow-up: the frozen protocol was not changed after data began.
 All four attempts and the deferred camera-free analysis are complete; continue
-through `gaze-mgazenet-calibration-observability-v3-analysis.md`.
+through `gaze-mgazenet-calibration-observability-v3-analysis.md`, then
+`gaze-mgazenet-direct-validation-screen-protocol.md` for the frozen
+development-only direct screen and its separately bounded confirmation design.
 
 ## Question and evidence class
 
