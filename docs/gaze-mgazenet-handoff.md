@@ -145,6 +145,17 @@ and the process was absent. Two of four frozen attempts are complete. The next
 attempt is A56 `a56_v3_r2` after the between-round interval and separate
 authorization; G991B round 2 remains last.
 
+A56 `a56_v3_r2` completed more than three hours after its first round. The
+session used the same no-glasses, approximate-distance, medium-brightness and
+lighted-room conditions at night. The participant described fatigue afterward
+as “a little more normal in terms of fatigue, not as mild anymore”; retain that
+ambiguous wording verbatim without exclusion or correction. Raw session
+`1788959696940_91ff6a25-97dd-4dc4-8e93-0d163d9d00cf` is hash-verified at
+`6b24ebd023bd479a8dd35402ffe71e988506d7135e261c8fb12c446073ef2c7c`.
+It remains unscored. CAMERA was re-denied, both packages were force-stopped and
+the process was absent. Three of four attempts are complete; only G991B
+`g991b_v3_r2` remains before the frozen camera-free scoring and comparison.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,

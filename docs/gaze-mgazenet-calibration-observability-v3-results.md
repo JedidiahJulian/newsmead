@@ -3,10 +3,10 @@
 Updated 2026-09-09. Read after
 `gaze-mgazenet-calibration-observability-v3-protocol.md`.
 
-Status: two of four frozen development attempts are complete and preserved.
+Status: three of four frozen development attempts are complete and preserved.
 No calibration-audit scorer has been run and no LOO, drift or held-out accuracy
-value has been inspected. The remaining order is A56 round 2, then G991B round
-2. The active tracker remains unchanged.
+value has been inspected. Only G991B round 2 remains. The active tracker remains
+unchanged.
 
 ## Frozen sequence status
 
@@ -14,7 +14,7 @@ value has been inspected. The remaining order is A56 round 2, then G991B round
 | ---: | --- | --- | --- |
 | 1 | SM-G991B (`R5CR60YSJ2X`) | `g991b_v3_r1` | Complete and hash-verified |
 | 2 | A56 / SM-A566B (`R5CY40Y2C5W`) | `a56_v3_r1` | Complete and hash-verified |
-| 3 | A56 / SM-A566B (`R5CY40Y2C5W`) | `a56_v3_r2` | Not started |
+| 3 | A56 / SM-A566B (`R5CY40Y2C5W`) | `a56_v3_r2` | Complete and hash-verified |
 | 4 | SM-G991B (`R5CR60YSJ2X`) | `g991b_v3_r2` | Not started |
 
 Do not reorder, replace or add a run after seeing evidence. All four attempts
@@ -90,12 +90,48 @@ non-retention/no-decision contract, and printed no gaze values. The raw report's
 SHA-256 was independently recomputed on the preserved bytes and matched the
 device-written value above. The scorer has not been run.
 
+## A56 round 2
+
+- Run label: `a56_v3_r2`
+- Session ID: `1788959696940_91ff6a25-97dd-4dc4-8e93-0d163d9d00cf`
+- Start timestamp encoded by the session ID: 2026-09-09 21:14:56 +08:00
+- Outcome exposed by the collector: complete
+- Raw report SHA-256:
+  `6b24ebd023bd479a8dd35402ffe71e988506d7135e261c8fb12c446073ef2c7c`
+- Preserved raw directory:
+  `diagnostics-local/2026-09-09/mgazenet-calibration-observability-v3/sm-a56/session-2/`
+
+More than three hours had elapsed since A56 round 1, exceeding the frozen
+between-session and between-round intervals. Before round 2, the installed app
+again matched frozen SHA-256
+`2fba004144d705102c76c76b25ab6c8426892797fb6a2f923bb45d8c4230ccab`.
+CAMERA runtime grant was `false`, effective app-op was `ignore`, the process was
+absent, and the round-1 device record remained present. Opening the benchmark
+home screen did not change CAMERA state.
+
+The session occurred at night. No change to the previously declared no-glasses,
+approximately 30 cm, medium-brightness or lighted-room conditions was reported.
+After completion, the participant described fatigue as “a little more normal in
+terms of fatigue, not as mild anymore.” Because that wording does not establish
+a single better/worse category, it is retained verbatim without reinterpretation.
+It is not an exclusion, correction or reason to rerun.
+
+The camera app-op recorded approximately 2 minutes 53 seconds for the run.
+After completion, CAMERA was explicitly revoked and returned to effective
+app-op `ignore`; runtime grant `false` was confirmed. The app and instrumentation
+packages were force-stopped and the benchmark process was confirmed absent.
+
+The collector preserved only the named numeric record, verified its device-side
+hash and non-retention/no-decision contract, and displayed no gaze values. The
+raw SHA-256 was independently recomputed on the preserved bytes and matched.
+The scorer has not been run.
+
 ## Current boundary
 
-G991B round 1 and A56 round 1 are immutable and will not be repeated. No
-accuracy statement can be made while scoring remains deferred. The next frozen
-attempt is `a56_v3_r2`, only after the required between-round interval and a
-separate explicit authorization. Before that run, confirm the same frozen APK,
-camera-denied state, stopped process and current participant/environment
-conditions. Do not score either preserved record, grant CAMERA or start the
-second A56 calibration in advance.
+The three completed attempts are immutable and will not be repeated. No accuracy
+statement can be made while scoring remains deferred. The final frozen attempt
+is G991B `g991b_v3_r2`, only after the required interval and separate explicit
+authorization. Before that run, confirm the same frozen APK, camera-denied state,
+stopped process, intact round-1 record and current participant/environment
+conditions. Do not score any preserved record, contact G991B, grant CAMERA or
+start its second calibration in advance.
