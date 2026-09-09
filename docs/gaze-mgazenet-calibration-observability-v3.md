@@ -8,7 +8,9 @@ personal data was used. The work does not modify the active NewsMead tracker or
 calibration store or assign an accuracy gate. The real native 16-fold audit path
 now passes with synthetic input on both the A56 and G991B. The subsequent
 camera-free four-session collection protocol is frozen in
-`gaze-mgazenet-calibration-observability-v3-protocol.md`; it has not been run.
+`gaze-mgazenet-calibration-observability-v3-protocol.md`. Its later collection
+and analysis are complete; see
+`gaze-mgazenet-calibration-observability-v3-analysis.md`.
 
 Read after `gaze-mgazenet-post-pilot-review.md`. This is the current MGazeNet
 continuation point.
@@ -263,6 +265,7 @@ on both phones are complete, as is the same-build camera-free native SVR audit
 on both phones. Do not grant CAMERA, run a personal calibration, collect a v3
 record, change a threshold, promote MGazeNet or modify the active tracker
 without a new explicit authorization. The v3 protocol is now frozen, without
-contacting a phone or starting a camera run. Its next boundary is separate
-authorization for each of four predeclared development sessions, followed by a
-camera-free analysis only after all four attempts are complete.
+contacting a phone or starting a camera run at this software checkpoint. The
+four sessions were later separately authorized and completed. Their analysis
+rejects the LOO diagnostic as a quality gate; it authorizes no further camera
+run or active-tracker change.

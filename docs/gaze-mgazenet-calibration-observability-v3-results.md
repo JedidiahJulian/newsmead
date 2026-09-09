@@ -3,10 +3,10 @@
 Updated 2026-09-09. Read after
 `gaze-mgazenet-calibration-observability-v3-protocol.md`.
 
-Status: three of four frozen development attempts are complete and preserved.
-No calibration-audit scorer has been run and no LOO, drift or held-out accuracy
-value has been inspected. Only G991B round 2 remains. The active tracker remains
-unchanged.
+Status: all four frozen development attempts are complete, preserved and scored
+only after collection ended. The full camera-free comparison and decision are in
+`gaze-mgazenet-calibration-observability-v3-analysis.md`. The active tracker
+remains unchanged.
 
 ## Frozen sequence status
 
@@ -15,7 +15,7 @@ unchanged.
 | 1 | SM-G991B (`R5CR60YSJ2X`) | `g991b_v3_r1` | Complete and hash-verified |
 | 2 | A56 / SM-A566B (`R5CY40Y2C5W`) | `a56_v3_r1` | Complete and hash-verified |
 | 3 | A56 / SM-A566B (`R5CY40Y2C5W`) | `a56_v3_r2` | Complete and hash-verified |
-| 4 | SM-G991B (`R5CR60YSJ2X`) | `g991b_v3_r2` | Not started |
+| 4 | SM-G991B (`R5CR60YSJ2X`) | `g991b_v3_r2` | Complete and hash-verified |
 
 Do not reorder, replace or add a run after seeing evidence. All four attempts
 must be preserved before scoring or comparison.
@@ -55,7 +55,8 @@ debug package boundary, verified its device-written SHA-256, schema, protocol,
 session identity, privacy flags, correction flags and null decision fields, and
 saved it without scoring. Its collector contract tests bring the MGazeNet Python
 suite to 53 passing tests. The report hash above was independently recomputed on
-the preserved bytes and matched. No raw gaze values were printed or opened.
+the preserved bytes and matched. At this preservation checkpoint, no raw gaze
+values were printed or opened; scoring occurred only after all four attempts.
 
 ## A56 round 1
 
@@ -88,7 +89,8 @@ packages were force-stopped and the benchmark process was confirmed absent.
 The collector preserved only the named numeric record, verified the hash and
 non-retention/no-decision contract, and printed no gaze values. The raw report's
 SHA-256 was independently recomputed on the preserved bytes and matched the
-device-written value above. The scorer has not been run.
+device-written value above. The scorer was not run until all four attempts were
+complete.
 
 ## A56 round 2
 
@@ -124,14 +126,42 @@ packages were force-stopped and the benchmark process was confirmed absent.
 The collector preserved only the named numeric record, verified its device-side
 hash and non-retention/no-decision contract, and displayed no gaze values. The
 raw SHA-256 was independently recomputed on the preserved bytes and matched.
-The scorer has not been run.
+The scorer was not run until all four attempts were complete.
+
+## G991B round 2
+
+- Run label: `g991b_v3_r2`
+- Session ID: `1788960878269_a10b1e51-8902-4e2e-b3cc-640e7ffc5a11`
+- Start timestamp encoded by the session ID: 2026-09-09 21:34:38 +08:00
+- Outcome exposed by the collector: complete
+- Raw report SHA-256:
+  `c9426c6c8f4a2e808ade80c88a9f8fc0cd7df9ace7366c9a812fdd18fbf6df46`
+- Preserved raw directory:
+  `diagnostics-local/2026-09-09/mgazenet-calibration-observability-v3/sm-g991b/session-2/`
+
+The final run began approximately twenty minutes after A56 round 2, exceeding
+the frozen interval. Before it, the installed app again matched frozen SHA-256
+`2fba004144d705102c76c76b25ab6c8426892797fb6a2f923bb45d8c4230ccab`.
+CAMERA runtime grant was `false`, effective app-op was `ignore`, the process was
+absent, and G991B round 1 remained present. Opening the home screen did not
+change CAMERA state.
+
+The participant declared the same conditions as A56 round 2: no glasses,
+approximately 30 cm, medium screen brightness, a lighted room, nighttime, and
+the same verbatim fatigue description retained for that run. No other change
+was reported.
+
+The camera app-op recorded approximately 3 minutes 2 seconds. CAMERA was then
+explicitly revoked and returned to effective app-op `ignore`; runtime grant
+`false` was confirmed. Both packages were force-stopped and the process was
+absent. The collector verified and preserved the named raw report without
+showing gaze values, and the local SHA-256 matched the device-written value.
 
 ## Current boundary
 
-The three completed attempts are immutable and will not be repeated. No accuracy
-statement can be made while scoring remains deferred. The final frozen attempt
-is G991B `g991b_v3_r2`, only after the required interval and separate explicit
-authorization. Before that run, confirm the same frozen APK, camera-denied state,
-stopped process, intact round-1 record and current participant/environment
-conditions. Do not score any preserved record, contact G991B, grant CAMERA or
-start its second calibration in advance.
+All four attempts are immutable and will not be repeated. Only after the fourth
+raw hash was verified were the independent summaries generated and compared.
+That analysis assigns no gate or promotion decision and is documented in
+`gaze-mgazenet-calibration-observability-v3-analysis.md`. No further participant
+run, CAMERA grant, threshold, correction, natural-reading trial or active-tracker
+change is authorized by collection completion.

@@ -5,8 +5,8 @@ checkpoint authorizes no phone contact, CAMERA grant, calibration or collection.
 Read after `gaze-mgazenet-calibration-observability-v3.md`.
 
 Collection follow-up: the frozen protocol was not changed after data began.
-G991B round 1 is complete and preserved without scoring; continue through
-`gaze-mgazenet-calibration-observability-v3-results.md`.
+All four attempts and the deferred camera-free analysis are complete; continue
+through `gaze-mgazenet-calibration-observability-v3-analysis.md`.
 
 ## Question and evidence class
 

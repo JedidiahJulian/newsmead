@@ -130,20 +130,21 @@ an approximately one-second attention lapse at one unidentified target; retain
 it as context, with no exclusion, correction or rerun. Raw session
 `1788944307040_7525fa1f-cca6-4112-afcb-ebdae2788a34` is hash-verified at
 `fe2f2edc9750d4761b6027f570004ad17a8fbaaa72fcacffca55a0e9dbad0403`.
-It was preserved without scoring or exposing performance values. CAMERA was
-re-denied, both packages were force-stopped and the process was absent. The next
-frozen attempt is A56 `a56_v3_r1`; do not score early or contact that phone
-without separate authorization.
+It was preserved without scoring or exposing performance values until the
+four-session collection completed. CAMERA was re-denied, both packages were
+force-stopped and the process was absent. The next frozen attempt is A56
+`a56_v3_r1`; do not score early or contact that phone without separate
+authorization.
 
 A56 `a56_v3_r1` then completed under the same declared no-glasses,
 approximately 30 cm, medium-brightness, lighted-room, daytime and mild-fatigue
 conditions, with no new discomfort or change reported. Raw session
 `1788948001184_f08c9240-525c-44d7-b63a-b49d93785da1` is hash-verified at
 `4fdf42813ee85f7335dc4e47928c3809f49b2924ece860ad0d491b6ff131a680`.
-It too remains unscored. CAMERA was re-denied, both packages were force-stopped
-and the process was absent. Two of four frozen attempts are complete. The next
-attempt is A56 `a56_v3_r2` after the between-round interval and separate
-authorization; G991B round 2 remains last.
+It too was retained unscored until collection ended. CAMERA was re-denied, both
+packages were force-stopped and the process was absent. Two of four frozen
+attempts are complete. The next attempt is A56 `a56_v3_r2` after the
+between-round interval and separate authorization; G991B round 2 remains last.
 
 A56 `a56_v3_r2` completed more than three hours after its first round. The
 session used the same no-glasses, approximate-distance, medium-brightness and
@@ -152,9 +153,28 @@ as “a little more normal in terms of fatigue, not as mild anymore”; retain t
 ambiguous wording verbatim without exclusion or correction. Raw session
 `1788959696940_91ff6a25-97dd-4dc4-8e93-0d163d9d00cf` is hash-verified at
 `6b24ebd023bd479a8dd35402ffe71e988506d7135e261c8fb12c446073ef2c7c`.
-It remains unscored. CAMERA was re-denied, both packages were force-stopped and
-the process was absent. Three of four attempts are complete; only G991B
-`g991b_v3_r2` remains before the frozen camera-free scoring and comparison.
+It was retained unscored until collection ended. CAMERA was re-denied, both
+packages were force-stopped and the process was absent. At that checkpoint
+three of four attempts were complete; only G991B `g991b_v3_r2` remained before
+the frozen camera-free scoring and comparison.
+
+**Calibration-observability v3 analysis follow-up:**
+`gaze-mgazenet-calibration-observability-v3-analysis.md` is now the current
+continuation point. G991B `g991b_v3_r2` completed under the same nighttime and
+fatigue context as A56 round 2; raw hash is
+`c9426c6c8f4a2e808ade80c88a9f8fc0cd7df9ace7366c9a812fdd18fbf6df46`.
+CAMERA was re-denied and processes were stopped. All four reports were scored
+only after collection ended. Primary LOO versus five-target held-out vertical
+error was G991B R1 0.361/0.845 lines, A56 R1 0.611/0.391, A56 R2
+0.582/1.793, and G991B R2 0.330/0.686. G991B round changes agreed, but A56
+LOO improved by 0.028 line while held-out error worsened by 1.402 lines. The
+four-session Spearman value is -0.2. The LOO diagnostic therefore failed to
+replicate as a quality screen and must not receive a threshold. Three sessions
+remain encouraging stationary evidence, but the A56 round-2 failure prevents a
+reliability or promotion claim. A direct five-point post-fit screen is the only
+bounded next candidate; it requires a camera-free threshold/confirmation
+proposal and new authorization. No additional collection or active-tracker
+change is authorized.
 
 ## Goal and authority
 
