@@ -90,8 +90,13 @@ record, and processes stopped. Since the earlier A56 check used the pre-repair
 app, the corrected exact pair was then rechecked on the A56: all four tests
 passed in 2.984 seconds with CAMERA denied, no record, and processes stopped.
 Both phones now pass the same deterministic build. The software and setup-only
-boundary is complete; CAMERA grant or any participant run remains separately
-unauthorized.
+boundary is complete. A new camera-free `CalibrationAuditNativeTest` then ran
+the real OpenCV path on the A56: sixteen whole-target folds of 675 rows produced
+45 finite predictions each in 4,899.515 ms, and the final 720-row fit completed
+in 316.651 ms. Cleanup passed, CAMERA stayed denied, no record was written and
+processes were stopped. The matching G991B native run remains pending with test
+APK hash `b3d1e229f9b181faab93e503dd2ffa10870cf5dae3d5f6699f6fd0380c43621f`.
+CAMERA grant or any participant run remains separately unauthorized.
 
 ## Goal and authority
 

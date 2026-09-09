@@ -5,7 +5,8 @@ host-verified. Authorized setup-only checks passed on both phones using the
 corrected exact APK pair, after one retained G991B cross-layout protocol failure
 and repair. CAMERA remained denied. No camera, participant calibration or
 personal data was used. The work does not modify the active NewsMead tracker or
-calibration store or assign an accuracy gate.
+calibration store or assign an accuracy gate. The real native 16-fold audit path
+now passes with synthetic input on the A56; the matching G991B check is pending.
 
 Read after `gaze-mgazenet-post-pilot-review.md`. This is the current MGazeNet
 continuation point.
@@ -198,6 +199,36 @@ runtime grant remained `false`, both packages were force-stopped and the
 benchmark process was confirmed absent. The historical app-op `allow` record
 did not advance.
 
+## Camera-free native SVR audit checkpoint
+
+The setup checks do not execute the expensive v3 fit path. Before any personal
+calibration, a separate deterministic instrumentation test was therefore added
+to run the real OpenCV implementation rather than the fake JVM regressor. It
+constructs exactly sixteen groups of 45 finite 258-value synthetic rows and
+checks every native operation used by v3:
+
+- sixteen folds are created in fixed `fit_1` through `fit_16` order;
+- every fold receives exactly 675 rows from the other 15 complete target groups;
+- the omitted group marker is absent from every corresponding training set;
+- both native SVRs train in every fold and emit 45 finite two-value predictions;
+- the final native SVRs train on all 720 rows and emit finite predictions;
+- all copied features and labels are zeroed after the test.
+
+The app APK remains
+`2fba004144d705102c76c76b25ab6c8426892797fb6a2f923bb45d8c4230ccab`.
+The instrumentation APK containing `CalibrationAuditNativeTest` is
+`b3d1e229f9b181faab93e503dd2ffa10870cf5dae3d5f6699f6fd0380c43621f`.
+All 147 JVM tests and 49 Python tests passed before assembly.
+
+On the A56, the single native test passed in 5.338 seconds. The sixteen-fold
+audit itself took 4,899.515 ms and the final 720-row fit took 316.651 ms. These
+are descriptive execution timings, not a speed or accuracy gate. CAMERA had
+runtime grant `false` and effective app-op `ignore`; the test used no camera,
+image, landmark, participant feature or personal model and wrote no evidence
+record. CAMERA was re-denied afterward, both packages were force-stopped, and
+the benchmark process was absent. A matching run on the G991B remains required
+before this native-execution checkpoint is complete.
+
 ## Files in this checkpoint
 
 - `CalibrationAuditEngine.kt`: pure whole-target-fold audit and memory cleanup;
@@ -215,7 +246,9 @@ did not advance.
 ## Authorization boundary and next decision
 
 The software checkpoint and corrected exact-build camera-disabled setup checks
-on both phones are complete. Do not grant CAMERA, run a personal calibration,
-collect a v3 record, change a threshold, promote MGazeNet or modify the active
-tracker without a new explicit authorization. A camera-enabled v3 measurement
-would be the next distinct boundary; these setup checks do not authorize it.
+on both phones are complete. The native SVR audit passes on the A56 and awaits
+the same camera-free run on the G991B. Do not grant CAMERA, run a personal
+calibration, collect a v3 record, change a threshold, promote MGazeNet or modify
+the active tracker without a new explicit authorization. After the G991B native
+check, a frozen v3 collection protocol—not an immediate camera run—is the next
+measurement-validity boundary.
