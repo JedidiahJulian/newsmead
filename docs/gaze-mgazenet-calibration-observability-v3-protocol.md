@@ -4,6 +4,10 @@ Status: frozen before any v3 participant data. This camera-free protocol-design
 checkpoint authorizes no phone contact, CAMERA grant, calibration or collection.
 Read after `gaze-mgazenet-calibration-observability-v3.md`.
 
+Collection follow-up: the frozen protocol was not changed after data began.
+G991B round 1 is complete and preserved without scoring; continue through
+`gaze-mgazenet-calibration-observability-v3-results.md`.
+
 ## Question and evidence class
 
 The bounded question is whether the v3 leave-one-complete-target-group-out

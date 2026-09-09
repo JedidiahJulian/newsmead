@@ -121,6 +121,20 @@ No phone was contacted while freezing the protocol. Each participant session
 and CAMERA grant requires new explicit authorization; after all four attempts,
 the next boundary is camera-free analysis.
 
+**Calibration-observability v3 collection follow-up:**
+`gaze-mgazenet-calibration-observability-v3-results.md` is now the current
+continuation point. Frozen sequence 1, G991B `g991b_v3_r1`, completed under the
+declared no-glasses, approximately 30 cm, medium-brightness, lighted-room,
+daytime and mild-fatigue conditions. The participant retrospectively reported
+an approximately one-second attention lapse at one unidentified target; retain
+it as context, with no exclusion, correction or rerun. Raw session
+`1788944307040_7525fa1f-cca6-4112-afcb-ebdae2788a34` is hash-verified at
+`fe2f2edc9750d4761b6027f570004ad17a8fbaaa72fcacffca55a0e9dbad0403`.
+It was preserved without scoring or exposing performance values. CAMERA was
+re-denied, both packages were force-stopped and the process was absent. The next
+frozen attempt is A56 `a56_v3_r1`; do not score early or contact that phone
+without separate authorization.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,
