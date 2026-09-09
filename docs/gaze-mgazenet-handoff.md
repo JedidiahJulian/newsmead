@@ -135,6 +135,16 @@ re-denied, both packages were force-stopped and the process was absent. The next
 frozen attempt is A56 `a56_v3_r1`; do not score early or contact that phone
 without separate authorization.
 
+A56 `a56_v3_r1` then completed under the same declared no-glasses,
+approximately 30 cm, medium-brightness, lighted-room, daytime and mild-fatigue
+conditions, with no new discomfort or change reported. Raw session
+`1788948001184_f08c9240-525c-44d7-b63a-b49d93785da1` is hash-verified at
+`4fdf42813ee85f7335dc4e47928c3809f49b2924ece860ad0d491b6ff131a680`.
+It too remains unscored. CAMERA was re-denied, both packages were force-stopped
+and the process was absent. Two of four frozen attempts are complete. The next
+attempt is A56 `a56_v3_r2` after the between-round interval and separate
+authorization; G991B round 2 remains last.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,
