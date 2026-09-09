@@ -126,26 +126,18 @@ class ConfirmationActivity : ComponentActivity() {
         openedAt = AccuracyCameraSource.now()
         runId = "${System.currentTimeMillis()}_${UUID.randomUUID()}"
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        status = TextView(this).apply {
-            textSize = 18f
-            setPadding(20,12,20,0)
-            text = "Preparing camera. Follow the red target when it appears."
+        val measurement = ConfirmationMeasurementLayout.create(this) {
+            if (closing) finish() else finishRun("user_stopped",false)
         }
-        root.addView(status,LinearLayout.LayoutParams(-1,(112*resources.displayMetrics.density).toInt()))
-        targetView = AccuracyTargetView(this).also { view ->
-            root.addView(view,LinearLayout.LayoutParams(-1,0,1f))
+        status = measurement.status
+        targetView = measurement.target.also { view ->
             view.onPresented = { token,time -> session?.presented(token,time) }
             view.onGeometry = { geometry ->
                 if (!closing && session != null && session!!.layout != geometry)
                     finishRun("screen_layout_changed",true)
             }
         }
-        root.addView(Button(this).apply {
-            text = "Stop and return"
-            setOnClickListener { if (closing) finish() else finishRun("user_stopped",false) }
-        })
-        setContentView(root)
+        setContentView(measurement.root)
         source = AccuracyCameraSource(applicationContext,this,{ metadata ->
             if (!closing) {
                 try {

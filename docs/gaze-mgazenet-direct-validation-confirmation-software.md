@@ -1,9 +1,11 @@
 # MGazeNet direct-validation confirmation software checkpoint — 2026-09-09
 
 Status: the separately authorized isolated confirmation software is implemented
-and host-verified. No phone was contacted, no APK was installed, no CAMERA
-permission was requested, and no participant calibration or measurement was
-performed. The active NewsMead tracker under `app/` remains unchanged.
+and host-verified. Its exact production measurement layout now also passes the
+camera-free checks on both phones. No participant
+calibration or measurement was performed, and the active NewsMead tracker under
+`app/` remains unchanged. Continue into
+`gaze-mgazenet-direct-validation-confirmation-device-check.md`.
 
 Read after `gaze-mgazenet-direct-validation-screen-protocol.md`. This checkpoint
 implements that frozen design without changing its target positions, timing,
@@ -111,8 +113,8 @@ Host artifact identities:
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Debug app APK | 32,847,143 | `ca70ed3599f2ce8f3b79fb16fc84dafb60a3b715baed1eca698045e31a30417d` |
-| Debug instrumentation APK | 383,885 | `968f7abc848ac09e5a284768af0ecc41c013c843af012af1b4ced0a59cd61155` |
+| Debug app APK | 32,847,143 | `95cfc1c457955131e0271ae81472afd66d90a5006556d98fd05d53570410e73d` |
+| Debug instrumentation APK | 386,886 | `9e80c0c8d542be19a66ebcfe9e537475fb87200042838681eb1c0adef52b6bbb` |
 | Kotlin synthetic complete record | 159,556 | `797cd2f19a8b5f2dd4adc9b7f8aad211fc311749b4331b160ccbb5bdabd5d311` |
 | Independently scored synthetic summary | 139,877 | `b4043e2541d4ca6e8ce8b226d49733da3f146cf385c46e07665c797d3f2b4c36` |
 
@@ -121,9 +123,8 @@ and not files to stage.
 
 ## Current authorization boundary
 
-The software-only checkpoint is complete. It does not authorize installing
-these APKs or contacting either phone. The next bounded step, only after new
-explicit authorization, is a camera-free setup and actual-layout instrumentation
-check of this exact APK pair on the A56 and G991B. That check must not press
-Start or request CAMERA and must create no confirmation record. Any participant
-session and CAMERA grant remain later, separate decisions.
+The software-only and separately authorized two-phone camera-free checks are
+complete. Continue from
+`gaze-mgazenet-direct-validation-confirmation-device-check.md` for the exact
+rebuilt APK identities and device evidence. Any participant session and CAMERA
+grant remain later, separate decisions.

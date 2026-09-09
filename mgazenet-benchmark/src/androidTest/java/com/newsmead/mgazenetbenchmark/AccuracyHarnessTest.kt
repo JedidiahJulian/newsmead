@@ -75,6 +75,61 @@ class AccuracyHarnessTest {
         }
         assertEquals(before,directory.list()?.toSet() ?: emptySet<String>())
     }
+
+    @Test fun confirmationMeasurementLayoutSupportsTheFrozenTargetPlanWithoutCamera() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val directory = File(instrumentation.targetContext.filesDir,"confirmation")
+        val before = directory.list()?.toSet() ?: emptySet()
+        var targetView: AccuracyTargetView? = null
+        var acknowledged = -1
+        ActivityScenario.launch(ConfirmationActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val measurement = ConfirmationMeasurementLayout.create(activity) {
+                    fail("Camera-free layout check must not invoke Stop")
+                }
+                targetView = measurement.target.apply {
+                    onPresented = { token, _ -> acknowledged = token }
+                }
+                activity.setContentView(measurement.root)
+            }
+            instrumentation.waitForIdleSync()
+            scenario.onActivity { activity ->
+                assertEquals(0,activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                val view = targetView!!
+                val layout = view.snapshot()
+                val location = IntArray(2)
+                view.getLocationOnScreen(location)
+                assertTrue("measurement target surface has no width",view.width > 0)
+                assertTrue("measurement target surface has no height",view.height > 0)
+                assertEquals(location[0] + 12.0*view.resources.displayMetrics.density,layout.viewport.left,.001)
+                assertEquals(location[1] + 12.0*view.resources.displayMetrics.density,layout.viewport.top,.001)
+
+                val confirmation = ConfirmationSession(layout,"camera_free_layout_check",
+                    AccuracySession.ValidationOrder.FORWARD_THEN_REVERSE)
+                assertEquals(16,confirmation.fitPoints.count { !it.practice })
+                assertEquals(5,confirmation.screenBlocks.size)
+                assertEquals(20,confirmation.confirmationBlocks.size)
+                assertEquals(10,confirmation.confirmationBlocks.map { it.locationId }.distinct().size)
+                assertTrue(confirmation.confirmationBlocks.groupBy { it.locationId }.values.all { repeated ->
+                    repeated.size == 2 && repeated[0].point == repeated[1].point
+                })
+                val allPoints = confirmation.fitPoints.map { it.point } +
+                    confirmation.screenBlocks.map { it.point } +
+                    confirmation.confirmationBlocks.map { it.point }
+                assertTrue(allPoints.all { point ->
+                    point.x >= layout.viewport.left && point.x <= layout.viewport.right &&
+                        point.y >= layout.viewport.top && point.y <= layout.viewport.bottom
+                })
+                view.target = confirmation.target
+            }
+            instrumentation.waitForIdleSync()
+            scenario.onActivity { targetView!!.invalidate() }
+            instrumentation.waitForIdleSync()
+            scenario.onActivity { assertEquals(0,acknowledged) }
+        }
+        assertEquals(before,directory.list()?.toSet() ?: emptySet<String>())
+    }
+
     @Test fun insetViewUsesPhysicalScreenCoordinatesAndAcknowledgesDrawnTarget() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         var targetView: AccuracyTargetView? = null
