@@ -101,12 +101,13 @@ participant or gaze record.
 
 ## Current authorization boundary
 
-The software and camera-free two-device checkpoint is complete. Both phones
-remain CAMERA-denied and stopped. The next frozen collection attempt would be
-A56 confirmation 1 with forward-then-reverse order, but that participant
-attempt, its CAMERA grant and fresh personal calibration require a new explicit
-authorization. Result scoring must wait until all four frozen attempts have
-terminated and their raw hashes are preserved.
+The software and camera-free two-device checkpoint is complete. A56
+confirmation 1 was subsequently authorized and completed with the frozen
+forward-then-reverse order. Continue from
+`gaze-mgazenet-direct-validation-confirmation-collection.md`; its raw record is
+preserved without scoring. Both phones were CAMERA-denied and stopped at their
+latest terminal checks. Result scoring must wait until all four frozen attempts
+have terminated and their raw hashes are preserved.
 
 Threshold changes, model promotion and active-tracker changes remain outside
 this checkpoint.

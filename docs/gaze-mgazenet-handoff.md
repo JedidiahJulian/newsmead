@@ -211,6 +211,20 @@ checkpoint is complete. The next frozen collection attempt would be A56
 confirmation 1, forward then reverse, but participant collection and CAMERA
 grant remain a later explicit decision. `app/` remains unchanged.
 
+**Direct-validation confirmation collection follow-up:**
+`gaze-mgazenet-direct-validation-confirmation-collection.md` is now the current
+continuation point. After explicit participant/CAMERA authorization, A56
+`a56_confirmation_1` completed with the frozen forward-then-reverse order under
+the declared no-glasses, approximately 30 cm, medium-brightness, lighted-room,
+daytime and “more fatigued” context. Raw session
+`1788996966439_c741e1b1-4887-4c01-9527-b58228a44b57` is hash-verified at
+`a498f3584142ae5f69e6b0f090b543684f353064be8c87de8ef78852a190986a`.
+It remains unscored with spatial results unexamined. CAMERA was re-denied and
+both packages were force-stopped. One of four attempts is complete. After at
+least ten minutes away from the target task, the next frozen attempt is G991B
+`g991b_confirmation_1`, reverse then forward, with separate authorization.
+Never stage the ignored `diagnostics-local` evidence.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,
