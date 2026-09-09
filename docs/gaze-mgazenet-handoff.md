@@ -192,6 +192,21 @@ bounded step requires explicit approval for isolated confirmation-software and
 host-only verification; device setup and participant collection remain later
 authorization boundaries.
 
+**Direct-validation confirmation software follow-up:**
+`gaze-mgazenet-direct-validation-confirmation-software.md` is now the current
+continuation point. After explicit software-only authorization, the isolated
+benchmark added a distinct 16-fit/5-screen/20-confirmation flow. The five-point
+result is sealed and hidden before the independent blocks, and passing and
+failing screens both continue through the same two-sweep sequence. Numeric-only
+reporting, a hash-verifying collector, an independent scorer and the frozen
+four-session comparator are implemented. All 153 JVM and 74 Python tests pass;
+the debug app/instrumentation APK hashes are
+`ca70ed3599f2ce8f3b79fb16fc84dafb60a3b715baed1eca698045e31a30417d` and
+`968f7abc848ac09e5a284768af0ecc41c013c843af012af1b4ced0a59cd61155`.
+No phone, installation or CAMERA action occurred, and `app/` remains unchanged.
+The next boundary is a separately authorized camera-free setup/layout check of
+that exact pair on both phones; participant collection remains a later decision.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,

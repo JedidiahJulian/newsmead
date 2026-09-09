@@ -59,6 +59,22 @@ class AccuracyHarnessTest {
         }
         assertEquals(before,directory.list()?.toSet() ?: emptySet<String>())
     }
+
+    @Test fun openingConfirmationSetupKeepsCameraOffHasNoDefaultOrderAndCreatesNoRecord() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val directory = File(instrumentation.targetContext.filesDir,"confirmation")
+        val before = directory.list()?.toSet() ?: emptySet()
+        ActivityScenario.launch(ConfirmationActivity::class.java).use { scenario ->
+            instrumentation.waitForIdleSync()
+            scenario.onActivity { activity ->
+                assertEquals(0,activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                val orderChoices = descendants(activity.window.decorView).filterIsInstance<RadioButton>()
+                assertEquals(2,orderChoices.size)
+                assertTrue(orderChoices.none { it.isChecked })
+            }
+        }
+        assertEquals(before,directory.list()?.toSet() ?: emptySet<String>())
+    }
     @Test fun insetViewUsesPhysicalScreenCoordinatesAndAcknowledgesDrawnTarget() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         var targetView: AccuracyTargetView? = null
@@ -101,6 +117,19 @@ class AccuracyHarnessTest {
                     audit.verificationBlocks.first().point)
                 assertTrue(audit.verificationBlocks.drop(1).none { verification ->
                     audit.fitPoints.filterNot { it.practice }.any { it.point == verification.point }
+                })
+
+                val confirmation = ConfirmationSession(layout,"synthetic_view_only",
+                    AccuracySession.ValidationOrder.FORWARD_THEN_REVERSE)
+                assertEquals(16,confirmation.fitPoints.count { !it.practice })
+                assertEquals(5,confirmation.screenBlocks.size)
+                assertEquals(20,confirmation.confirmationBlocks.size)
+                assertTrue(confirmation.screenBlocks.none { screen ->
+                    confirmation.fitPoints.filterNot { it.practice }.any { it.point == screen.point }
+                })
+                assertTrue(confirmation.confirmationBlocks.none { block ->
+                    confirmation.fitPoints.filterNot { it.practice }.any { it.point == block.point } ||
+                        confirmation.screenBlocks.any { it.point == block.point }
                 })
             }
             instrumentation.waitForIdleSync()

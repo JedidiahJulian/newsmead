@@ -21,6 +21,7 @@ class BenchmarkActivity : ComponentActivity() {
     private lateinit var camera: Button
     private lateinit var accuracy: Button
     private lateinit var calibrationAudit: Button
+    private lateinit var confirmation: Button
     private lateinit var inputCheck: Button
     private var cameraRun: CameraBenchmark? = null
     private val worker = Executors.newSingleThreadExecutor()
@@ -66,6 +67,11 @@ class BenchmarkActivity : ComponentActivity() {
             setOnClickListener { startActivity(android.content.Intent(this@BenchmarkActivity,CalibrationAuditActivity::class.java)) }
         }
         root.addView(calibrationAudit)
+        confirmation = Button(this).apply {
+            text = "Open direct-screen confirmation setup (camera stays off)"
+            setOnClickListener { startActivity(android.content.Intent(this@BenchmarkActivity,ConfirmationActivity::class.java)) }
+        }
+        root.addView(confirmation)
         root.addView(Button(this).apply { text = "Stop"; setOnClickListener {
             cancelled.set(true); cameraRun?.stop("user_stopped"); status.text = "Stopping…"
         } })
@@ -76,6 +82,7 @@ class BenchmarkActivity : ComponentActivity() {
     private fun enable(enabled: Boolean) {
         synthetic.isEnabled = enabled; camera.isEnabled = enabled
         inputCheck.isEnabled = enabled; accuracy.isEnabled = enabled; calibrationAudit.isEnabled = enabled
+        confirmation.isEnabled = enabled
     }
     private fun runSynthetic() {
         if (syntheticRunning || cameraRun != null) return

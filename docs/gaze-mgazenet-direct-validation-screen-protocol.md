@@ -5,6 +5,13 @@ offline evaluator is implemented and host-verified. No Android confirmation
 flow has been implemented, no phone was contacted, and no camera or participant
 session is authorized by this document.
 
+**Confirmation-software follow-up:** the separately authorized isolated flow is
+now implemented and host-verified in
+`gaze-mgazenet-direct-validation-confirmation-software.md`. The frozen protocol
+and thresholds below were not changed. No phone or CAMERA action occurred; the
+next boundary is a separately authorized camera-free setup/layout check of the
+exact APK pair.
+
 Read after `gaze-mgazenet-calibration-observability-v3-analysis.md`. That
 four-session development set rejected the leave-one-complete-target-group-out
 (LOO) diagnostic as a calibration-quality screen. This document does not assign
@@ -185,3 +192,7 @@ participant calibration or active-tracker change. The next bounded action, only
 after explicit approval, is the isolated confirmation software implementation
 and host verification described above. Phone setup and participant collection
 remain later, separate boundaries.
+
+That software action is now complete. Continue from
+`gaze-mgazenet-direct-validation-confirmation-software.md`; phone setup and
+participant collection remain separately unauthorized.
