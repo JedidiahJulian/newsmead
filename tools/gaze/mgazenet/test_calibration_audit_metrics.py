@@ -220,6 +220,18 @@ class CalibrationAuditMetricsTests(unittest.TestCase):
         self.assertEqual(2, result["blocks"][0]["output_age_ms"]["count"])
         self.assertEqual(0, result["blocks_without_coordinates"])
 
+    def test_heldout_primary_excludes_drift_repeat(self):
+        report = fixture()
+        drift = report["verification_blocks"][0]
+        drift_target = drift["target_px"]
+        drift["samples"][0]["point_px"] = [drift_target[0], drift_target[1]+120]
+        result = evaluate(report)["verification"]
+        self.assertEqual(1/3,
+                         result["target_balanced"]["mean_target_median"]["absolute_vertical_lines"])
+        held_out = result["held_out_validation_target_balanced"]
+        self.assertEqual(5, held_out["contributing_target_count"])
+        self.assertEqual(0, held_out["mean_target_median"]["absolute_vertical_lines"])
+
 
 if __name__ == "__main__":
     unittest.main()

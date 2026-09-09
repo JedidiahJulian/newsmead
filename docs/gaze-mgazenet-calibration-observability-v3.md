@@ -6,7 +6,9 @@ corrected exact APK pair, after one retained G991B cross-layout protocol failure
 and repair. CAMERA remained denied. No camera, participant calibration or
 personal data was used. The work does not modify the active NewsMead tracker or
 calibration store or assign an accuracy gate. The real native 16-fold audit path
-now passes with synthetic input on both the A56 and G991B.
+now passes with synthetic input on both the A56 and G991B. The subsequent
+camera-free four-session collection protocol is frozen in
+`gaze-mgazenet-calibration-observability-v3-protocol.md`; it has not been run.
 
 Read after `gaze-mgazenet-post-pilot-review.md`. This is the current MGazeNet
 continuation point.
@@ -260,6 +262,7 @@ The software checkpoint and corrected exact-build camera-disabled setup checks
 on both phones are complete, as is the same-build camera-free native SVR audit
 on both phones. Do not grant CAMERA, run a personal calibration, collect a v3
 record, change a threshold, promote MGazeNet or modify the active tracker
-without a new explicit authorization. The next measurement-validity boundary
-is to draft and freeze the v3 collection protocol without contacting a phone or
-starting a camera run.
+without a new explicit authorization. The v3 protocol is now frozen, without
+contacting a phone or starting a camera run. Its next boundary is separate
+authorization for each of four predeclared development sessions, followed by a
+camera-free analysis only after all four attempts are complete.

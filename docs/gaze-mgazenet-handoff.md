@@ -105,6 +105,22 @@ these timings are descriptive and establish no speed or accuracy gate. The next
 boundary is a camera-free draft and freeze of the v3 collection protocol.
 CAMERA grant or any participant run remains separately unauthorized.
 
+**Calibration-observability v3 protocol follow-up:**
+`gaze-mgazenet-calibration-observability-v3-protocol.md` is now the current
+continuation point. The protocol was frozen camera-free before any v3
+participant data. It predeclares exactly four fresh-calibration development
+sessions in alternating device order: G991B round 1, A56 round 1, A56 round 2,
+then G991B round 2. All started attempts and unfavorable results remain; there
+is no automatic replacement, early scoring, threshold, correction or promotion.
+The primary comparison is the target-balanced mean of target-median absolute
+vertical line error for the 16 whole-target LOO folds versus the five held-out
+post-fit validation points, kept separate per session and compared within each
+phone. The `fit_6` repeat remains a separate drift observation. The disclosed
+severe-fatigue context is recorded, never subtracted or used for exclusion.
+No phone was contacted while freezing the protocol. Each participant session
+and CAMERA grant requires new explicit authorization; after all four attempts,
+the next boundary is camera-free analysis.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,
