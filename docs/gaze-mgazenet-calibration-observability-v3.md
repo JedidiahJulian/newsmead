@@ -6,7 +6,7 @@ corrected exact APK pair, after one retained G991B cross-layout protocol failure
 and repair. CAMERA remained denied. No camera, participant calibration or
 personal data was used. The work does not modify the active NewsMead tracker or
 calibration store or assign an accuracy gate. The real native 16-fold audit path
-now passes with synthetic input on the A56; the matching G991B check is pending.
+now passes with synthetic input on both the A56 and G991B.
 
 Read after `gaze-mgazenet-post-pilot-review.md`. This is the current MGazeNet
 continuation point.
@@ -226,8 +226,19 @@ are descriptive execution timings, not a speed or accuracy gate. CAMERA had
 runtime grant `false` and effective app-op `ignore`; the test used no camera,
 image, landmark, participant feature or personal model and wrote no evidence
 record. CAMERA was re-denied afterward, both packages were force-stopped, and
-the benchmark process was absent. A matching run on the G991B remains required
-before this native-execution checkpoint is complete.
+the benchmark process was absent.
+
+The same exact app and instrumentation APKs were then installed in place on the
+G991B. CAMERA had runtime grant `false` and effective app-op `ignore` before the
+test. The same single native test passed in 3.608 seconds; the sixteen-fold audit
+took 3,300.128 ms and the final 720-row fit took 226.245 ms. It exercised the
+same complete-target omissions, finite predictions, final fit and cleanup
+assertions, with no speed gate. It used no camera, image, landmark, participant
+feature or personal model and wrote no evidence record. CAMERA was explicitly
+revoked and set to `ignore` afterward, both packages were force-stopped, and the
+benchmark process was confirmed absent. The historical app-op `allow` entry did
+not advance. This completes the camera-free native-execution checkpoint on both
+phones.
 
 ## Files in this checkpoint
 
@@ -246,9 +257,9 @@ before this native-execution checkpoint is complete.
 ## Authorization boundary and next decision
 
 The software checkpoint and corrected exact-build camera-disabled setup checks
-on both phones are complete. The native SVR audit passes on the A56 and awaits
-the same camera-free run on the G991B. Do not grant CAMERA, run a personal
-calibration, collect a v3 record, change a threshold, promote MGazeNet or modify
-the active tracker without a new explicit authorization. After the G991B native
-check, a frozen v3 collection protocol—not an immediate camera run—is the next
-measurement-validity boundary.
+on both phones are complete, as is the same-build camera-free native SVR audit
+on both phones. Do not grant CAMERA, run a personal calibration, collect a v3
+record, change a threshold, promote MGazeNet or modify the active tracker
+without a new explicit authorization. The next measurement-validity boundary
+is to draft and freeze the v3 collection protocol without contacting a phone or
+starting a camera run.

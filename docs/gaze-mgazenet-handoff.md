@@ -94,8 +94,15 @@ boundary is complete. A new camera-free `CalibrationAuditNativeTest` then ran
 the real OpenCV path on the A56: sixteen whole-target folds of 675 rows produced
 45 finite predictions each in 4,899.515 ms, and the final 720-row fit completed
 in 316.651 ms. Cleanup passed, CAMERA stayed denied, no record was written and
-processes were stopped. The matching G991B native run remains pending with test
-APK hash `b3d1e229f9b181faab93e503dd2ffa10870cf5dae3d5f6699f6fd0380c43621f`.
+processes were stopped. The matching test APK hash is
+`b3d1e229f9b181faab93e503dd2ffa10870cf5dae3d5f6699f6fd0380c43621f`.
+The same test then passed on the G991B: the sixteen-fold audit took 3,300.128 ms,
+the final fit took 226.245 ms and total test time was 3.608 seconds. CAMERA was
+denied before and after, no record or personal data was produced, cleanup
+passed, and both packages were force-stopped. The historical app-op `allow`
+entry did not advance. The two-phone native-execution checkpoint is complete;
+these timings are descriptive and establish no speed or accuracy gate. The next
+boundary is a camera-free draft and freeze of the v3 collection protocol.
 CAMERA grant or any participant run remains separately unauthorized.
 
 ## Goal and authority
