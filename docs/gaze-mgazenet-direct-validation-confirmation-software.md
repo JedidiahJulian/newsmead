@@ -124,7 +124,7 @@ and not files to stage.
 ## Current authorization boundary
 
 The software-only and separately authorized two-phone camera-free checks are
-complete. Continue from
-`gaze-mgazenet-direct-validation-confirmation-device-check.md` for the exact
-rebuilt APK identities and device evidence. Any participant session and CAMERA
-grant remain later, separate decisions.
+complete. Subsequent separately authorized collection also completed before
+the frozen scoring. Continue from
+`gaze-mgazenet-direct-validation-confirmation-analysis.md`; its inconclusive
+result does not authorize model promotion or an active-tracker change.

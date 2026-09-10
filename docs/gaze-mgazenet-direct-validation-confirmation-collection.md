@@ -1,10 +1,10 @@
 # MGazeNet direct-validation confirmation collection — 2026-09-10
 
-Status: three of the four frozen confirmation attempts are complete and
-preserved without scoring. Both G991B orders and A56 confirmation 1 used their
-required counterbalanced orders. Only A56 confirmation 2 remains. No spatial
-result has been inspected or exposed, and the active NewsMead tracker under
-`app/` remains unchanged.
+Status: all four frozen confirmation attempts are complete and hash-preserved.
+Only after the fourth record was secured were all four independently scored.
+The preregistered comparison is inconclusive; continue from
+`gaze-mgazenet-direct-validation-confirmation-analysis.md`. The active NewsMead
+tracker under `app/` remains unchanged.
 
 Read after
 `gaze-mgazenet-direct-validation-confirmation-device-check.md`. The software and
@@ -113,17 +113,48 @@ The collector verified the matching device-written/local hash, complete
 identity, privacy, hidden-result, no-correction and null-decision contracts.
 No scorer was run and no spatial value was inspected.
 
+## Retained attempt 4 — A56 confirmation 2
+
+The final attempt began approximately 15.14 minutes after the estimated G991B
+confirmation-2 terminal time, exceeding the frozen ten-minute between-session
+minimum. The A56 `R5CY40Y2C5W` baseline had CAMERA denied/effectively ignored,
+both processes absent, and only its already-preserved confirmation-1 device
+record. The same exact app APK was reinstalled. The setup used:
+
+- run label `a56_confirmation_2`;
+- device identity `samsung/SM-A566B`;
+- validation order `reverse_then_forward`; and
+- protocol/schema `mgazenet_direct_validation_confirmation_v1`.
+
+The participant confirmed the conditions remained unchanged: no glasses,
+approximately 30 cm with ordinary distance variation, medium screen brightness,
+the same lighted room, daytime and more fatigue. The app reported completion.
+CAMERA was immediately re-denied/effectively ignored, both processes were
+force-stopped and absent, and the two expected A56 device record IDs were
+present.
+
+| Field | Value |
+| --- | --- |
+| Session ID | `1789000895500_8f468e21-5e04-4a6a-a46a-c75b2001a088` |
+| Outcome | `complete` |
+| Raw report SHA-256 | `420c99582445feff2a87521ecadc6b6b3dbe23ded27ac3b0bc4fab3d10cd3ca5` |
+| Local evidence | `diagnostics-local/2026-09-10/mgazenet-direct-validation-confirmation-v1/a56_confirmation_2/1789000895500_8f468e21-5e04-4a6a-a46a-c75b2001a088/` |
+
+The collector verified the matching device-written/local hash, complete
+identity, privacy, hidden-result, no-correction and null-decision contracts.
+At that point all four frozen raw records were preserved, satisfying the
+delayed-analysis boundary. Scoring then proceeded exactly once through the
+frozen independent tools; results are recorded in the analysis document.
+
 ## Frozen sequence state and boundary
 
 | Order | Attempt | Required sweep order | State |
 | ---: | --- | --- | --- |
-| 1 | A56 confirmation 1 | forward, then reverse | complete, unscored |
-| 2 | G991B confirmation 1 | reverse, then forward | complete, unscored |
-| 3 | G991B confirmation 2 | forward, then reverse | complete, unscored |
-| 4 | A56 confirmation 2 | reverse, then forward | pending |
+| 1 | A56 confirmation 1 | forward, then reverse | complete, scored after collection |
+| 2 | G991B confirmation 1 | reverse, then forward | complete, scored after collection |
+| 3 | G991B confirmation 2 | forward, then reverse | complete, scored after collection |
+| 4 | A56 confirmation 2 | reverse, then forward | complete, scored after collection |
 
-Permit at least ten minutes away from the target task before A56 confirmation
-2; longer delays or a different day are valid. Its required order is reverse
-then forward. The remaining attempt requires the A56 and a separate
-participant/CAMERA authorization. Do not score early, substitute orders, omit a
-retained failure or automatically rerun an unfavorable or fatigued attempt.
+Collection is closed with exactly the four planned complete attempts. Continue
+from `gaze-mgazenet-direct-validation-confirmation-analysis.md`. Do not add or
+replace attempts, change thresholds, or tune against this evidence set.

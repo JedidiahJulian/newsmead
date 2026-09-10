@@ -235,6 +235,21 @@ the target task, the last frozen attempt is A56 `a56_confirmation_2`, reverse
 then forward, with separate authorization. Never stage ignored
 `diagnostics-local` evidence.
 
+**Direct-validation confirmation analysis follow-up:**
+`gaze-mgazenet-direct-validation-confirmation-analysis.md` is now the current
+continuation point. A56 `a56_confirmation_2` completed reverse-then-forward
+under the same declared conditions after approximately 15.14 minutes; raw
+session/hash are `1789000895500_8f468e21-5e04-4a6a-a46a-c75b2001a088` /
+`420c99582445feff2a87521ecadc6b6b3dbe23ded27ac3b0bc4fab3d10cd3ca5`.
+Only after all four hashes were preserved, the frozen scorer classified every
+screen and every independent confirmation as fail: four true rejections, zero
+true acceptances, zero false acceptances and zero false rejections. The frozen
+comparator therefore returns `inconclusive`, not support for the proposed next
+model comparison. Every run passed coverage, but every run exceeded the
+1.2-line regional guard. The current MGazeNet screen is not validated and the
+active tracker remains unchanged. Do not tune thresholds, add/replay attempts
+or infer that MGazeNet was compared head-to-head with the active model.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,

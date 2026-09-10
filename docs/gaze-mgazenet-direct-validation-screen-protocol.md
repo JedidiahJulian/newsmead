@@ -187,8 +187,8 @@ or population generalization.
 
 ## Current authorization boundary
 
-The software action and separately authorized two-phone camera-free device check
-are complete. Continue from
-`gaze-mgazenet-direct-validation-confirmation-device-check.md`. Participant
-collection, CAMERA grant and active-tracker changes remain separate and
-unauthorized.
+The software action, two-phone camera-free check and subsequent separately
+authorized four-session collection are complete. Continue from
+`gaze-mgazenet-direct-validation-confirmation-analysis.md`. The frozen result is
+inconclusive and does not authorize model promotion or an active-tracker
+change.
