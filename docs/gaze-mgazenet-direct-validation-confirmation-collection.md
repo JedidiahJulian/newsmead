@@ -1,9 +1,10 @@
 # MGazeNet direct-validation confirmation collection — 2026-09-10
 
-Status: one of the four frozen confirmation attempts is complete and preserved
-without scoring. A56 confirmation 1 used the required forward-then-reverse
-order. Three attempts remain. No spatial result has been inspected or exposed,
-and the active NewsMead tracker under `app/` remains unchanged.
+Status: two of the four frozen confirmation attempts are complete and preserved
+without scoring. A56 confirmation 1 and G991B confirmation 1 used their required
+counterbalanced orders. Two attempts remain. No spatial result has been
+inspected or exposed, and the active NewsMead tracker under `app/` remains
+unchanged.
 
 Read after
 `gaze-mgazenet-direct-validation-confirmation-device-check.md`. The software and
@@ -52,17 +53,48 @@ values remain unexamined until all four frozen attempts have terminated and
 their hashes are preserved. The ignored `diagnostics-local` evidence must not
 be staged.
 
-## Remaining frozen sequence and boundary
+## Retained attempt 2 — G991B confirmation 1
 
-| Next order | Attempt | Required sweep order | State |
+The second attempt began approximately 17.36 minutes after the estimated A56
+terminal time, exceeding the frozen ten-minute separation. The G991B
+`R5CR60YSJ2X` baseline had CAMERA denied/effectively ignored, absent benchmark
+processes and no `files/confirmation` directory. The same exact app APK was
+reinstalled. The setup used:
+
+- run label `g991b_confirmation_1`;
+- device identity `samsung/SM-G991B`;
+- validation order `reverse_then_forward`; and
+- protocol/schema `mgazenet_direct_validation_confirmation_v1`.
+
+The participant declared the same conditions as attempt 1: no glasses,
+approximately 30 cm with ordinary distance variation, medium screen brightness,
+the same lighted room, daytime and more fatigue. The app reported completion.
+CAMERA was immediately re-denied/effectively ignored and both package processes
+were force-stopped and absent.
+
+| Field | Value |
+| --- | --- |
+| Session ID | `1788998305355_3d94ff60-2cd2-4969-97ce-57d8903b7eaa` |
+| Outcome | `complete` |
+| Raw report SHA-256 | `b9e42e276239b9f1dc1dbb3041a91d03c7e1eeadfc0c474aa8a439bb1b4ad2d6` |
+| Local evidence | `diagnostics-local/2026-09-10/mgazenet-direct-validation-confirmation-v1/g991b_confirmation_1/1788998305355_3d94ff60-2cd2-4969-97ce-57d8903b7eaa/` |
+
+The collector verified the matching device-written/local hash, complete
+identity, privacy, hidden-result, no-correction and null-decision contracts.
+No scorer was run and no spatial value was inspected.
+
+## Frozen sequence state and boundary
+
+| Order | Attempt | Required sweep order | State |
 | ---: | --- | --- | --- |
-| 2 | G991B confirmation 1 | reverse, then forward | pending |
+| 1 | A56 confirmation 1 | forward, then reverse | complete, unscored |
+| 2 | G991B confirmation 1 | reverse, then forward | complete, unscored |
 | 3 | G991B confirmation 2 | forward, then reverse | pending |
 | 4 | A56 confirmation 2 | reverse, then forward | pending |
 
-Permit at least ten minutes away from the target task before G991B confirmation
-1. Permit at least fifteen minutes between rounds before G991B confirmation 2;
-longer delays or a different day are valid. Each remaining attempt requires the
-correct connected phone and a separate participant/CAMERA authorization. Do not
-score early, substitute orders, omit a retained failure or automatically rerun
-an unfavorable or fatigued attempt.
+Permit at least fifteen minutes away from the target task between the end of
+round 1 and G991B confirmation 2; longer delays or a different day are valid.
+The round-2 G991B order is forward then reverse. Each remaining attempt requires
+the correct connected phone and a separate participant/CAMERA authorization.
+Do not score early, substitute orders, omit a retained failure or automatically
+rerun an unfavorable or fatigued attempt.
