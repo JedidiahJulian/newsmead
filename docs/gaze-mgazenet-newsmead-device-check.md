@@ -106,6 +106,33 @@ instrumentation output and coordinate-only log output are retained under ignored
 `diagnostics-local/2026-09-10/mgazenet-primary-device-check/g991b/` and must not
 be staged. No camera images or participant feature/model contents were copied.
 
+## Fresh-process persistence follow-up
+
+A separate camera-free instrumentation test now splits synthetic save and load
+across two explicitly orchestrated invocations. The preparation invocation saves
+a deterministic synthetic two-SVR bundle and hashes its finite predictions in a
+dedicated `mgazenet-process-restart-test-v1` no-backup test namespace. After the
+target package is force-stopped, the verification invocation must have a
+different process ID, load the unchanged bundle and reproduce the exact
+prediction hash. It then deletes the entire synthetic test namespace. Running
+the class without an explicit `prepare` or `verify` phase skips it, preventing a
+normal whole-suite invocation from claiming an in-process result as a restart.
+
+The production APK remained unchanged at
+`131f8d96f9bdc3f5a5c16855aa6347e119fd07e96609cba9f6792b161c682fd9`.
+The rebuilt Android-test APK SHA-256 is
+`3036a45ff50af7ca59737079cc9500c031ccd3a9e07c21e3f75733efec0b0945`.
+The pinned vendor check and Android-test APK assembly passed.
+
+On the SM-G991B, preparation passed in process `11087` and verification passed
+in process `11659`. The calibration artifact hash and prediction hash matched
+exactly after the forced stop. The synthetic namespace was absent afterward;
+all 13 pre-existing protected file hashes remained unchanged; both packages
+were stopped; and CAMERA remained `granted=false` and effectively `ignore`.
+Evidence is retained under ignored
+`diagnostics-local/2026-09-10/mgazenet-process-restart/g991b-final/` and must not
+be staged. The same finalized test remains pending on the A56.
+
 ## Interpretation and next boundary
 
 Both phones passed all nine camera-disabled checks using the same exact APK pair.
@@ -113,4 +140,6 @@ This establishes executable synthetic model persistence and the checked layout
 behavior on these devices, not calibrated gaze
 accuracy, reading-event validity or population reliability. The known APK
 16 KB page-size limitations remain; a 4 KB device pass does not resolve them.
+Fresh-process persistence has additionally passed on the G991B and remains to be
+repeated on the A56 before that requirement is closed on both devices.
 CAMERA and participant calibration remain separate later authorization boundaries.
