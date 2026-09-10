@@ -223,11 +223,16 @@ After approximately 17.36 minutes, G991B `g991b_confirmation_1` completed the
 required reverse-then-forward order under the same declared conditions. Its raw
 session/hash are `1788998305355_3d94ff60-2cd2-4969-97ce-57d8903b7eaa` /
 `b9e42e276239b9f1dc1dbb3041a91d03c7e1eeadfc0c474aa8a439bb1b4ad2d6`.
-Both records are complete and hash-verified but unscored, with spatial results
-unexamined. CAMERA was re-denied and packages were force-stopped after each.
-Two of four attempts are complete. After at least fifteen minutes away from the
-target task, the next frozen attempt is G991B `g991b_confirmation_2`, forward
-then reverse, with separate authorization. Never stage ignored
+After approximately 18.24 minutes between rounds, G991B
+`g991b_confirmation_2` completed the required forward-then-reverse order under
+the same conditions. Its raw session/hash are
+`1788999691168_0203775a-cb4e-4528-a1f4-875fc5137f09` /
+`d79a86e2a1ea70e89186856f204ccbeb7bb70cd5ba9fe6887600dccfd9202011`.
+All three records are complete and hash-verified but unscored, with spatial
+results unexamined. CAMERA was re-denied and packages were force-stopped after
+each. Three of four attempts are complete. After at least ten minutes away from
+the target task, the last frozen attempt is A56 `a56_confirmation_2`, reverse
+then forward, with separate authorization. Never stage ignored
 `diagnostics-local` evidence.
 
 ## Goal and authority
