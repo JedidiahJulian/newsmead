@@ -11,6 +11,11 @@ known-target reading result.
 No phone, camera, calibration, participant session, model fit, threshold change,
 active-tracker change, staging or commit occurred during this audit.
 
+**Prospective protocol follow-up:**
+`gaze-current-vs-mgazenet-comparison-protocol.md` freezes the matched four-slot
+known-target design, exact estimator baselines, endpoints and pre-collection
+software controls. It authorizes no participant or CAMERA action.
+
 ## Direct answer
 
 The current NewsMead system has been tested repeatedly. The retained archive
