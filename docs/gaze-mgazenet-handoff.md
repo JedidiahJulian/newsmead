@@ -273,6 +273,20 @@ five-point screen as a selector, not to a head-to-head model outcome. No phone,
 camera, participant run, threshold, model or tracker change occurred during the
 synthesis.
 
+**NewsMead integration handoff follow-up:**
+`gaze-mgazenet-newsmead-integration-handoff.md` is now the current continuation
+point for a new chat. The user chose to make MGazeNet the primary gaze path on
+the dedicated `mgazenet-feasibility` branch instead of adding a permanent
+runtime research-backend selector. The current implementation remains preserved
+on `gaze-pipeline-improvements`; immediately before the handoff,
+`git diff gaze-pipeline-improvements..HEAD -- app` was empty. The integration
+must use a distinct hash-bound MGazeNet calibration store, never load or erase
+the current mapper calibration, preserve full-screen coordinate/AOI/RSI
+contracts, retain no frames/crops/landmarks/feature rows, and verify synthetic
+SVR persistence plus host builds before any phone action. The handoff itself
+does not authorize `app/` edits, installation, CAMERA or participant data; the
+new chat should receive explicit software authorization first.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,
