@@ -131,7 +131,16 @@ all 13 pre-existing protected file hashes remained unchanged; both packages
 were stopped; and CAMERA remained `granted=false` and effectively `ignore`.
 Evidence is retained under ignored
 `diagnostics-local/2026-09-10/mgazenet-process-restart/g991b-final/` and must not
-be staged. The same finalized test remains pending on the A56.
+be staged.
+
+On the SM-A566B, preparation passed in process `30688` and verification passed
+in process `30815`. The calibration artifact hash and device-local prediction
+hash matched exactly after the forced stop. The synthetic namespace was absent
+afterward; all 122 pre-existing protected file hashes remained unchanged; both
+packages were stopped; and CAMERA remained `granted=false` and effectively
+`ignore`. Evidence is retained under ignored
+`diagnostics-local/2026-09-10/mgazenet-process-restart/a56-final/` and must not
+be staged.
 
 ## Interpretation and next boundary
 
@@ -140,6 +149,5 @@ This establishes executable synthetic model persistence and the checked layout
 behavior on these devices, not calibrated gaze
 accuracy, reading-event validity or population reliability. The known APK
 16 KB page-size limitations remain; a 4 KB device pass does not resolve them.
-Fresh-process persistence has additionally passed on the G991B and remains to be
-repeated on the A56 before that requirement is closed on both devices.
+Fresh-process persistence additionally passed on both phones.
 CAMERA and participant calibration remain separate later authorization boundaries.

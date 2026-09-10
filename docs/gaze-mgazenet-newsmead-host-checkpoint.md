@@ -6,8 +6,8 @@ SM-G991B. See
 `gaze-mgazenet-newsmead-device-check.md` for installation, permission,
 data-preservation and both phones' results. The host-only account below remains
 the historical software checkpoint. A later synthetic save/force-stop/load test
-also passed across distinct Android processes on the SM-G991B; its A56 repeat is
-pending and is documented in the device-check report.
+also passed across distinct Android processes on both phones, as documented in
+the device-check report.
 
 Software-only integration is implemented in the existing `mgazenet-feasibility`
 worktree. Starting HEAD was `fa8acbfcd68fbed08a9e87340751d97becfa4cb1` and the
