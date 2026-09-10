@@ -108,11 +108,21 @@ summary hash matches the corresponding output file. `git diff --check` passes,
 the active `app/` tracker remains unchanged, CAMERA is denied on the last-used
 A56, and both benchmark packages were stopped after collection.
 
-The frozen result does not support proceeding automatically to the proposed
-known-target current-model/MGazeNet comparison. Do not lower the regional limit,
-discard fatigued sessions, add repetitions, tune against these targets or call
-the current MGazeNet screen validated. The evidence-backed default is to leave
-the active gaze system unchanged.
+The frozen result does not support proceeding automatically to a new
+participant known-target current-model/MGazeNet comparison. Do not lower the
+regional limit, discard fatigued sessions, add repetitions, tune against these
+targets or call the current MGazeNet screen validated. Leaving the active gaze
+system unchanged is an authorization and measurement-validity boundary, not a
+finding that it outperformed MGazeNet.
+
+A subsequent camera-free synthesis of the retained current-model and MGazeNet
+16-point evidence is in `gaze-current-vs-mgazenet-evidence.md`. On the closest
+normalizable five-target stationary metric, the recorded distribution leans in
+MGazeNet's favor, including an A56-only comparison. It remains observational,
+not a contemporaneous paired test; the fractional target pattern matched but
+the actual viewports differed. MGazeNet also still lacks known-target reading
+evidence. The `inconclusive` result in this document classifies the proposed
+screen as a selector; it must not be misreported as a current-model victory.
 
 Any further MGazeNet work requires a separately justified, materially distinct
 prospective hypothesis and a newly frozen protocol before new participant data.

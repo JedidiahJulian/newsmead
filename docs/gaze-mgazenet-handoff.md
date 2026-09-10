@@ -250,6 +250,29 @@ model comparison. Every run passed coverage, but every run exceeded the
 active tracker remains unchanged. Do not tune thresholds, add/replay attempts
 or infer that MGazeNet was compared head-to-head with the active model.
 
+**Current-versus-MGazeNet evidence-synthesis follow-up:**
+`gaze-current-vs-mgazenet-evidence.md` is now the current camera-free
+continuation point. It inventories all thirteen accepted complete current
+eye-local 16-point calibrations, separates the eleven legacy pre-coordinate-
+repair records from the two clean `screen_px_v1` sessions, and compares the
+latter with all eight MGazeNet sessions that reused the same sixteen-fit/five-
+held-out physical geometry. On the closest normalized stationary measure, the
+MGazeNet distribution is descriptively better: median session target-balanced
+mean error is 0.721 lines across eight MGazeNet sessions versus 1.694 across the
+two clean current sessions; the A56-only MGazeNet value is 0.910. Median session
+worst-target error is 1.620 lines for MGazeNet, 1.879 for A56-only MGazeNet and
+3.183 for the current post-repair set. The fractional target pattern matched,
+but MGazeNet's physical viewport was narrower. A separate near-matched A56
+centre-target comparison in raw pixels also leans modestly toward MGazeNet:
+136.410 px median across four sessions versus 162.379 across the two current
+sessions. These unequal, noncontemporaneous samples are not a matched model-
+selection experiment, and MGazeNet has no known-target reading result.
+Therefore the active system remains unchanged procedurally, not because it was
+shown superior. The prior `inconclusive` label applies to validation of the
+five-point screen as a selector, not to a head-to-head model outcome. No phone,
+camera, participant run, threshold, model or tracker change occurred during the
+synthesis.
+
 ## Goal and authority
 
 Find the best feasible on-device gaze approach under the project's actual accuracy, FPS,
