@@ -69,17 +69,48 @@ retained under ignored
 `diagnostics-local/2026-09-10/mgazenet-primary-device-check/a56/`. They must not
 be staged. No camera images or participant feature/model contents were copied.
 
-## SM-G991B: pending
+## SM-G991B: passed
 
-The user can connect only one phone at a time. After the A56 was safely closed,
-the user was asked to switch to the unlocked SM-G991B. Its current connection,
-installed package, permissions and data are not inferred from historical state.
-The same exact camera-disabled check remains to be completed there.
+The user connected the second phone after committing the A56 report as
+`cc3f4db`. The worktree was clean and the local APK hashes were unchanged.
+
+- Device: `SM-G991B`, serial `R5CR60YSJ2X`, 4096-byte page size, unlocked.
+- Prior installed NewsMead APK SHA-256:
+  `f417ceece6d6654e9b66f0f1e153be7b084baf605c78f241b53414c9856426fb`.
+- CAMERA was initially granted. Before installation, NewsMead was force-stopped,
+  the runtime grant was revoked, and the effective CAMERA app-op set to `ignore`.
+- Both `install -r` updates succeeded without uninstalling or resetting app data.
+  Device-side hashes of both installed APKs matched the exact pair above.
+- All **9 tests passed in 5.065 seconds**, with no failed or repeated test run.
+- All **13 pre-existing protected gaze/calibration/reading file hashes** matched
+  after installation and after testing. No new protected file or personal
+  MGazeNet calibration was created.
+- Both packages were force-stopped afterward; the NewsMead process was absent.
+  CAMERA remained `granted=false` and effectively `ignore`.
+- The historical CAMERA `allow` entry remained approximately four days old; its
+  age increased throughout these checks and no new access was recorded.
+
+Measured layout evidence:
+
+| Layout | Physical geometry |
+| --- | --- |
+| Calibration view | origin `(0,80)`, size `1080×2320`, display `1080×2400` |
+| Calibration centre | `(540,1240)` physical pixels |
+| Artificial inset window | origin `(91,251)`, size `650×850`; scrolled AOI and dot checks passed |
+| Reading root | origin `(0,0)`, size `1080×2400` |
+| Reading viewport | origin `(0,238)`, size `1080×1414` |
+
+The checked view origins differ from the A56 and are measured on this phone.
+No calibration target sequence was started. Hash-only snapshots,
+instrumentation output and coordinate-only log output are retained under ignored
+`diagnostics-local/2026-09-10/mgazenet-primary-device-check/g991b/` and must not
+be staged. No camera images or participant feature/model contents were copied.
 
 ## Interpretation and next boundary
 
-The A56 closes the first phone's native/setup check. It establishes executable
-synthetic model persistence and the checked layout behavior, not calibrated gaze
+Both phones passed all nine camera-disabled checks using the same exact APK pair.
+This establishes executable synthetic model persistence and the checked layout
+behavior on these devices, not calibrated gaze
 accuracy, reading-event validity or population reliability. The known APK
 16 KB page-size limitations remain; a 4 KB device pass does not resolve them.
 CAMERA and participant calibration remain separate later authorization boundaries.

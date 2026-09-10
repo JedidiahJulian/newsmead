@@ -1,9 +1,10 @@
 # MGazeNet primary integration: host checkpoint — 2026-09-10
 
 **Device-check follow-up:** after commit `5811486` and separate authorization,
-the exact APK pair passed all nine camera-disabled tests on the A56. See
+the exact APK pair passed all nine camera-disabled tests on both the A56 and
+SM-G991B. See
 `gaze-mgazenet-newsmead-device-check.md` for installation, permission,
-data-preservation and second-phone status. The host-only account below remains
+data-preservation and both phones' results. The host-only account below remains
 the historical software checkpoint.
 
 Software-only integration is implemented in the existing `mgazenet-feasibility`
