@@ -38,6 +38,10 @@ class CalibrationView @JvmOverloads constructor(
     private var confirmAnimator: ValueAnimator? = null
     private var focusAnimator: ValueAnimator? = null
     private var miniStates: List<MiniDotState> = emptyList()
+    private var pendingTargetDraw: (() -> Unit)? = null
+
+    /** Acknowledge actual drawing; callers still account separately for attention/settle time. */
+    fun onNextTargetDraw(callback: () -> Unit) { pendingTargetDraw = callback }
 
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = RING_COLOR
@@ -106,6 +110,7 @@ class CalibrationView @JvmOverloads constructor(
     }
 
     fun hideTarget() {
+        pendingTargetDraw = null
         appearAnimator?.cancel()
         confirmAnimator?.cancel()
         focusAnimator?.cancel()
@@ -153,6 +158,7 @@ class CalibrationView @JvmOverloads constructor(
         canvas.drawCircle(x, y, RING_RADIUS_DP * density * scale, ringPaint)
         drawCrosshair(canvas, x, y, scale)
         drawCenterCross(canvas, x, y)
+        pendingTargetDraw?.let { callback -> pendingTargetDraw = null; post { callback() } }
         if (confirmProgress > 0f) {
             confirmPaint.alpha = (200 * confirmProgress).toInt()
             canvas.drawCircle(x, y, RING_RADIUS_DP * density, confirmPaint)

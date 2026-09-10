@@ -271,6 +271,23 @@ class ReadingValidationSessionLog(
         put("${prefix}_word_end", target.wordEnd)
     }
 
+    /** Capture/delivery and explicit gaps accompany coordinates; never contains model inputs. */
+    fun logMgazeNetObservation(captureMs: Double?, outputMs: Double, reason: String,
+        rawX: Float?, rawY: Float?, arrivals: Long?, busyDrops: Long?) {
+        if (finished) return
+        write(JSONObject().apply {
+            put("record_type","mgazenet_source")
+            putNum("capture_elapsed_ms",captureMs)
+            putNum("output_elapsed_ms",outputMs)
+            putNum("output_age_ms",captureMs?.let { outputMs-it })
+            put("reason",reason)
+            putNum("raw_screen_x",rawX); putNum("raw_screen_y",rawY)
+            putNum("analyzer_arrivals",arrivals); putNum("observed_busy_drops",busyDrops)
+            put("operational_expiry_ms",500)
+            put("filter","none")
+        })
+    }
+
     private fun JSONObject.putNum(key: String, value: Number?) {
         val number = value?.toDouble()
         put(key, if (number != null && number.isFinite()) number else JSONObject.NULL)
@@ -290,7 +307,7 @@ class ReadingValidationSessionLog(
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).format(Date(timestampMs))
 
     companion object {
-        const val SCHEMA_VERSION = 5
+        const val SCHEMA_VERSION = 6
         private const val TAG = "ReadingValidation"
     }
 }

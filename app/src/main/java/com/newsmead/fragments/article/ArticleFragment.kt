@@ -33,15 +33,13 @@ import com.newsmead.data.DataHelper
 import com.newsmead.data.DatabaseHelper
 import com.newsmead.data.FirebaseHelper
 import com.newsmead.data.StudyConfig
-import com.newsmead.gaze.CalibrationStore
 import com.newsmead.gaze.AdaptiveScaffoldController
-import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.GazeOverlayView
+import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
+import com.newsmead.gaze.mgazenet.MgazeNetCalibrationStore
 import com.newsmead.gaze.GazeProvider
 import com.newsmead.gaze.GazeTargetStabilizer
 import com.newsmead.gaze.LineAoiMapper
-import com.newsmead.gaze.LocalCalibratedGazeProvider
-import com.newsmead.gaze.LocalGazeSources
 import com.newsmead.gaze.ReadingStateInferencer
 import com.newsmead.gaze.ScaffoldLevel
 import com.newsmead.gaze.ScaffoldUpdate
@@ -68,6 +66,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var articleGazeSink: GazeProvider.OnGaze? = null
     private var gazeOverlay: GazeOverlayView? = null
     private var launchedCalibration = false
+    private var resumeGazeAfterStop = false
     private var rsiInferencer: ReadingStateInferencer? = null
     private var targetStabilizer: GazeTargetStabilizer? = null
     private var stabilityEstimator: WindowedStabilityEstimator? = null
@@ -486,17 +485,26 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     override fun onResume() {
         super.onResume()
+        if (resumeGazeAfterStop && !launchedCalibration) {
+            resumeGazeAfterStop = false
+            binding.root.post {
+                if (isResumed && gazeProvider == null) articleGazeSink?.let { attachLiveGaze(it) }
+            }
+        }
         if (launchedCalibration) {
             launchedCalibration = false
-            // The gaze test/calibration activity shares the CameraX singleton and
-            // releases it (unbindAll) in its OWN onDestroy, which runs *after* this
-            // onResume. Rebinding immediately would be clobbered by that teardown
-            // (the camera would start, then die - requiring a full re-entry). Wait
-            // until the finishing activity is gone, then restart.
+            // Allow the finishing activity's worker to drain its native resources.
             Handler(Looper.getMainLooper()).postDelayed({
-                if (isAdded && !isDetached) restartLiveGazeAfterCalibration()
+                if (isResumed) restartLiveGazeAfterCalibration()
             }, GAZE_RESTART_DELAY_MS)
         }
+    }
+
+    override fun onStop() {
+        resumeGazeAfterStop = gazeProvider != null && !StudyConfig.GAZE_TOUCH_VALIDATION
+        gazeProvider?.stop(); gazeProvider = null
+        gazeOverlay?.clearGaze()
+        super.onStop()
     }
 
     /** Stop live gaze (frees the camera), open the accuracy test, resume on return. */
@@ -833,35 +841,20 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
      * touch input; missing/invalid calibration must be fixed before reading.
      */
     private fun attachLiveGaze(onGaze: GazeProvider.OnGaze) {
-        val issue = CalibrationStore.compatibilityIssue(requireContext())
+        val issue = MgazeNetCalibrationStore(requireContext()).compatibilityIssue(binding.root)
         if (issue != null) {
-            Log.w("GazeAOI", issue)
-            Toast.makeText(context, "Run a fresh 16-point calibration before live reading", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, issue, Toast.LENGTH_LONG).show()
             return
         }
-        val samples = CalibrationStore.load(requireContext())
-        if (samples == null) {
-            Log.w("GazeAOI", "No calibration found; live gaze not started")
-            Toast.makeText(context, "Run gaze calibration before live reading", Toast.LENGTH_LONG).show()
-            return
+        val provider = MgazeNetGazeProvider(requireContext(),binding.root)
+        provider.onFps = { fps -> gazeOverlay?.setFps(fps) }
+        provider.onFailure = { message -> Toast.makeText(context,message,Toast.LENGTH_LONG).show() }
+        provider.onObservation = { observation ->
+            if (observation.reason != "coordinate") gazeOverlay?.clearGaze()
         }
-        try {
-            val rawSource = LocalGazeSources.create(requireContext())
-            rawSource.setOnFps { fps -> activity?.runOnUiThread { gazeOverlay?.setFps(fps) } }
-            val provider = LocalCalibratedGazeProvider(
-                mapper = GazeMapper(samples),
-                rawSource = rawSource,
-                correction = CalibrationStore.loadDriftCorrection(requireContext()),
-                postureProfile = com.newsmead.gaze.PostureProfile.fromCalibration(samples),
-            )
-            provider.setOnGaze { x, y -> activity?.runOnUiThread { onGaze.onGaze(x, y) } }
-            provider.start(viewLifecycleOwner)
-            gazeProvider = provider
-            Log.i("GazeAOI", "Local calibrated gaze started with ${samples.size} calibration samples")
-        } catch (e: Exception) {
-            Log.e("GazeAOI", "Calibration fit failed; live gaze not started", e)
-            Toast.makeText(context, "Gaze calibration is invalid; recalibrate", Toast.LENGTH_LONG).show()
-        }
+        provider.setOnGaze { x,y -> onGaze.onGaze(x,y) }
+        gazeProvider = provider
+        provider.start(viewLifecycleOwner)
     }
 
     /**

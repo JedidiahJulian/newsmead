@@ -78,6 +78,9 @@ class GazeOverlayView @JvmOverloads constructor(
         invalidate()
     }
 
+    /** Clear only the debug gaze dot when the source reports unavailable/stale input. */
+    fun clearGaze() { hasPoint = false; invalidate() }
+
     fun setDebugVisualsEnabled(enabled: Boolean) {
         debugVisualsEnabled = enabled
         invalidate()

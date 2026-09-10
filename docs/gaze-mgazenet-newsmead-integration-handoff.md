@@ -1,5 +1,14 @@
 # MGazeNet-as-primary NewsMead integration handoff — 2026-09-10
 
+**Software integration follow-up:** the user explicitly authorized the software
+work, now completed to the host-build boundary in
+`gaze-mgazenet-newsmead-host-checkpoint.md`. That checkpoint records the primary
+provider wiring, isolated calibration storage, exact test/build evidence and
+unexecuted Android checks. No phone contact, installation, CAMERA use or
+participant calibration occurred. The original handoff below remains the
+requirements and historical starting state, not a claim that `app/` is still
+unchanged.
+
 Status: the MGazeNet feasibility, input, stationary-accuracy and evidence-review
 phases are complete. The next distinct project is to make MGazeNet the primary
 gaze implementation on branch `mgazenet-feasibility`. Do not add a permanent

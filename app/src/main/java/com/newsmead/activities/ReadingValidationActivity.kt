@@ -22,16 +22,14 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.widget.NestedScrollView
 import com.newsmead.data.StudyConfig
 import com.newsmead.databinding.ActivityReadingValidationBinding
-import com.newsmead.gaze.CalibrationStore
 import com.newsmead.gaze.gazeCoordinateFrame
 import com.newsmead.gaze.getVisibleRectOnScreen
 import com.newsmead.gaze.physicalDisplaySize
-import com.newsmead.gaze.GazeMapper
 import com.newsmead.gaze.GazeOverlayView
 import com.newsmead.gaze.GazeTargetStabilizer
+import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
+import com.newsmead.gaze.mgazenet.MgazeNetCalibrationStore
 import com.newsmead.gaze.LineAoiMapper
-import com.newsmead.gaze.LocalCalibratedGazeProvider
-import com.newsmead.gaze.LocalGazeSources
 import com.newsmead.gaze.ReadingValidationCheckpoint
 import com.newsmead.gaze.ReadingValidationLine
 import com.newsmead.gaze.ReadingValidationMetrics
@@ -58,7 +56,7 @@ class ReadingValidationActivity : AppCompatActivity() {
     private val readingVisibleRect = Rect()
     private val metrics = ReadingValidationMetrics()
 
-    private var gazeProvider: LocalCalibratedGazeProvider? = null
+    private var gazeProvider: MgazeNetGazeProvider? = null
     private var gazeOverlay: GazeOverlayView? = null
     private var mapper: LineAoiMapper? = null
     private val stabilizer = GazeTargetStabilizer()
@@ -86,7 +84,6 @@ class ReadingValidationActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityReadingValidationBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         binding.tvValidationText.setTextSize(
             TypedValue.COMPLEX_UNIT_DIP,
@@ -130,40 +127,19 @@ class ReadingValidationActivity : AppCompatActivity() {
     }
 
     private fun showRunSetup() {
-        val issue = CalibrationStore.compatibilityIssue(this)
-        val samples = CalibrationStore.load(this)
-        if (issue != null || samples == null) {
+        val issue = MgazeNetCalibrationStore(this).compatibilityIssue(binding.root)
+        if (issue != null) {
             AlertDialog.Builder(this)
                 .setTitle("Fresh calibration required")
-                .setMessage(issue ?: "The saved calibration cannot be read. Run a fresh 16-point calibration.")
+                .setMessage(issue)
                 .setPositiveButton("OK", null)
                 .show()
             return
         }
         val runNumber = getPreferences(MODE_PRIVATE).getInt(PREF_RUN_COUNT, 0) + 1
         orderVariant = if (runNumber % 2 == 1) "A" else "B"
-        var selectedMode = ReadingVerticalAlignmentMode.OFF
-        AlertDialog.Builder(this)
-            .setTitle("Vertical alignment condition")
-            .setSingleChoiceItems(
-                arrayOf(
-                    "OFF — control; record references only",
-                    "ON — apply the guarded vertical fit",
-                ),
-                0,
-            ) { _, which ->
-                selectedMode = if (which == 1) {
-                    ReadingVerticalAlignmentMode.ON
-                } else {
-                    ReadingVerticalAlignmentMode.OFF
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Next") { _, _ ->
-                verticalAlignmentMode = selectedMode
-                showRunLabelSetup(runNumber, samples.size)
-            }
-            .show()
+        verticalAlignmentMode = ReadingVerticalAlignmentMode.OFF
+        showRunLabelSetup(runNumber,16)
     }
 
     private fun showRunLabelSetup(runNumber: Int, calibrationPointCount: Int) {
@@ -217,10 +193,10 @@ class ReadingValidationActivity : AppCompatActivity() {
             screenWidthPx = displaySize.x,
             screenHeightPx = displaySize.y,
             densityDpi = display.densityDpi,
-            rawFeatureMode = LocalGazeSources.ACTIVE_FEATURE_MODE.logLabel,
+            rawFeatureMode = "mgazenet_258_svr_unfiltered_v1",
             calibrationPointCount = calibrationPointCount,
-            calibrationFingerprint = CalibrationStore.fingerprint(this),
-            driftCorrectionActive = CalibrationStore.loadDriftCorrection(this) != null,
+            calibrationFingerprint = MgazeNetCalibrationStore(this).fingerprint(),
+            driftCorrectionActive = false,
             verticalAlignmentMode = verticalAlignmentMode,
         ).also {
             it.logLayout(
@@ -234,12 +210,12 @@ class ReadingValidationActivity : AppCompatActivity() {
         }
 
         running = true
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         attachGazePipeline()
         showDotPreview()
     }
 
     private fun attachGazePipeline() {
-        val samples = CalibrationStore.load(this) ?: return
         val overlay = GazeOverlayView(this).also { gazeOverlay = it }
         (binding.root as ViewGroup).addView(
             overlay,
@@ -256,19 +232,23 @@ class ReadingValidationActivity : AppCompatActivity() {
         binding.tvValidationCountdown.bringToFront()
 
         mapper = LineAoiMapper(binding.tvValidationText)
-        val rawSource = LocalGazeSources.create(this)
-        rawSource.setOnFps { fps ->
-            runOnUiThread { sessionLog?.logFps(fps, phase, stepId, trialState) }
+        val provider = MgazeNetGazeProvider(this,binding.root)
+        provider.onFps = { fps -> sessionLog?.logFps(fps,phase,stepId,trialState) }
+        provider.onFailure = { message ->
+            Toast.makeText(this,message,Toast.LENGTH_LONG).show()
+            handler.removeCallbacksAndMessages(null)
+            sessionLog?.finish("mgazenet_failed",metrics.summary())
+            finished = true; running = false
+            finish()
         }
-        val provider = LocalCalibratedGazeProvider(
-            mapper = GazeMapper(samples),
-            rawSource = rawSource,
-            correction = CalibrationStore.loadDriftCorrection(this),
-            postureProfile = com.newsmead.gaze.PostureProfile.fromCalibration(samples),
-        )
+        provider.onObservation = { observation ->
+            sessionLog?.logMgazeNetObservation(observation.captureMs,observation.outputMs,observation.reason,
+                observation.rawX,observation.rawY,observation.arrivals,observation.busyDrops)
+            if (observation.reason != "coordinate") gazeOverlay?.clearGaze()
+        }
         provider.setOnGaze { x, y -> runOnUiThread { onGaze(x, y) } }
-        provider.start(this)
         gazeProvider = provider
+        provider.start(this)
     }
 
     private fun showDotPreview() {
@@ -734,6 +714,17 @@ class ReadingValidationActivity : AppCompatActivity() {
             .setNegativeButton("Continue", null)
             .setPositiveButton("Stop and save") { _, _ -> finish() }
             .show()
+    }
+
+    override fun onStop() {
+        if (running && !finished) {
+            handler.removeCallbacksAndMessages(null)
+            gazeProvider?.stop(); gazeProvider = null
+            sessionLog?.finish("interrupted",metrics.summary())
+            finished = true; running = false
+        }
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onStop()
     }
 
     companion object {
