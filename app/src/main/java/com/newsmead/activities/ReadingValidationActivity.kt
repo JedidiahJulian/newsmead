@@ -35,6 +35,7 @@ import com.newsmead.gaze.ComparisonRecordBinding
 import com.newsmead.gaze.ComparisonRuntime
 import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
 import com.newsmead.gaze.mgazenet.MgazeNetCalibrationStore
+import com.newsmead.gaze.mgazenet.CalibrationIdentity
 import com.newsmead.gaze.LineAoiMapper
 import com.newsmead.gaze.ReadingValidationCheckpoint
 import com.newsmead.gaze.ReadingValidationLine
@@ -174,7 +175,7 @@ class ReadingValidationActivity : AppCompatActivity() {
         val runNumber = getPreferences(MODE_PRIVATE).getInt(PREF_RUN_COUNT, 0) + 1
         orderVariant = if (runNumber % 2 == 1) "A" else "B"
         verticalAlignmentMode = ReadingVerticalAlignmentMode.OFF
-        showRunLabelSetup(runNumber,16)
+        showRunLabelSetup(runNumber, CalibrationIdentity.FIT_TARGET_COUNT)
     }
 
     private fun showRunLabelSetup(runNumber: Int, calibrationPointCount: Int) {

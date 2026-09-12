@@ -11,14 +11,24 @@ class CalibrationContractTest {
     @Test fun fullViewportOriginAndOrderedGeometryRoundTrip() {
         val id = identity()
         assertEquals(id,CalibrationIdentity.parse(id.canonical()))
-        assertEquals(16,id.targets.distinct().size)
+        assertEquals(13,id.targets.distinct().size)
+        assertEquals(listOf(1,5,9,12,16,19,27,30,34,37,41,45,23),
+            CalibrationIdentity.UPSTREAM_GRID_INDICES)
+        assertTrue(CalibrationIdentity.TARGET_CUE_MS < MgazeNetCalibrationSession.SETTLE_MS)
+        assertTrue(CalibrationIdentity.TARGET_FRACTIONS.all { (x, y) ->
+            x in .10f..90f/100f && y in .10f..90f/100f
+        })
+        assertEquals(108f,id.targets.first().x,.001f)
         assertEquals(324.9f,id.targets.first().y,.001f)
-        assertEquals(2116.1f,id.targets.last().y,.001f)
-        assertEquals(id.targets[0].y,id.targets[3].y,0f)
-        assertTrue(id.targets[4].y > id.targets[3].y)
+        assertEquals(540f,id.targets.last().x,.001f)
+        assertEquals(1220.5f,id.targets.last().y,.001f)
+        assertEquals(id.targets[0].y,id.targets[2].y,0f)
+        assertTrue(id.targets[3].y > id.targets[2].y)
+        rejected { CalibrationIdentity.parse(id.canonical().replace(CalibrationIdentity.VERSION,"newsmead_mgazenet_calibration_v1")) }
         rejected { CalibrationIdentity.parse(id.canonical().replace("screen_px_v1","legacy")) }
         rejected { CalibrationIdentity.parse(id.canonical().replace(CalibrationIdentity.MODEL,"0".repeat(64))) }
-        rejected { CalibrationIdentity.parse(id.canonical().replace("108.0,324.9","109.0,324.9")) }
+        val first = id.targets.first()
+        rejected { CalibrationIdentity.parse(id.canonical().replace("${first.x},${first.y}","${first.x+1},${first.y}")) }
     }
     @Test fun bundleRejectsLegacyPartialCorruptAndWrongDevice() {
         val id = identity(); val data = CalibrationBundle.encode(CalibrationBundle.Artifact(id,byteArrayOf(1,2),byteArrayOf(3,4)))
@@ -37,7 +47,7 @@ class CalibrationContractTest {
         val source = FloatArray(258) { 1f }
         session.sample(2000.0,2001.0,source,11.0,11.0); assertEquals(0,session.count)
         var now = 0.0
-        for (target in -1..15) {
+        for (target in -1 until identity().targets.size) {
             assertEquals(target,session.index); session.drawn(now)
             session.sample(now+1499,now+1500,source,11.0,11.0); assertEquals(0,session.count)
             session.sample(now+1500,now+1501,source,10.0,11.0); assertEquals(0,session.count)
@@ -48,7 +58,7 @@ class CalibrationContractTest {
         }
         source.fill(99f)
         val (features,labels) = session.takeTraining()
-        assertEquals(720,features.size); assertEquals(720,labels.size)
+        assertEquals(585,features.size); assertEquals(585,labels.size)
         assertTrue(features.all { it[0] == 1f })
         assertEquals(identity().targets.first().y/2340,labels.first()[1],0f)
         assertEquals(identity().targets.last().x/1080,labels.last()[0],0f)

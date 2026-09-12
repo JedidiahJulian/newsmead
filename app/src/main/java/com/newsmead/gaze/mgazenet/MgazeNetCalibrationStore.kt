@@ -12,7 +12,7 @@ import java.util.UUID
 /** App-private, excluded from Android backup, distinct from every legacy calibration file. */
 class MgazeNetCalibrationStore(context: Context) {
     private val context = context.applicationContext
-    private val root get() = File(context.noBackupFilesDir,"mgazenet-v1")
+    private val root get() = File(context.noBackupFilesDir,"mgazenet-v2")
     private val artifact get() = AtomicFile(File(root,"calibration.bin"))
     private fun device() = CalibrationIdentity.hash((android.os.Build.FINGERPRINT + ":" +
         Settings.Secure.getString(context.contentResolver,Settings.Secure.ANDROID_ID)).toByteArray())
@@ -36,7 +36,7 @@ class MgazeNetCalibrationStore(context: Context) {
         val saved = read(view)
         saved.x.fill(0); saved.y.fill(0)
         null
-    } catch (_: Exception) { "A fresh MGazeNet 16-point calibration is required for this device and screen." }
+    } catch (_: Exception) { "A fresh MGazeNet 13-point calibration is required for this device and screen." }
     fun fingerprint(): String? = runCatching {
         val file = File(root,"calibration.bin"); require(file.length() in 1..17L*1024*1024)
         CalibrationIdentity.hash(file.readBytes())
@@ -83,10 +83,16 @@ class MgazeNetCalibrationStore(context: Context) {
         // Only our interrupted temporary model files; never the committed calibration or legacy data.
         root.listFiles()?.filter { it.name.matches(Regex("pending-[a-f0-9-]{36}-[xy]\\.xml")) }
             ?.forEach { check(it.delete()) { "Cannot remove interrupted temporary model" } }
-        val features = Array(720) { i -> FloatArray(258) { j ->
-            (((i / 45) * (j % 7 + 1) + (i % 45) * .001) / 16.0).toFloat()
+        val rowCount = CalibrationIdentity.FIT_TARGET_COUNT * CalibrationIdentity.SAMPLES_PER_TARGET
+        val features = Array(rowCount) { i -> FloatArray(258) { j ->
+            (((i / CalibrationIdentity.SAMPLES_PER_TARGET) * (j % 7 + 1) +
+                (i % CalibrationIdentity.SAMPLES_PER_TARGET) * .001) /
+                CalibrationIdentity.FIT_TARGET_COUNT).toFloat()
         } }
-        val labels = Array(720) { i -> floatArrayOf(.1f + (i/45%4)*.8f/3f,.1f+(i/180)*.8f/3f) }
+        val labels = Array(rowCount) { i ->
+            CalibrationIdentity.TARGET_FRACTIONS[i / CalibrationIdentity.SAMPLES_PER_TARGET]
+                .let { (x, y) -> floatArrayOf(x, y) }
+        }
         try { SvrCalibration().use { original ->
             original.fit(features,labels)
             withModelFiles { x,y ->

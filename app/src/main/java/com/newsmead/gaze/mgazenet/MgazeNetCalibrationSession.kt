@@ -4,7 +4,7 @@ package com.newsmead.gaze.mgazenet
 class MgazeNetCalibrationSession(val identity: CalibrationIdentity) : AutoCloseable {
     enum class Phase { READY, WAIT_DRAW, COLLECT, POST, FITTING, COMPLETE, FAILED }
     var phase = Phase.READY; private set
-    var index = -1; private set // -1 is practice; 0..15 are fit targets
+    var index = -1; private set // -1 is practice; non-negative indices are fit targets
     var count = 0; private set
     var rejected = 0; private set
     private var onset = Double.NaN
@@ -32,20 +32,21 @@ class MgazeNetCalibrationSession(val identity: CalibrationIdentity) : AutoClosea
             labels.add(floatArrayOf(target.x/identity.screenWidth,target.y/identity.screenHeight))
         }
         count++
-        if (count == 45) { postUntil = output + 500; phase = Phase.POST }
+        if (count == SAMPLES_PER_TARGET) { postUntil = output + POST_MS; phase = Phase.POST }
     }
     /** Returns true when a different target must be drawn. */
     fun tick(now: Double): Boolean {
         if (phase == Phase.COLLECT && now >= onset + TARGET_TIMEOUT_MS) { close(); return false }
         if (phase == Phase.POST && now >= postUntil) {
-            if (index == 15) { phase = Phase.FITTING; return false }
+            if (index == identity.targets.lastIndex) { phase = Phase.FITTING; return false }
             index++; phase = Phase.WAIT_DRAW; return true
         }
         return false
     }
     /** Transfers ownership to the worker; cancellation no longer races its training arrays. */
     fun takeTraining(): Pair<Array<FloatArray>,Array<FloatArray>> {
-        check(phase == Phase.FITTING && rows.size == 720 && labels.size == 720)
+        val expectedRows = identity.targets.size * SAMPLES_PER_TARGET
+        check(phase == Phase.FITTING && rows.size == expectedRows && labels.size == expectedRows)
         return (rows.toTypedArray() to labels.toTypedArray()).also { rows.clear(); labels.clear() }
     }
     fun fitted(success: Boolean) { check(phase == Phase.FITTING); phase = if (success) Phase.COMPLETE else Phase.FAILED }
@@ -53,5 +54,10 @@ class MgazeNetCalibrationSession(val identity: CalibrationIdentity) : AutoClosea
         rows.forEach { it.fill(0f) }; labels.forEach { it.fill(0f) }; rows.clear(); labels.clear()
         if (phase != Phase.COMPLETE) phase = Phase.FAILED
     }
-    companion object { const val SETTLE_MS = 1500; const val TARGET_TIMEOUT_MS = 30000 }
+    companion object {
+        const val SETTLE_MS = 1500
+        const val POST_MS = 500
+        const val TARGET_TIMEOUT_MS = 30000
+        const val SAMPLES_PER_TARGET = CalibrationIdentity.SAMPLES_PER_TARGET
+    }
 }

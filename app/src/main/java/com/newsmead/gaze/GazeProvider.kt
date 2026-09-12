@@ -7,7 +7,7 @@ import androidx.lifecycle.LifecycleOwner
  * mapping, RSI) depend only on this interface and its [onGaze] stream, so the
  * tracker implementation can be swapped without touching anything downstream.
  * Current live implementation is MGazeNet: 258-value features are calibrated by
- * the saved 16-point calibration and emitted as full-screen phone pixels.
+ * the saved 13-point calibration and emitted as full-screen phone pixels.
  */
 interface GazeProvider {
 

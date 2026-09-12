@@ -837,7 +837,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     /**
      * Live gaze from the local phone tracker, mapped to the phone screen with
-     * the saved 16-point calibration. In live mode, do not silently substitute
+     * the saved 13-point calibration. In live mode, do not silently substitute
      * touch input; missing/invalid calibration must be fixed before reading.
      */
     private fun attachLiveGaze(onGaze: GazeProvider.OnGaze) {

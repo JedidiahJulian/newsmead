@@ -54,7 +54,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         binding.root.keepScreenOn = false
-        binding.progressText.text = "MGazeNet calibration. Start opens the camera; follow each target until it advances."
+        binding.progressText.text = "MGazeNet 13-point calibration. Start opens the camera; follow each target until it advances."
         binding.startButton.setOnClickListener {
             requestStart()
         }
@@ -181,11 +181,12 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private fun showTarget() {
         val s = session ?: return
         val local = s.identity.viewport.toLocal(s.target.x,s.target.y)
-        binding.progressText.text = if (s.index < 0) "Practice" else "Target ${s.index+1} of 16"
+        binding.progressText.text = if (s.index < 0) "Practice" else
+            "Target ${s.index+1} of ${CalibrationIdentity.FIT_TARGET_COUNT}"
         binding.calibrationView.onNextTargetDraw {
-            handler.postDelayed({ if (active) s.drawn(MgazeNetCameraSource.now()) },1800)
+            if (active) s.drawn(MgazeNetCameraSource.now())
         }
-        binding.calibrationView.showTarget(local.x,local.y,1800)
+        binding.calibrationView.showTarget(local.x,local.y,CalibrationIdentity.TARGET_CUE_MS)
     }
     private val tick = object : Runnable {
         override fun run() {
@@ -199,7 +200,9 @@ class GazeCalibrationActivity : AppCompatActivity() {
             if (s != null && verification < 0) {
                 if (s.tick(now)) showTarget()
                 if (s.phase == MgazeNetCalibrationSession.Phase.FAILED) { stop("Target capture timed out. Nothing was saved."); return }
-                if (s.phase == MgazeNetCalibrationSession.Phase.COLLECT) binding.statusText.text = "${s.count} / 45 samples"
+                if (s.phase == MgazeNetCalibrationSession.Phase.COLLECT) {
+                    binding.statusText.text = "${s.count} / ${MgazeNetCalibrationSession.SAMPLES_PER_TARGET} samples"
+                }
                 if (s.phase == MgazeNetCalibrationSession.Phase.FITTING && !fitting) {
                     fitting = true; binding.calibrationView.hideTarget(); binding.progressText.text = "Fitting calibration…"
                     val (features,labels) = s.takeTraining()
@@ -222,7 +225,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
         }
     }
     private fun checkTarget() = identity!!.let { id ->
-        if (verification == 0) id.targets[5] else {
+        if (verification == 0) id.targets.last() else {
             val f = listOf(.5f to .5f,.25f to .25f,.75f to .25f,.25f to .75f,.75f to .75f)[verification-1]
             id.viewport.toScreen(f.first*id.viewport.width,f.second*id.viewport.height)
         }

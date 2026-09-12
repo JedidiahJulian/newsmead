@@ -92,13 +92,13 @@ class MgazeNetIntegrationTest {
                 try { store.save(identity,original) { false }; fail("Canceled save committed") }
                 catch (_: IllegalStateException) { }
                 assertEquals(before,store.fingerprint())
-                val artifact = CalibrationBundle.decode(File(temporary,"mgazenet-v1/calibration.bin").readBytes()) { it == identity }
+                val artifact = CalibrationBundle.decode(File(temporary,"mgazenet-v2/calibration.bin").readBytes()) { it == identity }
                 MgazeNetCalibrationStore(isolated).load(artifact).use { restored ->
                     MgazeNetCalibrationStore.syntheticQueries().forEach { query ->
                         assertArrayEquals(original.predict(query),restored.predict(query),0f); query.fill(0f)
                     }
                 }
-                assertEquals(listOf("calibration.bin"),File(temporary,"mgazenet-v1").list()!!.sorted())
+                assertEquals(listOf("calibration.bin"),File(temporary,"mgazenet-v2").list()!!.sorted())
             } } finally { features.forEach { it.fill(0f) }; labels.forEach { it.fill(0f) } }
         } finally { temporary.deleteRecursively() }
     }

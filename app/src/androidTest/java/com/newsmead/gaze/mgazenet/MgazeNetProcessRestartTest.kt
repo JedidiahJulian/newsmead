@@ -83,7 +83,7 @@ class MgazeNetProcessRestartTest {
             assertEquals(4,proof.size)
             assertEquals("mgazenet-process-restart-test-v1",proof[0])
             assertNotEquals("Instrumentation process was not restarted",proof[1].toInt(),android.os.Process.myPid())
-            val calibration = File(root,"mgazenet-v1/calibration.bin")
+            val calibration = File(root,"mgazenet-v2/calibration.bin")
             assertEquals("Calibration artifact changed across restart",proof[2],CalibrationIdentity.hash(calibration.readBytes()))
             val saved = CalibrationBundle.decode(calibration.readBytes()) { it == identity() }
             MgazeNetCalibrationStore(context(root)).load(saved).use { restored ->
