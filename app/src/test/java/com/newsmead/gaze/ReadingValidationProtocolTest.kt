@@ -3,6 +3,7 @@ package com.newsmead.gaze
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class ReadingValidationProtocolTest {
@@ -64,5 +65,23 @@ class ReadingValidationProtocolTest {
         assertEquals(1.0, summary.exactLineAccuracy, 0.0001)
         assertEquals(0, summary.wordMeasuredSamples)
         assertEquals(0.0, summary.exactWordAccuracy, 0.0001)
+    }
+
+    @Test
+    fun orderVariantMustBeExact() {
+        for (variant in listOf("", "a", "b", "C")) {
+            try {
+                ReadingValidationProtocol.localizationCheckpoints(lines, variant)
+                fail("Expected rejection for $variant")
+            } catch (_: IllegalArgumentException) {
+                // Expected.
+            }
+            try {
+                ReadingValidationProtocol.lineReadingCheckpoints(lines, variant)
+                fail("Expected rejection for $variant")
+            } catch (_: IllegalArgumentException) {
+                // Expected.
+            }
+        }
     }
 }

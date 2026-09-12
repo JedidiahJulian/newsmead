@@ -29,6 +29,26 @@ android {
         versionCode = 1
         versionName = "0.2"
 
+        // Frozen estimator baseline identity for the matched comparison harness.
+        // The reference build applies the reviewed comparison patch to its exact
+        // base snapshot and substitutes only these arm-specific constants.
+        buildConfigField("String", "COMPARISON_ESTIMATOR_ID", "\"mgazenet\"")
+        buildConfigField(
+            "String",
+            "COMPARISON_BASE_COMMIT",
+            "\"bea2dacbfa8d95f6519ccd4fad1cb0dfd6028b22\"",
+        )
+        buildConfigField(
+            "String",
+            "COMPARISON_BASE_APK_SHA256",
+            "\"131f8d96f9bdc3f5a5c16855aa6347e119fd07e96609cba9f6792b161c682fd9\"",
+        )
+        buildConfigField(
+            "String",
+            "COMPARISON_PROTOCOL_MANIFEST_SHA256",
+            "\"41a3fbccd4df38c2bb13d4695a052fe15d3ef78423b19a4c1737d3de6944f185\"",
+        )
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -61,6 +81,7 @@ android {
     // Enable viewBinding
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 
@@ -150,6 +171,19 @@ val verifyVendor by tasks.registering {
         check(rootProject.file("mgazenet-benchmark/vendor/assets/notices/MNN-Apache-2.0.txt").isFile)
     }
 }
+val verifyComparisonProtocolManifest by tasks.registering {
+    val manifest = file("src/main/assets/comparison/newsmead-current-vs-mgazenet-reading-v1.json")
+    inputs.file(manifest)
+    doLast {
+        check(manifest.isFile) { "Missing frozen comparison protocol manifest asset." }
+        val hash = MessageDigest.getInstance("SHA-256").digest(manifest.readBytes())
+            .joinToString("") { "%02x".format(it) }
+        check(hash == "41a3fbccd4df38c2bb13d4695a052fe15d3ef78423b19a4c1737d3de6944f185") {
+            "Frozen comparison protocol manifest changed."
+        }
+    }
+}
+
 val prepareMgazeNetAssets by tasks.registering(Sync::class) {
     dependsOn(verifyVendor)
     from(rootProject.file("mgazenet-benchmark/vendor/assets")) {
@@ -157,7 +191,10 @@ val prepareMgazeNetAssets by tasks.registering(Sync::class) {
     }
     into(layout.buildDirectory.dir("generated/mgazenetAssets"))
 }
-tasks.named("preBuild").configure { dependsOn(prepareMgazeNetAssets) }
+tasks.named("preBuild").configure {
+    dependsOn(prepareMgazeNetAssets)
+    dependsOn(verifyComparisonProtocolManifest)
+}
 
 // Verify the artifact, not just input directories (OpenCV also supplies libc++_shared).
 tasks.register("verifyMgazeNetDebugApk") {

@@ -57,6 +57,7 @@ object ReadingValidationProtocol {
         lines: List<ReadingValidationLine>,
         variant: String,
     ): List<ReadingValidationCheckpoint> {
+        require(variant == "A" || variant == "B") { "Reading order must be exactly A or B" }
         val usable = lines.filter { it.words.isNotEmpty() }
         require(usable.size >= REQUIRED_CHECKPOINTS) {
             "Structured reading validation requires at least $REQUIRED_CHECKPOINTS laid-out text lines"
@@ -93,7 +94,7 @@ object ReadingValidationProtocol {
             )
         }
 
-        val order = if (variant.uppercase(Locale.ROOT) == "B") {
+        val order = if (variant == "B") {
             intArrayOf(1, 3, 0, 2, 5, 7, 4, 6)
         } else {
             intArrayOf(0, 1, 2, 3, 4, 5, 6, 7)
@@ -106,6 +107,7 @@ object ReadingValidationProtocol {
         lines: List<ReadingValidationLine>,
         variant: String,
     ): List<ReadingValidationCheckpoint> {
+        require(variant == "A" || variant == "B") { "Reading order must be exactly A or B" }
         val usable = lines.filter { it.words.size >= 3 }
         require(usable.size >= REQUIRED_LINE_CHECKPOINTS) {
             "Guided line validation requires at least $REQUIRED_LINE_CHECKPOINTS laid-out text lines"
@@ -129,7 +131,7 @@ object ReadingValidationProtocol {
                 viewportFraction = verticalFractions[index],
             )
         }
-        return if (variant.uppercase(Locale.ROOT) == "B") {
+        return if (variant == "B") {
             listOf(selected[1], selected[2], selected[0], selected[4], selected[5], selected[3])
         } else {
             selected

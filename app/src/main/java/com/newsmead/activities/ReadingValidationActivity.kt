@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.InputType
 import android.text.Spannable
 import android.text.SpannableString
@@ -27,6 +28,11 @@ import com.newsmead.gaze.getVisibleRectOnScreen
 import com.newsmead.gaze.physicalDisplaySize
 import com.newsmead.gaze.GazeOverlayView
 import com.newsmead.gaze.GazeTargetStabilizer
+import com.newsmead.gaze.ComparisonLaunchSpec
+import com.newsmead.gaze.ComparisonProtocol
+import com.newsmead.gaze.ComparisonReadingBinding
+import com.newsmead.gaze.ComparisonRecordBinding
+import com.newsmead.gaze.ComparisonRuntime
 import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
 import com.newsmead.gaze.mgazenet.MgazeNetCalibrationStore
 import com.newsmead.gaze.LineAoiMapper
@@ -78,7 +84,12 @@ class ReadingValidationActivity : AppCompatActivity() {
     private var verticalCorrection: ReadingVerticalCorrection? = null
     private var running = false
     private var finished = false
+    private var preparingComparison = false
     private var programmaticScrollUntilMs = 0L
+    private var comparisonSpec: ComparisonLaunchSpec? = null
+    private var pendingDeliveryId: Long? = null
+    private var pendingDeliveryElapsedNs: Long? = null
+    private var fallbackDeliveryId = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,6 +104,22 @@ class ReadingValidationActivity : AppCompatActivity() {
         binding.tvValidationProgress.text = "Accuracy validation · about 3 minutes"
         binding.tvValidationInstruction.text =
             "This test measures only known words and visibly highlighted physical lines. It does not score free reading or adaptive behavior."
+
+        val comparisonLaunch = ComparisonRuntime.parseLaunch(intent)
+        if (comparisonLaunch.requested) {
+            val spec = comparisonLaunch.spec
+            if (spec == null) {
+                binding.tvValidationProgress.text = "Comparison setup rejected"
+                binding.tvValidationInstruction.text = comparisonLaunch.error
+                binding.btnValidationAction.isEnabled = false
+            } else {
+                comparisonSpec = spec
+                binding.tvValidationProgress.text = "Matched comparison · ${spec.slot.id}"
+                binding.tvValidationInstruction.text =
+                    "Order ${spec.orderVariant} is locked. Start verifies the exact installed build and saved slot calibration before opening the camera."
+                binding.btnValidationAction.text = "Start reading validation"
+            }
+        }
 
         binding.btnValidationAction.setOnClickListener { showRunSetup() }
         binding.btnCloseValidation.setOnClickListener { requestStop() }
@@ -118,9 +145,11 @@ class ReadingValidationActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
-        gazeProvider?.stop()
         if (!finished && sessionLog != null) {
-            sessionLog?.finish("interrupted", metrics.summary())
+            finishSessionAfterProviderStops("interrupted", metrics.summary())
+        } else {
+            gazeProvider?.stop()
+            gazeProvider = null
         }
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         super.onDestroy()
@@ -134,6 +163,12 @@ class ReadingValidationActivity : AppCompatActivity() {
                 .setMessage(issue)
                 .setPositiveButton("OK", null)
                 .show()
+            return
+        }
+        comparisonSpec?.let { spec ->
+            orderVariant = spec.orderVariant
+            verticalAlignmentMode = ReadingVerticalAlignmentMode.OFF
+            beginSession(spec.slot.id, 16)
             return
         }
         val runNumber = getPreferences(MODE_PRIVATE).getInt(PREF_RUN_COUNT, 0) + 1
@@ -169,7 +204,7 @@ class ReadingValidationActivity : AppCompatActivity() {
     }
 
     private fun beginSession(runLabel: String, calibrationPointCount: Int) {
-        if (running) return
+        if (running || preparingComparison) return
         val layout = binding.tvValidationText.layout
         if (layout == null) {
             binding.tvValidationText.post { beginSession(runLabel, calibrationPointCount) }
@@ -184,35 +219,121 @@ class ReadingValidationActivity : AppCompatActivity() {
             return
         }
 
-        val display = resources.displayMetrics
-        val displaySize = binding.root.physicalDisplaySize()
-        sessionLog = ReadingValidationSessionLog(
-            context = this,
-            runLabel = runLabel,
-            orderVariant = orderVariant,
-            screenWidthPx = displaySize.x,
-            screenHeightPx = displaySize.y,
-            densityDpi = display.densityDpi,
-            rawFeatureMode = "mgazenet_258_svr_unfiltered_v1",
-            calibrationPointCount = calibrationPointCount,
-            calibrationFingerprint = MgazeNetCalibrationStore(this).fingerprint(),
-            driftCorrectionActive = false,
-            verticalAlignmentMode = verticalAlignmentMode,
-        ).also {
-            it.logLayout(
-                textLength = binding.tvValidationText.text.length,
-                lineCount = layout.lineCount,
+        val comparison = comparisonSpec
+        if (comparison != null) {
+            val calibrationFingerprint = MgazeNetCalibrationStore(this).fingerprint()
+            if (!ComparisonProtocol.isSha256(calibrationFingerprint)) {
+                Toast.makeText(this, "The slot calibration fingerprint is unavailable.", Toast.LENGTH_LONG).show()
+                return
+            }
+            val layoutSha256 = ComparisonProtocol.readingLayoutSha256(
+                passage = VALIDATION_PASSAGE,
+                lines = lines,
+                wordTargets = wordCheckpoints,
+                lineTargets = lineCheckpoints,
                 lineHeightPx = binding.tvValidationText.lineHeight.toFloat(),
                 textSizePx = binding.tvValidationText.textSize,
                 viewportWidthPx = binding.nsvValidationText.width,
                 viewportHeightPx = binding.nsvValidationText.height,
             )
+            preparingComparison = true
+            binding.btnValidationAction.isEnabled = false
+            binding.tvValidationInstruction.text = "Verifying the installed comparison build…"
+            val comparisonDisplaySize = binding.root.physicalDisplaySize()
+            val comparisonDensityDpi = resources.displayMetrics.densityDpi
+            val comparisonRotation = binding.root.display.rotation
+            Thread {
+                val resolved = runCatching {
+                    ComparisonRuntime.resolveIdentity(
+                        this,
+                        comparison,
+                        comparisonDisplaySize.x,
+                        comparisonDisplaySize.y,
+                        comparisonDensityDpi,
+                        comparisonRotation,
+                    )
+                }
+                runOnUiThread {
+                    preparingComparison = false
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    resolved.fold(
+                        onSuccess = { runtime ->
+                            val comparisonBinding = ComparisonReadingBinding(
+                                ComparisonRecordBinding(runtime, calibrationFingerprint),
+                                layoutSha256,
+                                ComparisonProtocol.passageSha256(VALIDATION_PASSAGE),
+                            )
+                            startPreparedSession(
+                                runLabel,
+                                calibrationPointCount,
+                                layout,
+                                comparisonBinding,
+                            )
+                        },
+                        onFailure = { failure ->
+                            binding.btnValidationAction.isEnabled = true
+                            binding.tvValidationInstruction.text =
+                                failure.message ?: "The comparison build could not be verified."
+                        },
+                    )
+                }
+            }.start()
+            return
+        }
+        startPreparedSession(runLabel, calibrationPointCount, layout, null)
+    }
+
+    private fun startPreparedSession(
+        runLabel: String,
+        calibrationPointCount: Int,
+        layout: android.text.Layout,
+        comparisonBinding: ComparisonReadingBinding?,
+    ) {
+        if (running) return
+
+        val display = resources.displayMetrics
+        val displaySize = binding.root.physicalDisplaySize()
+        sessionLog = try {
+            ReadingValidationSessionLog(
+                context = this,
+                runLabel = runLabel,
+                orderVariant = orderVariant,
+                screenWidthPx = displaySize.x,
+                screenHeightPx = displaySize.y,
+                densityDpi = display.densityDpi,
+                rawFeatureMode = "mgazenet_258_svr_unfiltered_v1",
+                calibrationPointCount = calibrationPointCount,
+                calibrationFingerprint = MgazeNetCalibrationStore(this).fingerprint(),
+                driftCorrectionActive = false,
+                verticalAlignmentMode = verticalAlignmentMode,
+                comparison = comparisonBinding,
+            ).also {
+                it.logLayout(
+                    textLength = binding.tvValidationText.text.length,
+                    lineCount = layout.lineCount,
+                    lineHeightPx = binding.tvValidationText.lineHeight.toFloat(),
+                    textSizePx = binding.tvValidationText.textSize,
+                    viewportWidthPx = binding.nsvValidationText.width,
+                    viewportHeightPx = binding.nsvValidationText.height,
+                )
+                it.logProtocolPlan(
+                    ComparisonProtocol.passageSha256(VALIDATION_PASSAGE),
+                    wordCheckpoints,
+                    lineCheckpoints,
+                )
+            }
+        } catch (failure: Exception) {
+            binding.btnValidationAction.isEnabled = true
+            binding.tvValidationInstruction.text =
+                failure.message ?: "The comparison slot is not ready for reading."
+            return
         }
 
         running = true
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        attachGazePipeline()
         showDotPreview()
+        attachGazePipeline()
+        gazeOverlay?.setDebugVisualsEnabled(true)
     }
 
     private fun attachGazePipeline() {
@@ -237,16 +358,36 @@ class ReadingValidationActivity : AppCompatActivity() {
         provider.onFailure = { message ->
             Toast.makeText(this,message,Toast.LENGTH_LONG).show()
             handler.removeCallbacksAndMessages(null)
-            sessionLog?.finish("mgazenet_failed",metrics.summary())
-            finished = true; running = false
-            finish()
+            finishSessionAfterProviderStops("mgazenet_failed", metrics.summary()) { finish() }
         }
         provider.onObservation = { observation ->
-            sessionLog?.logMgazeNetObservation(observation.captureMs,observation.outputMs,observation.reason,
-                observation.rawX,observation.rawY,observation.arrivals,observation.busyDrops)
+            fallbackDeliveryId = maxOf(fallbackDeliveryId, observation.deliveryId)
+            sessionLog?.logMgazeNetObservation(
+                observation.captureMs,
+                observation.deliveryElapsedNs,
+                observation.deliveryId,
+                observation.reason,
+                observation.rawX,
+                observation.rawY,
+                observation.arrivals,
+                observation.busyDrops,
+                phase,
+                stepId,
+                trialState,
+            )
+            if (observation.reason == "coordinate") {
+                pendingDeliveryId = observation.deliveryId
+                pendingDeliveryElapsedNs = observation.deliveryElapsedNs
+            }
             if (observation.reason != "coordinate") gazeOverlay?.clearGaze()
         }
-        provider.setOnGaze { x, y -> runOnUiThread { onGaze(x, y) } }
+        provider.setOnGaze { x, y -> runOnUiThread {
+            val elapsedNs = pendingDeliveryElapsedNs ?: SystemClock.elapsedRealtimeNanos()
+            val deliveryId = pendingDeliveryId ?: ++fallbackDeliveryId
+            pendingDeliveryElapsedNs = null
+            pendingDeliveryId = null
+            onGaze(x, y, elapsedNs, deliveryId)
+        } }
         gazeProvider = provider
         provider.start(this)
     }
@@ -298,9 +439,8 @@ class ReadingValidationActivity : AppCompatActivity() {
 
     private fun prepareVerticalReferences(): Boolean {
         if (!binding.nsvValidationText.getVisibleRectOnScreen(readingVisibleRect)) {
-            sessionLog?.finish("reading_surface_not_visible", metrics.summary())
             Toast.makeText(this, "Reading surface unavailable. Please reopen the test.", Toast.LENGTH_LONG).show()
-            finish()
+            finishSessionAfterProviderStops("reading_surface_not_visible", metrics.summary()) { finish() }
             return false
         }
         logCoordinateFrames()
@@ -404,15 +544,12 @@ class ReadingValidationActivity : AppCompatActivity() {
 
     private fun finishAlignmentRejected() {
         if (finished) return
-        finished = true
-        running = false
-        gazeProvider?.stop()
-        gazeProvider = null
         binding.verticalAlignmentTarget.visibility = View.GONE
         val fileName = sessionLog?.fileName().orEmpty()
-        sessionLog?.finish("alignment_rejected", metrics.summary())
-        Toast.makeText(this, "Alignment evidence saved: $fileName", Toast.LENGTH_LONG).show()
-        finish()
+        finishSessionAfterProviderStops("alignment_rejected", metrics.summary()) {
+            Toast.makeText(this, "Alignment evidence saved: $fileName", Toast.LENGTH_LONG).show()
+            finish()
+        }
     }
 
     private fun showWordInstructions() {
@@ -441,9 +578,10 @@ class ReadingValidationActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun onGaze(x: Float, y: Float) {
+    private fun onGaze(x: Float, y: Float, deliveryElapsedNs: Long, deliveryId: Long) {
         if (!running || finished) return
         val timestampMs = System.currentTimeMillis()
+        val monotonicTimestampMs = deliveryElapsedNs / 1_000_000L
         if (phase == ReadingValidationPhase.VERTICAL_ALIGNMENT &&
             trialState == ReadingValidationTrialState.MEASURE &&
             activeVerticalReference != null
@@ -452,7 +590,7 @@ class ReadingValidationActivity : AppCompatActivity() {
         gazeOverlay?.setGazeScreen(x, effectiveY)
         val baseTarget = mapper?.targetAt(x, y) ?: TextTarget.INVALID
         val rawTarget = mapper?.targetAt(x, effectiveY) ?: TextTarget.INVALID
-        val stableTarget = stabilizer.update(rawTarget, timestampMs)
+        val stableTarget = stabilizer.update(rawTarget, monotonicTimestampMs)
         if ((phase == ReadingValidationPhase.LOCALIZATION ||
                 phase == ReadingValidationPhase.GUIDED_LINE_READING) &&
             trialState == ReadingValidationTrialState.MEASURE
@@ -461,6 +599,8 @@ class ReadingValidationActivity : AppCompatActivity() {
         binding.tvValidationText.getLocationOnScreen(textLocation)
         sessionLog?.logGaze(
             timestampMs = timestampMs,
+            deliveryElapsedNs = deliveryElapsedNs,
+            deliveryId = deliveryId,
             phase = phase,
             stepId = stepId,
             state = trialState,
@@ -600,38 +740,70 @@ class ReadingValidationActivity : AppCompatActivity() {
         trialState = ReadingValidationTrialState.MEASURE
         expectedCheckpoint = null
         clearHighlight()
-        finished = true
-        running = false
-        gazeProvider?.stop()
-        gazeProvider = null
         val summary = metrics.summary()
         val fileName = sessionLog?.fileName().orEmpty()
-        sessionLog?.finish("completed", summary)
+        finishSessionAfterProviderStops("completed", summary) {
+            if (comparisonSpec != null) {
+                val receipt = sessionLog?.sealedReceipt()
+                val receiptText = receipt?.let { "${it.fileName}\nSHA-256 ${it.sha256}" }
+                    ?: "The slot log could not be sealed."
+                binding.validationControlPanel.visibility = View.VISIBLE
+                binding.tvValidationProgress.text = "Comparison slot sealed"
+                binding.tvValidationInstruction.text = receiptText
+                binding.btnValidationAction.text = "Done"
+                binding.btnValidationAction.visibility = View.VISIBLE
+                binding.btnValidationAction.setOnClickListener { finish() }
+                AlertDialog.Builder(this)
+                    .setTitle("Comparison slot saved")
+                    .setMessage("Spatial results remain hidden.\n\n$receiptText")
+                    .setCancelable(false)
+                    .setPositiveButton("Done") { _, _ -> finish() }
+                    .show()
+            } else {
+                val result = String.format(
+                    Locale.US,
+                    "File: %s\nAlignment: %s%s\n\nWORD FIXATION\nExact line: %.1f%%\nWithin one line: %.1f%%\nExact word: %.1f%%\n\nGUIDED LINE READING\nExact line: %.1f%%\nWithin one line: %.1f%%",
+                    fileName,
+                    verticalAlignmentMode.name,
+                    verticalAlignmentFit?.gain?.let { String.format(Locale.US, " · gain %.3f", it) }.orEmpty(),
+                    100.0 * summary.wordExactLineAccuracy,
+                    100.0 * summary.wordWithinOneLineAccuracy,
+                    100.0 * summary.exactWordAccuracy,
+                    100.0 * summary.guidedLineExactAccuracy,
+                    100.0 * summary.guidedLineWithinOneAccuracy,
+                )
+                binding.validationControlPanel.visibility = View.VISIBLE
+                binding.tvValidationProgress.text = "Known-target accuracy validation complete"
+                binding.tvValidationInstruction.text = "Saved $fileName"
+                binding.btnValidationAction.text = "Done"
+                binding.btnValidationAction.visibility = View.VISIBLE
+                binding.btnValidationAction.setOnClickListener { finish() }
+                AlertDialog.Builder(this)
+                    .setTitle("Accuracy data saved")
+                    .setMessage(result)
+                    .setPositiveButton("Done") { _, _ -> finish() }
+                    .setNegativeButton("Stay", null)
+                    .show()
+            }
+        }
+    }
 
-        val result = String.format(
-            Locale.US,
-            "File: %s\nAlignment: %s%s\n\nWORD FIXATION\nExact line: %.1f%%\nWithin one line: %.1f%%\nExact word: %.1f%%\n\nGUIDED LINE READING\nExact line: %.1f%%\nWithin one line: %.1f%%",
-            fileName,
-            verticalAlignmentMode.name,
-            verticalAlignmentFit?.gain?.let { String.format(Locale.US, " · gain %.3f", it) }.orEmpty(),
-            100.0 * summary.wordExactLineAccuracy,
-            100.0 * summary.wordWithinOneLineAccuracy,
-            100.0 * summary.exactWordAccuracy,
-            100.0 * summary.guidedLineExactAccuracy,
-            100.0 * summary.guidedLineWithinOneAccuracy,
-        )
-        binding.validationControlPanel.visibility = View.VISIBLE
-        binding.tvValidationProgress.text = "Known-target accuracy validation complete"
-        binding.tvValidationInstruction.text = "Saved $fileName"
-        binding.btnValidationAction.text = "Done"
-        binding.btnValidationAction.visibility = View.VISIBLE
-        binding.btnValidationAction.setOnClickListener { finish() }
-        AlertDialog.Builder(this)
-            .setTitle("Accuracy data saved")
-            .setMessage(result)
-            .setPositiveButton("Done") { _, _ -> finish() }
-            .setNegativeButton("Stay", null)
-            .show()
+    private fun finishSessionAfterProviderStops(
+        outcome: String,
+        summary: ReadingValidationMetrics.Summary,
+        afterSeal: () -> Unit = {},
+    ) {
+        if (finished) return
+        finished = true
+        running = false
+        handler.removeCallbacksAndMessages(null)
+        val stopping = gazeProvider
+        gazeProvider = null
+        val seal = {
+            sessionLog?.finish(outcome, summary)
+            afterSeal()
+        }
+        if (stopping == null) seal() else stopping.stopAndThen(seal)
     }
 
     private fun highlight(checkpoint: ReadingValidationCheckpoint) {
@@ -718,10 +890,7 @@ class ReadingValidationActivity : AppCompatActivity() {
 
     override fun onStop() {
         if (running && !finished) {
-            handler.removeCallbacksAndMessages(null)
-            gazeProvider?.stop(); gazeProvider = null
-            sessionLog?.finish("interrupted",metrics.summary())
-            finished = true; running = false
+            finishSessionAfterProviderStops("interrupted", metrics.summary())
         }
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         super.onStop()

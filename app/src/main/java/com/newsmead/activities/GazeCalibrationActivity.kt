@@ -1,6 +1,7 @@
 package com.newsmead.activities
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
@@ -16,6 +17,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.newsmead.databinding.ActivityGazeCalibrationBinding
 import com.newsmead.gaze.gazeCoordinateFrame
 import com.newsmead.gaze.physicalDisplaySize
+import com.newsmead.gaze.ComparisonCalibrationEvidence
+import com.newsmead.gaze.ComparisonCalibrationReservation
+import com.newsmead.gaze.ComparisonLaunchSpec
+import com.newsmead.gaze.ComparisonRuntime
+import com.newsmead.gaze.ComparisonSlotStore
 import com.newsmead.gaze.mgazenet.*
 
 /** MGazeNet-only calibration. Setup performs no camera/native/store mutation. */
@@ -33,6 +39,10 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private val errors = ArrayList<Float>()
     private val summaries = ArrayList<String>()
     private var permissionPending = false
+    private var preparingComparison = false
+    private var comparisonSpec: ComparisonLaunchSpec? = null
+    private var comparisonReservation: ComparisonCalibrationReservation? = null
+    private var comparisonCalibrationCommitted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,24 +56,97 @@ class GazeCalibrationActivity : AppCompatActivity() {
         binding.root.keepScreenOn = false
         binding.progressText.text = "MGazeNet calibration. Start opens the camera; follow each target until it advances."
         binding.startButton.setOnClickListener {
-            if (ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                permissionPending = true
-                ActivityCompat.requestPermissions(this,arrayOf(Manifest.permission.CAMERA),42)
-            } else begin()
+            requestStart()
         }
         binding.btnAccept.setOnClickListener { save() }
         binding.btnRedoWorst.visibility = View.GONE
         binding.btnRedoAll.visibility = View.GONE
+
+        val comparisonLaunch = ComparisonRuntime.parseLaunch(intent)
+        if (comparisonLaunch.requested) {
+            val spec = comparisonLaunch.spec
+            if (spec == null) {
+                binding.progressText.text = comparisonLaunch.error
+                binding.startButton.isEnabled = false
+            } else {
+                comparisonSpec = spec
+                val issue = ComparisonSlotStore(this).calibrationStartIssue(spec)
+                binding.progressText.text = issue ?:
+                    "Matched comparison ${spec.slot.id}. Start verifies and reserves this slot before opening the camera."
+                binding.startButton.isEnabled = issue == null
+                binding.startButton.text = "Start comparison calibration"
+            }
+        }
     }
+
+    private fun requestStart() {
+        if (active || preparingComparison) return
+        if (ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            permissionPending = true
+            ActivityCompat.requestPermissions(this,arrayOf(Manifest.permission.CAMERA),42)
+        } else prepareComparisonThenBegin()
+    }
+
     override fun onRequestPermissionsResult(code: Int, permissions: Array<out String>, results: IntArray) {
         super.onRequestPermissionsResult(code,permissions,results)
         if (code == 42 && permissionPending) {
             permissionPending = false
-            if (results.firstOrNull() == PackageManager.PERMISSION_GRANTED) begin()
+            if (results.firstOrNull() == PackageManager.PERMISSION_GRANTED) prepareComparisonThenBegin()
         }
     }
+
+    private fun prepareComparisonThenBegin() {
+        val spec = comparisonSpec
+        if (spec == null) {
+            begin()
+            return
+        }
+        preparingComparison = true
+        binding.startButton.isEnabled = false
+        binding.progressText.text = "Verifying the installed comparison build…"
+        val displaySize = binding.calibrationView.physicalDisplaySize()
+        val densityDpi = resources.displayMetrics.densityDpi
+        val rotation = binding.calibrationView.display.rotation
+        Thread {
+            val resolved = runCatching {
+                ComparisonRuntime.resolveIdentity(
+                    this,
+                    spec,
+                    displaySize.x,
+                    displaySize.y,
+                    densityDpi,
+                    rotation,
+                )
+            }
+            runOnUiThread {
+                preparingComparison = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                resolved.fold(
+                    onSuccess = { runtime ->
+                        runCatching { ComparisonSlotStore(this).reserveCalibration(runtime) }
+                            .onSuccess { reservation ->
+                                comparisonReservation = reservation
+                                begin()
+                            }
+                            .onFailure { failure ->
+                                binding.progressText.text = failure.message
+                                    ?: "The comparison slot could not be reserved."
+                            }
+                    },
+                    onFailure = { failure ->
+                        binding.progressText.text = failure.message
+                            ?: "The comparison build could not be verified."
+                    },
+                )
+            }
+        }.start()
+    }
     private fun begin() {
-        if (active || binding.calibrationView.width == 0) return
+        if (active) return
+        if (binding.calibrationView.width == 0) {
+            binding.calibrationView.post { begin() }
+            return
+        }
         val store = MgazeNetCalibrationStore(this)
         identity = store.identity(binding.calibrationView)
         active = true; startedAt = MgazeNetCameraSource.now()
@@ -164,6 +247,12 @@ class GazeCalibrationActivity : AppCompatActivity() {
         binding.root.keepScreenOn = false
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         binding.calibrationView.hideTarget(); binding.statusText.text = ""
+        if (comparisonSpec != null) {
+            binding.progressText.text = "Finalizing the slot calibration…"
+            binding.gatePanel.visibility = View.GONE
+            saveComparisonCalibration()
+            return
+        }
         binding.gatePanel.visibility = View.VISIBLE
         binding.gateText.text = summaries.joinToString("\n") +
             "\n\nDescriptive checks only; no accuracy pass is assigned. Save retains two local models. No correction is applied."
@@ -177,8 +266,74 @@ class GazeCalibrationActivity : AppCompatActivity() {
             if (success) finish()
         }
     }
+
+    private fun saveComparisonCalibration() {
+        val reservation = comparisonReservation ?: run {
+            stop("Comparison reservation unavailable.")
+            return
+        }
+        val savedIdentity = identity ?: run {
+            stop("Calibration identity unavailable.")
+            return
+        }
+        source?.save(savedIdentity) { success ->
+            if (!success) {
+                stop("Calibration could not be saved.")
+                return@save
+            }
+            val fingerprint = MgazeNetCalibrationStore(this).fingerprint()
+            val recorded = runCatching {
+                require(fingerprint != null)
+                ComparisonSlotStore(this).completeCalibration(
+                    reservation,
+                    fingerprint,
+                    ComparisonCalibrationEvidence(
+                        fitTargetCount = 16,
+                        acceptedRowsPerTarget = 45,
+                        featureCount = 258,
+                        postFitCheckCount = 6,
+                        excludedFitTargetCount = 0,
+                        detailedTelemetryEnabled = false,
+                        correctionApplied = false,
+                    ),
+                )
+            }
+            if (recorded.isFailure) {
+                stop(recorded.exceptionOrNull()?.message ?: "Calibration receipt could not be written.")
+                return@save
+            }
+            comparisonCalibrationCommitted = true
+            active = false
+            handler.removeCallbacksAndMessages(null)
+            session?.close()
+            session = null
+            binding.root.keepScreenOn = false
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            val closing = source
+            source = null
+            closing?.close {
+                val reading = ComparisonRuntime.putLaunch(
+                    Intent(this, ReadingValidationActivity::class.java),
+                    reservation.runtime.spec,
+                )
+                startActivity(reading)
+                finish()
+            }
+        }
+    }
     private fun stop(message: String) {
         active = false; handler.removeCallbacksAndMessages(null)
+        val reservation = comparisonReservation
+        if (reservation != null && !comparisonCalibrationCommitted) {
+            runCatching {
+                ComparisonSlotStore(this).failCalibration(
+                    reservation,
+                    if (message.contains("interrupted", ignoreCase = true)) "interrupted" else "failed",
+                    message,
+                )
+            }
+            comparisonReservation = null
+        }
         source?.close {}; source = null; session?.close()
         binding.calibrationView.hideTarget(); binding.countdownText.visibility = View.GONE
         binding.root.keepScreenOn = false; window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

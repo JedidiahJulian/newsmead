@@ -2,7 +2,9 @@ package com.newsmead.gaze
 
 import android.content.Context
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedWriter
 import java.io.File
@@ -11,10 +13,9 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Append-only synchronized trace for a structured reading validation run.
- * Each line is one JSON object. Camera images and raw face landmarks are never
- * retained, and detailed source telemetry remains disabled to avoid perturbing
- * the live gaze rate being evaluated.
+ * Structured reading trace. Comparison records use one slot-bound append-only
+ * file and a shared elapsedRealtimeNanos envelope; ordinary diagnostic runs
+ * keep their existing independent files.
  */
 class ReadingValidationSessionLog(
     context: Context,
@@ -28,48 +29,86 @@ class ReadingValidationSessionLog(
     calibrationFingerprint: String?,
     driftCorrectionActive: Boolean,
     verticalAlignmentMode: ReadingVerticalAlignmentMode,
+    private val comparison: ComparisonReadingBinding? = null,
 ) {
     private val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
-    private val sessionId = "reading_validation_session_$stamp"
-    private val file = File(context.filesDir, "$sessionId.jsonl")
-    private val writer: BufferedWriter = file.bufferedWriter()
+    private val sessionId = comparison?.let { "comparison_${it.record.runtime.spec.slot.id}" }
+        ?: "reading_validation_session_$stamp"
+    private val normalFile: File? = if (comparison == null) {
+        File(context.filesDir, "$sessionId.jsonl")
+    } else {
+        null
+    }
+    private val normalWriter: BufferedWriter? = normalFile?.bufferedWriter()
+    private val comparisonWriter = comparison?.let { ComparisonSlotStore(context).openReading(it) }
     private val startedAtMs = System.currentTimeMillis()
+    private val startedElapsedNs = SystemClock.elapsedRealtimeNanos()
     private var finished = false
+    private var receipt: ComparisonSlotReceipt? = null
 
     init {
-        write(
-            JSONObject().apply {
-                put("record_type", "session_start")
-                put("schema_version", SCHEMA_VERSION)
-                put("coordinate_space", GazeCoordinateContract.SPACE)
-                put("calibration_sha256", calibrationFingerprint ?: JSONObject.NULL)
-                put("protocol_version", ReadingValidationProtocol.VERSION)
-                put("session_id", sessionId)
-                put("run_label", runLabel)
-                put("order_variant", orderVariant)
-                put("timestamp_ms", startedAtMs)
-                put("timestamp_iso", isoTimestamp(startedAtMs))
-                put("device_model", Build.MODEL)
-                put("device_manufacturer", Build.MANUFACTURER)
-                put("android_version", Build.VERSION.RELEASE)
-                put("screen_width_px", screenWidthPx)
-                put("screen_height_px", screenHeightPx)
-                put("density_dpi", densityDpi)
-                put("raw_feature_mode", rawFeatureMode)
-                put("calibration_point_count", calibrationPointCount)
-                put("drift_correction_active", driftCorrectionActive)
-                put("vertical_alignment_mode", verticalAlignmentMode.name.lowercase(Locale.ROOT))
-                put("vertical_alignment_scope", "session_only_reading_surface_y_gain_bias")
-                put("detailed_source_telemetry_enabled", false)
-                put("camera_frames_retained", false)
-                put("validation_scope", "known_target_spatial_accuracy_only")
-                put(
-                    "processing_path",
-                    "calibrated_gaze -> optional_session_vertical_alignment -> line_aoi -> existing_target_stabilizer",
-                )
-            },
-            flush = true,
-        )
+        require(orderVariant == "A" || orderVariant == "B")
+        if (comparison != null) {
+            require(calibrationFingerprint == comparison.record.calibrationSha256)
+            require(orderVariant == comparison.record.runtime.spec.orderVariant)
+            require(screenWidthPx == comparison.record.runtime.screenWidthPx)
+            require(screenHeightPx == comparison.record.runtime.screenHeightPx)
+            require(densityDpi == comparison.record.runtime.densityDpi)
+            require(!driftCorrectionActive)
+            require(verticalAlignmentMode == ReadingVerticalAlignmentMode.OFF)
+        }
+        event("session_start", flush = true) {
+            put("schema_version", SCHEMA_VERSION)
+            put("calibration_sha256", calibrationFingerprint ?: JSONObject.NULL)
+            put("protocol_version", ReadingValidationProtocol.VERSION)
+            put("run_label", runLabel)
+            put("order_variant", orderVariant)
+            put("timestamp_iso", isoTimestamp(startedAtMs))
+            put("device_model", Build.MODEL)
+            put("device_manufacturer", Build.MANUFACTURER)
+            put("android_version", Build.VERSION.RELEASE)
+            put("screen_width_px", screenWidthPx)
+            put("screen_height_px", screenHeightPx)
+            put("density_dpi", densityDpi)
+            put("raw_feature_mode", rawFeatureMode)
+            put("calibration_point_count", calibrationPointCount)
+            put("drift_correction_active", driftCorrectionActive)
+            put("vertical_alignment_mode", verticalAlignmentMode.name.lowercase(Locale.ROOT))
+            put("vertical_alignment_scope", "session_only_reading_surface_y_gain_bias")
+            put("detailed_source_telemetry_enabled", false)
+            put("camera_frames_retained", false)
+            put("validation_scope", "known_target_spatial_accuracy_only")
+            put("result_visibility", if (comparison == null) "terminal_ui" else "offline_after_four_hashes")
+            put(
+                "processing_path",
+                "calibrated_gaze -> optional_session_vertical_alignment -> line_aoi -> existing_target_stabilizer",
+            )
+        }
+    }
+
+    fun logProtocolPlan(
+        passageSha256: String,
+        wordTargets: List<ReadingValidationCheckpoint>,
+        lineTargets: List<ReadingValidationCheckpoint>,
+    ) = event("protocol_plan", flush = true) {
+        put("passage_sha256", passageSha256)
+        put("unscored_dot_preview_count", 1)
+        put("vertical_reference_count", 3)
+        put("word_target_count", wordTargets.size)
+        put("line_target_count", lineTargets.size)
+        put("countdown_ms", ReadingValidationProtocol.COUNTDOWN_MS)
+        put("vertical_reference_acquire_ms", ReadingValidationProtocol.ALIGNMENT_ACQUIRE_MS)
+        put("vertical_reference_measure_ms", ReadingValidationProtocol.ALIGNMENT_MEASURE_MS)
+        put("word_acquire_ms", ReadingValidationProtocol.LOCALIZATION_ACQUIRE_MS)
+        put("word_measure_ms", ReadingValidationProtocol.LOCALIZATION_MEASURE_MS)
+        put("line_acquire_ms", ReadingValidationProtocol.LINE_READING_ACQUIRE_MS)
+        put("line_measure_ms", ReadingValidationProtocol.LINE_READING_MEASURE_MS)
+        put("minimum_coordinates_per_scored_target", ComparisonProtocol.MIN_COORDINATES_PER_SCORED_TARGET)
+        put("targets", JSONArray().apply {
+            (wordTargets + lineTargets).forEach { target ->
+                put(JSONObject().apply { putExpected(target) })
+            }
+        })
     }
 
     fun logCoordinateFrames(
@@ -138,19 +177,15 @@ class ReadingValidationSessionLog(
         putNum("fps", fps)
     }
 
-    fun logVerticalReference(
-        aggregate: ReadingVerticalReferenceAggregate,
-    ) = event("vertical_alignment_reference", flush = true) {
-        put("reference_id", aggregate.reference.id)
-        putNum("target_x_screen_px", aggregate.reference.targetX)
-        putNum("target_y_screen_px", aggregate.reference.targetY)
-        put("sample_count", aggregate.sampleCount)
-        putNum("observed_median_y_screen_px", aggregate.observedMedianY)
-        putNum(
-            "signed_error_before_px",
-            aggregate.observedMedianY - aggregate.reference.targetY,
-        )
-    }
+    fun logVerticalReference(aggregate: ReadingVerticalReferenceAggregate) =
+        event("vertical_alignment_reference", flush = true) {
+            put("reference_id", aggregate.reference.id)
+            putNum("target_x_screen_px", aggregate.reference.targetX)
+            putNum("target_y_screen_px", aggregate.reference.targetY)
+            put("sample_count", aggregate.sampleCount)
+            putNum("observed_median_y_screen_px", aggregate.observedMedianY)
+            putNum("signed_error_before_px", aggregate.observedMedianY - aggregate.reference.targetY)
+        }
 
     fun logVerticalAlignmentFit(
         mode: ReadingVerticalAlignmentMode,
@@ -172,6 +207,8 @@ class ReadingValidationSessionLog(
 
     fun logGaze(
         timestampMs: Long,
+        deliveryElapsedNs: Long,
+        deliveryId: Long,
         phase: ReadingValidationPhase,
         stepId: String,
         state: ReadingValidationTrialState,
@@ -184,8 +221,10 @@ class ReadingValidationSessionLog(
         stableTarget: TextTarget,
         scrollY: Int,
         textTopOnScreen: Int,
-    ) = event("gaze_sample", timestampMs) {
+    ) = event("gaze_sample", timestampMs, deliveryElapsedNs) {
         putContext(phase, stepId, state, expected)
+        put("delivery_id", deliveryId)
+        put("delivery_elapsed_ns", deliveryElapsedNs)
         putNum("gaze_x_screen_px", gazeX)
         putNum("gaze_y_screen_px", baseGazeY)
         putNum("effective_gaze_y_screen_px", effectiveGazeY)
@@ -198,94 +237,129 @@ class ReadingValidationSessionLog(
         put("line_count", stableTarget.lineCount.takeIf { it > 0 } ?: rawTarget.lineCount)
     }
 
+    /** MGazeNet-only source events. Current-arm records must not invent capture time. */
+    fun logMgazeNetObservation(
+        captureMs: Double?,
+        deliveryElapsedNs: Long,
+        deliveryId: Long,
+        reason: String,
+        rawX: Float?,
+        rawY: Float?,
+        arrivals: Long?,
+        busyDrops: Long?,
+        phase: ReadingValidationPhase,
+        stepId: String,
+        state: ReadingValidationTrialState,
+    ) = event("mgazenet_source", elapsedNs = deliveryElapsedNs) {
+        putContext(phase, stepId, state, null)
+        put("delivery_id", deliveryId)
+        putNum("capture_elapsed_ms", captureMs)
+        put("delivery_elapsed_ns", deliveryElapsedNs)
+        putNum("output_age_ms", captureMs?.let { deliveryElapsedNs / 1e6 - it })
+        put("reason", reason)
+        putNum("raw_screen_x", rawX)
+        putNum("raw_screen_y", rawY)
+        putNum("analyzer_arrivals", arrivals)
+        putNum("observed_busy_drops", busyDrops)
+        put("operational_expiry_ms", 500)
+        put("filter", "none")
+    }
+
     fun finish(outcome: String, summary: ReadingValidationMetrics.Summary) {
         if (finished) return
         event("session_end", flush = true) {
             put("outcome", outcome)
             put("timestamp_iso", isoTimestamp(System.currentTimeMillis()))
-            put("measured_sample_count", summary.measuredSamples)
-            put("valid_sample_count", summary.validSamples)
-            put("completed_checkpoint_count", summary.checkpointCount)
-            putNum("valid_fraction", summary.validFraction)
-            putNum("exact_line_accuracy", summary.exactLineAccuracy)
-            putNum("within_one_line_accuracy", summary.withinOneLineAccuracy)
-            putNum("exact_word_accuracy", summary.exactWordAccuracy)
-            put("word_measurement_sample_count", summary.wordMeasuredSamples)
-            putNum("word_trial_exact_line_accuracy", summary.wordExactLineAccuracy)
-            putNum("word_trial_within_one_line_accuracy", summary.wordWithinOneLineAccuracy)
-            put("guided_line_measurement_sample_count", summary.lineMeasuredSamples)
-            putNum("guided_line_exact_accuracy", summary.guidedLineExactAccuracy)
-            putNum("guided_line_within_one_accuracy", summary.guidedLineWithinOneAccuracy)
-            putNum("median_absolute_line_error", summary.medianAbsoluteLineError)
-            putNum("p95_absolute_line_error", summary.p95AbsoluteLineError)
+            put("spatial_result_exposed", comparison == null)
+            if (comparison == null) {
+                put("measured_sample_count", summary.measuredSamples)
+                put("valid_sample_count", summary.validSamples)
+                put("completed_checkpoint_count", summary.checkpointCount)
+                putNum("valid_fraction", summary.validFraction)
+                putNum("exact_line_accuracy", summary.exactLineAccuracy)
+                putNum("within_one_line_accuracy", summary.withinOneLineAccuracy)
+                putNum("exact_word_accuracy", summary.exactWordAccuracy)
+                put("word_measurement_sample_count", summary.wordMeasuredSamples)
+                putNum("word_trial_exact_line_accuracy", summary.wordExactLineAccuracy)
+                putNum("word_trial_within_one_line_accuracy", summary.wordWithinOneLineAccuracy)
+                put("guided_line_measurement_sample_count", summary.lineMeasuredSamples)
+                putNum("guided_line_exact_accuracy", summary.guidedLineExactAccuracy)
+                putNum("guided_line_within_one_accuracy", summary.guidedLineWithinOneAccuracy)
+                putNum("median_absolute_line_error", summary.medianAbsoluteLineError)
+                putNum("p95_absolute_line_error", summary.p95AbsoluteLineError)
+            }
         }
         finished = true
-        writer.close()
-        Log.i(TAG, "Finished structured reading log ${file.absolutePath}: $outcome")
+        if (comparisonWriter != null) {
+            receipt = comparisonWriter.closeAndSeal()
+        } else {
+            normalWriter?.close()
+        }
+        Log.i(TAG, "Finished structured reading log ${fileName()}: $outcome")
     }
 
     fun flush() {
-        if (!finished) writer.flush()
+        if (!finished) comparisonWriter?.flush() ?: normalWriter?.flush()
     }
 
-    fun fileName(): String = file.name
+    fun fileName(): String = comparisonWriter?.fileName() ?: normalFile?.name.orEmpty()
+
+    fun sealedReceipt(): ComparisonSlotReceipt? = receipt
 
     private fun event(
         recordType: String,
         timestampMs: Long = System.currentTimeMillis(),
+        elapsedNs: Long = SystemClock.elapsedRealtimeNanos(),
         flush: Boolean = false,
         block: JSONObject.() -> Unit,
     ) {
         if (finished) return
-        write(JSONObject().apply {
+        val value = JSONObject().apply {
             put("record_type", recordType)
             put("session_id", sessionId)
             put("timestamp_ms", timestampMs)
-            put("elapsed_ms", (timestampMs - startedAtMs).coerceAtLeast(0L))
+            put("event_elapsed_ns", elapsedNs)
+            put("elapsed_ms", ((elapsedNs - startedElapsedNs).coerceAtLeast(0L)) / 1e6)
             block()
-        }, flush)
+        }
+        write(value, elapsedNs, flush)
     }
 
     private fun JSONObject.putContext(
         phase: ReadingValidationPhase,
         stepId: String,
         state: ReadingValidationTrialState,
-        expected: ReadingValidationCheckpoint?,
+        expectedCheckpoint: ReadingValidationCheckpoint?,
     ) {
         put("phase", phase.name)
         put("step_id", stepId)
         put("trial_state", state.name)
-        put("expected_checkpoint", expected?.id ?: JSONObject.NULL)
-        put("expected_region", expected?.region ?: JSONObject.NULL)
-        put("expected_line", expected?.lineIndex ?: JSONObject.NULL)
-        put("expected_target_kind", expected?.targetKind?.name ?: JSONObject.NULL)
-        put("expected_target_text", expected?.targetText ?: JSONObject.NULL)
-        put("expected_target_start", expected?.targetStart ?: JSONObject.NULL)
-        put("expected_target_end", expected?.targetEnd ?: JSONObject.NULL)
+        put("expected_checkpoint", expectedCheckpoint?.id ?: JSONObject.NULL)
+        put("expected_region", expectedCheckpoint?.region ?: JSONObject.NULL)
+        put("expected_line", expectedCheckpoint?.lineIndex ?: JSONObject.NULL)
+        put("expected_target_kind", expectedCheckpoint?.targetKind?.name ?: JSONObject.NULL)
+        put("expected_target_text", expectedCheckpoint?.targetText ?: JSONObject.NULL)
+        put("expected_target_start", expectedCheckpoint?.targetStart ?: JSONObject.NULL)
+        put("expected_target_end", expectedCheckpoint?.targetEnd ?: JSONObject.NULL)
+    }
+
+    private fun JSONObject.putExpected(target: ReadingValidationCheckpoint) {
+        put("id", target.id)
+        put("region", target.region)
+        put("line_index", target.lineIndex)
+        put("target_kind", target.targetKind.name)
+        put("target_text", target.targetText)
+        put("target_start", target.targetStart)
+        put("target_end", target.targetEnd)
+        putNum("viewport_fraction", target.viewportFraction)
     }
 
     private fun JSONObject.putTarget(prefix: String, target: TextTarget) {
         put("${prefix}_valid", target.isValid)
         put("${prefix}_line", target.lineIndex)
+        put("${prefix}_line_count", target.lineCount)
         put("${prefix}_word_start", target.wordStart)
         put("${prefix}_word_end", target.wordEnd)
-    }
-
-    /** Capture/delivery and explicit gaps accompany coordinates; never contains model inputs. */
-    fun logMgazeNetObservation(captureMs: Double?, outputMs: Double, reason: String,
-        rawX: Float?, rawY: Float?, arrivals: Long?, busyDrops: Long?) {
-        if (finished) return
-        write(JSONObject().apply {
-            put("record_type","mgazenet_source")
-            putNum("capture_elapsed_ms",captureMs)
-            putNum("output_elapsed_ms",outputMs)
-            putNum("output_age_ms",captureMs?.let { outputMs-it })
-            put("reason",reason)
-            putNum("raw_screen_x",rawX); putNum("raw_screen_y",rawY)
-            putNum("analyzer_arrivals",arrivals); putNum("observed_busy_drops",busyDrops)
-            put("operational_expiry_ms",500)
-            put("filter","none")
-        })
     }
 
     private fun JSONObject.putNum(key: String, value: Number?) {
@@ -293,21 +367,32 @@ class ReadingValidationSessionLog(
         put(key, if (number != null && number.isFinite()) number else JSONObject.NULL)
     }
 
-    private fun write(value: JSONObject, flush: Boolean = false) {
-        try {
-            writer.append(value.toString())
-            writer.newLine()
-            if (flush) writer.flush()
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to write ${file.name}", e)
+    private fun write(value: JSONObject, elapsedNs: Long, flush: Boolean) {
+        if (comparisonWriter != null) {
+            comparisonWriter.append(value, elapsedNs, flush)
+            return
         }
+        try {
+            normalWriter?.append(value.toString())
+            normalWriter?.newLine()
+            if (flush) normalWriter?.flush()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write ${normalFile?.name}", e)
+        }
+    }
+
+    private fun GazeCoordinateFrame.toJson() = JSONObject().apply {
+        put("origin_x", originX)
+        put("origin_y", originY)
+        put("width", width)
+        put("height", height)
     }
 
     private fun isoTimestamp(timestampMs: Long): String =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).format(Date(timestampMs))
 
     companion object {
-        const val SCHEMA_VERSION = 6
+        const val SCHEMA_VERSION = 7
         private const val TAG = "ReadingValidation"
     }
 }
