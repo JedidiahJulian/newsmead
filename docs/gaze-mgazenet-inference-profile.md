@@ -180,7 +180,18 @@ fixture predictions per block; the timed calls reuse one synthetic fixture,
 so 2,880 timings are not 2,880 independent accuracy observations.
 The 21 host comparator tests pass; the benchmark JVM suite has 99 passing
 tests at the guard checkpoint, and both foreground instrumentation tests pass.
-The regular inference guard and four-thread default remain unchanged.
+The four-thread default remained unchanged at this investigation checkpoint.
+
+## Production promotion — 2026-09-12
+
+The equivalent range guard was promoted to the regular estimator after a live
+article-pipeline investigation reproduced the A56 bottleneck. The production
+path retains all length/non-finite rejection and the four-thread CPU runtime.
+An exact on-device parity test also gates the new bitmap-to-OpenCV input path.
+Together with bounded overlap of GPU localization and CPU MNN work, the A56
+article screen sustained 24 face-present outputs/s versus the observed 8 FPS
+serial baseline; see `progress-notes.md` for the complete stage averages and
+the downstream UI result. This throughput result is not an accuracy claim.
 
 This bounded performance investigation is closed. Accuracy and measurement
 validity take priority, as the user clarified on 2026-09-07. True Android low

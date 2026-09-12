@@ -1,6 +1,7 @@
 package com.newsmead.gaze
 
 import android.graphics.Rect
+import android.text.Layout
 import android.widget.TextView
 import java.text.BreakIterator
 
@@ -19,12 +20,17 @@ class LineAoiMapper(private val textView: TextView) {
 
     private val loc = IntArray(2)
     private val visibleRect = Rect()
+    private var cachedTextSource: CharSequence? = null
     private var cachedText = ""
     private var wordIterator: BreakIterator? = null
 
     /** @return the 0-based line index under [screenY], or -1 if outside the text. */
     fun lineAt(screenY: Float): Int {
         val layout = textView.layout ?: return -1
+        return lineAt(layout, screenY)
+    }
+
+    private fun lineAt(layout: Layout, screenY: Float): Int {
         if (!textView.getVisibleRectOnScreen(visibleRect, loc) ||
             screenY < visibleRect.top || screenY >= visibleRect.bottom
         ) return -1
@@ -40,7 +46,6 @@ class LineAoiMapper(private val textView: TextView) {
         val line = lineAt(screenY)
         if (line !in 0 until layout.lineCount) return TextTarget.INVALID
 
-        textView.getLocationOnScreen(loc)
         val localX = screenX - loc[0] - textView.totalPaddingLeft
         val lineLeft = layout.getLineLeft(line)
         val lineRight = layout.getLineRight(line)
@@ -48,7 +53,13 @@ class LineAoiMapper(private val textView: TextView) {
             return TextTarget(line, layout.lineCount)
         }
 
-        val text = textView.text.toString()
+        val textSource = textView.text
+        if (cachedTextSource !== textSource || wordIterator == null) {
+            cachedTextSource = textSource
+            cachedText = textSource.toString()
+            wordIterator = BreakIterator.getWordInstance(textView.textLocale).apply { setText(cachedText) }
+        }
+        val text = cachedText
         if (text.isEmpty()) return TextTarget(line, layout.lineCount)
         val offset = layout.getOffsetForHorizontal(line, localX)
             .coerceIn(layout.getLineStart(line), (layout.getLineEnd(line) - 1).coerceAtLeast(0))
@@ -56,15 +67,11 @@ class LineAoiMapper(private val textView: TextView) {
             return TextTarget(line, layout.lineCount)
         }
 
-        if (cachedText != text || wordIterator == null) {
-            cachedText = text
-            wordIterator = BreakIterator.getWordInstance(textView.textLocale).apply { setText(text) }
-        }
         val iterator = wordIterator ?: return TextTarget(line, layout.lineCount)
         val start = if (iterator.isBoundary(offset)) offset else iterator.preceding(offset + 1)
         val end = iterator.following(offset)
         if (start == BreakIterator.DONE || end == BreakIterator.DONE || start >= end ||
-            text.substring(start, end).none { it.isLetterOrDigit() }
+            !containsLetterOrDigit(text, start, end)
         ) return TextTarget(line, layout.lineCount)
 
         return TextTarget(
@@ -77,4 +84,9 @@ class LineAoiMapper(private val textView: TextView) {
 
     /** Total number of laid-out lines in the body, or 0 before layout. */
     val lineCount: Int get() = textView.layout?.lineCount ?: 0
+
+    private fun containsLetterOrDigit(text: String, start: Int, end: Int): Boolean {
+        for (index in start until end) if (text[index].isLetterOrDigit()) return true
+        return false
+    }
 }

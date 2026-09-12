@@ -1,5 +1,7 @@
 package com.newsmead.gaze.mgazenet
 
+import android.graphics.Bitmap
+import android.graphics.Color
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Before
@@ -39,6 +41,38 @@ class NativePipelineTest {
             assertEquals(1f,p.left[0],0f); assertEquals(0f,p.right[0],0f)
             assertEquals(1f,p.right[2*112*112],0f)
         }
+    }
+    @Test fun bitmapAndPackedRgbPreprocessingAreExactlyEquivalent() {
+        val pixels = intArrayOf(
+            Color.rgb(255,0,0), Color.rgb(0,255,0), Color.rgb(0,0,255),
+            Color.rgb(15,31,63), Color.rgb(127,191,223), Color.rgb(255,255,255),
+        )
+        val bitmap = Bitmap.createBitmap(3,2,Bitmap.Config.ARGB_8888).apply {
+            setPixels(pixels,0,3,0,0,3,2)
+        }
+        val packed = ByteArray(pixels.size * 3)
+        pixels.forEachIndexed { index, color ->
+            packed[index * 3] = Color.red(color).toByte()
+            packed[index * 3 + 1] = Color.green(color).toByte()
+            packed[index * 3 + 2] = Color.blue(color).toByte()
+        }
+        val box = GazeGeometry.Box(0,0,3,2)
+        val crops = GazeGeometry.Crops(box,box,box,0.0,0.0)
+        val packedInputs = Preprocessor().use { prep ->
+            prep.prepare(RgbFrame(3,2,packed),crops).let {
+                Preprocessor.Inputs(it.face.copyOf(),it.left.copyOf(),it.right.copyOf(),it.rect.copyOf())
+            }
+        }
+        val bitmapInputs = Preprocessor().use { prep ->
+            prep.prepare(bitmap,crops).let {
+                Preprocessor.Inputs(it.face.copyOf(),it.left.copyOf(),it.right.copyOf(),it.rect.copyOf())
+            }
+        }
+        assertArrayEquals(packedInputs.face,bitmapInputs.face,0f)
+        assertArrayEquals(packedInputs.left,bitmapInputs.left,0f)
+        assertArrayEquals(packedInputs.right,bitmapInputs.right,0f)
+        assertArrayEquals(packedInputs.rect,bitmapInputs.rect,0f)
+        bitmap.recycle()
     }
     @Test fun externallyRecycledUprightBitmapIsRecreatedBeforeTheNextFrame() {
         val raw = byteArrayOf(10,5,7,-1,20,5,7,-1)

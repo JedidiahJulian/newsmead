@@ -1,6 +1,7 @@
 package com.newsmead.gaze.mgazenet
 
 import android.content.Context
+import android.graphics.Point
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -61,6 +62,7 @@ class MgazeNetGazeProvider(private val context: Context, private val view: View)
     private var fpsStart = 0.0
     private var fpsCount = 0
     private var deliverySequence = 0L
+    private val displaySize = Point()
     private val stopCompletions = MgazeNetStopCompletionQueue()
     override fun setOnGaze(listener: GazeProvider.OnGaze) { this.listener = listener }
     override fun start(owner: LifecycleOwner) {
@@ -75,7 +77,7 @@ class MgazeNetGazeProvider(private val context: Context, private val view: View)
         val identity = saved.identity
         val gate = MgazeNetOutputGate(identity.screenWidth,identity.screenHeight)
         source = MgazeNetCameraSource(context,owner,ready = {}, result = { frame ->
-            val size = view.physicalDisplaySize()
+            val size = view.physicalDisplaySize(displaySize)
             if (size.x != identity.screenWidth || size.y != identity.screenHeight || view.display.rotation != identity.rotation) {
                 fail("Screen geometry changed; recalibrate.")
             } else {

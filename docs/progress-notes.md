@@ -1,5 +1,9 @@
 # NewsMead — Progress Notes
 
+## 2026-09-12 - MGazeNet article pipeline throughput
+
+On the Galaxy A56 article screen, face-present MGazeNet output improved from about 8 FPS to a sustained 24 FPS without changing resolution, model precision, pixel/crop semantics, gaze coordinates, or calibration identity. Promoted the previously validated finite-input guard, moved bitmap conversion/normalization out of Kotlin hot loops, removed landmark/article/UI allocations and redundant redraw/log work, and overlapped serial GPU localization with bounded double-buffered CPU inference. The steady face-present stage averages were 4.5-6.2 ms copy/rotation, 21.9-23.7 ms localization, 1.3-1.4 ms preprocessing, 26.5-29.0 ms MNN, and 0.3-0.4 ms SVR; article rendering remained healthy at 5 ms median and 8 ms P99 in the post-reset sample. Focused MGazeNet/geometry/stability tests and all six native A56 pipeline tests pass; the full 216-test JVM run has one unrelated legacy Firebase-runtime failure.
+
 ## 2026-09-03 - Replicated vertical control and offset-only offline screening
 
 At the user's request, retained the original experiment unchanged for two more pairs rather than ending evaluation after one adverse run. The second ON run helped guided reading but hurt word targeting; the third harmed accuracy on its own samples. Then evaluated one fixed median-reference offset rule across all six recordings. It improves some aggregate scores strongly but turns top-left within-one-line accuracy from 100% to 0% in three recordings, so it is not ready for implementation. The line-only replay reconstructs actual layout geometry and reproduces all 10,580 base/effective assignments; all 11 pure analyzer tests pass. Detailed findings and aggregate results are in `gaze-offset-replay.md`. Newer raw logs were read from the phone in memory, not copied into OneDrive. No Android source/build/install or git staging/commit change was made.

@@ -31,10 +31,12 @@ class WindowedStabilityEstimator(
     private var lastMetricAtMs = Long.MIN_VALUE
     private var lastSmoothedAtMs: Long? = null
     private var smoothedIndex = 0.0
+    private var validGazeCount = 0
     private var lastSnapshot = StabilitySnapshot.EMPTY.copy(baselineReady = initialBaseline != null)
 
     fun recordGazeSample(valid: Boolean, timestampMs: Long) {
         gazeValidity.addLast(ValiditySample(timestampMs, valid))
+        if (valid) validGazeCount++
         trimValidity(timestampMs)
     }
 
@@ -136,6 +138,7 @@ class WindowedStabilityEstimator(
     fun reset() {
         scores.clear()
         gazeValidity.clear()
+        validGazeCount = 0
         regressionStats.reset()
         dwellStats.reset()
         fixationStats.reset()
@@ -179,14 +182,14 @@ class WindowedStabilityEstimator(
         while (gazeValidity.isNotEmpty()) {
             val first = gazeValidity.peekFirst() ?: break
             if (timestampMs - first.timestampMs <= windowMs) break
-            gazeValidity.removeFirst()
+            if (gazeValidity.removeFirst().valid) validGazeCount--
         }
     }
 
     private fun confidence(timestampMs: Long): Double {
         trimValidity(timestampMs)
         if (gazeValidity.isEmpty()) return 0.0
-        return gazeValidity.count { it.valid }.toDouble() / gazeValidity.size
+        return validGazeCount.toDouble() / gazeValidity.size
     }
 
     data class ReadingMetrics(

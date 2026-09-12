@@ -75,24 +75,30 @@ class GazeOverlayView @JvmOverloads constructor(
         screenX = x
         screenY = y
         hasPoint = true
-        invalidate()
+        postInvalidateOnAnimation()
     }
 
     /** Clear only the debug gaze dot when the source reports unavailable/stale input. */
-    fun clearGaze() { hasPoint = false; invalidate() }
+    fun clearGaze() {
+        if (!hasPoint) return
+        hasPoint = false
+        postInvalidateOnAnimation()
+    }
 
     fun setDebugVisualsEnabled(enabled: Boolean) {
+        if (debugVisualsEnabled == enabled) return
         debugVisualsEnabled = enabled
-        invalidate()
+        postInvalidateOnAnimation()
     }
 
     fun setScaffoldState(textView: TextView, state: ScaffoldState) {
+        if (scaffoldTextView === textView && requestedState == state) return
         scaffoldTextView = textView
         val levelChanged = requestedState.level != state.level
         requestedState = state
         if (!levelChanged) {
             if (state.level != ScaffoldLevel.NONE) renderedState = state
-            invalidate()
+            postInvalidateOnAnimation()
             return
         }
 
@@ -114,14 +120,17 @@ class GazeOverlayView @JvmOverloads constructor(
 
     /** Label the active level on screen during a demo recording; null hides it. */
     fun setScaffoldCaption(text: String?) {
+        if (captionText == text) return
         captionText = text
-        invalidate()
+        postInvalidateOnAnimation()
     }
 
     /** Show the tracker's current processing frame rate in the corner. */
     fun setFps(fps: Float) {
-        fpsText = String.format(Locale.US, "%.0f fps", fps)
-        invalidate()
+        val text = String.format(Locale.US, "%.0f fps", fps)
+        if (fpsText == text) return
+        fpsText = text
+        postInvalidateOnAnimation()
     }
 
     override fun onDetachedFromWindow() {
@@ -291,7 +300,7 @@ class GazeOverlayView @JvmOverloads constructor(
             duration = FADE_DURATION_MS
             addUpdateListener {
                 scaffoldOpacity = it.animatedValue as Float
-                invalidate()
+                postInvalidateOnAnimation()
             }
             if (after != null) {
                 addListener(object : android.animation.AnimatorListenerAdapter() {

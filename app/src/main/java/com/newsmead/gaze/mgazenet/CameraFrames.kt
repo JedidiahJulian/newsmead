@@ -17,6 +17,7 @@ class CameraFrames : AutoCloseable {
     private var rgba = ByteArray(0)
     private val matrix = Matrix()
     private val paint = Paint()
+    private val canvas = Canvas()
 
     fun copy(image: ImageProxy): Bitmap {
         val plane = image.planes[0]
@@ -29,22 +30,30 @@ class CameraFrames : AutoCloseable {
         if (row?.width != width || row?.height != height) {
             row?.recycle(); row = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         }
-        // Last row may omit stride padding; copy only valid RGBA pixels explicitly.
-        if (pixels.size != width * height) pixels = IntArray(width * height)
-        if (rgba.size != width * height * 4) rgba = ByteArray(width * height * 4)
         val buffer = input.duplicate()
-        for (y in 0 until height) {
-            buffer.position(y * stride)
-            buffer.get(rgba, y * width * 4, width * 4)
+        if (stride == width * 4) {
+            // CameraX RGBA and Android ARGB_8888 have the same byte layout in
+            // bitmap memory. Let the native bitmap copy replace two Kotlin loops.
+            buffer.position(0)
+            buffer.limit(width * height * 4)
+            row!!.copyPixelsFromBuffer(buffer)
+        } else {
+            // Last row may omit stride padding; copy only valid RGBA pixels explicitly.
+            if (pixels.size != width * height) pixels = IntArray(width * height)
+            if (rgba.size != width * height * 4) rgba = ByteArray(width * height * 4)
+            for (y in 0 until height) {
+                buffer.position(y * stride)
+                buffer.get(rgba, y * width * 4, width * 4)
+            }
+            for (i in pixels.indices) {
+                val r = rgba[i * 4].toInt() and 255
+                val g = rgba[i * 4 + 1].toInt() and 255
+                val b = rgba[i * 4 + 2].toInt() and 255
+                val a = rgba[i * 4 + 3].toInt() and 255
+                pixels[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
+            }
+            row!!.setPixels(pixels, 0, width, 0, 0, width, height)
         }
-        for (i in pixels.indices) {
-            val r = rgba[i * 4].toInt() and 255
-            val g = rgba[i * 4 + 1].toInt() and 255
-            val b = rgba[i * 4 + 2].toInt() and 255
-            val a = rgba[i * 4 + 3].toInt() and 255
-            pixels[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
-        }
-        row!!.setPixels(pixels, 0, width, 0, 0, width, height)
         matrix.reset(); matrix.postRotate(rotation.toFloat())
         val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
         matrix.mapRect(bounds)
@@ -53,7 +62,8 @@ class CameraFrames : AutoCloseable {
             if (upright?.isRecycled == false) upright?.recycle()
             upright = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         }
-        Canvas(upright!!).apply {
+        canvas.setBitmap(upright!!)
+        canvas.apply {
             save(); translate(-bounds.left, -bounds.top); concat(this@CameraFrames.matrix)
             clipRect(0, 0, width, height)
             drawBitmap(row!!, 0f, 0f, paint); restore()
@@ -72,5 +82,5 @@ class CameraFrames : AutoCloseable {
         }
         return RgbFrame(bitmap.width, bitmap.height, rgb)
     }
-    override fun close() { pixels.fill(0); rgb.fill(0); rgba.fill(0); row?.recycle(); if (upright?.isRecycled == false) upright?.recycle(); row = null; upright = null }
+    override fun close() { canvas.setBitmap(null); pixels.fill(0); rgb.fill(0); rgba.fill(0); row?.recycle(); if (upright?.isRecycled == false) upright?.recycle(); row = null; upright = null }
 }

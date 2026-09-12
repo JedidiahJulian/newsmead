@@ -1,5 +1,6 @@
 package com.newsmead.gaze
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -50,6 +51,19 @@ class WindowedStabilityEstimatorTest {
         val snapshot = estimator.onCumulativeScore(score(2_000, 2, 500, 0))
 
         assertTrue(!snapshot.baselineReady)
+    }
+
+    @Test
+    fun confidenceCountStaysCorrectAsSamplesLeaveTheWindow() {
+        val estimator = WindowedStabilityEstimator(windowMs = 1_000)
+        estimator.recordGazeSample(true, 0)
+        estimator.recordGazeSample(false, 500)
+        estimator.recordGazeSample(true, 1_000)
+        assertEquals(2.0 / 3.0, estimator.currentSnapshot(1_000).confidence, 1e-9)
+
+        assertEquals(1.0, estimator.currentSnapshot(1_501).confidence, 0.0)
+        estimator.reset()
+        assertEquals(0.0, estimator.currentSnapshot(2_000).confidence, 0.0)
     }
 
     private fun score(

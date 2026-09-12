@@ -3,6 +3,7 @@ package com.newsmead.gaze.mgazenet
 import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.os.SystemClock
+import android.util.Log
 import android.util.Size
 import androidx.annotation.OptIn
 import androidx.camera.camera2.interop.Camera2CameraInfo
@@ -20,12 +21,14 @@ import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
+import java.util.Locale
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
-/** Explicit-start production source. Inference and native calibration are confined to one worker. */
+/** Explicit-start production source. MNN inference and native calibration are confined to one worker. */
 class MgazeNetCameraSource(private val context: Context, private val owner: LifecycleOwner,
     private val ready: (Map<String, Any?>) -> Unit, private val result: (Frame) -> Unit,
     private val failed: (String) -> Unit,
@@ -42,20 +45,23 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private val worker = Executors.newSingleThreadExecutor()
     private val stopped = AtomicBoolean(false)
     private val failedOnce = AtomicBoolean(false)
-    private val busy = AtomicBoolean(false)
     private val drops = AtomicLong()
     private val arrivals = AtomicLong()
     private var provider: ProcessCameraProvider? = null
     private var analysis: ImageAnalysis? = null
     private var model: MnnEstimator? = null
     private var landmarker: FaceLandmarker? = null
-    private var preprocess: Preprocessor? = null
+    private var preprocessors: List<Preprocessor> = emptyList()
+    private val availablePreprocessors = ArrayBlockingQueue<Preprocessor>(PREPROCESSOR_SLOT_COUNT)
     private var svr: SvrCalibration? = null
     private val frames = CameraFrames()
     @Volatile private var clockReady = false
     private var signature: List<Int>? = null
     private var lastTimestamp = -1L
     private var delegateName = "GPU"
+    private val performanceLog = PerformanceLog()
+    private val landmarkX = DoubleArray(478)
+    private val landmarkY = DoubleArray(478)
 
     fun start() {
         worker.execute {
@@ -64,7 +70,9 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 check(org.opencv.android.OpenCVLoader.initLocal())
                 check(CalibrationIdentity.hash(context.assets.open("face_landmarker.task").use { it.readBytes() }) == CalibrationIdentity.LOCALIZER)
                 store.verifyNativePersistence()
-                model = MnnEstimator(context); preprocess = Preprocessor()
+                model = MnnEstimator(context)
+                preprocessors = List(PREPROCESSOR_SLOT_COUNT) { Preprocessor() }
+                preprocessors.forEach { availablePreprocessors.add(it) }
                 svr = saved?.let { store.load(it) } ?: SvrCalibration()
                 fun localizer(delegate: Delegate) = FaceLandmarker.createFromOptions(context,
                     FaceLandmarker.FaceLandmarkerOptions.builder().setBaseOptions(BaseOptions.builder()
@@ -101,8 +109,8 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     }
     private fun analyze(image: ImageProxy) {
         if (stopped.get() || !clockReady) { image.close(); return }
+        val analyzerStartedNs = SystemClock.elapsedRealtimeNanos()
         arrivals.incrementAndGet()
-        if (!busy.compareAndSet(false,true)) { drops.incrementAndGet(); image.close(); return }
         try {
             val captureNs = image.imageInfo.timestamp
             check(captureNs > 0 && captureNs <= SystemClock.elapsedRealtimeNanos()) { "Invalid shared camera timestamp" }
@@ -110,6 +118,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
             val acquisition = "${image.width}x${image.height}:${image.imageInfo.rotationDegrees}:$delegateName"
             check(saved == null || saved.identity.acquisition == acquisition) { "Camera/localizer configuration changed" }
             val bitmap = frames.copy(image)
+            val copyFinishedNs = SystemClock.elapsedRealtimeNanos()
             if (signature == null) {
                 signature = shape
                 val metadata = linkedMapOf<String,Any?>(
@@ -125,40 +134,79 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                     "android_sdk" to android.os.Build.VERSION.SDK_INT,"opencv" to org.opencv.core.Core.VERSION)
                 main.execute { if (!stopped.get()) ready(metadata) }
             } else check(signature == shape) { "Camera dimensions or orientation changed; new calibration required" }
-            worker.execute {
-                try {
-                    if (stopped.get()) return@execute
-                    val videoMs = captureNs/1_000_000
-                    check(videoMs > lastTimestamp) { "Nonmonotonic MediaPipe capture clock" }
-                    lastTimestamp = videoMs
-                    val mp = BitmapImageBuilder(bitmap).build()
+            val videoMs = captureNs/1_000_000
+            check(videoMs > lastTimestamp) { "Nonmonotonic MediaPipe capture clock" }
+            lastTimestamp = videoMs
+            val mp = BitmapImageBuilder(bitmap).build()
+            try {
+                // Localization stays serial on the analyzer, while CPU inference for
+                // the prior frame can run concurrently on the worker.
+                val localizerStartedNs = SystemClock.elapsedRealtimeNanos()
+                val detected = landmarker!!.detectForVideo(mp,videoMs)
+                val localizerFinishedNs = SystemClock.elapsedRealtimeNanos()
+                val landmarks = detected.faceLandmarks().firstOrNull()
+                val crops = landmarks?.let { points ->
+                    if (points.size != landmarkX.size) null else {
+                        points.forEachIndexed { index, point ->
+                            landmarkX[index] = point.x().toDouble()
+                            landmarkY[index] = point.y().toDouble()
+                        }
+                        GazeGeometry.crops(landmarkX,landmarkY,bitmap.width,bitmap.height)
+                    }
+                }
+                val reason = when { landmarks == null -> "no_face"; crops == null -> "invalid_crops"; else -> "features" }
+                val preprocessor = if (crops == null) null else availablePreprocessors.poll()
+                if (crops != null && preprocessor == null) {
+                    drops.incrementAndGet()
+                    return
+                }
+                val preprocessStartedNs = SystemClock.elapsedRealtimeNanos()
+                val inputs = if (crops == null) null else preprocessor!!.prepare(bitmap,crops)
+                val preprocessFinishedNs = SystemClock.elapsedRealtimeNanos()
+                val queuedNs = SystemClock.elapsedRealtimeNanos()
+                worker.execute {
                     try {
-                        // BitmapImageBuilder may transfer ownership. Keep the wrapper open until every bitmap read ends.
-                        val detected = landmarker!!.detectForVideo(mp,videoMs)
-                        val landmarks = detected.faceLandmarks().firstOrNull()
-                        val crops = landmarks?.map { GazeGeometry.Landmark(it.x().toDouble(),it.y().toDouble()) }
-                            ?.let { GazeGeometry.crops(it,bitmap.width,bitmap.height) }
-                        val features = crops?.let { model!!.infer(preprocess!!.prepare(frames.rgb(bitmap),it)) }
+                        if (stopped.get()) return@execute
+                        val workerStartedNs = SystemClock.elapsedRealtimeNanos()
+                        val inferenceStartedNs = SystemClock.elapsedRealtimeNanos()
+                        val features = inputs?.let { model!!.infer(it) }
+                        val inferenceFinishedNs = SystemClock.elapsedRealtimeNanos()
                         val prediction = try { features?.let { if (svr!!.trained) svr!!.predict(it) else null } }
                             catch (e: Throwable) { features?.fill(0f); throw e }
-                        val reason = when { landmarks == null -> "no_face"; crops == null -> "invalid_crops"; else -> "features" }
-                        main.execute deliver@{
-                            // Delivery time includes main-queue delay. Final queued results precede close completion.
-                            if (stopped.get()) { features?.fill(0f); return@deliver }
-                            try { result(Frame(captureNs/1e6,now(),features,crops?.leftOpenness ?: 0.0,
-                                crops?.rightOpenness ?: 0.0,prediction,reason,crops?.let {
-                                    listOf(listOf(it.face.width,it.face.height),listOf(it.left.width,it.left.height),
-                                        listOf(it.right.width,it.right.height))
-                                },arrivals.get(),drops.get())) } finally { features?.fill(0f) }
-                        }
-                    } finally {
-                        mp.close()
-                    }
-                } catch (e: Throwable) { error(e) }
-                finally { busy.set(false) }
-            }
-        } catch (e: Throwable) { busy.set(false); error(e) }
+                        val finishedNs = SystemClock.elapsedRealtimeNanos()
+                        performanceLog.record(
+                            face = crops != null,
+                            copyMs = (copyFinishedNs - analyzerStartedNs) / 1e6,
+                            queueMs = (workerStartedNs - queuedNs) / 1e6,
+                            localizerMs = (localizerFinishedNs - localizerStartedNs) / 1e6,
+                            preprocessMs = (preprocessFinishedNs - preprocessStartedNs) / 1e6,
+                            inferenceMs = (inferenceFinishedNs - inferenceStartedNs) / 1e6,
+                            predictionMs = (finishedNs - inferenceFinishedNs) / 1e6,
+                            totalMs = (finishedNs - analyzerStartedNs) / 1e6,
+                            arrivals = arrivals.get(),
+                            drops = drops.get(),
+                            nowNs = finishedNs,
+                        )
+                        deliver(captureNs,features,crops,prediction,reason)
+                    } catch (e: Throwable) { error(e) }
+                    finally { preprocessor?.let { availablePreprocessors.offer(it) } }
+                }
+            } finally { mp.close() }
+        } catch (e: Throwable) { error(e) }
         finally { image.close() }
+    }
+
+    private fun deliver(captureNs: Long, features: FloatArray?, crops: GazeGeometry.Crops?,
+        prediction: FloatArray?, reason: String) {
+        main.execute callback@{
+            // Delivery time includes main-queue delay. Final queued results precede close completion.
+            if (stopped.get()) { features?.fill(0f); return@callback }
+            try { result(Frame(captureNs/1e6,now(),features,crops?.leftOpenness ?: 0.0,
+                crops?.rightOpenness ?: 0.0,prediction,reason,crops?.let {
+                    listOf(listOf(it.face.width,it.face.height),listOf(it.left.width,it.left.height),
+                        listOf(it.right.width,it.right.height))
+                },arrivals.get(),drops.get())) } finally { features?.fill(0f) }
+        }
     }
     fun fit(features: Array<FloatArray>, labels: Array<FloatArray>, complete: (Boolean) -> Unit) {
         worker.execute {
@@ -200,7 +248,8 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
             worker.execute {
                 val errors = mutableListOf<String>()
                 try {
-                    listOf<() -> Unit>({ landmarker?.close() },{ model?.close() },{ preprocess?.close() },
+                    listOf<() -> Unit>({ landmarker?.close() },{ model?.close() },
+                        { preprocessors.forEach { it.close() }; preprocessors = emptyList(); availablePreprocessors.clear() },
                         { svr?.close() },{ frames.close() }).forEach { close ->
                         runCatching { close() }.exceptionOrNull()?.let { errors.add(it.toString()) }
                     }
@@ -213,5 +262,53 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
             }
         }.start()
     }
-    companion object { fun now() = SystemClock.elapsedRealtimeNanos()/1e6 }
+    private class PerformanceLog {
+        private var startedNs = 0L
+        private var samples = 0
+        private var faceSamples = 0
+        private var copyTotal = 0.0
+        private var queueTotal = 0.0
+        private var localizerTotal = 0.0
+        private var preprocessTotal = 0.0
+        private var inferenceTotal = 0.0
+        private var predictionTotal = 0.0
+        private var total = 0.0
+
+        fun record(face: Boolean, copyMs: Double, queueMs: Double, localizerMs: Double,
+            preprocessMs: Double, inferenceMs: Double, predictionMs: Double, totalMs: Double,
+            arrivals: Long, drops: Long, nowNs: Long) {
+            if (startedNs == 0L) startedNs = nowNs
+            samples++
+            if (face) faceSamples++
+            copyTotal += copyMs
+            queueTotal += queueMs
+            localizerTotal += localizerMs
+            preprocessTotal += preprocessMs
+            inferenceTotal += inferenceMs
+            predictionTotal += predictionMs
+            total += totalMs
+            if (nowNs - startedNs < PERFORMANCE_LOG_WINDOW_NS) return
+            Log.i(PERFORMANCE_TAG, String.format(Locale.US,
+                "samples=%d face=%d arrivals=%d drops=%d avg_ms copy=%.1f queue=%.1f localizer=%.1f preprocess=%.1f inference=%.1f svr=%.1f total=%.1f",
+                samples,faceSamples,arrivals,drops,copyTotal/samples,queueTotal/samples,localizerTotal/samples,
+                preprocessTotal/samples,inferenceTotal/samples,predictionTotal/samples,total/samples))
+            startedNs = nowNs
+            samples = 0
+            faceSamples = 0
+            copyTotal = 0.0
+            queueTotal = 0.0
+            localizerTotal = 0.0
+            preprocessTotal = 0.0
+            inferenceTotal = 0.0
+            predictionTotal = 0.0
+            total = 0.0
+        }
+    }
+
+    companion object {
+        private const val PREPROCESSOR_SLOT_COUNT = 2
+        private const val PERFORMANCE_LOG_WINDOW_NS = 2_000_000_000L
+        private const val PERFORMANCE_TAG = "MGazeNetPerf"
+        fun now() = SystemClock.elapsedRealtimeNanos()/1e6
+    }
 }

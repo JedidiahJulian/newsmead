@@ -15,6 +15,18 @@ class GazeGeometryTest {
         assertEquals(GazeGeometry.Box(26,31,18,14), c.left)
         assertEquals(GazeGeometry.Box(56,31,18,14), c.right)
     }
+    @Test fun primitiveCoordinatePathMatchesLandmarkPath() {
+        val points = points()
+        assertEquals(
+            GazeGeometry.crops(points,100,100),
+            GazeGeometry.crops(
+                DoubleArray(points.size) { points[it].x },
+                DoubleArray(points.size) { points[it].y },
+                100,
+                100,
+            ),
+        )
+    }
     @Test fun halfPixelUsesEvenRounding() {
         val p = points(); p[33] = GazeGeometry.Landmark(.305, .4)
         assertEquals(GazeGeometry.crops(points(), 100, 100), GazeGeometry.crops(p, 100, 100))

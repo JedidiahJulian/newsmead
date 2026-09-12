@@ -20,9 +20,11 @@ fun View.getVisibleRectOnScreen(out: Rect, rootLocation: IntArray = IntArray(2))
 }
 
 @Suppress("DEPRECATION")
-fun View.physicalDisplaySize(): Point = Point().also { size ->
+fun View.physicalDisplaySize(size: Point): Point = size.also {
     requireNotNull(display) { "View must be attached before recording display coordinates" }.getRealSize(size)
 }
+
+fun View.physicalDisplaySize(): Point = physicalDisplaySize(Point())
 
 fun GazeCoordinateFrame.toJson(): JSONObject = JSONObject().apply {
     put("origin_x_screen_px", originX)

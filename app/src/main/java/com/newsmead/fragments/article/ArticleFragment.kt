@@ -73,6 +73,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var scaffoldController: AdaptiveScaffoldController? = null
     private var currentTextTarget = TextTarget.INVALID
     private var lastStabilityLogMs = 0L
+    private var lastAoiLogMs = 0L
     private val scaffoldDemoHandler = Handler(Looper.getMainLooper())
     private var scaffoldDemoStep = 0
     private enum class ColorMode { LIGHT, DARK, SEPIA }
@@ -485,6 +486,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     override fun onResume() {
         super.onResume()
+        if (StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE && scaffoldController != null) {
+            startScaffoldDemoCycle()
+        }
         if (resumeGazeAfterStop && !launchedCalibration) {
             resumeGazeAfterStop = false
             binding.root.post {
@@ -501,6 +505,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     override fun onStop() {
+        scaffoldDemoHandler.removeCallbacksAndMessages(null)
         resumeGazeAfterStop = gazeProvider != null && !StudyConfig.GAZE_TOUCH_VALIDATION
         gazeProvider?.stop(); gazeProvider = null
         gazeOverlay?.clearGaze()
@@ -558,6 +563,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         scaffoldController?.reset()?.let(::applyScaffoldUpdate)
         currentTextTarget = TextTarget.INVALID
         lastStabilityLogMs = 0L
+        lastAoiLogMs = 0L
         rsiInferencer = createRsiInferencer()
         Log.i("GazeScaffold", "Adaptive reading session reset after calibration/test interruption")
     }
@@ -689,12 +695,15 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             estimator.recordGazeSample(rawTarget.isValid, timestampMs)
             controller.onGazeTarget(target, timestampMs)
 
-            Log.d(
-                "GazeAOI",
-                "gaze=(" + x.toInt() + "," + y.toInt() + ") rawLine=" + rawTarget.lineIndex +
-                    " stableLine=" + target.lineIndex + "/" + target.lineCount +
-                    " word=" + target.wordStart + ":" + target.wordEnd
-            )
+            if (timestampMs - lastAoiLogMs >= ARTICLE_DIAGNOSTIC_LOG_INTERVAL_MS) {
+                lastAoiLogMs = timestampMs
+                Log.d(
+                    "GazeAOI",
+                    "gaze=(" + x.toInt() + "," + y.toInt() + ") rawLine=" + rawTarget.lineIndex +
+                        " stableLine=" + target.lineIndex + "/" + target.lineCount +
+                        " word=" + target.wordStart + ":" + target.wordEnd
+                )
+            }
 
             if (target.isValid) {
                 rsiInferencer?.onLine(target.lineIndex, target.lineCount, timestampMs)
@@ -745,7 +754,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private fun createRsiInferencer(): ReadingStateInferencer =
         ReadingStateInferencer(object : ReadingStateInferencer.Listener {
             override fun onLineSample(sample: ReadingStateInferencer.LineSample) {
-                Log.d("GazeRSI", "line=${sample.lineIndex}/${sample.lineCount} t=${sample.timestampMs}")
+                // Per-sample diagnostics are intentionally omitted from the reading hot path.
             }
 
             override fun onFixation(event: ReadingStateInferencer.FixationEvent) {
@@ -761,14 +770,6 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             }
 
             override fun onScore(score: ReadingStateInferencer.RsiScore) {
-                Log.d(
-                    "GazeRSI",
-                    "score=${"%.1f".format(score.score)} " +
-                        "reg=${"%.2f".format(score.regressionComponent)} " +
-                        "dwell=${"%.2f".format(score.dwellComponent)} " +
-                        "fix=${"%.2f".format(score.fixationComponent)} " +
-                        "events=f${score.fixationCount}/d${score.totalDwellMs}ms/r${score.regressionCount}"
-                )
                 val estimator = stabilityEstimator ?: return
                 val controller = scaffoldController ?: return
                 val snapshot = estimator.onCumulativeScore(score)
@@ -971,6 +972,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
          * onDestroy camera release before we rebind the shared CameraX camera.
          */
         private const val GAZE_RESTART_DELAY_MS = 800L
+        private const val ARTICLE_DIAGNOSTIC_LOG_INTERVAL_MS = 1_000L
 
         /** Order DEMO_CYCLE walks through; it loops, so a retake needs no restart. */
         private val SCAFFOLD_DEMO_SEQUENCE = listOf(
