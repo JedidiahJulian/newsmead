@@ -42,8 +42,12 @@ internal class MgazeNetStopCompletionQueue {
     }
 }
 
-/** Only unfiltered finite physical-screen measurements reach GazeProvider. No correction or replay. */
-class MgazeNetGazeProvider(private val context: Context, private val view: View) : GazeProvider, DefaultLifecycleObserver {
+/** Finite physical-screen measurements reach GazeProvider with no correction or replay. */
+class MgazeNetGazeProvider(
+    private val context: Context,
+    private val view: View,
+    private val smoothForReading: Boolean = false,
+) : GazeProvider, DefaultLifecycleObserver {
     data class Observation(val captureMs: Double?, val deliveryElapsedNs: Long, val deliveryId: Long, val reason: String,
         val x: Float? = null, val y: Float? = null, val rawX: Float? = null, val rawY: Float? = null,
         val arrivals: Long? = null, val busyDrops: Long? = null) {
@@ -63,6 +67,7 @@ class MgazeNetGazeProvider(private val context: Context, private val view: View)
     private var fpsCount = 0
     private var deliverySequence = 0L
     private val displaySize = Point()
+    private val readingSmoother = MgazeNetReadingSmoother()
     private val stopCompletions = MgazeNetStopCompletionQueue()
     override fun setOnGaze(listener: GazeProvider.OnGaze) { this.listener = listener }
     override fun start(owner: LifecycleOwner) {
@@ -74,6 +79,7 @@ class MgazeNetGazeProvider(private val context: Context, private val view: View)
         this.owner = owner; owner.lifecycle.addObserver(this)
         lastCapture = -1.0; lastOutput = -1.0; fpsStart = MgazeNetCameraSource.now(); fpsCount = 0
         deliverySequence = 0L
+        readingSmoother.reset()
         val identity = saved.identity
         val gate = MgazeNetOutputGate(identity.screenWidth,identity.screenHeight)
         source = MgazeNetCameraSource(context,owner,ready = {}, result = { frame ->
@@ -89,9 +95,13 @@ class MgazeNetGazeProvider(private val context: Context, private val view: View)
                 val reason = result.reason; val x = result.rawX; val y = result.rawY
                 lastCapture = frame.captureMs; lastOutput = frame.outputMs
                 fresh = reason == "coordinate"
-                onObservation?.invoke(Observation(frame.captureMs,deliveryElapsedNs,deliveryId,reason,if (fresh) x else null,if (fresh) y else null,
+                val captureMs = frame.captureMs.toLong()
+                val outputX = if (fresh && smoothForReading) readingSmoother.filterX(x!!,captureMs) else x
+                val outputY = if (fresh && smoothForReading) readingSmoother.filterY(y!!,captureMs) else y
+                if (!fresh) readingSmoother.reset()
+                onObservation?.invoke(Observation(frame.captureMs,deliveryElapsedNs,deliveryId,reason,if (fresh) outputX else null,if (fresh) outputY else null,
                     x,y,frame.arrivals,frame.busyDrops))
-                if (fresh) listener?.onGaze(x!!,y!!)
+                if (fresh) listener?.onGaze(outputX!!,outputY!!)
                 fpsCount++
                 if (now-fpsStart >= 1000) { onFps?.invoke((fpsCount*1000/(now-fpsStart)).toFloat()); fpsStart=now; fpsCount=0 }
             }
@@ -105,6 +115,7 @@ class MgazeNetGazeProvider(private val context: Context, private val view: View)
             if (lastOutput < 0 && now - fpsStart > 20000) { fail("MGazeNet initialization timed out."); return }
             if (fresh && now-lastCapture > MAX_OUTPUT_AGE_MS) {
                 fresh = false
+                readingSmoother.reset()
                 onObservation?.invoke(Observation(lastCapture,SystemClock.elapsedRealtimeNanos(),++deliverySequence,"stale"))
             }
             handler.postDelayed(this,50)
@@ -126,7 +137,7 @@ class MgazeNetGazeProvider(private val context: Context, private val view: View)
         }
         handler.removeCallbacksAndMessages(null)
         owner?.lifecycle?.removeObserver(this); owner = null
-        val closing = source; source = null; fresh = false
+        val closing = source; source = null; fresh = false; readingSmoother.reset()
         if (closing == null) {
             stopCompletions.complete().forEach { it() }
             return
@@ -144,7 +155,7 @@ class MgazeNetGazeProvider(private val context: Context, private val view: View)
         }
     }
     companion object {
-        // Explicit operational expiry, NOT an accuracy threshold. No interpolation or smoothing.
+        // Explicit operational expiry, NOT an accuracy threshold. No interpolation.
         const val MAX_OUTPUT_AGE_MS = MgazeNetOutputGate.EXPIRY_MS
     }
 }

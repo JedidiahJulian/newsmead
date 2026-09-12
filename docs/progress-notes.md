@@ -1,5 +1,9 @@
 # NewsMead — Progress Notes
 
+## 2026-09-12 - MGazeNet article-output smoothing
+
+Added an article-only One Euro screen-coordinate filter to reduce visible MGazeNet jitter while preserving responsive gaze shifts. Calibration and accuracy instruments remain raw; observations expose both raw and filtered coordinates, and unavailable/stale input resets the filter instead of bridging gaps.
+
 ## 2026-09-12 - MGazeNet article pipeline throughput
 
 On the Galaxy A56 article screen, face-present MGazeNet output improved from about 8 FPS to a sustained 24 FPS without changing resolution, model precision, pixel/crop semantics, gaze coordinates, or calibration identity. Promoted the previously validated finite-input guard, moved bitmap conversion/normalization out of Kotlin hot loops, removed landmark/article/UI allocations and redundant redraw/log work, and overlapped serial GPU localization with bounded double-buffered CPU inference. The steady face-present stage averages were 4.5-6.2 ms copy/rotation, 21.9-23.7 ms localization, 1.3-1.4 ms preprocessing, 26.5-29.0 ms MNN, and 0.3-0.4 ms SVR; article rendering remained healthy at 5 ms median and 8 ms P99 in the post-reset sample. Focused MGazeNet/geometry/stability tests and all six native A56 pipeline tests pass; the full 216-test JVM run has one unrelated legacy Firebase-runtime failure.

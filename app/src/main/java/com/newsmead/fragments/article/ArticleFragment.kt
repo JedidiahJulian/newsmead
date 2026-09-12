@@ -847,7 +847,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             Toast.makeText(context, issue, Toast.LENGTH_LONG).show()
             return
         }
-        val provider = MgazeNetGazeProvider(requireContext(),binding.root)
+        val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true)
         provider.onFps = { fps -> gazeOverlay?.setFps(fps) }
         provider.onFailure = { message -> Toast.makeText(context,message,Toast.LENGTH_LONG).show() }
         provider.onObservation = { observation ->
