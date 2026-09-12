@@ -225,7 +225,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
         }
     }
     private fun checkTarget() = identity!!.let { id ->
-        if (verification == 0) id.targets.last() else {
+        if (verification == 0) id.targets[3] else {
             val f = listOf(.5f to .5f,.25f to .25f,.75f to .25f,.25f to .75f,.75f to .75f)[verification-1]
             id.viewport.toScreen(f.first*id.viewport.width,f.second*id.viewport.height)
         }

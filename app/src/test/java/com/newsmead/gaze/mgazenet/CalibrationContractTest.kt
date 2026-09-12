@@ -30,6 +30,16 @@ class CalibrationContractTest {
         val first = id.targets.first()
         rejected { CalibrationIdentity.parse(id.canonical().replace("${first.x},${first.y}","${first.x+1},${first.y}")) }
     }
+    @Test fun accuracyGridHoldsOutEightTargetsAndRepeatsOnlyCentre() {
+        assertEquals(9,MgazeNetAccuracyProtocol.TARGET_FRACTIONS.distinct().size)
+        assertEquals(setOf(.5f to .5f),MgazeNetAccuracyProtocol.TARGET_FRACTIONS.toSet()
+            .intersect(CalibrationIdentity.TARGET_FRACTIONS.toSet()))
+        val frame = identity().viewport
+        assertEquals(216f,MgazeNetAccuracyProtocol.target(frame,0).x,.001f)
+        assertEquals(548.8f,MgazeNetAccuracyProtocol.target(frame,0).y,.001f)
+        assertEquals(864f,MgazeNetAccuracyProtocol.target(frame,8).x,.001f)
+        assertEquals(1892.2f,MgazeNetAccuracyProtocol.target(frame,8).y,.001f)
+    }
     @Test fun bundleRejectsLegacyPartialCorruptAndWrongDevice() {
         val id = identity(); val data = CalibrationBundle.encode(CalibrationBundle.Artifact(id,byteArrayOf(1,2),byteArrayOf(3,4)))
         val result = CalibrationBundle.decode(data) { it == id }

@@ -28,6 +28,7 @@ class GazeTestActivity : AppCompatActivity() {
     private var onset = Double.NaN
     private val samples = ArrayList<Pair<Float,Float>>()
     private val summaries = ArrayList<String>()
+    private val targetResults = ArrayList<TargetResult>()
     private var permissionPending = false
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,7 +36,7 @@ class GazeTestActivity : AppCompatActivity() {
         binding.root.keepScreenOn = false
         WindowCompat.setDecorFitsSystemWindows(window,false)
         WindowInsetsControllerCompat(window,binding.root).hide(WindowInsetsCompat.Type.systemBars())
-        binding.hintText.text = "MGazeNet check. Start opens the camera. Follow the nine targets; results do not correct gaze."
+        binding.hintText.text = "MGazeNet accuracy check. Eight targets are new and the centre is repeated. Results do not correct gaze."
         binding.accuracyButton.visibility = View.VISIBLE; binding.accuracyButton.text = "Start MGazeNet check"
         binding.accuracyButton.setOnClickListener {
             if (ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -62,7 +63,8 @@ class GazeTestActivity : AppCompatActivity() {
         p.onObservation = { observation ->
             if (frame != binding.calibrationView.gazeCoordinateFrame()) end("Target geometry changed; check stopped.")
             else if (target == -1 && observation.reason == "coordinate") { target = 0; showTarget() }
-            else if (target in 0..8 && observation.reason == "coordinate" && onset.isFinite() &&
+            else if (target in MgazeNetAccuracyProtocol.TARGET_FRACTIONS.indices &&
+                observation.reason == "coordinate" && onset.isFinite() &&
                 observation.captureMs != null && observation.captureMs >= onset+3000 &&
                 observation.captureMs < onset+5500 && observation.outputMs < onset+5750) {
                 samples.add(observation.x!! to observation.y!!)
@@ -73,10 +75,7 @@ class GazeTestActivity : AppCompatActivity() {
         provider = p; p.start(this)
         handler.postDelayed({ if (provider != null && target == -1) end("No fresh gaze output within 20 seconds. Check stopped.") },20000)
     }
-    private fun targetPoint() = frame!!.let { f ->
-        val fractions = listOf(.1f,.5f,.9f)
-        f.toScreen(fractions[target%3]*f.width,fractions[target/3]*f.height)
-    }
+    private fun targetPoint() = MgazeNetAccuracyProtocol.target(frame!!,target)
     private fun showTarget() {
         samples.clear(); onset = Double.NaN
         val p = targetPoint(); val local = frame!!.toLocal(p.x,p.y)
@@ -88,17 +87,36 @@ class GazeTestActivity : AppCompatActivity() {
         binding.calibrationView.showTarget(local.x,local.y,1800)
     }
     private fun finishTarget() {
-        if (provider == null || target !in 0..8) return
+        if (provider == null || target !in MgazeNetAccuracyProtocol.TARGET_FRACTIONS.indices) return
         val p = targetPoint()
-        fun median(values: List<Float>): Float = values.sorted().let { (it[(it.size-1)/2]+it[it.size/2])/2 }
         summaries.add(if (samples.isEmpty()) "Target ${target+1}: no fresh coordinates" else {
             val dx = median(samples.map { it.first-p.x }); val dy = median(samples.map { it.second-p.y })
-            val error = median(samples.map { kotlin.math.abs(it.second-p.y) })
-            "Target ${target+1}: n=${samples.size}, dx=${"%.1f".format(dx)}, dy=${"%.1f".format(dy)}, median |Y|=${"%.1f".format(error)} px"
+            val radial = kotlin.math.hypot(dx,dy)
+            targetResults.add(TargetResult(target+1,radial,kotlin.math.abs(dy)))
+            "Target ${target+1}: n=${samples.size}, dx=${"%.1f".format(dx)}, " +
+                "dy=${"%.1f".format(dy)}, 2D=${"%.1f".format(radial)} px"
         })
         target++
-        if (target == 9) end(summaries.joinToString("\n")+"\n\nRaw MGazeNet, 500 ms operational expiry. No accuracy pass or correction. This check does not establish reading accuracy.")
+        if (target == MgazeNetAccuracyProtocol.TARGET_FRACTIONS.size) end(resultSummary())
         else showTarget()
+    }
+    private fun resultSummary(): String {
+        val metrics = if (targetResults.isEmpty()) "No targets produced usable coordinates." else {
+            val median2d = median(targetResults.map { it.radial })
+            val medianVertical = median(targetResults.map { it.absDy })
+            val worst = targetResults.maxBy { it.radial }
+            "Measured targets: ${targetResults.size} of ${MgazeNetAccuracyProtocol.TARGET_FRACTIONS.size}\n" +
+                "Median 2D target error: ${"%.1f".format(median2d)} px\n" +
+                "Worst target: ${worst.index} at ${"%.1f".format(worst.radial)} px\n" +
+                "Median |vertical bias|: ${"%.1f".format(medianVertical)} px"
+        }
+        return "Nine-point result\n$metrics\n\n${summaries.joinToString("\n")}\n\n" +
+            "Eight targets were held out from calibration; the centre is a repeat. " +
+            "Raw MGazeNet with 500 ms operational expiry. No accuracy pass or correction. " +
+            "This check does not establish reading accuracy."
+    }
+    private fun median(values: List<Float>): Float = values.sorted().let {
+        (it[(it.size-1)/2]+it[it.size/2])/2
     }
     private fun end(message: String) {
         handler.removeCallbacksAndMessages(null); provider?.stop(); provider = null
@@ -109,4 +127,6 @@ class GazeTestActivity : AppCompatActivity() {
     }
     override fun onStop() { permissionPending = false; if (provider != null) end("Check interrupted."); super.onStop() }
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); provider?.stop(); super.onDestroy() }
+
+    private data class TargetResult(val index: Int, val radial: Float, val absDy: Float)
 }

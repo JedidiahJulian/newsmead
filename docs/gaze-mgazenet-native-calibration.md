@@ -74,8 +74,10 @@ and `git diff --check` pass. The debug APK is a new development artifact and is
 intentionally not the hash-locked 16-point comparison APK.
 
 The next step is one non-participant device timing and functional check on each
-phone, followed by independent nine-point and reading validation. Record actual
-completion time, target timeouts/rejections, output coverage, regional error,
-and line accuracy. Do not reduce the 45-row count or remove validation based on
-duration alone; compare any shorter protocol prospectively against this
-13x45 checkpoint.
+phone, followed by the fixed 20%/50%/80% nine-point check and reading validation.
+Eight of those nine accuracy targets are held out from the 13-point fit; the
+centre is retained as a repeat check. Record actual completion time, target
+timeouts/rejections, output coverage, median and worst two-dimensional target
+error, regional error, and line accuracy. Do not reduce the 45-row count or
+remove validation based on duration alone; compare any shorter protocol
+prospectively against this 13x45 checkpoint.
