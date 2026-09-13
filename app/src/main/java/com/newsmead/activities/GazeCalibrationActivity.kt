@@ -6,8 +6,10 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
+import java.util.Locale
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -36,8 +38,12 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private var startedAt = 0.0
     private var verification = -1
     private var checkStart = Double.NaN
-    private val errors = ArrayList<Float>()
+    private val checkPredictions = ArrayList<Pair<Float,Float>>()
+    private val checkResults = ArrayList<MgazeNetCalibrationQualityGate.Check>()
     private val summaries = ArrayList<String>()
+    private var qualityReport: MgazeNetCalibrationQualityGate.Report? = null
+    private var pxPerCmX = Double.NaN
+    private var pxPerCmY = Double.NaN
     private var permissionPending = false
     private var preparingComparison = false
     private var comparisonSpec: ComparisonLaunchSpec? = null
@@ -59,6 +65,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
             requestStart()
         }
         binding.btnAccept.setOnClickListener { save() }
+        binding.btnRedoAll.setOnClickListener { discardAndPrepareRetry() }
         binding.btnRedoWorst.visibility = View.GONE
         binding.btnRedoAll.visibility = View.GONE
 
@@ -148,6 +155,13 @@ class GazeCalibrationActivity : AppCompatActivity() {
             return
         }
         val store = MgazeNetCalibrationStore(this)
+        val metrics = resources.displayMetrics
+        if (!metrics.xdpi.isFinite() || metrics.xdpi <= 0f || !metrics.ydpi.isFinite() || metrics.ydpi <= 0f) {
+            stop("Physical display dimensions are unavailable. Calibration was not started.")
+            return
+        }
+        pxPerCmX = metrics.xdpi / 2.54
+        pxPerCmY = metrics.ydpi / 2.54
         identity = store.identity(binding.calibrationView)
         active = true; startedAt = MgazeNetCameraSource.now()
         binding.root.keepScreenOn = true
@@ -162,7 +176,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
             if (active) {
                 if (!geometryMatches()) stop("Screen geometry changed. Calibration was not saved.")
                 else if (verification >= 0) observeCheck(frame)
-                else session?.sample(frame.captureMs,frame.outputMs,frame.features,frame.leftArea,frame.rightArea)
+                else session?.sample(frame.captureMs,frame.outputMs,frame.features,frame.leftArea,frame.rightArea,frame.posture)
             }
         },failed = { stop(it) },store = store).also { it.start() }
         handler.post(tick)
@@ -201,7 +215,13 @@ class GazeCalibrationActivity : AppCompatActivity() {
                 if (s.tick(now)) showTarget()
                 if (s.phase == MgazeNetCalibrationSession.Phase.FAILED) { stop("Target capture timed out. Nothing was saved."); return }
                 if (s.phase == MgazeNetCalibrationSession.Phase.COLLECT) {
-                    binding.statusText.text = "${s.count} / ${MgazeNetCalibrationSession.SAMPLES_PER_TARGET} samples"
+                    binding.statusText.text = when {
+                        s.showPostureWarning(now) && s.index < 0 -> "Hold the phone and your head steady · recollecting practice"
+                        s.showPostureWarning(now) -> "Return to the practice posture"
+                        s.fillingTemporalWindow(now) -> "${s.count} / ${MgazeNetCalibrationSession.SAMPLES_PER_TARGET} stable samples · spreading across 3 seconds"
+                        s.index < 0 -> "${s.count} / ${MgazeNetCalibrationSession.SAMPLES_PER_TARGET} posture-reference samples"
+                        else -> "${s.count} / ${MgazeNetCalibrationSession.SAMPLES_PER_TARGET} stable samples"
+                    }
                 }
                 if (s.phase == MgazeNetCalibrationSession.Phase.FITTING && !fitting) {
                     fitting = true; binding.calibrationView.hideTarget(); binding.progressText.text = "Fitting calibration…"
@@ -213,11 +233,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
                     }
                 }
             } else if (verification in 0..5 && checkStart.isFinite() && now >= checkStart+5750) {
-                val label = if (verification == 0) "Near-centre repeat" else "Validation $verification"
-                summaries.add(if (errors.isEmpty()) "$label: no coordinates" else {
-                    val sorted = errors.sorted(); val median = (sorted[(sorted.size-1)/2]+sorted[sorted.size/2])/2
-                    "$label: ${errors.size} coordinates; median |Y error| ${"%.1f".format(median)} px"
-                })
+                finishCheck()
                 verification++
                 if (verification == 6) finishChecks() else showCheck()
             }
@@ -231,7 +247,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
         }
     }
     private fun showCheck() {
-        errors.clear(); checkStart = Double.NaN
+        checkPredictions.clear(); checkStart = Double.NaN
         val p = checkTarget(); val local = identity!!.viewport.toLocal(p.x,p.y)
         binding.progressText.text = if (verification == 0) "Near-centre repeat" else "Validation $verification of 5"
         binding.statusText.text = "Keep looking at the target"
@@ -241,28 +257,72 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private fun observeCheck(frame: MgazeNetCameraSource.Frame) {
         if (verification !in 0..5 || !checkStart.isFinite() || frame.captureMs < checkStart+3000 ||
             frame.captureMs >= checkStart+5500 || frame.outputMs >= checkStart+5750 || !frame.eligible) return
+        if (session?.postureAccepted(frame.posture) != true) {
+            binding.statusText.text = "Return to the calibration posture"
+            return
+        }
+        binding.statusText.text = "Keep looking at the target"
         val p = frame.prediction ?: return
-        val dy = kotlin.math.abs(p[1]*identity!!.screenHeight-checkTarget().y)
-        if (dy.isFinite()) errors.add(dy)
+        val x = p[0]*identity!!.screenWidth
+        val y = p[1]*identity!!.screenHeight
+        if (x.isFinite() && y.isFinite()) checkPredictions.add(x to y)
+    }
+    private fun finishCheck() {
+        val spec = checkSpec(verification)
+        if (checkPredictions.isEmpty()) {
+            summaries.add("${spec.label}: no usable coordinates")
+            return
+        }
+        val expected = checkTarget()
+        val x = median(checkPredictions.map { it.first })
+        val y = median(checkPredictions.map { it.second })
+        val dxCm = (x-expected.x)/pxPerCmX
+        val dyCm = (y-expected.y)/pxPerCmY
+        val result = MgazeNetCalibrationQualityGate.Check(
+            index = verification+1,
+            label = spec.label,
+            sampleCount = checkPredictions.size,
+            dxCm = dxCm,
+            dyCm = dyCm,
+            repeatedFitTarget = spec.repeatedFitTarget,
+        )
+        checkResults.add(result)
+        summaries.add(String.format(Locale.US,
+            "%s: n=%d, dx=%.3f cm, dy=%.3f cm, 2D=%.3f cm",
+            result.label,result.sampleCount,result.dxCm,result.dyCm,result.radialCm))
     }
     private fun finishChecks() {
         source?.pauseCapture()
         binding.root.keepScreenOn = false
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         binding.calibrationView.hideTarget(); binding.statusText.text = ""
-        if (comparisonSpec != null) {
+        val report = MgazeNetCalibrationQualityGate.evaluate(checkResults).also { qualityReport = it }
+        Log.i("MGazeNetCalibration",String.format(Locale.US,
+            "quality_pass=%s median_2d_cm=%.3f worst_2d_cm=%.3f median_vertical_cm=%.3f " +
+                "worst_repeat_cm=%.3f posture_rejected=%d practice_restarts=%d candidates=%d selected=%d",
+            report.passed,report.median2dCm,report.worst2dCm,report.medianVerticalCm,
+            report.worstRepeatCm,session?.postureRejected ?: 0,session?.practiceRestarts ?: 0,
+            session?.trainingCandidates ?: 0,CalibrationIdentity.FIT_TARGET_COUNT*CalibrationIdentity.SAMPLES_PER_TARGET))
+        if (comparisonSpec != null && report.passed) {
             binding.progressText.text = "Finalizing the slot calibration…"
             binding.gatePanel.visibility = View.GONE
             saveComparisonCalibration()
             return
         }
+        if (comparisonSpec != null) {
+            stop("Calibration quality check failed. Nothing was saved. ${report.failures.joinToString("; ")}")
+            return
+        }
         binding.gatePanel.visibility = View.VISIBLE
-        binding.gateText.text = summaries.joinToString("\n") +
-            "\n\nDescriptive checks only; no accuracy pass is assigned. Save retains two local models. No correction is applied."
+        binding.gateText.text = qualitySummary(report)
+        binding.btnAccept.visibility = if (report.passed) View.VISIBLE else View.GONE
+        binding.btnAccept.isEnabled = report.passed
+        binding.btnRedoAll.visibility = if (report.passed) View.GONE else View.VISIBLE
+        binding.btnRedoAll.text = "Discard and recalibrate"
         binding.btnAccept.text = "Save MGazeNet calibration"
     }
     private fun save() {
-        if (!active || verification != 6 || !geometryMatches()) return
+        if (!active || verification != 6 || qualityReport?.passed != true || !geometryMatches()) return
         binding.btnAccept.isEnabled = false
         source!!.save(identity!!) { success ->
             stop(if (success) "MGazeNet calibration saved." else "Calibration could not be saved.")
@@ -271,6 +331,10 @@ class GazeCalibrationActivity : AppCompatActivity() {
     }
 
     private fun saveComparisonCalibration() {
+        if (qualityReport?.passed != true) {
+            stop("Calibration quality check failed. Nothing was saved.")
+            return
+        }
         val reservation = comparisonReservation ?: run {
             stop("Comparison reservation unavailable.")
             return
@@ -344,4 +408,66 @@ class GazeCalibrationActivity : AppCompatActivity() {
     }
     override fun onStop() { permissionPending = false; if (active) stop("Calibration interrupted. Close and reopen to begin again."); super.onStop() }
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); source?.close {}; session?.close(); super.onDestroy() }
+
+    private fun checkSpec(index: Int): CheckSpec = when (index) {
+        0 -> CheckSpec("30% position repeat",true)
+        1 -> CheckSpec("Centre repeat",true)
+        2 -> CheckSpec("Upper-left held-out",false)
+        3 -> CheckSpec("Upper-right held-out",false)
+        4 -> CheckSpec("Lower-left held-out",false)
+        5 -> CheckSpec("Lower-right held-out",false)
+        else -> error("Invalid post-fit check index")
+    }
+
+    private fun qualitySummary(report: MgazeNetCalibrationQualityGate.Report): String {
+        fun value(number: Double) = if (number.isFinite()) String.format(Locale.US,"%.3f",number) else "unavailable"
+        val heading = if (report.passed) "Calibration quality: PASS" else "Calibration quality: RETRY REQUIRED"
+        val metrics = "$heading\n" +
+            "Median 2D: ${value(report.median2dCm)} cm (limit ${MgazeNetCalibrationQualityGate.MAX_MEDIAN_2D_CM} cm)\n" +
+            "Worst 2D: ${value(report.worst2dCm)} cm (limit ${MgazeNetCalibrationQualityGate.MAX_WORST_2D_CM} cm)\n" +
+            "Median |vertical|: ${value(report.medianVerticalCm)} cm (limit ${MgazeNetCalibrationQualityGate.MAX_MEDIAN_VERTICAL_CM} cm)\n" +
+            "Worst repeat: ${value(report.worstRepeatCm)} cm (limit ${MgazeNetCalibrationQualityGate.MAX_WORST_REPEAT_CM} cm)\n" +
+            "Posture-rejected frames: ${session?.postureRejected ?: 0}; practice restarts: ${session?.practiceRestarts ?: 0}\n" +
+            "Stable training candidates: ${session?.trainingCandidates ?: 0}; selected: ${CalibrationIdentity.FIT_TARGET_COUNT*CalibrationIdentity.SAMPLES_PER_TARGET}"
+        val decision = if (report.passed) {
+            "This guardrail passed. Saving will replace the previous calibration. The separate nine-point check remains the accuracy evaluation."
+        } else {
+            "This run cannot be saved. The previous calibration remains untouched.\n" +
+                report.failures.joinToString("\n") { "• $it" }
+        }
+        return "$metrics\n\n${summaries.joinToString("\n")}\n\n$decision\nNo correction or smoothing was applied."
+    }
+
+    private fun discardAndPrepareRetry() {
+        if (qualityReport?.passed != false) return
+        active = false
+        handler.removeCallbacksAndMessages(null)
+        session?.close(); session = null
+        binding.gatePanel.visibility = View.GONE
+        binding.progressText.text = "Discarding this run…"
+        val closing = source
+        source = null
+        closing?.close {
+            if (isFinishing || isDestroyed) return@close
+            fitting = false
+            verification = -1
+            checkStart = Double.NaN
+            checkPredictions.clear()
+            checkResults.clear()
+            summaries.clear()
+            qualityReport = null
+            identity = null
+            binding.startButton.visibility = View.VISIBLE
+            binding.startButton.isEnabled = true
+            binding.startButton.text = "Start recalibration"
+            binding.progressText.text = "Poor run discarded. The previous saved calibration was kept."
+            binding.statusText.text = ""
+        }
+    }
+
+    private fun median(values: List<Float>): Float = values.sorted().let {
+        (it[(it.size-1)/2]+it[it.size/2])/2f
+    }
+
+    private data class CheckSpec(val label: String, val repeatedFitTarget: Boolean)
 }

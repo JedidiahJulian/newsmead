@@ -8,6 +8,9 @@ class CalibrationContractTest {
     private fun identity() = CalibrationIdentity("a".repeat(64),1080,2340,0,
         GazeCoordinateFrame(0,101,1080,2239),"640x480:270:GPU")
     private fun rejected(action: () -> Unit) { try { action(); fail("Incompatible artifact accepted") } catch (_: Exception) {} }
+    private fun posture(centerX: Double = .5) = MgazeNetPostureGate.Sample(
+        centerX,.48,.4,.52,.5,.38,.55,1.0,
+    )
     @Test fun fullViewportOriginAndOrderedGeometryRoundTrip() {
         val id = identity()
         assertEquals(id,CalibrationIdentity.parse(id.canonical()))
@@ -15,6 +18,7 @@ class CalibrationContractTest {
         assertEquals(listOf(1,5,9,12,16,19,27,30,34,37,41,45,23),
             CalibrationIdentity.UPSTREAM_GRID_INDICES)
         assertTrue(CalibrationIdentity.TARGET_CUE_MS < MgazeNetCalibrationSession.SETTLE_MS)
+        assertEquals(3000,MgazeNetCalibrationSession.SAMPLE_WINDOW_MS)
         assertTrue(CalibrationIdentity.TARGET_FRACTIONS.all { (x, y) ->
             x in .10f..90f/100f && y in .10f..90f/100f
         })
@@ -55,20 +59,27 @@ class CalibrationContractTest {
     @Test fun drawsSettlesAdmitsExactly45AndNeverTrainsPractice() {
         val session = MgazeNetCalibrationSession(identity()); session.begin()
         val source = FloatArray(258) { 1f }
-        session.sample(2000.0,2001.0,source,11.0,11.0); assertEquals(0,session.count)
+        session.sample(2000.0,2001.0,source,11.0,11.0,posture()); assertEquals(0,session.count)
         var now = 0.0
         for (target in -1 until identity().targets.size) {
             assertEquals(target,session.index); session.drawn(now)
-            session.sample(now+1499,now+1500,source,11.0,11.0); assertEquals(0,session.count)
-            session.sample(now+1500,now+1501,source,10.0,11.0); assertEquals(0,session.count)
-            for (i in 0..44) session.sample(now+1600+i*100,now+1650+i*100,source,11.0,11.0)
+            session.sample(now+1499,now+1500,source,11.0,11.0,posture()); assertEquals(0,session.count)
+            session.sample(now+1500,now+1501,source,10.0,11.0,posture()); assertEquals(0,session.count)
+            for (i in 0..59) session.sample(now+1550+i*50,now+1551+i*50,source,11.0,11.0,posture())
             assertEquals(45,session.count)
-            session.sample(now+6200,now+6250,source,11.0,11.0); assertEquals(45,session.count)
-            session.tick(now+6600); now+=7000
+            assertEquals(MgazeNetCalibrationSession.Phase.COLLECT,session.phase)
+            assertFalse(session.tick(now+4501))
+            val advanced = session.tick(now+5101)
+            if (target == identity().targets.lastIndex) {
+                assertFalse(advanced)
+                assertEquals(MgazeNetCalibrationSession.Phase.FITTING,session.phase)
+            } else assertTrue(advanced)
+            now+=6000
         }
         source.fill(99f)
         val (features,labels) = session.takeTraining()
         assertEquals(585,features.size); assertEquals(585,labels.size)
+        assertEquals(780,session.trainingCandidates)
         assertTrue(features.all { it[0] == 1f })
         assertEquals(identity().targets.first().y/2340,labels.first()[1],0f)
         assertEquals(identity().targets.last().x/1080,labels.last()[0],0f)
@@ -78,12 +89,24 @@ class CalibrationContractTest {
     }
     @Test fun nonfiniteDuplicateLateRowsAndDeadlineAreRejected() {
         val s = MgazeNetCalibrationSession(identity()); s.begin(); s.drawn(0.0)
-        s.sample(1600.0,1700.0,FloatArray(258){ Float.NaN },11.0,11.0)
-        s.sample(1800.0,1801.0,FloatArray(258),11.0,11.0)
-        s.sample(1800.0,1802.0,FloatArray(258),11.0,11.0)
-        s.sample(1900.0,30001.0,FloatArray(258),11.0,11.0)
+        s.sample(1600.0,1700.0,FloatArray(258){ Float.NaN },11.0,11.0,posture())
+        s.sample(1800.0,1801.0,FloatArray(258),11.0,11.0,posture())
+        s.sample(1800.0,1802.0,FloatArray(258),11.0,11.0,posture())
+        s.sample(1900.0,30001.0,FloatArray(258),11.0,11.0,posture())
         assertEquals(1,s.count)
         s.tick(30000.0); assertEquals(MgazeNetCalibrationSession.Phase.FAILED,s.phase)
         rejected { s.takeTraining() }
+    }
+    @Test fun trainingRejectsPostureDriftFromPracticeReference() {
+        val s = MgazeNetCalibrationSession(identity()); s.begin(); s.drawn(0.0)
+        val features = FloatArray(258)
+        for (i in 0..59) s.sample(1550.0+i*50,1551.0+i*50,features,11.0,11.0,posture())
+        assertFalse(s.tick(4501.0)); assertTrue(s.tick(5101.0)); s.drawn(6000.0)
+        s.sample(7600.0,7601.0,features,11.0,11.0,posture(centerX = .60))
+        assertEquals(0,s.count)
+        assertEquals(1,s.postureRejected)
+        s.sample(7700.0,7701.0,features,11.0,11.0,posture(centerX = .52))
+        assertEquals(1,s.count)
+        s.close()
     }
 }

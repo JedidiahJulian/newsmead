@@ -36,7 +36,8 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private val saved: CalibrationBundle.Artifact? = null) {
     data class Frame(val captureMs: Double, val outputMs: Double, val features: FloatArray?,
         val leftArea: Double, val rightArea: Double, val prediction: FloatArray?, val reason: String,
-        val cropSizes: List<List<Int>>?, val arrivals: Long, val busyDrops: Long) {
+        val cropSizes: List<List<Int>>?, val posture: MgazeNetPostureGate.Sample?,
+        val arrivals: Long, val busyDrops: Long) {
         val eligible get() = features?.let { it.size == 258 && it.all(Float::isFinite) } == true &&
             leftArea.isFinite() && rightArea.isFinite() && leftArea > 10 && rightArea > 10
     }
@@ -155,6 +156,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                     }
                 }
                 val reason = when { landmarks == null -> "no_face"; crops == null -> "invalid_crops"; else -> "features" }
+                val posture = crops?.let { MgazeNetPostureGate.from(it,bitmap.width,bitmap.height) }
                 val preprocessor = if (crops == null) null else availablePreprocessors.poll()
                 if (crops != null && preprocessor == null) {
                     drops.incrementAndGet()
@@ -187,7 +189,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                             drops = drops.get(),
                             nowNs = finishedNs,
                         )
-                        deliver(captureNs,features,crops,prediction,reason)
+                        deliver(captureNs,features,crops,posture,prediction,reason)
                     } catch (e: Throwable) { error(e) }
                     finally { preprocessor?.let { availablePreprocessors.offer(it) } }
                 }
@@ -197,7 +199,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     }
 
     private fun deliver(captureNs: Long, features: FloatArray?, crops: GazeGeometry.Crops?,
-        prediction: FloatArray?, reason: String) {
+        posture: MgazeNetPostureGate.Sample?, prediction: FloatArray?, reason: String) {
         main.execute callback@{
             // Delivery time includes main-queue delay. Final queued results precede close completion.
             if (stopped.get()) { features?.fill(0f); return@callback }
@@ -205,7 +207,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 crops?.rightOpenness ?: 0.0,prediction,reason,crops?.let {
                     listOf(listOf(it.face.width,it.face.height),listOf(it.left.width,it.left.height),
                         listOf(it.right.width,it.right.height))
-                },arrivals.get(),drops.get())) } finally { features?.fill(0f) }
+                },posture,arrivals.get(),drops.get())) } finally { features?.fill(0f) }
         }
     }
     fun fit(features: Array<FloatArray>, labels: Array<FloatArray>, complete: (Boolean) -> Unit) {

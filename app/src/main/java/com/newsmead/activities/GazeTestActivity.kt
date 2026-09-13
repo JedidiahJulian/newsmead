@@ -17,6 +17,7 @@ import com.newsmead.databinding.ActivityGazeTestBinding
 import com.newsmead.gaze.GazeCoordinateFrame
 import com.newsmead.gaze.gazeCoordinateFrame
 import com.newsmead.gaze.mgazenet.*
+import java.util.Locale
 
 /** Explicit-start raw MGazeNet check. No affine fit, correction, calibration write or quality gate. */
 class GazeTestActivity : AppCompatActivity() {
@@ -30,6 +31,8 @@ class GazeTestActivity : AppCompatActivity() {
     private val summaries = ArrayList<String>()
     private val targetResults = ArrayList<TargetResult>()
     private var permissionPending = false
+    private var pxPerCmX = Double.NaN
+    private var pxPerCmY = Double.NaN
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityGazeTestBinding.inflate(layoutInflater); setContentView(binding.root)
@@ -56,6 +59,13 @@ class GazeTestActivity : AppCompatActivity() {
         if (provider != null) return
         val issue = MgazeNetCalibrationStore(this).compatibilityIssue(binding.root)
         if (issue != null) { end(issue); return }
+        val metrics = resources.displayMetrics
+        if (!metrics.xdpi.isFinite() || metrics.xdpi <= 0f || !metrics.ydpi.isFinite() || metrics.ydpi <= 0f) {
+            end("Physical display dimensions are unavailable; accuracy check stopped.")
+            return
+        }
+        pxPerCmX = metrics.xdpi / 2.54
+        pxPerCmY = metrics.ydpi / 2.54
         frame = binding.calibrationView.gazeCoordinateFrame()
         binding.accuracyButton.visibility = View.GONE; binding.root.keepScreenOn = true
         val p = MgazeNetGazeProvider(this,binding.root)
@@ -91,10 +101,11 @@ class GazeTestActivity : AppCompatActivity() {
         val p = targetPoint()
         summaries.add(if (samples.isEmpty()) "Target ${target+1}: no fresh coordinates" else {
             val dx = median(samples.map { it.first-p.x }); val dy = median(samples.map { it.second-p.y })
-            val radial = kotlin.math.hypot(dx,dy)
-            targetResults.add(TargetResult(target+1,radial,kotlin.math.abs(dy)))
-            "Target ${target+1}: n=${samples.size}, dx=${"%.1f".format(dx)}, " +
-                "dy=${"%.1f".format(dy)}, 2D=${"%.1f".format(radial)} px"
+            val dxCm = dx/pxPerCmX; val dyCm = dy/pxPerCmY
+            val radialCm = kotlin.math.hypot(dxCm,dyCm)
+            targetResults.add(TargetResult(target+1,radialCm,kotlin.math.abs(dyCm)))
+            String.format(Locale.US,"Target %d: n=%d, dx=%.3f cm, dy=%.3f cm, 2D=%.3f cm",
+                target+1,samples.size,dxCm,dyCm,radialCm)
         })
         target++
         if (target == MgazeNetAccuracyProtocol.TARGET_FRACTIONS.size) end(resultSummary())
@@ -102,13 +113,13 @@ class GazeTestActivity : AppCompatActivity() {
     }
     private fun resultSummary(): String {
         val metrics = if (targetResults.isEmpty()) "No targets produced usable coordinates." else {
-            val median2d = median(targetResults.map { it.radial })
-            val medianVertical = median(targetResults.map { it.absDy })
-            val worst = targetResults.maxBy { it.radial }
+            val median2d = medianDouble(targetResults.map { it.radialCm })
+            val medianVertical = medianDouble(targetResults.map { it.absDyCm })
+            val worst = targetResults.maxBy { it.radialCm }
             "Measured targets: ${targetResults.size} of ${MgazeNetAccuracyProtocol.TARGET_FRACTIONS.size}\n" +
-                "Median 2D target error: ${"%.1f".format(median2d)} px\n" +
-                "Worst target: ${worst.index} at ${"%.1f".format(worst.radial)} px\n" +
-                "Median |vertical bias|: ${"%.1f".format(medianVertical)} px"
+                String.format(Locale.US,"Median 2D target error: %.3f cm\n",median2d) +
+                String.format(Locale.US,"Worst target: %d at %.3f cm\n",worst.index,worst.radialCm) +
+                String.format(Locale.US,"Median |vertical bias|: %.3f cm",medianVertical)
         }
         return "Nine-point result\n$metrics\n\n${summaries.joinToString("\n")}\n\n" +
             "Eight targets were held out from calibration; the centre is a repeat. " +
@@ -116,6 +127,9 @@ class GazeTestActivity : AppCompatActivity() {
             "This check does not establish reading accuracy."
     }
     private fun median(values: List<Float>): Float = values.sorted().let {
+        (it[(it.size-1)/2]+it[it.size/2])/2
+    }
+    private fun medianDouble(values: List<Double>): Double = values.sorted().let {
         (it[(it.size-1)/2]+it[it.size/2])/2
     }
     private fun end(message: String) {
@@ -128,5 +142,5 @@ class GazeTestActivity : AppCompatActivity() {
     override fun onStop() { permissionPending = false; if (provider != null) end("Check interrupted."); super.onStop() }
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); provider?.stop(); super.onDestroy() }
 
-    private data class TargetResult(val index: Int, val radial: Float, val absDy: Float)
+    private data class TargetResult(val index: Int, val radialCm: Double, val absDyCm: Double)
 }
