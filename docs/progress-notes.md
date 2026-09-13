@@ -1,5 +1,14 @@
 # NewsMead — Progress Notes
 
+## 2026-09-13 - Device-test calibration loss
+
+After the connected Android test installation, NewsMead's calibration is missing and firstInstallTime equals lastUpdateTime (2026-09-13 00:08:46), indicating a fresh installation/data reset. No calibration bundle was found in the app, the benchmark's corresponding location, or either project workspace. Do not run Gradle connected tests on the user's working app data without a verified recoverable backup; use preserving updates and direct instrumentation or a separate test installation. The earlier assurance that calibration would be preserved was incorrect.
+
+## 2026-09-13 - Reading measurement pilot
+
+Added explicit article diagnostics recording with the orange gaze dot visible (user request), scaffolds off, raw/display capture timestamps, geometry/gap exclusions, and app-private JSONL. Added the measurement specification and offline I-DT replay for provisional fixation, first-pass, rereading, regression and skipping measurements; no new RII formula is selected. Next: inspect an actual diagnostic reading run and establish word/event reliability before independent-label collection; see `reading-measurement-pilot.md`.
+Validation: debug build, 219 gaze JVM tests, 14 replay tests, and two synthetic Android checks passed; the updated debug build was installed on the A56 through the device checks.
+
 ## 2026-09-12 - MGazeNet article-output smoothing
 
 Added an article-only One Euro screen-coordinate filter to reduce visible MGazeNet jitter while preserving responsive gaze shifts. Calibration and accuracy instruments remain raw; observations expose both raw and filtered coordinates, and unavailable/stale input resets the filter instead of bridging gaps.

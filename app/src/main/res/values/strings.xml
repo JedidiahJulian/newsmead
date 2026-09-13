@@ -20,6 +20,12 @@
     <string name="reading_validation_stop">Stop validation</string>
     <string name="reading_vertical_alignment_target">Vertical alignment reference target</string>
     <string name="reading_validation_menu">Gaze diagnostics</string>
+    <string name="reading_measurement_option">Record natural reading</string>
+    <string name="reading_measurement_instructions">Read normally at your own pace. The orange gaze dot stays visible so you can check tracking. Reading scaffolds will be off. Tap the gaze diagnostics button again to finish. Leaving this screen also ends the recording.</string>
+    <string name="reading_measurement_start">Start reading</string>
+    <string name="reading_measurement_unavailable">Start live gaze tracking and open an article before recording.</string>
+    <string name="reading_measurement_saved">Reading recording saved on this device.</string>
+    <string name="reading_measurement_failed">The reading recording could not be saved completely. Please repeat it.</string>
     <string name="reading_validation_accuracy_option">Nine-point accuracy check</string>
     <string name="reading_validation_reading_option">Structured reading validation</string>
     <string name="calib_excluded_notice">Point skipped after 2 tries</string>

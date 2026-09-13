@@ -138,13 +138,22 @@ class GazeOverlayView @JvmOverloads constructor(
         super.onDetachedFromWindow()
     }
 
+    private var dotOnly = false
+
+    /** Researcher recording view: retain the orange dot, suppress all other overlays. */
+    fun setDotOnly(enabled: Boolean) {
+        if (dotOnly == enabled) return
+        dotOnly = enabled
+        postInvalidateOnAnimation()
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        drawScaffold(canvas)
+        if (!dotOnly) drawScaffold(canvas)
         // Above the article body, next to the FPS readout - never over the text.
-        captionText?.let { canvas.drawText(it, 24f, 104f, captionPaint) }
-        if (!debugVisualsEnabled) return
-        fpsText?.let { canvas.drawText(it, 24f, 60f, fpsPaint) }
+        if (!dotOnly) captionText?.let { canvas.drawText(it, 24f, 104f, captionPaint) }
+        if (!debugVisualsEnabled && !dotOnly) return
+        if (!dotOnly) fpsText?.let { canvas.drawText(it, 24f, 60f, fpsPaint) }
         if (!hasPoint) return
         getLocationOnScreen(loc)
         canvas.drawCircle(screenX - loc[0], screenY - loc[1], radius, gazePaint)
