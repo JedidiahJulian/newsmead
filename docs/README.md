@@ -2,6 +2,10 @@
 
 This directory contains the supporting documentation for the NewsMead gaze-driven reading prototype.
 
+The [manuscript research plan](../Manuscript/README-reading-instability-and-gaze-measurement-plan.md) is the current source of truth
+for the reading-instability and gaze-measurement research plan, supporting
+sources, implementation-versus-thesis corrections, and manuscript-ready prose.
+
 ## Project Guides
 
 - [Thesis Memory](thesis-memory.md): working understanding of the thesis, manuscript model, and current implementation.

@@ -1,0 +1,146 @@
+% NewsMead core manuscript inserts
+% Generated from the implementation-alignment documentation and verified
+% against ReadingStateInferencer, WindowedStabilityEstimator,
+% AdaptiveScaffoldController, and StudyConfig.
+%
+% This file is an insertion aid, not a standalone LaTeX document.
+
+\subsection{Session Reading State Index}
+
+The Session Reading State Index (Session RSI) is a cumulative measure of
+detected reading effort across the current article-reading session. It combines
+regression, dwell, and fixation components on a 0--100 scale using weights of
+0.40, 0.35, and 0.25, respectively. Higher values indicate that the gaze-derived
+reading pattern contains more behaviors associated with rereading, hesitation,
+or effort. Session RSI is a descriptive research outcome; it is not a
+comprehension score and does not directly select visual-scaffolding levels.
+
+\begin{equation}
+  \mathrm{Session\ RSI}=100(0.40R+0.35D+0.25F),
+\end{equation}
+
+where \(R\) is the confirmed regression count divided by the number of lines
+reached, bounded to \([0,1]\); \(D\) is accumulated dwell time divided by
+elapsed session time, bounded to \([0,1]\); and \(F\) is fixation rate divided
+by a reference rate of 120 fixations per minute, bounded to \([0,1]\).
+
+Regression receives the largest engineering weight because confirmed backward
+line movement is treated as the strongest of the three available indicators of
+rereading. Dwell receives the second-largest weight, and fixation rate the
+smallest, because both can also reflect ordinary careful reading or individual
+reading style. These weights encode the prototype's current design priorities;
+they must not be presented as population-optimal coefficients and should be
+examined during pilot validation.
+
+A cumulative measure is unsuitable for immediate adaptation. Difficulty or
+tracking noise early in an article may keep Session RSI elevated after the
+reader recovers, while a new difficulty episode late in a long stable session
+may be diluted by earlier history. Session RSI is also not normalized against
+each participant's normal reading pattern. It is therefore retained for
+end-of-session description and comparison of articles or experimental
+conditions rather than real-time scaffold selection.
+
+\subsubsection{Adaptive Instability Index}
+
+The Adaptive Instability Index (AII) is a recent, participant-relative measure
+used for real-time scaffold selection. It is computed from regression rate,
+dwell-time proportion, and fixation rate within a rolling 10-second window.
+Every 500~ms, after at least two seconds of recent observations are available,
+each metric is standardized against the participant's baseline. Only positive
+deviations in the direction associated with increased effort are retained.
+
+For metric \(i\), the positive standardized deviation is
+
+\begin{equation}
+ z_i^{+}=\max\left(0,
+ \frac{x_{i,\mathrm{recent}}-\mu_{i,\mathrm{baseline}}}
+ {\max(\sigma_{i,\mathrm{baseline}},\sigma_{i,\mathrm{floor}})}
+ \right).
+\end{equation}
+
+The raw index is
+
+\begin{equation}
+ \mathrm{AII}_{\mathrm{raw}}=
+ \operatorname{clamp}_{[0,4]}
+ \left(0.40z_R^{+}+0.35z_D^{+}+0.25z_F^{+}\right).
+\end{equation}
+
+The implemented standard-deviation floors are 1.0 regression per minute, 0.05
+dwell-time proportion, and 5.0 fixations per minute. The raw value is
+exponentially smoothed with a two-second time constant. For update interval
+\(\Delta t\), \(\alpha=1-e^{-\Delta t/2s}\), and
+
+\begin{equation}
+ \mathrm{AII}_t=\mathrm{AII}_{t-1}
+ +\alpha(\mathrm{AII}_{\mathrm{raw},t}-\mathrm{AII}_{t-1}).
+\end{equation}
+
+The AII is reported in weighted z-derived index units. It must not be
+interpreted as an exact number of standard deviations or assigned a
+standard-normal percentile because its components are truncated at zero,
+weighted, calculated from overlapping windows, capped, and smoothed.
+
+The current prototype automatically estimates a fresh baseline during the first
+20 seconds of each article. This is an engineering fallback and is not the
+intended main-study baseline protocol. For the main study, each participant will
+first read standardized passages under the intended device position, lighting,
+font, layout, and posture. The resulting mean and standard deviation of each
+metric will be persisted and reused across the participant's experimental
+articles. Baseline duration and test-retest reliability will be checked during
+the pilot before the profile is used in the main evaluation.
+
+\subsection{Adaptation and Graded Visual Scaffolding}
+
+Visual-scaffolding levels are selected using the smoothed Adaptive Instability
+Index rather than the cumulative Session RSI. The controller applies only one
+intervention at a time and escalates or withdraws support conservatively to
+avoid rapid visual oscillation.
+
+\begin{table}[ht]
+\centering
+\caption{Adaptive Instability Index mapping used by the current prototype.}
+\begin{tabular}{p{0.36\linewidth}p{0.53\linewidth}}
+\hline
+\textbf{Adaptive Instability Index} & \textbf{Desired state}\\
+\hline
+Less than 1.0 & No scaffold\\
+1.0 to less than 1.5 & Level 1: word highlighting\\
+1.5 to less than 2.0 & Level 2: line emphasis\\
+2.0 to less than 2.5 & Level 3: five-line focus window\\
+At least 2.5 with loss evidence & Level 4: re-entry support\\
+At least 2.5 without loss evidence & Level 3: five-line focus window\\
+\hline
+\end{tabular}
+\end{table}
+
+Adaptation remains disabled until baseline collection is complete. At least 65
+percent of gaze samples in the recent window must land on visible article text.
+This value is a coverage gate, not proof that the correct line or word was
+identified. Elevated behavior must persist for 1.5 seconds before escalation,
+while recovery must persist for 3.5 seconds before withdrawal. Both escalation
+and withdrawal proceed one level at a time. Low gaze coverage clears the active
+intervention instead of allowing possible tracking loss to be treated as reading
+difficulty.
+
+Level 4 requires evidence beyond an elevated AII. In the current operational
+definition, gaze must remain off the visible article text for at least 800~ms
+and then return at least two lines away from the last stable line. The resulting
+re-entry evidence remains eligible for 10 seconds. A high index or a regression
+alone does not activate Level 4.
+
+The thresholds 1.0, 1.5, 2.0, and 2.5; the 65 percent coverage gate; the 1.5-
+and 3.5-second persistence intervals; and the current loss-of-position rule are
+provisional engineering parameters. The final parameters will be tuned and
+frozen using pilot data with independently labeled stable, difficulty,
+tracking-error, loss-of-position, and recovery episodes.
+
+\paragraph{Alternative considered.}
+Direct mapping of cumulative Session RSI to scaffold levels was considered but
+not adopted. Its historical accumulation can preserve early difficulty after
+recovery, dilute a late difficulty episode after prolonged stable reading, and
+apply non-personalized absolute cutoffs to readers with different normal reading
+patterns. Direct control would also require a new set of empirically validated
+0--100 thresholds; the current AII thresholds cannot be converted directly to
+Session RSI ranges. A high Session RSI would not replace the independent
+loss-of-position evidence required for Level 4.

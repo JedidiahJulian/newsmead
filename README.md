@@ -1,12 +1,17 @@
 # NewsMead Gaze-Driven Reading Prototype
 
+> **Historical implementation guide.** Sections below describe several older
+> gaze-tracker configurations, including the 16-point MediaPipe-Iris path. The
+> current thesis research plan, MGazeNet pipeline status, and validated-versus-
+> provisional reading claims are in the [manuscript research plan](Manuscript/README-reading-instability-and-gaze-measurement-plan.md).
+
 NewsMead is an Android news-reading application repurposed as a thesis research prototype for gaze-driven adaptive reading. The current study build runs offline, bypasses the production login flow, estimates gaze from the phone front camera, maps gaze to article text lines, and derives a Reading State Index (RSI) from line-level reading behavior.
 
 This README is written as a manual and study guide for understanding the implementation. It explains what was built, why each decision was made, how calibration works, how MediaPipe and the bundled model are used, how the logs should be interpreted, and how RSI is deduced from the logs.
 
-Supporting documentation lives in [docs/](docs/README.md). Start there for the thesis memory, gaze implementation guide, RSI guide, adaptive visual-scaffolding guide, session setup, progress notes, and implementation specs.
+For the current thesis research plan and manuscript-ready treatment of reading instability and gaze measurements, start with the [manuscript research plan](Manuscript/README-reading-instability-and-gaze-measurement-plan.md). Supporting implementation documentation lives in [docs/](docs/README.md).
 
-## Current Status
+## Historical Status Snapshot
 
 The current implementation is a working prototype, not a finalized clinical or production-grade eye tracker.
 
