@@ -177,8 +177,14 @@ object DataHelper {
                 callback(articles)
             },
             { error ->
+                // The live backend (newsmead*.southeastasia.cloudapp.azure.com)
+                // is currently unreachable during development. Fall back to a
+                // small local sample set so screens aren't left blank while
+                // testing unrelated features (e.g. auth). Remove this fallback
+                // once the backend is back and this is no longer needed.
                 Log.e("DataHelper", error.toString())
-                callback(articles)
+                Log.w("DataHelper", "Article backend unreachable, using sample articles")
+                callback(sampleArticles())
             })
 
         queue.add(jsonObjectRequest)
@@ -189,6 +195,81 @@ object DataHelper {
     // ----------------------------------------------------------------------------- //
     // ----------------------------- Data for Testing ------------------------------ //
     // ----------------------------------------------------------------------------- //
+
+    // Local stand-in for the live article feed, used by loadArticleData()'s
+    // Volley error callback when the backend can't be reached. Mirrors the
+    // shape a real /articles response is parsed into (see loadArticleData),
+    // so list, detail, and save/list flows all work against it normally.
+    fun sampleArticles(): ArrayList<Article> {
+        val data = ArrayList<Article>()
+        data.add(
+            Article(
+                sourceNameMap("gmanews"), sourceImageMap("gmanews"),
+                "PH secures over \$4.26-B investment deals from Saudi Arabia visit",
+                "",
+                "Oct 20, 2023",
+                "MANILA, Philippines — The Philippines secured over \$4.26 billion in investment pledges following a series of bilateral meetings, according to officials. The agreements span energy, infrastructure, and labor cooperation, with implementation expected to begin over the next fiscal year.\n\nOfficials described the deals as part of a broader push to diversify trade partnerships in the region.",
+                "News", "English", "3 min read",
+                "https://example.com/sample-article-1", "sample-1"
+            )
+        )
+        data.add(
+            Article(
+                sourceNameMap("inquirer"), sourceImageMap("inquirer"),
+                "Local startups push for wider 5G rollout outside Metro Manila",
+                "",
+                "Oct 21, 2023",
+                "A coalition of technology startups is calling for accelerated 5G infrastructure investment in provincial areas, arguing that connectivity gaps are limiting economic opportunities outside major cities.\n\nIndustry groups say expanded coverage could support remote work and digital services in underserved regions.",
+                "Technology", "English", "4 min read",
+                "https://example.com/sample-article-2", "sample-2"
+            )
+        )
+        data.add(
+            Article(
+                sourceNameMap("philstar"), sourceImageMap("philstar"),
+                "National basketball team opens training camp ahead of regional cup",
+                "",
+                "Oct 22, 2023",
+                "The national basketball squad began training camp this week in preparation for the upcoming regional championship. Coaches emphasized conditioning and roster depth as key focus areas ahead of group-stage matches.",
+                "Sports", "English", "2 min read",
+                "https://example.com/sample-article-3", "sample-3"
+            )
+        )
+        data.add(
+            Article(
+                sourceNameMap("manilabulletin"), sourceImageMap("manilabulletin"),
+                "Retail sector reports steady growth heading into holiday season",
+                "",
+                "Oct 23, 2023",
+                "Retail industry groups reported steady consumer spending growth in the third quarter, with analysts attributing the trend to seasonal hiring and improved foot traffic in shopping districts.\n\nProjections for the holiday season remain cautiously optimistic.",
+                "Business", "English", "3 min read",
+                "https://example.com/sample-article-4", "sample-4"
+            )
+        )
+        data.add(
+            Article(
+                sourceNameMap("news5"), sourceImageMap("news5"),
+                "Film festival announces lineup of independent Filipino cinema",
+                "",
+                "Oct 24, 2023",
+                "This year's independent film festival lineup features a wide selection of Filipino-directed features and shorts, with organizers highlighting a focus on emerging regional filmmakers.",
+                "Entertainment", "English", "2 min read",
+                "https://example.com/sample-article-5", "sample-5"
+            )
+        )
+        data.add(
+            Article(
+                sourceNameMap("abantenews"), sourceImageMap("abantenews"),
+                "Mga eksperto, nanawagan ng mas mahigpit na regulasyon sa online scams",
+                "",
+                "Oct 25, 2023",
+                "Nanawagan ang mga eksperto sa cybersecurity ng mas mahigpit na regulasyon laban sa mga online scam matapos ang pagtaas ng mga ulat ng pandaraya sa social media at mga messaging app.\n\nIminumungkahi nila ang mas malawak na public awareness campaign.",
+                "News", "Filipino", "3 min read",
+                "https://example.com/sample-article-6", "sample-6"
+            )
+        )
+        return data
+    }
 
     fun loadArticleDataLatest(): ArrayList<Article> {
         val data = ArrayList<Article>()
