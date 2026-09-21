@@ -50,6 +50,10 @@ class LogInFragment : Fragment() {
 
 
         // Buttons
+        this.viewBinding.tvForgotPassword.setOnClickListener {
+            val email = this.viewBinding.etAccLogEmail.text.toString()
+            ResetPasswordDialog(requireContext(), email).show()
+        }
         this.viewBinding.btnAccCreate.setOnClickListener {
             val signUpFragment = SignUpFragment()
             val transaction = parentFragmentManager.beginTransaction()

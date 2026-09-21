@@ -21,12 +21,13 @@ import kotlin.coroutines.suspendCoroutine
 
 class FirebaseHelper {
     companion object {
-        private var uid = FirebaseAuth.getInstance().currentUser?.uid ?: "null"
+        // Computed, not cached: reads the current FirebaseAuth user on every
+        // access so a logout/login within the same process never serves a
+        // stale currentUid (and therefore never leaks a prior user's Firestore data).
+        private val currentUid: String
+            get() = FirebaseAuth.getInstance().currentUser?.uid ?: "null"
 
-        fun getUid(): String {
-            uid = FirebaseAuth.getInstance().currentUser?.uid ?: "null"
-            return uid
-        }
+        fun getUid(): String = currentUid
 
         fun isNetworkAvailable(context: Context): Boolean {
             val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
@@ -48,13 +49,13 @@ class FirebaseHelper {
         }
 
         suspend fun getListsCollection(context: Context): ArrayList<SavedList>? = coroutineScope {
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
                 return@coroutineScope null
             }
 
             val firestore = getFirestoreInstance()
-            val userListsRef = firestore.collection("users").document(uid).collection("lists")
+            val userListsRef = firestore.collection("users").document(currentUid).collection("lists")
 
             try {
                 // Check if network is available
@@ -122,7 +123,7 @@ class FirebaseHelper {
         suspend fun getOfflineArticlesList(context: Context): List<Article> = getArticlesFromList(context, "offlineArticles")
 
         suspend fun getAllArticlesFromLists(context: Context): ArrayList<Article> = coroutineScope {
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
                 return@coroutineScope ArrayList<Article>()
             }
@@ -130,7 +131,7 @@ class FirebaseHelper {
             val articles = ArrayList<Article>()
 
             val firestore = getFirestoreInstance()
-            val userListsRef = firestore.collection("users").document(uid).collection("lists")
+            val userListsRef = firestore.collection("users").document(currentUid).collection("lists")
 
             try {
                 // Check if network is available
@@ -213,7 +214,7 @@ class FirebaseHelper {
         }
 
         suspend fun getListsAndArticles(context: Context): Pair<ArrayList<SavedList>, ArrayList<Article>> = coroutineScope {
-            if (uid == "null") {
+            if (currentUid == "null") {
                 // Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
                 return@coroutineScope Pair(ArrayList<SavedList>(), ArrayList<Article>())
             }
@@ -222,7 +223,7 @@ class FirebaseHelper {
             val articles = ArrayList<Article>()
 
             val firestore = getFirestoreInstance()
-            val userListsRef = firestore.collection("users").document(uid).collection("lists")
+            val userListsRef = firestore.collection("users").document(currentUid).collection("lists")
 
             try {
                 // Check if network is available
@@ -357,7 +358,7 @@ class FirebaseHelper {
         }
 
         suspend fun getArticleIdsFromList(context: Context, listId: String): List<String> = suspendCoroutine { continuation ->
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
                 continuation.resume(emptyList())
             }
@@ -365,7 +366,7 @@ class FirebaseHelper {
             val articleIds = mutableListOf<String>()
 
             val firestore = getFirestoreInstance()
-            val userListsRef = firestore.collection("users").document(uid).collection("lists")
+            val userListsRef = firestore.collection("users").document(currentUid).collection("lists")
             val listRef = userListsRef.document(listId).collection("articles")
 
             listRef.get()
@@ -383,7 +384,7 @@ class FirebaseHelper {
         }
 
         suspend fun getArticlesFromList(context: Context, listId: String): List<Article> = suspendCoroutine { continuation ->
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
                 continuation.resume(emptyList())
             }
@@ -391,7 +392,7 @@ class FirebaseHelper {
             val articles = mutableListOf<Article>()
 
             val firestore = getFirestoreInstance()
-            val userListsRef = firestore.collection("users").document(uid).collection("lists")
+            val userListsRef = firestore.collection("users").document(currentUid).collection("lists")
             val listRef = userListsRef.document(listId).collection("articles")
 
             listRef.get()
@@ -422,7 +423,7 @@ class FirebaseHelper {
         }
 
         suspend fun getHistory(context: Context): List<Article> = coroutineScope {
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(context, "Please login to view history", Toast.LENGTH_SHORT).show()
                 return@coroutineScope emptyList()
             }
@@ -430,7 +431,7 @@ class FirebaseHelper {
             val articles = mutableListOf<Article>()
 
             val firestore = getFirestoreInstance()
-            val userHistoryRef = firestore.collection("users").document(uid).collection("history")
+            val userHistoryRef = firestore.collection("users").document(currentUid).collection("history")
 
             try {
                 // Use async to perform the nested query concurrently
@@ -466,13 +467,13 @@ class FirebaseHelper {
         }
 
         suspend fun checkIfArticleSavedInLists(context: Context, articleId: String): List<String> = coroutineScope {
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
                 return@coroutineScope emptyList()
             }
 
             val firestore = getFirestoreInstance()
-            val userListsRef = firestore.collection("users").document(uid).collection("lists")
+            val userListsRef = firestore.collection("users").document(currentUid).collection("lists")
 
             try {
                 // Use async to perform the nested query concurrently
@@ -573,7 +574,7 @@ class FirebaseHelper {
                 .document("categories")
 
             // Add preferred categories to Firestore
-            Log.d("FirebaseHelper", "Adding preferred categories $categories to $uid")
+            Log.d("FirebaseHelper", "Adding preferred categories $categories to $currentUid")
             categoriesPrefListRef.set(
                 hashMapOf(
                     "categories" to categories
@@ -596,14 +597,14 @@ class FirebaseHelper {
          * @return Id of the new list; "" if error
          */
         suspend fun addListToFireStore(context: Context, newListName: String): String {
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(context, "Please login to create a list", Toast.LENGTH_SHORT).show()
                 return ""
             }
 
             val userListsRef = getFirestoreInstance()
                 .collection("users")
-                .document(uid)
+                .document(currentUid)
                 .collection("lists")
 
             val newListId = userListsRef.document().id
@@ -636,13 +637,13 @@ class FirebaseHelper {
         //  * @param articleId Id of the article to add to the list
         //  */
         // fun addArticleIdToFireStoreList(requireContext: Context, listId: String, articleId: String) {
-        //     if (uid == "null") {
+        //     if (currentUid == "null") {
         //         Toast.makeText(requireContext, "Please login to add to a list", Toast.LENGTH_SHORT).show()
         //         return
         //     }
         //     val userListsRef = getFirestoreInstance()
         //         .collection("users")
-        //         .document(uid)
+        //         .document(currentUid)
         //         .collection("lists")
         //     // Add article to list
         //     Log.d("FirebaseHelper", "Adding article $articleId to list $listId")
@@ -668,14 +669,14 @@ class FirebaseHelper {
          * @param articleId Id of the article to add to the list
          */
         fun addArticleToFireStoreList(requireContext: Context, listId: String, article: Article) {
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(requireContext, "Please login to add to a list", Toast.LENGTH_SHORT).show()
                 return
             }
 
             val userListsRef = getFirestoreInstance()
                 .collection("users")
-                .document(uid)
+                .document(currentUid)
                 .collection("lists")
 
             // Add article to list
@@ -703,14 +704,14 @@ class FirebaseHelper {
         }
 
         fun deleteArticleFromFirestoreList(requireContext: Context, listId: String, articleId: String) {
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(requireContext, "Please login to delete from a list", Toast.LENGTH_SHORT).show()
                 return
             }
 
             val userListsRef = getFirestoreInstance()
                 .collection("users")
-                .document(uid)
+                .document(currentUid)
                 .collection("lists")
 
             // Delete article from list
@@ -725,14 +726,14 @@ class FirebaseHelper {
         }
 
         fun deleteArticlesFromFirestoreList(requireContext: Context, listId: String, articleIds: List<String>) {
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(requireContext, "Please login to delete from a list", Toast.LENGTH_SHORT).show()
                 return
             }
 
             val userListsRef = getFirestoreInstance()
                 .collection("users")
-                .document(uid)
+                .document(currentUid)
                 .collection("lists")
 
             // Delete article from list
@@ -749,14 +750,14 @@ class FirebaseHelper {
         }
 
         fun deleteList(requireContext: Context, listId: String) {
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(requireContext, "Please login to delete a list", Toast.LENGTH_SHORT).show()
                 return
             }
 
             val userListsRef = getFirestoreInstance()
                 .collection("users")
-                .document(uid)
+                .document(currentUid)
                 .collection("lists")
 
             // Delete list
@@ -772,14 +773,14 @@ class FirebaseHelper {
         }
 
         fun renameList(requireContext: Context, listId: String, newName: String) {
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(requireContext, "Please login to rename a list", Toast.LENGTH_SHORT).show()
                 return
             }
 
             val userListsRef = getFirestoreInstance()
                 .collection("users")
-                .document(uid)
+                .document(currentUid)
                 .collection("lists")
 
             // Rename list
@@ -805,7 +806,7 @@ class FirebaseHelper {
          * @param article Article to add to history
          */
         fun addArticleToHistory(requireContext: Context, article: Article) {
-            if (uid == "null") {
+            if (currentUid == "null") {
                 Toast.makeText(requireContext, "Please login to add to history", Toast.LENGTH_SHORT).show()
                 return
             }
@@ -815,7 +816,7 @@ class FirebaseHelper {
 
             val userHistoryRef = getFirestoreInstance()
                 .collection("users")
-                .document(uid)
+                .document(currentUid)
                 .collection("history")
 
             // If article already exists in history, delete it

@@ -45,8 +45,15 @@
     <!-- fragment_log_in -->
     <string name="log_in_title">Welcome Back! Log in</string>
     <string name="log_in_remember_me">Remember Me?</string>
+    <string name="log_in_forgot_password">Forgot password?</string>
     <string name="log_in_btn">Log in</string>
     <string name="log_in_create_account_btn">Create an Account</string>
+    <string name="reset_password_title">Reset password</string>
+    <string name="reset_password_message">Enter the email address for your account. We\'ll send you a link to reset your password.</string>
+    <string name="reset_password_send">Send link</string>
+    <string name="reset_password_cancel">Cancel</string>
+    <string name="reset_password_sent">If an account exists for that email, a reset link has been sent.</string>
+    <string name="reset_password_invalid_email">Please provide a valid email</string>
 
     <!-- fragment_onboarding -->
     <string name="onboarding_title">Welcome to NewsMead</string>

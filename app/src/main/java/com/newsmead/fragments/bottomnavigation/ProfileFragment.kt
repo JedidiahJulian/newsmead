@@ -7,9 +7,11 @@ import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.util.Log
 import androidx.appcompat.app.AppCompatDelegate
 import com.google.firebase.auth.FirebaseAuth
 import com.newsmead.activities.AccountActivity
+import com.newsmead.data.FirebaseHelper
 import com.newsmead.data.PreloadedData
 
 // ViewBinding
@@ -46,6 +48,12 @@ class ProfileFragment : Fragment() {
         this.viewBinding.btnLogout.setOnClickListener {
             this.auth.signOut()
             PreloadedData.clearData()
+
+            // Clear Firestore's on-disk offline cache so the next account to
+            // sign in on this device (e.g. a shared test device) never reads
+            // the previous user's cached documents.
+            FirebaseHelper.getFirestoreInstance().clearPersistence()
+                .addOnFailureListener { e -> Log.w("ProfileFragment", "clearPersistence:failure", e) }
 
             // Finish Activity and Go to AccountActivity and reset the back stack
             val intent = Intent(requireActivity(), AccountActivity::class.java)

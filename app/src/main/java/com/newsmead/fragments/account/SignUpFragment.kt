@@ -72,12 +72,17 @@ class SignUpFragment: Fragment() {
                         val user = this.auth.currentUser
                         user!!.sendEmailVerification()
                             .addOnCompleteListener { taskEmail ->
-                                if (taskEmail.isSuccessful) {
-                                    // Add user to Firestore and then go to Onboarding Fragment once added
-                                    FirebaseHelper.addUserToFireStore(requireActivity(), email, name)
-                                    finishSignUp()
+                                if (!taskEmail.isSuccessful) {
+                                    // Verification email failed to send, but the account
+                                    // itself was created successfully — don't strand the
+                                    // user on this screen over it.
+                                    Log.w(TAG, "sendEmailVerification:failure", taskEmail.exception)
                                 }
                             }
+                        // Add user to Firestore and then go to Onboarding Fragment
+                        // regardless of whether the verification email went out.
+                        FirebaseHelper.addUserToFireStore(requireActivity(), email, name)
+                        finishSignUp()
                     } else {
                         // If sign in fails, display a message to the user.
                          Log.w(TAG, "createUserWithEmail:failure", task.exception)
