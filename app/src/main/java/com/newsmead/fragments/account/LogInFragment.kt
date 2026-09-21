@@ -75,8 +75,19 @@ class LogInFragment : Fragment() {
             this.auth.signInWithEmailAndPassword(email, password)
                 .addOnCompleteListener(requireActivity()) { task ->
                     if (task.isSuccessful) {
-                        // Sign in success, update UI with the signed-in user's information
-                        successfulLogIn()
+                        val user = this.auth.currentUser
+                        if (user != null && !user.isEmailVerified) {
+                            user.sendEmailVerification()
+                            this.auth.signOut()
+                            Toast.makeText(
+                                requireActivity(),
+                                "Please verify your email before logging in. We've sent a new link to your inbox.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            // Sign in success, update UI with the signed-in user's information
+                            successfulLogIn()
+                        }
                     } else {
                         // If sign in fails, display a message to the user.
                         Toast.makeText(requireActivity(), "Authentication failed. Wrong email or password.", Toast.LENGTH_SHORT).show()
