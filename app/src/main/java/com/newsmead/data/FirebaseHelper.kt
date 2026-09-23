@@ -508,12 +508,6 @@ class FirebaseHelper {
          * Creates the user profile document together with its two default
          * lists, in a single batch.
          *
-         * Previously each write was fired independently and the function
-         * returned `uid` synchronously while the failure listener assigned to
-         * it later, so the return value was meaningless and a partial failure
-         * left an account with a profile but no "Read Later" list. The caller
-         * now learns the real outcome through [onComplete].
-         *
          * @param email Email of the new user
          * @param onComplete Receives true once the batch is acknowledged
          */
@@ -550,14 +544,7 @@ class FirebaseHelper {
                 }
         }
 
-        /**
-         * True when the signed-in user has already picked preferred categories.
-         *
-         * Onboarding used to run only in the sign-up path. Now that sign-up
-         * hands the user back to log in instead of granting a session, the
-         * first verified login runs it, and this is how that login knows
-         * whether it still needs to.
-         */
+
         suspend fun hasCompletedOnboarding(): Boolean {
             if (currentUid == "null") return false
             return getFirestoreInstance()
