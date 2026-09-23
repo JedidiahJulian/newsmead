@@ -2,12 +2,14 @@ package com.newsmead.fragments.account
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.core.os.bundleOf
 import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
 import com.newsmead.activities.MainActivity
@@ -17,6 +19,8 @@ import com.newsmead.data.PreloadedData
 
 import com.newsmead.databinding.FragmentLogInBinding
 import kotlinx.coroutines.launch
+
+private const val TAG = "LogInFragment"
 
 /**
  * A simple [Fragment] subclass.
@@ -39,6 +43,14 @@ class LogInFragment : Fragment() {
             WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
         )
 
+        // Explains why the user is back here, e.g. after being signed out at
+        // launch over an unverified email. Shown once, not on every re-create.
+        if (savedInstanceState == null) {
+            arguments?.getString(ARG_NOTICE)?.let { notice ->
+                Toast.makeText(requireActivity(), notice, Toast.LENGTH_LONG).show()
+            }
+        }
+
         // Listener for text fields to clear error
         this.viewBinding.etAccLogEmail.setOnFocusChangeListener { _, _ ->
             this.viewBinding.tilAccLogEmail.error = null
@@ -51,7 +63,7 @@ class LogInFragment : Fragment() {
 
         // Buttons
         this.viewBinding.tvForgotPassword.setOnClickListener {
-            val email = this.viewBinding.etAccLogEmail.text.toString()
+            val email = this.viewBinding.etAccLogEmail.text.toString().trim()
             ResetPasswordDialog(requireContext(), email).show()
         }
         this.viewBinding.btnAccCreate.setOnClickListener {
@@ -63,8 +75,9 @@ class LogInFragment : Fragment() {
         }
         this.viewBinding.btnAccLogIn.setOnClickListener {
 
-            // Log In Validation
-            val email = this.viewBinding.etAccLogEmail.text.toString()
+            // Log In Validation. Trimmed because keyboard autofill routinely
+            // appends a space, which Firebase then rejects as a bad email.
+            val email = this.viewBinding.etAccLogEmail.text.toString().trim()
             val password = this.viewBinding.etAccLogPassword.text.toString()
 
             if (checkAccountErrors(email, password)) {
@@ -72,25 +85,26 @@ class LogInFragment : Fragment() {
             }
 
             // Log In User
+            setFormEnabled(false)
             this.auth.signInWithEmailAndPassword(email, password)
                 .addOnCompleteListener(requireActivity()) { task ->
-                    if (task.isSuccessful) {
-                        val user = this.auth.currentUser
-                        if (user != null && !user.isEmailVerified) {
-                            user.sendEmailVerification()
-                            this.auth.signOut()
-                            Toast.makeText(
-                                requireActivity(),
-                                "Please verify your email before logging in. We've sent a new link to your inbox.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        } else {
-                            // Sign in success, update UI with the signed-in user's information
-                            successfulLogIn()
-                        }
+                    if (!task.isSuccessful) {
+                        Log.w(TAG, "signIn:failure", task.exception)
+                        setFormEnabled(true)
+                        Toast.makeText(
+                            requireActivity(),
+                            signInErrorMessage(requireActivity(), task.exception),
+                            Toast.LENGTH_LONG
+                        ).show()
+                        return@addOnCompleteListener
+                    }
+
+                    val user = this.auth.currentUser
+                    if (user != null && !user.isEmailVerified) {
+                        sendVerificationThenSignOut()
                     } else {
-                        // If sign in fails, display a message to the user.
-                        Toast.makeText(requireActivity(), "Authentication failed. Wrong email or password.", Toast.LENGTH_SHORT).show()
+                        // Sign in success, update UI with the signed-in user's information
+                        successfulLogIn()
                     }
                 }
 
@@ -101,19 +115,79 @@ class LogInFragment : Fragment() {
     }
 
     /**
-     * Goes to MainActivity while clearing all other activities
+     * Issues a fresh verification link and only then drops the session.
+     * Signing out first could invalidate the token the send needs, so the
+     * email the user was told to expect sometimes never left.
+     */
+    private fun sendVerificationThenSignOut() {
+        val user = this.auth.currentUser ?: return
+        user.sendEmailVerification().addOnCompleteListener { emailTask ->
+            if (!emailTask.isSuccessful) {
+                Log.w(TAG, "sendEmailVerification:failure", emailTask.exception)
+            }
+            this.auth.signOut()
+
+            val host = activity ?: return@addOnCompleteListener
+            if (!isAdded) return@addOnCompleteListener
+            setFormEnabled(true)
+            Toast.makeText(
+                host,
+                getString(R.string.verify_email_before_login),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    /**
+     * Goes to MainActivity while clearing all other activities, or into
+     * onboarding first if this account never picked its categories.
      */
     private fun successfulLogIn() {
         lifecycleScope.launch {
-            // Load preloaded data
-            val pairData = FirebaseHelper.getListsAndArticles(requireActivity())
-            PreloadedData.updateSavedData(pairData)
+            val host = activity ?: return@launch
 
-            val intent = Intent(requireActivity(), MainActivity::class.java)
+            // Warming the saved-lists cache is a convenience, not a login
+            // requirement. This used to throw straight out of the coroutine
+            // and crash the app whenever Firestore was unreachable.
+            try {
+                PreloadedData.updateSavedData(FirebaseHelper.getListsAndArticles(host))
+            } catch (exception: Exception) {
+                Log.w(TAG, "preload:failure", exception)
+            }
+
+            val onboarded = try {
+                FirebaseHelper.hasCompletedOnboarding()
+            } catch (exception: Exception) {
+                // Don't make the user redo onboarding just because a read failed.
+                Log.w(TAG, "onboardingCheck:failure", exception)
+                true
+            }
+
+            if (!isAdded || host.isFinishing) return@launch
+
+            if (!onboarded) {
+                setFormEnabled(true)
+                host.supportFragmentManager.beginTransaction()
+                    .replace(R.id.flAccountContainer, OnboardingFragment())
+                    .commit()
+                return@launch
+            }
+
+            val intent = Intent(host, MainActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            requireActivity().startActivity(intent)
-            requireActivity().finish()
+            host.startActivity(intent)
+            host.finish()
         }
+    }
+
+    /**
+     * Guards against a second sign-in being fired by a double tap while the
+     * first is still in flight.
+     */
+    private fun setFormEnabled(enabled: Boolean) {
+        if (!isAdded) return
+        this.viewBinding.btnAccLogIn.isEnabled = enabled
+        this.viewBinding.btnAccCreate.isEnabled = enabled
     }
 
     /**
@@ -139,5 +213,17 @@ class LogInFragment : Fragment() {
         }
 
         return false
+    }
+
+    companion object {
+        private const val ARG_NOTICE = "notice"
+
+        /**
+         * @param notice One-off message explaining how the user got here,
+         *               or null to open the screen with no explanation.
+         */
+        fun newInstance(notice: String?): LogInFragment = LogInFragment().apply {
+            if (notice != null) arguments = bundleOf(ARG_NOTICE to notice)
+        }
     }
 }

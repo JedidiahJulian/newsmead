@@ -505,60 +505,69 @@ class FirebaseHelper {
 
 
         /**
-         * Adds a new user to Firestore with a "Read Later" and "Offline  Articles" list
+         * Creates the user profile document together with its two default
+         * lists, in a single batch.
+         *
+         * Previously each write was fired independently and the function
+         * returned `uid` synchronously while the failure listener assigned to
+         * it later, so the return value was meaningless and a partial failure
+         * left an account with a profile but no "Read Later" list. The caller
+         * now learns the real outcome through [onComplete].
+         *
          * @param email Email of the new user
-         * @return Id of the new user; "" if error
+         * @param onComplete Receives true once the batch is acknowledged
          */
-        fun addUserToFireStore(context: Context, email: String, name: String = "User"): String {
-            var uid = FirebaseAuth.getInstance().currentUser?.uid
-            val firestore = getFirestoreInstance()
-            var parsedName = name
-
+        fun addUserToFireStore(
+            context: Context,
+            email: String,
+            name: String = "User",
+            onComplete: (Boolean) -> Unit = {},
+        ) {
+            val uid = FirebaseAuth.getInstance().currentUser?.uid
             if (uid == null) {
                 Toast.makeText(context, "Error creating user", Toast.LENGTH_SHORT).show()
-                return ""
+                onComplete(false)
+                return
             }
 
-            if (name == "") { parsedName = "User" }
-
+            val parsedName = if (name.isBlank()) "User" else name
+            val firestore = getFirestoreInstance()
             val userRef = firestore.collection("users").document(uid)
+            val listsRef = userRef.collection("lists")
 
-            // Create new user document
-            userRef.set(
-                hashMapOf(
-                    "email" to email,
-                    "name" to parsedName
-                )
-            )
-                .addOnSuccessListener {
-                    // Add "Read Later" list to Firestore
-                    val userListsRef = firestore.collection("users").document(uid!!).collection("lists")
-                    val newListId = "readLater" // This is the id of the "Read Later" list
-
-                    userListsRef.document(newListId).set(
-                        hashMapOf(
-                            "name" to "Read Later"
-                        )
-                    )
-
-                    // Add "Offline Articles" list to Firestore
-                    val newListId2 = "offlineArticles" // This is the id of the "Offline Articles" list
-
-                    userListsRef.document(newListId2).set(
-                        hashMapOf(
-                            "name" to "Offline Articles"
-                        )
-                    )
-                    // Handle Success
-                    // Toast.makeText(context, "User created", Toast.LENGTH_SHORT).show()
-                }
-                .addOnFailureListener {
-                    // Handle Failure
+            firestore.batch().apply {
+                set(userRef, hashMapOf("email" to email, "name" to parsedName))
+                // These ids are referenced directly elsewhere, e.g.
+                // getOfflineArticlesList() looks up "offlineArticles".
+                set(listsRef.document("readLater"), hashMapOf("name" to "Read Later"))
+                set(listsRef.document("offlineArticles"), hashMapOf("name" to "Offline Articles"))
+            }.commit()
+                .addOnSuccessListener { onComplete(true) }
+                .addOnFailureListener { exception ->
+                    Log.w("FirebaseHelper", "addUserToFireStore:failure", exception)
                     Toast.makeText(context, "Error creating user", Toast.LENGTH_SHORT).show()
-                    uid = ""
+                    onComplete(false)
                 }
+        }
 
-            return uid as String
+        /**
+         * True when the signed-in user has already picked preferred categories.
+         *
+         * Onboarding used to run only in the sign-up path. Now that sign-up
+         * hands the user back to log in instead of granting a session, the
+         * first verified login runs it, and this is how that login knows
+         * whether it still needs to.
+         */
+        suspend fun hasCompletedOnboarding(): Boolean {
+            if (currentUid == "null") return false
+            return getFirestoreInstance()
+                .collection("users")
+                .document(currentUid)
+                .collection("preferences")
+                .document("categories")
+                .get()
+                .await()
+                .exists()
         }       
 
         

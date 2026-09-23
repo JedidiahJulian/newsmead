@@ -1,6 +1,5 @@
 package com.newsmead.fragments.account
 
-import android.content.ContentValues.TAG
 import android.os.Bundle
 import android.util.Log
 import android.util.Patterns
@@ -10,11 +9,14 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
 import com.google.firebase.auth.FirebaseAuth
 import com.newsmead.R
 import com.newsmead.data.FirebaseHelper
 
 import com.newsmead.databinding.FragmentSignUpBinding
+
+private const val TAG = "SignUpFragment"
 
 class SignUpFragment: Fragment() {
     private lateinit var viewBinding: FragmentSignUpBinding
@@ -43,18 +45,17 @@ class SignUpFragment: Fragment() {
         // Buttons
         this.viewBinding.btnAccLog.setOnClickListener {
             // Goes to Log In Fragment
-            val logInFragment = LogInFragment()
-            requireActivity().supportFragmentManager.beginTransaction()
-                .replace(R.id.flAccountContainer, logInFragment)
-                .commit()
+            goToLogIn(notice = null)
         }
 
         this.viewBinding.btnAccStart.setOnClickListener {
             // Temporarily disable button
             this.viewBinding.btnAccStart.isEnabled = false
 
-            val name = this.viewBinding.etAccName.text.toString()
-            val email = this.viewBinding.etAccEmail.text.toString()
+            val name = this.viewBinding.etAccName.text.toString().trim()
+            // Trimmed for the same reason as the log-in screen: autofill adds
+            // a trailing space and Firebase rejects the address.
+            val email = this.viewBinding.etAccEmail.text.toString().trim()
             val password = this.viewBinding.etAccPassword.text.toString()
             val confirmPassword = this.viewBinding.etAccConfirmPassword.text.toString()
 
@@ -67,30 +68,32 @@ class SignUpFragment: Fragment() {
             // Create user with email and password
             this.auth.createUserWithEmailAndPassword(email, password)
                 .addOnCompleteListener(requireActivity()) { task ->
-                    if (task.isSuccessful) {
-                        // Sign in success, update UI with the signed-in user's information
-                        val user = this.auth.currentUser
-                        user!!.sendEmailVerification()
-                            .addOnCompleteListener { taskEmail ->
-                                if (!taskEmail.isSuccessful) {
-                                    // Verification email failed to send, but the account
-                                    // itself was created successfully — don't strand the
-                                    // user on this screen over it.
-                                    Log.w(TAG, "sendEmailVerification:failure", taskEmail.exception)
-                                }
-                            }
-                        // Add user to Firestore and then go to Onboarding Fragment
-                        // regardless of whether the verification email went out.
-                        FirebaseHelper.addUserToFireStore(requireActivity(), email, name)
-                        finishSignUp()
-                    } else {
-                        // If sign in fails, display a message to the user.
-                         Log.w(TAG, "createUserWithEmail:failure", task.exception)
-                         Toast.makeText(requireActivity(), "Authentication failed. Please try again.",
-                             Toast.LENGTH_SHORT).show()
+                    if (!task.isSuccessful) {
+                        // If sign up fails, say which failure it was. "Email
+                        // already registered" in particular used to surface as
+                        // a generic retry message.
+                        Log.w(TAG, "createUserWithEmail:failure", task.exception)
+                        Toast.makeText(
+                            requireActivity(),
+                            signUpErrorMessage(requireActivity(), task.exception),
+                            Toast.LENGTH_LONG
+                        ).show()
 
                         // Re-enable button
                         this.viewBinding.btnAccStart.isEnabled = true
+                        return@addOnCompleteListener
+                    }
+
+                    // Write the profile while the new account still holds its
+                    // session, and only drop the session once that write has
+                    // landed: Firestore rules key on request.auth, so a write
+                    // still queued at signOut() would be rejected when it
+                    // finally flushed, leaving an account with no lists.
+                    FirebaseHelper.addUserToFireStore(requireActivity(), email, name) { written ->
+                        if (!written) {
+                            Log.w(TAG, "addUserToFireStore:failure")
+                        }
+                        sendVerificationThenFinish()
                     }
                 }
         }
@@ -99,20 +102,43 @@ class SignUpFragment: Fragment() {
     }
 
     /**
-     * Goes to Onboarding Fragment
+     * Sends the verification link, then hands the user back to log in.
+     *
+     * A brand-new account is not verified yet, and both SplashActivity and
+     * LogInFragment refuse unverified accounts. Letting this one session
+     * through to MainActivity anyway meant a user got in exactly once and was
+     * then locked out at the next launch with no explanation. Categories are
+     * now collected on the first verified login instead.
      */
-    private fun finishSignUp() {
-        // Goes to Onboarding Fragment
-        val onboardingFragment = OnboardingFragment()
-        requireActivity().supportFragmentManager.beginTransaction()
-           .replace(R.id.flAccountContainer, onboardingFragment)
-           .commit()
+    private fun sendVerificationThenFinish() {
+        val user = this.auth.currentUser
+        if (user == null) {
+            finishSignUp()
+            return
+        }
+        user.sendEmailVerification().addOnCompleteListener { emailTask ->
+            if (!emailTask.isSuccessful) {
+                // The account itself exists — don't strand the user over this.
+                Log.w(TAG, "sendEmailVerification:failure", emailTask.exception)
+            }
+            finishSignUp()
+        }
+    }
 
-        // Goes to MainActivity while clearing all other activities
-        // val intent = Intent(requireActivity(), MainActivity::class.java)
-        // intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        // requireActivity().startActivity(intent)
-        // requireActivity().finish()
+    private fun finishSignUp() {
+        this.auth.signOut()
+        if (!isAdded) return
+        goToLogIn(notice = getString(R.string.verify_email_sent))
+    }
+
+    private fun goToLogIn(notice: String?) {
+        val host = activity ?: return
+        // Clear the Log In -> Create an Account entry so Back doesn't land
+        // back on a sign-up form for an account that now exists.
+        host.supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
+        host.supportFragmentManager.beginTransaction()
+            .replace(R.id.flAccountContainer, LogInFragment.newInstance(notice))
+            .commit()
     }
 
     /**
@@ -148,17 +174,5 @@ class SignUpFragment: Fragment() {
         }
 
         return false
-    }
-
-    private fun clearTextFields() {
-        this.viewBinding.etAccEmail.setText("")
-        this.viewBinding.etAccPassword.setText("")
-        this.viewBinding.etAccConfirmPassword.setText("")
-        this.viewBinding.etAccEmail.clearFocus()
-        this.viewBinding.etAccPassword.clearFocus()
-        this.viewBinding.etAccConfirmPassword.clearFocus()
-        this.viewBinding.etAccEmail.error = null
-        this.viewBinding.etAccPassword.error = null
-        this.viewBinding.etAccConfirmPassword.error = null
     }
 }

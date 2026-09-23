@@ -55,6 +55,23 @@
     <string name="reset_password_sent">If an account exists for that email, a reset link has been sent.</string>
     <string name="reset_password_invalid_email">Please provide a valid email</string>
 
+    <!-- email verification -->
+    <string name="verify_email_sent">Account created. We have sent a verification link to your email. Open it, then log in.</string>
+    <string name="verify_email_before_login">Please verify your email before logging in. We have sent a new link to your inbox.</string>
+
+    <!-- auth errors -->
+    <string name="auth_error_network">No internet connection. Check your network and try again.</string>
+    <string name="auth_error_no_account">No account found for that email.</string>
+    <string name="auth_error_disabled">This account has been disabled.</string>
+    <string name="auth_error_bad_credentials">Wrong email or password.</string>
+    <string name="auth_error_sign_in_generic">Could not sign in. Please try again.</string>
+    <string name="auth_error_too_many_attempts">Too many attempts. Please wait a moment and try again.</string>
+    <string name="auth_error_email_taken">That email is already registered. Try logging in instead.</string>
+    <string name="auth_error_weak_password">Please choose a stronger password.</string>
+    <string name="auth_error_invalid_email">Please provide a valid email address.</string>
+    <string name="auth_error_sign_up_generic">Could not create your account. Please try again.</string>
+    <string name="profile_password_updated">Password updated.</string>
+
     <!-- fragment_onboarding -->
     <string name="onboarding_title">Welcome to NewsMead</string>
     <string name="onboarding_interest">What are you interested in?</string>
