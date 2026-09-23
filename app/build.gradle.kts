@@ -50,6 +50,9 @@ android {
     // Enable viewBinding
     buildFeatures {
         viewBinding = true
+        // AGP 8 no longer generates BuildConfig by default; AppLog gates its
+        // debug-level output on BuildConfig.DEBUG.
+        buildConfig = true
     }
 }
 

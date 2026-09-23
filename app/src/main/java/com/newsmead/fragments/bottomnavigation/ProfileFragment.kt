@@ -3,7 +3,6 @@ package com.newsmead.fragments.bottomnavigation
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
-import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
@@ -15,6 +14,9 @@ import com.newsmead.R
 import com.newsmead.activities.AccountActivity
 import com.newsmead.data.FirebaseHelper
 import com.newsmead.data.PreloadedData
+import com.newsmead.logging.Analytics
+import com.newsmead.logging.AppLog
+import com.newsmead.research.ResearchSession
 
 // ViewBinding
 import com.newsmead.databinding.FragmentProfileBinding
@@ -49,6 +51,9 @@ class ProfileFragment : Fragment() {
         // Buttons
         this.viewBinding.btnLogout.setOnClickListener {
             this.viewBinding.btnLogout.isEnabled = false
+            Analytics.logout()
+            ResearchSession.authEvent("log_out", success = true)
+            AppLog.setAuthState("signed_out")
             val firestore = FirebaseHelper.getFirestoreInstance()
 
             this.auth.signOut()
@@ -67,7 +72,7 @@ class ProfileFragment : Fragment() {
                 .continueWithTask { firestore.clearPersistence() }
                 .addOnCompleteListener { task ->
                     if (!task.isSuccessful) {
-                        Log.w("ProfileFragment", "clearPersistence:failure", task.exception)
+                        AppLog.w("ProfileFragment", "clearPersistence:failure", task.exception)
                     }
                     goToAccountActivity()
                 }

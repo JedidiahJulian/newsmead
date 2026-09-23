@@ -1,7 +1,6 @@
 package com.newsmead.fragments.account
 
 import android.os.Bundle
-import android.util.Log
 import android.util.Patterns
 import android.view.LayoutInflater
 import android.view.View
@@ -13,6 +12,9 @@ import androidx.fragment.app.FragmentManager
 import com.google.firebase.auth.FirebaseAuth
 import com.newsmead.R
 import com.newsmead.data.FirebaseHelper
+import com.newsmead.logging.Analytics
+import com.newsmead.logging.AppLog
+import com.newsmead.research.ResearchSession
 
 import com.newsmead.databinding.FragmentSignUpBinding
 
@@ -72,7 +74,10 @@ class SignUpFragment: Fragment() {
                         // If sign up fails, say which failure it was. "Email
                         // already registered" in particular used to surface as
                         // a generic retry message.
-                        Log.w(TAG, "createUserWithEmail:failure", task.exception)
+                        val code = firebaseErrorCode(task.exception)
+                        Analytics.signUp(success = false, errorCode = code)
+                        ResearchSession.authEvent("sign_up", success = false, errorCode = code)
+                        AppLog.w(TAG, "createUserWithEmail:failure code=$code", task.exception)
                         Toast.makeText(
                             requireActivity(),
                             signUpErrorMessage(requireActivity(), task.exception),
@@ -89,9 +94,13 @@ class SignUpFragment: Fragment() {
                     // landed: Firestore rules key on request.auth, so a write
                     // still queued at signOut() would be rejected when it
                     // finally flushed, leaving an account with no lists.
+                    Analytics.signUp(success = true)
+                    ResearchSession.authEvent("sign_up", success = true)
+                    AppLog.setAuthState("unverified")
+
                     FirebaseHelper.addUserToFireStore(requireActivity(), email, name) { written ->
                         if (!written) {
-                            Log.w(TAG, "addUserToFireStore:failure")
+                            AppLog.w(TAG, "addUserToFireStore:failure")
                         }
                         sendVerificationThenFinish()
                     }
@@ -119,7 +128,7 @@ class SignUpFragment: Fragment() {
         user.sendEmailVerification().addOnCompleteListener { emailTask ->
             if (!emailTask.isSuccessful) {
                 // The account itself exists — don't strand the user over this.
-                Log.w(TAG, "sendEmailVerification:failure", emailTask.exception)
+                AppLog.w(TAG, "sendEmailVerification:failure", emailTask.exception)
             }
             finishSignUp()
         }

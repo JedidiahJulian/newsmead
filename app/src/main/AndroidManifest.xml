@@ -32,6 +32,27 @@
             android:name=".activities.MainActivity"
             android:exported="false">
         </activity>
+
+        <!-- Stages research session logs for an explicit, user-initiated share. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.research.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/research_file_paths" />
+        </provider>
+
+        <!--
+          Firebase Analytics is used for product events (see logging/Analytics.kt).
+          Advertising-ID collection is off: this app is also run as a study
+          instrument, and an advertising identifier is not something
+          participants consent to.
+        -->
+        <meta-data
+            android:name="google_analytics_adid_collection_enabled"
+            android:value="false" />
     </application>
 
 </manifest>

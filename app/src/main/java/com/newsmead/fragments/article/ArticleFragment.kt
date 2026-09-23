@@ -7,6 +7,7 @@ import android.content.res.ColorStateList
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -27,6 +28,9 @@ import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.DatabaseHelper
 import com.newsmead.data.FirebaseHelper
+import com.newsmead.logging.Analytics
+import com.newsmead.logging.AppLog
+import com.newsmead.research.ResearchSession
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.fragments.layouts.BottomSheetDialogSaveFragment
 import com.newsmead.models.Article
@@ -43,6 +47,14 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private lateinit var savedLists: ArrayList<SavedList>
     private lateinit var textToSpeech: TextToSpeech
     private var isTranslated = false
+
+    // Reading-session bookkeeping for the research log. openedAtMs uses the
+    // monotonic clock so a clock change mid-article cannot produce a negative
+    // or wildly inflated dwell time.
+    private var loggedArticleId: String? = null
+    private var openedAtElapsedMs = 0L
+    private var deepestScrollPct = 0
+    private var lastScrollLogMs = 0L
     private var language = "english"
     private enum class ColorMode { LIGHT, DARK, SEPIA }
 
@@ -110,6 +122,19 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         // Add to history
         FirebaseHelper.addArticleToHistory(requireContext(), article)
 
+
+        loggedArticleId = article.newsId
+        openedAtElapsedMs = SystemClock.elapsedRealtime()
+        deepestScrollPct = 0
+
+        val openedFrom = ResearchSession.lastScreen() ?: "direct"
+        Analytics.articleOpen(
+            article.newsId, article.source, article.category, article.language, openedFrom
+        )
+        ResearchSession.articleOpen(
+            article.newsId, article.source, article.category, article.language, openedFrom
+        )
+
         // Set article title
         binding.tvArticleHeadline.text = article.title
 
@@ -143,7 +168,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             if (textToSpeech.isSpeaking && binding.btnReadAloudArticle.text == "Stop") {
                 binding.btnReadAloudArticle.text = "Read Aloud"
                 textToSpeech.stop()
+                logReadAloud(started = false)
             } else {
+                logReadAloud(started = true)
                 var body = binding.tvArticleText.text.toString()
                 Log.d("ArticleFragment", "tts-body: ${body.substring(0, 100)}")
                 if (body.isNotEmpty()) speak(body)
@@ -173,6 +200,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             binding.btnTranslateArticle.isClickable = false
             binding.btnTranslateArticle.text = "Translating..."
             if (!isTranslated) {
+                logTranslate(toFilipino = true, useGoogle = binding.switchUseGoogle.isChecked)
                 // Translate article
                 DataHelper.translateArticle(article.newsId, binding.switchUseGoogle.isChecked, requireContext()) { title, body ->
                     if(title.isNotEmpty() && body.isNotEmpty()) {
@@ -189,6 +217,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                     binding.btnTranslateArticle.isClickable = true
                 }
             } else {
+                logTranslate(toFilipino = false, useGoogle = binding.switchUseGoogle.isChecked)
                 // Revert to original language
                 binding.tvArticleHeadline.text = article.title
                 binding.tvArticleText.text = article.body
@@ -197,6 +226,23 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 binding.btnTranslateArticle.isEnabled = true
                 binding.btnTranslateArticle.isClickable = true
             }
+        }
+
+        // Scroll depth, throttled: this is the highest-volume record type and
+        // SessionLog's queue is bounded.
+        binding.nsvArticleText.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            val articleId = loggedArticleId ?: return@setOnScrollChangeListener
+            val scroller = binding.nsvArticleText
+            val content = scroller.getChildAt(0)?.height ?: 0
+            val viewport = scroller.height
+            val scrollable = (content - viewport).coerceAtLeast(1)
+            val pct = ((scrollY * 100L) / scrollable).toInt().coerceIn(0, 100)
+            if (pct > deepestScrollPct) deepestScrollPct = pct
+
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastScrollLogMs < SCROLL_LOG_INTERVAL_MS) return@setOnScrollChangeListener
+            lastScrollLogMs = now
+            ResearchSession.articleScroll(articleId, scrollY, viewport, content)
         }
 
         // When the user zooms in on the ZoomImageView, disable the NestedScrollView scrolling
@@ -413,6 +459,35 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
     }
 
+    private fun logReadAloud(started: Boolean) {
+        val articleId = loggedArticleId ?: return
+        Analytics.readAloud(started)
+        ResearchSession.readAloud(articleId, started)
+    }
+
+    private fun logTranslate(toFilipino: Boolean, useGoogle: Boolean) {
+        val articleId = loggedArticleId ?: return
+        Analytics.translate(toFilipino, useGoogle)
+        ResearchSession.translate(articleId, toFilipino, useGoogle)
+    }
+
+    /**
+     * Closes the reading record. Fires from onStop rather than onDestroy so a
+     * user who backgrounds the app without closing the article still produces
+     * a dwell time instead of an open-ended record.
+     */
+    override fun onStop() {
+        val articleId = loggedArticleId
+        if (articleId != null) {
+            val dwellMs = SystemClock.elapsedRealtime() - openedAtElapsedMs
+            Analytics.articleClose(articleId, dwellMs, deepestScrollPct)
+            ResearchSession.articleClose(articleId, dwellMs, deepestScrollPct)
+            AppLog.d("ArticleFragment", "article_close id=$articleId dwellMs=$dwellMs")
+            loggedArticleId = null
+        }
+        super.onStop()
+    }
+
     // Don't forget to release TextToSpeech when your activity is destroyed
     override fun onDestroy() {
         if (::textToSpeech.isInitialized) {
@@ -598,5 +673,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         // Action
         val action = ArticleFragmentDirections.actionArticleFragmentSelf(article)
         Navigation.findNavController(requireView()).navigate(action)
+    }
+
+    private companion object {
+        const val SCROLL_LOG_INTERVAL_MS = 250L
     }
 }

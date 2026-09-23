@@ -1,7 +1,13 @@
 package com.newsmead.data
 
+import android.app.Activity
 import android.app.Application
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import com.newsmead.logging.AppLog
 import com.newsmead.models.Article
+import com.newsmead.research.ResearchSession
 import com.newsmead.models.NewsArticle
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
@@ -16,6 +22,14 @@ class NewsMeadApplication: Application() {
     override fun onCreate() {
         super.onCreate()
         DatabaseHelper.initDatabase(this)
+
+        // One research session per foreground period, rather than per process.
+        // Android gives no reliable process-death callback, so a session tied
+        // to the process would never get its session_end record written and
+        // every file would be unterminated — which would waste the
+        // dropped-record accounting SessionLog does.
+        registerActivityLifecycleCallbacks(SessionLifecycle())
+        AppLog.setAuthState(if (FirebaseHelper.getUid() == "null") "signed_out" else "signed_in")
 
         // Check if logged in
         // If logged in, then preload data
@@ -49,5 +63,47 @@ class NewsMeadApplication: Application() {
 
             }
         }
+    }
+
+    /**
+     * Opens a research session when the app comes to the foreground and closes
+     * it when the last activity stops, so every file ends with a session_end.
+     */
+    private inner class SessionLifecycle : ActivityLifecycleCallbacks {
+        private val handler = Handler(Looper.getMainLooper())
+        private var started = 0
+
+        override fun onActivityStarted(activity: Activity) {
+            if (started == 0 && !ResearchSession.isRunning) {
+                // The participant code is set by whoever runs the study; left
+                // unassigned the log is still valid, just not attributable.
+                ResearchSession.start(this@NewsMeadApplication)
+            }
+            started++
+        }
+
+        override fun onActivityStopped(activity: Activity) {
+            started--
+            // A rotation stops and restarts the activity; without this guard
+            // it would close the session and split the file in two.
+            if (started != 0 || activity.isChangingConfigurations) return
+
+            // Deferred rather than ended inline. This callback runs before the
+            // hosted fragments' own onStop(), so ending here directly threw
+            // away ArticleFragment's closing article_close record — and
+            // discarded it silently, because the session was already gone by
+            // the time the event arrived. Posting lets the rest of the
+            // lifecycle dispatch finish first. The count is re-checked because
+            // moving between two activities also passes through zero.
+            handler.post {
+                if (started == 0) ResearchSession.end("app_backgrounded")
+            }
+        }
+
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+        override fun onActivityResumed(activity: Activity) = Unit
+        override fun onActivityPaused(activity: Activity) = Unit
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+        override fun onActivityDestroyed(activity: Activity) = Unit
     }
 }

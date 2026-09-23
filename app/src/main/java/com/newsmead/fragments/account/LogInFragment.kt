@@ -2,7 +2,6 @@ package com.newsmead.fragments.account
 
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
@@ -16,6 +15,9 @@ import com.newsmead.activities.MainActivity
 import com.newsmead.R
 import com.newsmead.data.FirebaseHelper
 import com.newsmead.data.PreloadedData
+import com.newsmead.logging.Analytics
+import com.newsmead.logging.AppLog
+import com.newsmead.research.ResearchSession
 
 import com.newsmead.databinding.FragmentLogInBinding
 import kotlinx.coroutines.launch
@@ -89,7 +91,10 @@ class LogInFragment : Fragment() {
             this.auth.signInWithEmailAndPassword(email, password)
                 .addOnCompleteListener(requireActivity()) { task ->
                     if (!task.isSuccessful) {
-                        Log.w(TAG, "signIn:failure", task.exception)
+                        val code = firebaseErrorCode(task.exception)
+                        AppLog.w(TAG, "signIn:failure code=$code", task.exception)
+                        Analytics.login(success = false, errorCode = code)
+                        ResearchSession.authEvent("log_in", success = false, errorCode = code)
                         setFormEnabled(true)
                         Toast.makeText(
                             requireActivity(),
@@ -101,8 +106,13 @@ class LogInFragment : Fragment() {
 
                     val user = this.auth.currentUser
                     if (user != null && !user.isEmailVerified) {
+                        Analytics.verificationBlocked()
+                        ResearchSession.authEvent("verification_blocked", success = false)
                         sendVerificationThenSignOut()
                     } else {
+                        Analytics.login(success = true)
+                        ResearchSession.authEvent("log_in", success = true)
+                        AppLog.setAuthState("verified")
                         // Sign in success, update UI with the signed-in user's information
                         successfulLogIn()
                     }
@@ -123,7 +133,7 @@ class LogInFragment : Fragment() {
         val user = this.auth.currentUser ?: return
         user.sendEmailVerification().addOnCompleteListener { emailTask ->
             if (!emailTask.isSuccessful) {
-                Log.w(TAG, "sendEmailVerification:failure", emailTask.exception)
+                AppLog.w(TAG, "sendEmailVerification:failure", emailTask.exception)
             }
             this.auth.signOut()
 
@@ -152,14 +162,14 @@ class LogInFragment : Fragment() {
             try {
                 PreloadedData.updateSavedData(FirebaseHelper.getListsAndArticles(host))
             } catch (exception: Exception) {
-                Log.w(TAG, "preload:failure", exception)
+                AppLog.w(TAG, "preload:failure", exception)
             }
 
             val onboarded = try {
                 FirebaseHelper.hasCompletedOnboarding()
             } catch (exception: Exception) {
                 // Don't make the user redo onboarding just because a read failed.
-                Log.w(TAG, "onboardingCheck:failure", exception)
+                AppLog.w(TAG, "onboardingCheck:failure", exception)
                 true
             }
 
