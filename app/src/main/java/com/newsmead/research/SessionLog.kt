@@ -36,7 +36,21 @@ import java.util.concurrent.atomic.AtomicInteger
  * Files live in `noBackupFilesDir`: participant observations must not travel
  * off the device in a cloud backup, and the manifest has `allowBackup="true"`.
  *
- * @param kind Prefix for the file name, e.g. "reading".
+ * This is one of several session-log families that write into
+ * `noBackupFilesDir` across this repo's branches — the gaze branches'
+ * `ReadingMeasurementLog` (com.newsmead.gaze) is the other one sharing this
+ * exact directory. Every file this class writes carries [FILE_PREFIX], a
+ * string no other log class on any branch uses, so [SessionLogExport] can
+ * list and share only what this system wrote without ever having to know
+ * what else might be sitting in that directory. Do not drop or loosen the
+ * prefix check in [SessionLogExport.sessionFiles] — that check, not the
+ * directory choice, is what keeps an export of ordinary app-usage logs from
+ * sweeping up someone else's gaze-tracking recordings if this branch is ever
+ * merged alongside one that has them.
+ *
+ * @param kind Identifies the session within this app's own naming, e.g.
+ *             "reading". Distinct from [FILE_PREFIX], which identifies the
+ *             file as belonging to this logging system at all.
  * @param metadata Extra fields for the `session_start` record.
  */
 class SessionLog(
@@ -46,7 +60,7 @@ class SessionLog(
     metadata: JSONObject.() -> Unit = {},
 ) {
 
-    val sessionId: String = "${kind}_${stamp()}_${UUID.randomUUID().toString().take(8)}"
+    val sessionId: String = "$FILE_PREFIX${kind}_${stamp()}_${UUID.randomUUID().toString().take(8)}"
     val file: File = File(context.noBackupFilesDir, "$sessionId.jsonl")
 
     private val writer = file.bufferedWriter()
@@ -170,6 +184,16 @@ class SessionLog(
         const val SCHEMA_VERSION = 1
         const val TYPE_SESSION_START = "session_start"
         const val TYPE_SESSION_END = "session_end"
+
+        /**
+         * Namespaces every file this class writes so [SessionLogExport] can
+         * tell this system's own files apart from any other log family that
+         * happens to write into the same `noBackupFilesDir` — see the class
+         * doc above. Chosen to not start with "reading", "gaze", or
+         * "calibration", which is what the other known writers in this repo
+         * use.
+         */
+        const val FILE_PREFIX = "appusage_"
 
         private const val TAG = "SessionLog"
         private const val QUEUE_CAPACITY = 2048

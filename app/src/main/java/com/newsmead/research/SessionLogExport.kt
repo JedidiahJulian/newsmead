@@ -14,17 +14,35 @@ import java.io.File
  * Research observations stay on the device until someone deliberately sends
  * them somewhere, which is the difference between this layer and the
  * Crashlytics/Analytics layer.
+ *
+ * [sessionFiles] only ever returns files that start with
+ * [SessionLog.FILE_PREFIX]. `noBackupFilesDir` is also where the gaze
+ * branches' `ReadingMeasurementLog` (com.newsmead.gaze) writes raw
+ * eye-tracking recordings; without this filter, exporting ordinary app-usage
+ * logs from a merged build would silently bundle a participant's
+ * gaze-tracking data into the same share action. Keep the prefix check even
+ * if it looks redundant with the `.jsonl` check — the extension alone is not
+ * enough to tell the two systems' files apart.
  */
 object SessionLogExport {
 
     private const val TAG = "SessionLogExport"
     private const val AUTHORITY_SUFFIX = ".research.fileprovider"
 
-    /** Finished session files, newest first. Excludes the one still open. */
+    /**
+     * Finished session files this system wrote, newest first. Excludes the
+     * one still open, and — by the [SessionLog.FILE_PREFIX] check — excludes
+     * anything written by a different log family that happens to share this
+     * directory (see class doc).
+     */
     fun sessionFiles(context: Context): List<File> {
         val open = ResearchSession.sessionId
         return context.noBackupFilesDir
-            .listFiles { file -> file.isFile && file.name.endsWith(".jsonl") }
+            .listFiles { file ->
+                file.isFile &&
+                    file.name.startsWith(SessionLog.FILE_PREFIX) &&
+                    file.name.endsWith(".jsonl")
+            }
             .orEmpty()
             .filter { it.nameWithoutExtension != open }
             .sortedByDescending { it.lastModified() }
