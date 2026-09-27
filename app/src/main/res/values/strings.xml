@@ -303,5 +303,9 @@
     <string name="article_text_loading">Article is loading... (If it does not load, please re-open this article.)</string>
     <string name="home_show_english">Show me English news</string>
     <string name="home_show_filipino">Show me Filipino news</string>
+    <string name="home_region_local">Philippines</string>
+    <string name="home_region_international">World</string>
+    <string name="article_read_full">Read the full story</string>
+    <string name="article_read_full_on">Read the full story on %1$s</string>
 
 </resources>

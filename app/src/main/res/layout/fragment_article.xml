@@ -291,6 +291,17 @@
                     android:text="@string/article_text_loading"
                     android:textColor="?primaryTextColor" />
 
+                <Button
+                    android:id="@+id/btnReadFullArticle"
+                    style="@style/ButtonMedium_Text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/text_margin"
+                    android:layout_marginEnd="@dimen/text_margin"
+                    android:layout_marginBottom="16dp"
+                    android:text="@string/article_read_full"
+                    android:visibility="gone" />
+
                 <View
                     android:id="@+id/divider"
                     android:layout_width="match_parent"

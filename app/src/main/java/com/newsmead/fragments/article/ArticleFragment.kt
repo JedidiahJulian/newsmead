@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -145,12 +146,27 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         binding.tvSource.text = article.source
         binding.btnArticleRecommendations.text = "Show more from " + article.source
         val context = binding.root.context
-        val resourceId = context.resources.getIdentifier(article.sourceImage, "drawable", context.packageName)
-        binding.ivSourceImage.setImageResource(if (resourceId != 0) resourceId else R.drawable.sample_source_image)
+        DataHelper.loadSourceImage(binding.ivSourceImage, article.sourceImage)
 
         // Set article read time
         val readTime = article.readTime //+ " min read"
         binding.tvArticleMinRead.text = readTime
+
+        // The NewsData free plan only returns a summary, so link out to the
+        // publisher for the full text.
+        if (article.url.startsWith("http")) {
+            binding.btnReadFullArticle.text = if (article.source.isNotEmpty())
+                getString(R.string.article_read_full_on, article.source)
+            else getString(R.string.article_read_full)
+            binding.btnReadFullArticle.visibility = View.VISIBLE
+            binding.btnReadFullArticle.setOnClickListener {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(article.url)))
+                } catch (e: ActivityNotFoundException) {
+                    Toast.makeText(context, "No browser available", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
 
         // Set language
         language = article.language
@@ -172,7 +188,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             } else {
                 logReadAloud(started = true)
                 var body = binding.tvArticleText.text.toString()
-                Log.d("ArticleFragment", "tts-body: ${body.substring(0, 100)}")
+                Log.d("ArticleFragment", "tts-body: ${body.take(100)}")
                 if (body.isNotEmpty()) speak(body)
                 else Toast.makeText(context, "No article to read", Toast.LENGTH_SHORT).show()
             }
