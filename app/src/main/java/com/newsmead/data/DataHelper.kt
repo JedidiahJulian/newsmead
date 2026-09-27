@@ -3,6 +3,8 @@ package com.newsmead.data
 import android.content.Context
 import android.icu.text.SimpleDateFormat
 import android.util.Log
+import android.os.SystemClock
+import android.util.LruCache
 import android.widget.ImageView
 import android.widget.Toast
 import com.android.volley.Request
@@ -12,9 +14,12 @@ import com.android.volley.toolbox.Volley
 import com.bumptech.glide.Glide
 import com.newsmead.BuildConfig
 import com.newsmead.R
+import com.newsmead.data.news.ArticleExtractor
 import com.newsmead.data.news.NewsDataApi
 import com.newsmead.logging.AppLog
 import com.newsmead.models.Article
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.DateFormat
 import java.util.Date
 
@@ -237,6 +242,28 @@ object DataHelper {
         if (now - lastErrorToastMs < 3000) return
         lastErrorToastMs = now
         Toast.makeText(context.applicationContext, message, Toast.LENGTH_SHORT).show()
+    }
+
+    // Extracted bodies by newsId, so reopening an article skips the download.
+    private val fullTextCache = LruCache<String, String>(30)
+
+    /** Publisher's full article text, or null if it can't be extracted. */
+    suspend fun loadFullText(article: Article): String? {
+        fullTextCache.get(article.newsId)?.let { return it }
+        val started = SystemClock.elapsedRealtime()
+        val text = withContext(Dispatchers.IO) {
+            try {
+                ArticleExtractor.fetchFullText(article.url)
+            } catch (e: Exception) {
+                AppLog.w(TAG, "Full text fetch failed for ${article.source}", e)
+                null
+            }
+        }
+        // No URL, title, or text in logs.
+        AppLog.d(TAG, "Full text ${if (text != null) "extracted" else "unavailable"} " +
+            "source=${article.source} ms=${SystemClock.elapsedRealtime() - started}")
+        if (text != null) fullTextCache.put(article.newsId, text)
+        return text
     }
 
     /** Source logo from a drawable name or a URL. */

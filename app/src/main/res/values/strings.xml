@@ -307,5 +307,7 @@
     <string name="home_region_international">World</string>
     <string name="article_read_full">Read the full story</string>
     <string name="article_read_full_on">Read the full story on %1$s</string>
+    <string name="article_view_original_on">View the original on %1$s</string>
+    <string name="article_loading_full">Loading the full article…</string>
 
 </resources>

@@ -29,6 +29,7 @@ import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.DatabaseHelper
 import com.newsmead.data.FirebaseHelper
+import com.newsmead.data.news.NewsDataApi
 import com.newsmead.logging.Analytics
 import com.newsmead.logging.AppLog
 import com.newsmead.research.ResearchSession
@@ -48,6 +49,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private lateinit var savedLists: ArrayList<SavedList>
     private lateinit var textToSpeech: TextToSpeech
     private var isTranslated = false
+    // Body currently shown; translate's revert restores it.
+    private var displayedBody = ""
 
     // Reading-session bookkeeping for the research log. openedAtMs uses the
     // monotonic clock so a clock change mid-article cannot produce a negative
@@ -152,12 +155,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         val readTime = article.readTime //+ " min read"
         binding.tvArticleMinRead.text = readTime
 
-        // The NewsData free plan only returns a summary, so link out to the
-        // publisher for the full text.
+        // Label updates once loadFullText() finishes.
         if (article.url.startsWith("http")) {
-            binding.btnReadFullArticle.text = if (article.source.isNotEmpty())
-                getString(R.string.article_read_full_on, article.source)
-            else getString(R.string.article_read_full)
+            setOriginalLinkLabel(article, fullTextShown = false)
             binding.btnReadFullArticle.visibility = View.VISIBLE
             binding.btnReadFullArticle.setOnClickListener {
                 try {
@@ -236,7 +236,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 logTranslate(toFilipino = false, useGoogle = binding.switchUseGoogle.isChecked)
                 // Revert to original language
                 binding.tvArticleHeadline.text = article.title
-                binding.tvArticleText.text = article.body
+                binding.tvArticleText.text = displayedBody
                 binding.btnTranslateArticle.text = "Filipino"
                 isTranslated = false
                 binding.btnTranslateArticle.isEnabled = true
@@ -343,16 +343,19 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
             if (offlineArticle?.articleBody?.isNotEmpty() == true) {
                 // Offline article
-                binding.tvArticleText.text = offlineArticle.articleBody
+                displayedBody = offlineArticle.articleBody
+                binding.tvArticleText.text = displayedBody
             } else {
-                // Online article
-                binding.tvArticleText.text = article.body
+                // Summary now, full text when fetched
+                displayedBody = article.body
+                binding.tvArticleText.text = displayedBody
+                loadFullText(article)
 
                 // Set article image from link
                 if (article.imageURL != "") {
                     Glide.with(this@ArticleFragment).load(article.imageURL).error(R.drawable.sample_article_image).into(binding.ivArticleFullImage)
                 } else {
-                    binding.ivSourceImage.setImageResource(R.drawable.sample_source_image)
+                    binding.ivArticleFullImage.visibility = View.GONE
                 }
             }
 
@@ -456,6 +459,35 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         } else {
             // Upon TextToSpeech initialization failure, disable the Read Aloud button
             Toast.makeText(context, "Read Aloud is not available", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** Swaps in the full text unless extraction fails or the article is translated. */
+    private fun loadFullText(article: Article) {
+        if (!article.url.startsWith("http")) return
+        binding.btnReadFullArticle.isEnabled = false
+        binding.btnReadFullArticle.text = getString(R.string.article_loading_full)
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val fullText = DataHelper.loadFullText(article)
+            if (view == null) return@launch
+
+            binding.btnReadFullArticle.isEnabled = true
+            val shown = fullText != null && !isTranslated
+            if (shown) {
+                displayedBody = fullText!!
+                binding.tvArticleText.text = displayedBody
+                binding.tvArticleMinRead.text = NewsDataApi.readTime(displayedBody)
+            }
+            setOriginalLinkLabel(article, shown)
+        }
+    }
+
+    private fun setOriginalLinkLabel(article: Article, fullTextShown: Boolean) {
+        binding.btnReadFullArticle.text = when {
+            article.source.isEmpty() -> getString(R.string.article_read_full)
+            fullTextShown -> getString(R.string.article_view_original_on, article.source)
+            else -> getString(R.string.article_read_full_on, article.source)
         }
     }
 

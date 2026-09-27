@@ -106,6 +106,10 @@ dependencies {
     // Import Volley dependencies
     implementation("com.android.volley:volley:1.2.1")
 
+    // Full-text extraction. jsoup pinned: Readability4J's 1.11.2 has CVE-2021-37714.
+    implementation("net.dankito.readability4j:readability4j:1.0.8")
+    implementation("org.jsoup:jsoup:1.15.4")
+
     // Import Glide dependencies
     implementation("com.github.bumptech.glide:glide:4.16.0")
 

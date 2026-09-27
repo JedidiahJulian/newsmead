@@ -39,3 +39,6 @@
 
 # Warnings and errors are deliberately kept: they are what feeds Crashlytics
 # non-fatals, so do not add w/e to the rule above.
+
+# Readability4J uses slf4j without a binding (no-op at runtime).
+-dontwarn org.slf4j.impl.StaticLoggerBinder
