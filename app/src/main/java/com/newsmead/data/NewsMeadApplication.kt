@@ -39,32 +39,62 @@ class NewsMeadApplication: Application() {
                 PreloadedData.updateSavedData(pairData)
 
                 // Check if missing or outdated offline articles in local database
-                val offlineData: List<Article> = FirebaseHelper.getOfflineArticlesList(this@NewsMeadApplication)
-                val offlineArticles: List<NewsArticle> = DatabaseHelper.getNewsArticleDao().getAllNewsArticles()
+                val offlineData: List<Article> =
+                    FirebaseHelper.getOfflineArticlesList(this@NewsMeadApplication)
+                val offlineArticles: List<NewsArticle> =
+                    DatabaseHelper.getNewsArticleDao().getAllNewsArticles()
 
                 val dataIds: List<String> = offlineData.map { it.newsId }
                 val articleIds: List<String> = offlineArticles.map { it.newsId }
 
-                // If there are missing or outdated articles, then update the local database
-
                 // 1 day = 86400000 milliseconds
                 val timeLimit = 86400000
                 val curTime = System.currentTimeMillis()
-                val outdatedArticles: List<NewsArticle> = offlineArticles.filter { curTime - it.lastUpdated > timeLimit }
 
-                // Call API to get body of outdated articles
+                // --- 1. Call API to get body of OUTDATED articles ---
+                val outdatedArticles: List<NewsArticle> =
+                    offlineArticles.filter { curTime - it.lastUpdated > timeLimit }
 
-                if (dataIds != articleIds) {
-                    val missingIds: List<String> = dataIds.filter { !articleIds.contains(it) }
-                    val missingArticles: List<Article> = offlineData.filter { missingIds.contains(it.newsId) }
+                for (outdated in outdatedArticles) {
+                    val matchingFirebaseArticle = offlineData.find { it.newsId == outdated.newsId }
+                    if (matchingFirebaseArticle != null) {
+                        // Extract full text using your built-in DataHelper
+                        val fullText = DataHelper.loadFullText(matchingFirebaseArticle)
+                            ?: matchingFirebaseArticle.body
 
-                    // Call API to get body of missing articles
+                        // Use .copy() to update fields because properties are 'val'
+                        val updatedArticle = outdated.copy(
+                            articleBody = fullText,
+                            lastUpdated = curTime
+                        )
+
+                        // Update the database (Assumes insert with OnConflictStrategy.REPLACE or an update method exists)
+                        DatabaseHelper.getNewsArticleDao().insertNewsArticle(updatedArticle)
+                    }
                 }
 
+                // --- 2. Call API to get body of MISSING articles ---
+                if (dataIds != articleIds) {
+                    val missingIds: List<String> = dataIds.filter { !articleIds.contains(it) }
+                    val missingArticles: List<Article> =
+                        offlineData.filter { missingIds.contains(it.newsId) }
+
+                    for (article in missingArticles) {
+                        // Extract full text using your built-in DataHelper
+                        val fullText = DataHelper.loadFullText(article) ?: article.body
+
+                        // Instantiate EXACTLY matching your NewsArticle.kt file
+                        val newsArticle = NewsArticle(
+                            newsId = article.newsId,
+                            articleBody = fullText,
+                            lastUpdated = curTime
+                        )
+                        DatabaseHelper.getNewsArticleDao().insertNewsArticle(newsArticle)
+                    }
+                }
             }
         }
     }
-
     /**
      * Opens a research session when the app comes to the foreground and closes
      * it when the last activity stops, so every file ends with a session_end.
