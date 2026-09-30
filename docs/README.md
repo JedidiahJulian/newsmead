@@ -4,6 +4,21 @@ This directory contains the supporting documentation for the NewsMead gaze-drive
 
 ## Project Guides
 
+- [Scanpath-to-Visual-Aid Implementation Pilot](scanpath-measurement-pilot.md): revision 4 objectives, work packages, source-linked P01–P13 pattern registry and A0–A4 aids; prompted/shadow/controlled trials and variable-strength evaluation, carrying forward existing gaze evidence.
+- [Implemented Offline Scanpath Detectors](scanpath-detectors.md): analyzer v5/classifier v1 named patterns, source provenance, explicit settings, abstention, event timing, output dictionary and replay commands; Android integration remains pending.
+- [Scanpath Pilot Audit](scanpath-pilot-audit.md): corrected replay/time/coverage errors, protocol gaps and current collection dependencies.
+- [Scanpath Pilot Plan and Session Record](scanpath-pilot-session-record.md): blank phase-specific study plan, software readiness, linked sessions, pattern results and aid/strength outcomes; fill participant copies privately.
+- [Reading Measurement Pilot v1](reading-measurement-pilot.md): original raw natural-reading recording and provisional fixation/word-metric contract.
+- [Scanpath-to-Visual-Aid Implementation Proposal](adaptive-visual-aid-proposal.md): current NewsMead feature specification, from word and line scanpath derivation through paper-linked order classes and configurable line, word, and focus-region aids, with validation gates.
+- [Illustrated Scanpath-to-Visual-Aid Proposal](../output/pdf/newsmead-scanpath-visual-aid-proposal.pdf): seven-page PDF with word/line scanpath diagrams, classification-to-aid examples, interface mockups, implementation gates, and primary-study findings.
+- [Earlier Adaptive Line-Guide Research Plan](adaptive-visual-aid-research-plan.md): historical narrower option focused on a three-state line guide and learned support-need model; retained for context, not the current implementation proposal.
+- [Interruption Bookmark Option](evidence-backed-reading-support-proposal.md): historical known-interruption proposal; withdrawn as the recommended primary direction because it does not satisfy the intended adaptive-reading behavior.
+- [Earlier Ordered Line-Visit Proposal](scanpath-scaffolding-proposal.md): historical fixed pattern/scaffold option; the current implementation retains ordered scanpaths while leaving pattern meanings and aid mappings subject to validation.
+- [Scanpath Proposal Evidence](scanpath-scaffolding-evidence.md): primary-study matrix for word/line order classes and visual-aid candidates, with transfer limits and NewsMead validation requirements.
+- [Published Scanpath Sequences and Reading Behaviors](scanpath-sequence-behavior-table.md): source-by-source table of word transitions, line/segment movements, whole-path patterns, and the limits of mapping them to NewsMead examples.
+- [Scanpath Classification Dictionary](scanpath-classification-map.md): grouped lookup of published movement labels, ordered path patterns, empirical clusters, and modeled phases by word, line, segment, and sentence level; includes a [table-form PDF edition](../output/pdf/newsmead-scanpath-classification-map.pdf).
+- [Scanpath-to-Visual-Aid Evidence Map](scanpath-visual-aid-evidence-map.md): behavior-to-aid table with tested line, word, navigation, and re-entry cues, measured outcomes, population and device limits, and unsupported mappings; includes a [PDF edition](../output/pdf/newsmead-scanpath-visual-aid-evidence-map.pdf).
+- [Gaze Proposal Evidence Audit](gaze-proposal-evidence-audit.md): claim-by-claim challenge of unvalidated line-pattern choices, direct interruption-cue evidence, and a staged alternative for the thesis.
 - [Thesis Memory](thesis-memory.md): working understanding of the thesis, manuscript model, and current implementation.
 - [Gaze Implementation](gaze-implementation.md): gaze pipeline, calibration, mapping, AOI, and accuracy caveats.
 - [Gaze Diagnostics Log](gaze-diagnostics-log.md): evidence log for the exploratory investigation of the current gaze system before proposing changes.

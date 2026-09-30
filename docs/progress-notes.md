@@ -1,5 +1,113 @@
 # NewsMead — Progress Notes
 
+## 2026-09-30 - Named offline scanpath detectors implemented
+
+Added `tools/gaze/scanpath_patterns.py` classifier v1 and integrated P01–P13
+outputs into analyzer v5. Outputs cover word/line movements, geometric return
+sweeps, revisit/frontier episodes, A–B–A–B cycles, observed residence/frontier
+progression and explicit breaks. Sweep endpoints and verified LTR direction are
+required for positive P09 matches; long/slow flags have no default human cutoffs.
+Added unique geometry snapshots, supporting-evidence availability/provenance,
+event IDs, configuration hash, per-pattern statuses and matched-vs-evaluated
+counts. Original raw-stream extraction/coverage behavior and logger schema remain.
+
+Focused checks: **39 extraction/integration tests + 13 classifier tests = 52
+passed**, including synthetic raw-record and CLI configuration/output tests.
+Independent review identified P10 backward-phase/provenance errors, unrecorded
+direction assumptions and below-threshold censored residence labels; corrected
+them and added regressions. The closure review's remaining evidence-index-order
+issue was fixed with sorted unique support and a frontier-before-revisit fixture.
+See `docs/scanpath-detectors.md` for the exact contract and transfer limits.
+
+This implements offline named descriptors, not Android live detection, a
+difficulty model or the new aid policy. No private recording, device/build/install,
+calibration, collection, staging or commit was performed.
+
+## 2026-09-30 - Pilot revision 4: full implementation and strength evaluation
+
+Reorganized the pilot around six objectives and seven build/evaluation packages.
+Added source-linked P01–P13 operational definitions and A0–A4 candidate aid
+parameters; specified causal prefix/live parity, separate raw prompted tasks,
+shadow decisions, independent support-need reports, controlled aid/strength
+trials and frozen varying-strength evaluation. Existing gaze work is baseline
+evidence. Expanded the private blank record for per-pattern and action outcomes,
+assignment/exposure, missingness and holdout provenance. Counts and numerical
+progression criteria remain phase-specific planning inputs before collection.
+Named classifiers/live policy remain pending; this revision changes documentation.
+Focused independent review identified report-interaction leakage and omitted
+evidence-accumulation latency. Added prespecified pre-report windows/lead guards,
+interaction/recovery exclusions and first-support/decisive-capture-to-render
+timing, with render-proxy and prospective/reactive distinctions.
+Targeted review confirmed both corrections. Documentation checks passed for seven
+files, 75 local links, registry/phase completeness and table structure; Git diff
+whitespace checks passed. No Android build/device collection or new human result.
+
+## 2026-09-30 - Pilot scope corrected to classifier-to-aid implementation
+
+At the owner's clarification, pilot revision 3 now treats completed gaze/model
+evaluation as baseline evidence and includes the full scanpath classifier/live
+engine/aid policy build checkpoints. Named patterns and their current missing
+implementation are listed explicitly. The previous measurement protocol is one
+work package, not the full pilot. The stronger research model being requested
+from its provider is a pending versioned input; classifier work can continue.
+No classifier or Android behavior was implemented by this scope correction.
+
+## 2026-09-30 - Scanpath pilot double-check
+
+The second audit found capture time could reverse after a replay boundary and
+detector-rejected timestamps still counted as usable. Analysis v4 fixes both,
+adds separate terminal-boundary counts, visit censoring, duration coverage and
+coordinate output-age summaries. All 31 focused tests pass; independent review
+found no remaining issue in those fixes. Revised the pilot procedure to hold
+calibration constant through pre-check/read/post-check, freeze current 22 dp,
+and require matched raw placement/continuous-order tasks and a completed study
+plan. Added an audit and blank session record. No device/Android change or
+private-recording analysis was performed; see `scanpath-pilot-audit.md`.
+
+## 2026-09-30 - Scanpath pilot preparation
+
+Moved the uncommitted measurement checkout from `measurement/RII_2` to
+`measurement/scanpath-pilot` at the same commit. Prepared a phone-only word/line
+scanpath pilot, with separate instructed placement checks and provisional
+free-reading path extraction. The offline replay now reports ordered visits,
+signed transitions, explicit breaks and coverage at both resolutions. This is
+software preparation only: no device installation, calibration, recording or
+independent natural-reading path validation was performed. The v6 known-target
+score uses smoothed coordinates while this replay uses raw coordinates; a
+separate matched raw target check is needed before placement gating. Focused
+replay tests: 24 passed; independent code review found no remaining material
+issues in the added path output. See
+`scanpath-measurement-pilot.md` for the pilot contract and limits.
+
+## 2026-09-21 - Article-matched structured validation
+
+The interrupted raw-visible protocol-v5 diagnostic sustained about 23.7 FPS,
+with zero observed analyzer-busy drops and output age comparable to the prior
+hidden-dot run, so it does not support an FPS-drop explanation for the visibly
+jumpier dot. An exact offline replay of the article One Euro filter reduced
+same-state median frame-to-frame movement from about 45 px to 15 px. Ordinary
+structured validation now uses protocol v6/schema 9: the same article-smoothed
+coordinates drive the orange dot, mapping, and scoring, while raw source
+coordinates remain separately logged. The raw-visible v5 and frozen hidden-dot
+v4 identities remain distinct and unchanged.
+
+## 2026-09-20 - Continuous gaze-feedback validation
+
+The completed hidden-dot `font22_run1` diagnostic retained all 1,183 scored
+samples at about 23.8 FPS but reached only 40.2% word-trial exact-line, 17.1%
+exact-word, and 0.8% guided exact-line accuracy; its saved evidence is
+`diagnostics-local/reading_validation_session_20260920_190328_306.jsonl`.
+At the user's request, ordinary structured validation now keeps the orange gaze
+dot visible through references and scored trials as a deliberately specified
+closed-loop diagnostic condition. This is separately identified as protocol v5/schema 8
+and `known_target_visible_feedback_performance`; it must not be pooled with or
+reported as unaided hidden-dot accuracy. The frozen matched-comparison path
+retains hidden-dot protocol v4 behavior.
+
+## 2026-09-13 - First natural-reading recording audit
+
+Read the 86.47 s recording in memory: complete log, 1,537 observations, but sparse fixation/word coverage and user-reported 1–2-line vertical offset. Fixed offline sequence bridging across long unclassified inter-fixation intervals (analysis v2; 16 tests pass); only four default-setting word transitions remain. No phone changes; use a fresh aligned calibration for the next comparison and see `reading-measurement-run-01.md`.
+
 ## 2026-09-13 - Device-test calibration loss
 
 After the connected Android test installation, NewsMead's calibration is missing and firstInstallTime equals lastUpdateTime (2026-09-13 00:08:46), indicating a fresh installation/data reset. No calibration bundle was found in the app, the benchmark's corresponding location, or either project workspace. Do not run Gradle connected tests on the user's working app data without a verified recoverable backup; use preserving updates and direct instrumentation or a separate test installation. The earlier assurance that calibration would be preserved was incorrect.
