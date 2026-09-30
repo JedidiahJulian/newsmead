@@ -5,6 +5,12 @@ No RII formula, weights, baseline, attention classifier, or scaffold-intensity p
 selected by this implementation. The existing adaptive/demo pipeline remains available
 outside recording; its line-visit counter is not used by the new measurement analysis.
 
+**Offline extension 2026-09-30:** analyzer v5 retains the extraction/coverage
+contracts and adds the [named P01–P13 detector layer](scanpath-detectors.md), unique
+geometry snapshots and evidence-availability provenance. Return-sweep regions
+and long/slow thresholds require explicit development settings. This changes
+offline analysis, not schema-1 recording or Android aid behavior.
+
 ## Running the first recording
 
 1. Use the current MGazeNet calibration and open a bundled article.
@@ -19,7 +25,7 @@ outside recording; its line-visit counter is not used by the new measurement ana
 For the first plumbing check, record a short passage, include a deliberate reread,
 scroll once, and briefly look away. This checks whether the recording is interpretable;
 the instructed behavior is not evidence of spontaneous attention detection. Then collect
-ordinary unassisted reading separately. Read from the beginning of a fresh passage for
+ordinary reading separately. Read from the beginning of a fresh passage for
 first-pass analysis and keep a researcher note of the task and starting position.
 
 These are diagnostic-dot recordings, explicitly identified in the metadata, rather than
@@ -132,6 +138,27 @@ The first-visit value is eligible only if its entry/exit and progression context
 
 ## Replay and verification
 
+Analysis version 2 additionally breaks word-sequence continuity when consecutive detected
+fixations are separated by more than the configured gap limit (default 125 ms), even if
+camera samples continued during that unclassified interval. Version 1 could bridge
+discarded candidates and distort skipping/regression estimates. See `reading-measurement-run-01.md`.
+
+The subsequent [scanpath measurement pilot](scanpath-measurement-pilot.md) defines
+analysis version 3's separately reported word and physical-line ordered paths and
+phone-only validation limits. The v1/v2 session-level word metrics remain provisional;
+the path replay does not turn them into a reading-difficulty detector.
+
+Analysis version 4 additionally preserves chronological capture order across
+boundaries, separates coordinate eligibility from detector-accepted sample coverage,
+and reports duration coverage, visit censoring, output age and boundary-event counts.
+See the [2026-09-30 audit](scanpath-pilot-audit.md) for the corrected semantics.
+
+Analysis version 5 adds the [offline named detector layer](scanpath-detectors.md),
+unique geometry snapshots and availability of each finalized candidate's closing
+evidence. Its optional `--pattern-config` JSON object records development settings;
+unset direction/endpoints or long/slow thresholds do not supply a positive label.
+Existing extraction/coverage definitions remain unchanged.
+
 Retrieve only the desired `reading_measurement_*.jsonl` from the phone's app-private
 no-backup directory. Existing calibration/accuracy logs are separate schemas. Example
 once a recording is available locally:
@@ -156,8 +183,9 @@ it does not open the camera or establish gaze accuracy.
 
 1. Confirm usable sampling intervals, spatial assignment, fixation counts/durations,
    ambiguous-word fraction, and behavior around scrolling. Compare threshold sensitivity.
-2. Run the independent known-target check at the current font/layout. Report exact-word,
-   neighboring-line, transition error and false-regression results, not only average error.
+2. Run the known-target check at the current font/layout. Report exact-word and
+   neighboring-line placement, coverage and false movement within target holds, not
+   only average error. Its separate target holds do not verify a natural reading path.
 3. Collect natural reading with independent reports of following, comprehension difficulty,
    losing place, or unrelated thoughts, plus passage comprehension. These labels are not
    inferred from this recording mode and are not automatically collected by it yet.
