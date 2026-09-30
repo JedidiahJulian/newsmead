@@ -29,6 +29,7 @@ class ReadingValidationSessionLog(
     calibrationFingerprint: String?,
     driftCorrectionActive: Boolean,
     verticalAlignmentMode: ReadingVerticalAlignmentMode,
+    private val feedbackMode: ReadingValidationFeedbackMode,
     private val comparison: ComparisonReadingBinding? = null,
 ) {
     private val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
@@ -48,6 +49,7 @@ class ReadingValidationSessionLog(
 
     init {
         require(orderVariant == "A" || orderVariant == "B")
+        feedbackMode.requireCompatibleWithComparison(comparison != null)
         if (comparison != null) {
             require(calibrationFingerprint == comparison.record.calibrationSha256)
             require(orderVariant == comparison.record.runtime.spec.orderVariant)
@@ -58,9 +60,9 @@ class ReadingValidationSessionLog(
             require(verticalAlignmentMode == ReadingVerticalAlignmentMode.OFF)
         }
         event("session_start", flush = true) {
-            put("schema_version", SCHEMA_VERSION)
+            put("schema_version", feedbackMode.schemaVersion)
             put("calibration_sha256", calibrationFingerprint ?: JSONObject.NULL)
-            put("protocol_version", ReadingValidationProtocol.VERSION)
+            put("protocol_version", feedbackMode.protocolVersion)
             put("run_label", runLabel)
             put("order_variant", orderVariant)
             put("timestamp_iso", isoTimestamp(startedAtMs))
@@ -77,11 +79,43 @@ class ReadingValidationSessionLog(
             put("vertical_alignment_scope", "session_only_reading_surface_y_gain_bias")
             put("detailed_source_telemetry_enabled", false)
             put("camera_frames_retained", false)
-            put("validation_scope", "known_target_spatial_accuracy_only")
+            if (feedbackMode.visibleDuringScoredTrials) {
+                put("gaze_feedback_mode", feedbackMode.logValue)
+                put("gaze_feedback_visible_during_scored_trials", true)
+                put(
+                    "gaze_feedback_coordinate",
+                    if (feedbackMode.smoothForReading) {
+                        "effective_article_smoothed_gaze_screen_px"
+                    } else {
+                        "effective_gaze_screen_px"
+                    },
+                )
+                put("gaze_feedback_presentation", JSONObject().apply {
+                    put("shape", "circle")
+                    put("radius_px", GazeOverlayView.GAZE_DOT_RADIUS_PX)
+                    put("alpha", GazeOverlayView.GAZE_DOT_ALPHA)
+                    put("red", GazeOverlayView.GAZE_DOT_RED)
+                    put("green", GazeOverlayView.GAZE_DOT_GREEN)
+                    put("blue", GazeOverlayView.GAZE_DOT_BLUE)
+                })
+                put("validation_scope", "known_target_visible_feedback_performance")
+                if (feedbackMode.smoothForReading) {
+                    put("output_coordinate_filter", "mgazenet_article_one_euro_v1")
+                    put("output_coordinate_filter_applied_to", "dot_mapping_scoring")
+                    put("scoring_coordinate", "effective_article_smoothed_gaze_screen_px")
+                    put("raw_source_coordinate", "mgazenet_source.raw_screen_x_y")
+                }
+            } else {
+                put("validation_scope", "known_target_spatial_accuracy_only")
+            }
             put("result_visibility", if (comparison == null) "terminal_ui" else "offline_after_four_hashes")
             put(
                 "processing_path",
-                "calibrated_gaze -> optional_session_vertical_alignment -> line_aoi -> existing_target_stabilizer",
+                if (feedbackMode.smoothForReading) {
+                    "calibrated_gaze -> article_one_euro_screen_smoothing -> optional_session_vertical_alignment -> line_aoi -> existing_target_stabilizer"
+                } else {
+                    "calibrated_gaze -> optional_session_vertical_alignment -> line_aoi -> existing_target_stabilizer"
+                },
             )
         }
     }
@@ -104,6 +138,17 @@ class ReadingValidationSessionLog(
         put("line_acquire_ms", ReadingValidationProtocol.LINE_READING_ACQUIRE_MS)
         put("line_measure_ms", ReadingValidationProtocol.LINE_READING_MEASURE_MS)
         put("minimum_coordinates_per_scored_target", ComparisonProtocol.MIN_COORDINATES_PER_SCORED_TARGET)
+        if (feedbackMode.visibleDuringScoredTrials) {
+            put("gaze_feedback_mode", feedbackMode.logValue)
+            put("gaze_feedback_visible_during_preview", true)
+            put("gaze_feedback_visible_during_vertical_references", true)
+            put("gaze_feedback_visible_during_word_trials", true)
+            put("gaze_feedback_visible_during_line_trials", true)
+            if (feedbackMode.smoothForReading) {
+                put("output_coordinate_filter", "mgazenet_article_one_euro_v1")
+                put("output_coordinate_filter_applied_to", "dot_mapping_scoring")
+            }
+        }
         put("targets", JSONArray().apply {
             (wordTargets + lineTargets).forEach { target ->
                 put(JSONObject().apply { putExpected(target) })
@@ -149,6 +194,10 @@ class ReadingValidationSessionLog(
         expected: ReadingValidationCheckpoint? = null,
     ) = event("protocol_state", flush = true) {
         putContext(phase, stepId, state, expected)
+        put(
+            "gaze_feedback_visible",
+            feedbackMode.visibleDuringScoredTrials || stepId == "unscored_dot_preview",
+        )
         put("instruction", instruction)
     }
 
@@ -263,6 +312,10 @@ class ReadingValidationSessionLog(
         putNum("observed_busy_drops", busyDrops)
         put("operational_expiry_ms", 500)
         put("filter", "none")
+        if (feedbackMode.smoothForReading) {
+            put("coordinate_role", "prefilter_raw_source")
+            put("delivered_output_filter", "mgazenet_article_one_euro_v1")
+        }
     }
 
     fun finish(outcome: String, summary: ReadingValidationMetrics.Summary) {
@@ -393,6 +446,8 @@ class ReadingValidationSessionLog(
 
     companion object {
         const val SCHEMA_VERSION = 7
+        const val RAW_VISIBLE_FEEDBACK_SCHEMA_VERSION = 8
+        const val ARTICLE_SMOOTHED_VISIBLE_FEEDBACK_SCHEMA_VERSION = 9
         private const val TAG = "ReadingValidation"
     }
 }

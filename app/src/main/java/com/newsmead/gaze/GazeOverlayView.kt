@@ -29,7 +29,9 @@ class GazeOverlayView @JvmOverloads constructor(
     defStyle: Int = 0,
 ) : View(context, attrs, defStyle) {
 
-    private val gazePaint = fillPaint(Color.argb(180, 255, 64, 0))
+    private val gazePaint = fillPaint(
+        Color.argb(GAZE_DOT_ALPHA, GAZE_DOT_RED, GAZE_DOT_GREEN, GAZE_DOT_BLUE),
+    )
     private val wordPaint = fillPaint(Color.argb(82, 244, 211, 94))
     private val linePaint = fillPaint(Color.argb(58, 244, 211, 94))
     private val focusPaint = fillPaint(Color.argb(112, 0, 0, 0))
@@ -45,7 +47,7 @@ class GazeOverlayView @JvmOverloads constructor(
         textSize = 34f
         typeface = Typeface.DEFAULT_BOLD
     }
-    private val radius = 18f
+    private val radius = GAZE_DOT_RADIUS_PX
     private val cornerRadius = dp(5f)
     private val loc = IntArray(2)
     private val textLoc = IntArray(2)
@@ -331,6 +333,11 @@ class GazeOverlayView @JvmOverloads constructor(
     private fun dp(value: Float): Float = value * resources.displayMetrics.density
 
     companion object {
+        const val GAZE_DOT_RADIUS_PX = 18f
+        const val GAZE_DOT_ALPHA = 180
+        const val GAZE_DOT_RED = 255
+        const val GAZE_DOT_GREEN = 64
+        const val GAZE_DOT_BLUE = 0
         private const val WORD_ALPHA = 82
         private const val LINE_ALPHA = 58
         private const val FOCUS_ALPHA = 112

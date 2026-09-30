@@ -13,6 +13,37 @@ enum class ReadingValidationPhase {
 
 enum class ReadingValidationTrialState { PREPARE, ACQUIRE, MEASURE }
 
+enum class ReadingValidationFeedbackMode(
+    val logValue: String,
+    val visibleDuringScoredTrials: Boolean,
+    val protocolVersion: Int,
+    val schemaVersion: Int,
+    val smoothForReading: Boolean,
+) {
+    /** Frozen matched-comparison behavior: visible in preview, hidden while scoring. */
+    HIDDEN_AFTER_PREVIEW("hidden_after_preview", false, 4, 7, false),
+
+    /** Historical raw-coordinate visible-feedback condition retained for log identity. */
+    CONTINUOUS_ORANGE_DOT_RAW("continuous_orange_dot", true, 5, 8, false),
+
+    /** Ordinary diagnostic condition matched to the article's One Euro gaze output. */
+    CONTINUOUS_ORANGE_DOT_ARTICLE_SMOOTHED(
+        "continuous_orange_dot_article_smoothed",
+        true,
+        6,
+        9,
+        true,
+    ),
+
+    ;
+
+    fun requireCompatibleWithComparison(comparisonBound: Boolean) {
+        require(!comparisonBound || this == HIDDEN_AFTER_PREVIEW) {
+            "Frozen matched-comparison reading must keep gaze feedback hidden while scoring"
+        }
+    }
+}
+
 data class ReadingValidationWord(
     val text: String,
     val start: Int,
@@ -44,6 +75,7 @@ data class ReadingValidationCheckpoint(
  * recurring region error from an always-first-target error across two runs.
  */
 object ReadingValidationProtocol {
+    /** Frozen matched-comparison version. Do not change without replacing that protocol. */
     const val VERSION = 4
     const val COUNTDOWN_MS = 3_000L
     const val ALIGNMENT_ACQUIRE_MS = 2_000L

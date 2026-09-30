@@ -38,6 +38,7 @@ import com.newsmead.gaze.mgazenet.MgazeNetCalibrationStore
 import com.newsmead.gaze.mgazenet.CalibrationIdentity
 import com.newsmead.gaze.LineAoiMapper
 import com.newsmead.gaze.ReadingValidationCheckpoint
+import com.newsmead.gaze.ReadingValidationFeedbackMode
 import com.newsmead.gaze.ReadingValidationLine
 import com.newsmead.gaze.ReadingValidationMetrics
 import com.newsmead.gaze.ReadingValidationPhase
@@ -91,6 +92,7 @@ class ReadingValidationActivity : AppCompatActivity() {
     private var pendingDeliveryId: Long? = null
     private var pendingDeliveryElapsedNs: Long? = null
     private var fallbackDeliveryId = 0L
+    private var feedbackMode = ReadingValidationFeedbackMode.CONTINUOUS_ORANGE_DOT_ARTICLE_SMOOTHED
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,7 +106,7 @@ class ReadingValidationActivity : AppCompatActivity() {
         binding.tvValidationText.text = VALIDATION_PASSAGE
         binding.tvValidationProgress.text = "Accuracy validation · about 3 minutes"
         binding.tvValidationInstruction.text =
-            "This test measures only known words and visibly highlighted physical lines. It does not score free reading or adaptive behavior."
+            "This test measures performance on known words and visibly highlighted physical lines while the orange gaze dot remains visible. It does not score free reading or adaptive behavior."
 
         val comparisonLaunch = ComparisonRuntime.parseLaunch(intent)
         if (comparisonLaunch.requested) {
@@ -181,23 +183,23 @@ class ReadingValidationActivity : AppCompatActivity() {
     private fun showRunLabelSetup(runNumber: Int, calibrationPointCount: Int) {
         val modeLabel = verticalAlignmentMode.name.lowercase(Locale.ROOT)
         val label = EditText(this).apply {
-            hint = "Example: vertical_${modeLabel}_1"
+            hint = "Example: font22_article-smoothed_run1"
             inputType = InputType.TYPE_CLASS_TEXT
-            setText("vertical_${modeLabel}_$runNumber")
+            setText("font22_article-smoothed_run$runNumber")
             setSelectAllOnFocus(true)
         }
         AlertDialog.Builder(this)
-            .setTitle("Start known-target accuracy validation")
+            .setTitle("Start known-target visible-feedback validation")
             .setMessage(
                 "Alignment $modeLabel · order $orderVariant. First you will see an unscored orange-dot preview. " +
-                    "The dot is then hidden before the three reference targets and measured accuracy trials.",
+                    "The orange gaze dot remains visible and uses the same gaze smoothing as article reading during the reference, word, and line trials.",
             )
             .setView(label)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Continue") { _, _ ->
                 getPreferences(MODE_PRIVATE).edit().putInt(PREF_RUN_COUNT, runNumber).apply()
                 beginSession(
-                    label.text.toString().trim().ifEmpty { "vertical_${modeLabel}_$runNumber" },
+                    label.text.toString().trim().ifEmpty { "font22_article-smoothed_run$runNumber" },
                     calibrationPointCount,
                 )
             }
@@ -292,6 +294,12 @@ class ReadingValidationActivity : AppCompatActivity() {
     ) {
         if (running) return
 
+        feedbackMode = if (comparisonBinding == null) {
+            ReadingValidationFeedbackMode.CONTINUOUS_ORANGE_DOT_ARTICLE_SMOOTHED
+        } else {
+            ReadingValidationFeedbackMode.HIDDEN_AFTER_PREVIEW
+        }
+
         val display = resources.displayMetrics
         val displaySize = binding.root.physicalDisplaySize()
         sessionLog = try {
@@ -307,6 +315,7 @@ class ReadingValidationActivity : AppCompatActivity() {
                 calibrationFingerprint = MgazeNetCalibrationStore(this).fingerprint(),
                 driftCorrectionActive = false,
                 verticalAlignmentMode = verticalAlignmentMode,
+                feedbackMode = feedbackMode,
                 comparison = comparisonBinding,
             ).also {
                 it.logLayout(
@@ -338,7 +347,10 @@ class ReadingValidationActivity : AppCompatActivity() {
     }
 
     private fun attachGazePipeline() {
-        val overlay = GazeOverlayView(this).also { gazeOverlay = it }
+        val overlay = GazeOverlayView(this).also {
+            it.setDotOnly(feedbackMode.visibleDuringScoredTrials)
+            gazeOverlay = it
+        }
         (binding.root as ViewGroup).addView(
             overlay,
             ConstraintLayout.LayoutParams(0, 0).apply {
@@ -354,7 +366,11 @@ class ReadingValidationActivity : AppCompatActivity() {
         binding.tvValidationCountdown.bringToFront()
 
         mapper = LineAoiMapper(binding.tvValidationText)
-        val provider = MgazeNetGazeProvider(this,binding.root)
+        val provider = MgazeNetGazeProvider(
+            this,
+            binding.root,
+            smoothForReading = feedbackMode.smoothForReading,
+        )
         provider.onFps = { fps -> sessionLog?.logFps(fps,phase,stepId,trialState) }
         provider.onFailure = { message ->
             Toast.makeText(this,message,Toast.LENGTH_LONG).show()
@@ -402,8 +418,11 @@ class ReadingValidationActivity : AppCompatActivity() {
         binding.nsvValidationText.setScrollingEnabled(true)
         gazeOverlay?.setDebugVisualsEnabled(true)
         binding.tvValidationProgress.text = "Unscored preview · not included in accuracy"
-        binding.tvValidationInstruction.text =
-            "Look at several words around the page. The orange dot should generally follow your gaze. Do not judge exact accuracy from the dot alone. When ready, start the measured test."
+        binding.tvValidationInstruction.text = if (feedbackMode.visibleDuringScoredTrials) {
+            "Look at several words around the page. The orange dot should generally follow your gaze. It will remain visible throughout this test. When ready, start the measured test."
+        } else {
+            "Look at several words around the page. The orange dot should generally follow your gaze. It will be hidden during measured trials. When ready, start the measured test."
+        }
         binding.btnValidationAction.text = "Start vertical references"
         binding.btnValidationAction.visibility = View.VISIBLE
         binding.btnValidationAction.setOnClickListener {
@@ -416,17 +435,23 @@ class ReadingValidationActivity : AppCompatActivity() {
 
     private fun showVerticalAlignmentInstructions() {
         val mode = verticalAlignmentMode.name
+        val feedbackInstruction = if (feedbackMode.visibleDuringScoredTrials) {
+            "The orange gaze dot remains visible; "
+        } else {
+            "The gaze dot will be hidden; "
+        }
         AlertDialog.Builder(this)
             .setTitle("Vertical references · $mode")
             .setMessage(
                 "Three orange targets will appear at the top, middle, and bottom of the reading surface. " +
                     "Look at the center of each target and keep looking until the next one appears. " +
-                    "Finding and measurement happen automatically, with no instructions visible while a target is active.",
+                    feedbackInstruction +
+                    "finding and measurement happen automatically, with no instructions visible while a target is active.",
             )
             .setNegativeButton("Back", null)
             .setPositiveButton("Begin") { _, _ ->
                 binding.validationControlPanel.visibility = View.GONE
-                gazeOverlay?.setDebugVisualsEnabled(false)
+                gazeOverlay?.setDebugVisualsEnabled(feedbackMode.visibleDuringScoredTrials)
                 clearHighlight()
                 binding.nsvValidationText.setScrollingEnabled(false)
                 programmaticScrollUntilMs = System.currentTimeMillis() + 1_000L
@@ -474,6 +499,7 @@ class ReadingValidationActivity : AppCompatActivity() {
         positionVerticalTarget(reference)
         binding.verticalAlignmentTarget.visibility = View.VISIBLE
         binding.verticalAlignmentTarget.bringToFront()
+        gazeOverlay?.bringToFront()
         sessionLog?.logProtocolState(
             phase,
             stepId,
@@ -561,18 +587,24 @@ class ReadingValidationActivity : AppCompatActivity() {
         } else {
             "The vertical references were recorded but not applied because this is the OFF control. "
         }
+        val feedbackInstruction = if (feedbackMode.visibleDuringScoredTrials) {
+            "The orange gaze dot remains visible, "
+        } else {
+            "The gaze dot is hidden, "
+        }
         AlertDialog.Builder(this)
             .setTitle("Word accuracy test")
             .setMessage(
                 alignmentMessage +
                     "Eight words will appear highlighted in yellow. Look only at the yellow word and keep looking at it until the next highlighted word appears. " +
                     "The first 3 seconds are unscored finding time; measurement then happens automatically for 2.5 seconds. " +
-                    "There will be no instructions to read while a target is active.",
+                    feedbackInstruction +
+                    "and there will be no instructions to read while a target is active.",
             )
             .setCancelable(false)
             .setPositiveButton("Begin") { _, _ ->
                 binding.validationControlPanel.visibility = View.GONE
-                gazeOverlay?.setDebugVisualsEnabled(false)
+                gazeOverlay?.setDebugVisualsEnabled(feedbackMode.visibleDuringScoredTrials)
                 stabilizer.reset()
                 runCountdown { startWordCheckpoint(0) }
             }
@@ -680,11 +712,17 @@ class ReadingValidationActivity : AppCompatActivity() {
         clearHighlight()
         binding.nsvValidationText.setScrollingEnabled(true)
         sessionLog?.flush()
+        val feedbackInstruction = if (feedbackMode.visibleDuringScoredTrials) {
+            "The orange gaze dot remains visible. "
+        } else {
+            "The gaze dot remains hidden. "
+        }
         AlertDialog.Builder(this)
             .setTitle("Guided line accuracy test")
             .setMessage(
                 "Six complete physical lines will appear highlighted in yellow. Read only the yellow line from left to right once, then keep your gaze on that same line until the next line appears. " +
-                    "Finding time and measurement happen automatically. No instructions will be visible while a line is active.",
+                    feedbackInstruction +
+                    "Finding time and measurement happen automatically, and no instructions will be visible while a line is active.",
             )
             .setCancelable(false)
             .setPositiveButton("Begin") { _, _ ->
@@ -763,7 +801,7 @@ class ReadingValidationActivity : AppCompatActivity() {
             } else {
                 val result = String.format(
                     Locale.US,
-                    "File: %s\nAlignment: %s%s\n\nWORD FIXATION\nExact line: %.1f%%\nWithin one line: %.1f%%\nExact word: %.1f%%\n\nGUIDED LINE READING\nExact line: %.1f%%\nWithin one line: %.1f%%",
+                    "File: %s\nAlignment: %s%s\nGaze feedback: continuous orange dot · article smoothing\n\nWORD FIXATION\nExact line: %.1f%%\nWithin one line: %.1f%%\nExact word: %.1f%%\n\nGUIDED LINE READING\nExact line: %.1f%%\nWithin one line: %.1f%%",
                     fileName,
                     verticalAlignmentMode.name,
                     verticalAlignmentFit?.gain?.let { String.format(Locale.US, " · gain %.3f", it) }.orEmpty(),
@@ -774,13 +812,13 @@ class ReadingValidationActivity : AppCompatActivity() {
                     100.0 * summary.guidedLineWithinOneAccuracy,
                 )
                 binding.validationControlPanel.visibility = View.VISIBLE
-                binding.tvValidationProgress.text = "Known-target accuracy validation complete"
+                binding.tvValidationProgress.text = "Known-target visible-feedback validation complete"
                 binding.tvValidationInstruction.text = "Saved $fileName"
                 binding.btnValidationAction.text = "Done"
                 binding.btnValidationAction.visibility = View.VISIBLE
                 binding.btnValidationAction.setOnClickListener { finish() }
                 AlertDialog.Builder(this)
-                    .setTitle("Accuracy data saved")
+                    .setTitle("Visible-feedback performance data saved")
                     .setMessage(result)
                     .setPositiveButton("Done") { _, _ -> finish() }
                     .setNegativeButton("Stay", null)
