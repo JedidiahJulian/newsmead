@@ -1,6 +1,7 @@
 package com.newsmead.gaze.scanpath
 
 import android.view.View
+import android.view.ViewGroup
 import android.widget.TextView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -13,6 +14,8 @@ import java.util.Locale
 @RunWith(AndroidJUnit4::class)
 class ScanpathTextGeometryTest {
     private fun text(body: String) = TextView(InstrumentationRegistry.getInstrumentation().targetContext).apply {
+        // Real article views receive layout params from their parent before text is replaced.
+        layoutParams = ViewGroup.LayoutParams(600, 800)
         text = body
         textLocale = Locale.ENGLISH
         textSize = 20f

@@ -6,14 +6,16 @@
 is integrated into analyzer v5 and the article's live raw-observation stream.
 Focused JVM extraction, policy and pipeline checks and 13 synthetic cases/183
 raw prefixes pass; the debug app builds. P01–P12/common fixation fields match the reference; live P13 resets
-immediately rather than relying on a future fixation. Android geometry tests
-compile but have not run on a device. P09 requires explicit geometric endpoint
+immediately rather than relying on a future fixation. Four synthetic Android
+geometry/magnifier tests passed on SM-A566B/API 36 after fixing detached-view
+fixtures; [device check 01](scanpath-device-check-01.md) retains both attempts.
+Visible article UI and live gaze behavior still need checks. P09 requires explicit geometric endpoint
 settings and verified LTR direction; P12 long/slow flags require explicit thresholds and coverage/window
 settings. P11 currently implements A–B–A–B alternation. The matched task
 instrument remains pending. The [runtime checkpoint](scanpath-aid-runtime.md)
 implements independent adjustable line/word/focus displays, reader controls and
 bounded numeric action/render provenance, including experimental variable
-word/focus strength. Device tests and participant evaluation remain pending.
+word/focus strength. Further device checks and participant evaluation remain pending.
 
 **Current phase: prototype implementation.** Build the live word/line engine,
 pattern-to-aid policy, adjustable A0–A4 displays, reader controls and action

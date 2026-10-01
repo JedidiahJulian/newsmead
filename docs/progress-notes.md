@@ -1,5 +1,17 @@
 # NewsMead — Progress Notes
 
+## 2026-10-01 - First Android device checks and corrected retest
+
+Installed the checkpoint debug app on the owner's connected SM-A566B/API 36
+with a data-preserving update. Four synthetic geometry/magnifier tests initially
+had one pass and three missing-layout-parameter failures in detached fixtures.
+Added explicit parent-style layout parameters in the two test files; no app,
+detector, policy, calibration or frozen protocol changed. Corrected test assembly
+passed, then the owner authorized `retest`: all four device tests passed.
+`scanpath-device-check-01.md` preserves failures, successful test names, APK
+hashes and limits. No provider/camera or participant recording was started.
+Visible article aid behavior, natural gaze validity and benefit remain pending.
+
 ## 2026-10-01 - Integrated independent scanpath reading aids
 
 Connected live word/line scanpath evidence to an independent policy, current-line

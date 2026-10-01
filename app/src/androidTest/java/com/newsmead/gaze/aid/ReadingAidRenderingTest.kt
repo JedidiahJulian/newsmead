@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.SystemClock
 import android.view.View
+import android.view.ViewGroup
 import android.widget.TextView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -23,7 +24,9 @@ class ReadingAidRenderingTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
             val source = TextView(context).apply { text = "example paragraph"; textSize = 20f }
-            val dock = ReadingAidWordView(context)
+            val dock = ReadingAidWordView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(1000, 300)
+            }
             dock.measure(View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(300, View.MeasureSpec.EXACTLY))
             dock.layout(0, 0, 1000, 300)
@@ -43,7 +46,9 @@ class ReadingAidRenderingTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
             val source = TextView(context).apply { text = "example paragraph"; textSize = 20f }
-            val dock = ReadingAidWordView(context)
+            val dock = ReadingAidWordView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(1000, 300)
+            }
             dock.measure(View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(300, View.MeasureSpec.EXACTLY))
             dock.layout(0, 0, 1000, 300)

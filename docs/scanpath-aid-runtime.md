@@ -114,12 +114,16 @@ Focused synthetic JVM checks exercise extraction, prefix parity, policy choices,
 adaptive/fixed strength, reset/suppression and the real engine-to-policy route.
 The Python reference suite and fixture consistency check protect the shared
 detector contract. Debug APK assembly and Android test compilation establish
-build readiness. Android geometry/render tests have **not run on a device**.
+build readiness. [Device check 01](scanpath-device-check-01.md) ran four synthetic
+geometry/render tests on SM-A566B/API 36. The first attempt had one pass and three
+failures from missing fixture layout parameters. After correction and an
+owner-authorized retest, **all four passed**. Visible article UI and live gaze
+behaviour still need separate checks.
 Independent source review covered timestamp/geometry boundaries, causal support,
 policy state, resource bounds and action provenance.
 
 The next implementation package is the matched raw placement/continuous-order
-evaluation instrument, followed by authorized device inspection and participant
+evaluation instrument, followed by further authorized device inspection and participant
 tasks in [pilot revision 6](scanpath-measurement-pilot.md). Natural fixation
 validity, word/line accuracy, processing/render latency, unwanted cues and human
 benefit remain unmeasured. Whole-path clusters, HMM/HSMM phases, a trained

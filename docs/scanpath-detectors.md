@@ -188,7 +188,10 @@ finalized within-visit evidence, with separate provenance.
 tests still pass. `:app:assembleDebug` and `:app:compileDebugAndroidTestKotlin`
 succeed. Two Android geometry tests cover UTF-16/origin mapping and cached
 layout/mixed bidi; two additional aid drawing tests cover magnifier preservation
-and expiration. They were **compiled, not run on a device**. Aid policy and real
+and expiration. [Device check 01](scanpath-device-check-01.md) initially found
+three detached-fixture layout failures; after correction and authorized retest,
+**all four passed on SM-A566B/API 36**. These are synthetic view checks, not live
+article/gaze validation. Aid policy and real
 engine-to-policy tests cover variable strength, source support, controls and
 invalid-input clearing. Focused independent
 review found excessive repeated layout scans and retained scroll geometry;

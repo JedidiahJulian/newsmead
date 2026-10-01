@@ -34,6 +34,15 @@ now implements the independent line/word/focus route, controls, variable
 word/focus strength and bounded action provenance. The matched instrument,
 device execution and participant evaluation follow this integrated build.
 
+First device check on 2026-10-01: Samsung SM-A566B/API 36, target APK from
+`e5fa5b2` installed with data-preserving update. Four synthetic geometry/magnifier
+tests ran: one passed, three failed on missing detached-fixture layout params.
+After local layout-parameter corrections and explicit owner authorization, the
+corrected test APK was installed and all four tests passed (`OK (4 tests)`).
+No gaze capture or participant measurement was started. Record and limits:
+[device check 01](scanpath-device-check-01.md). Keep this distinct from natural
+gaze or visible article-aid validation.
+
 The [scanpath-to-visual-aid implementation proposal](adaptive-visual-aid-proposal.md)
 is the current **NewsMead feature specification**. Re-reading the source task
 **Explore feasible gaze metrics** clarified the owner's final intent: preserve
