@@ -25,6 +25,14 @@ gaze evidence carries forward. Configurable pattern/strength rules can be
 implemented as experimental methods without claiming validated difficulty or
 aid benefit.
 
+**Interactive screen checkpoint — 2026-10-02:** the first
+[replay milestone](scanpath-replay-screen.md) provides five scripted raw-coordinate
+scenarios through actual layout, existing detectors/policy and real aid displays,
+reader controls, interruption handling and complete synthetic trace provenance.
+It creates no camera/provider or human reference. Its guide records focused
+software/device checks. Live prompted placement/order tasks and the matched
+human evaluation record are still a subsequent package.
+
 ## Purpose and objectives
 
 **General objective:** build a phone-based system that derives ordered word and physical-line scanpaths, recognizes defined reading-navigation patterns, and varies visual aid type and strength during reading. Determine which measurements, triggers and strengths are usable for adults aged 45+ reading news in NewsMead.

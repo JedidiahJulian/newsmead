@@ -1,5 +1,34 @@
 # NewsMead — Progress Notes
 
+## 2026-10-02 - Interactive raw-coordinate scanpath replay
+
+Built the pilot screen's first replay milestone. Five explicit raw-coordinate
+scripts use the actual visible Android text layout, existing session/engine,
+experimental aid policy and real line/start/word/focus views. Home and article
+diagnostics provide entry points. Reader controls, Stop, scroll/geometry changes
+and pause clear aids and stop input. No provider/camera or calibration is opened.
+
+Full private synthetic JSONL records preserve planned/callback times, geometry,
+raw assignments/exclusions, finalized/prefix evidence, patterns, decisions,
+anchors, variable strengths and draw proxies. Partial files retain failure
+status and a reserved footer; final names appear after successful close.
+Independent review prompted pause stopping and drawn-proxy requirements for the
+software-success flag. Frozen protocols and existing logger identities stay intact.
+
+All 34 focused JVM tests and both APK assemblies pass. First device attempt on
+SM-G991B/API 35 had 4 passes and 1 test-ID lookup failure: the test omitted valid
+finalized-fixation support IDs. Corrected only that test, then the owner authorized
+a retest: all 5 passed. Visual QA found clipped Back/Controls labels; corrected
+their sizing/padding and repeated the focused checks on the final target:
+all 5 passed. Synthetic preview is readable; traces show word strength 0.25–1
+and optional focus strength 0.625–0.8125. Hashes, attempts and local evidence paths:
+`scanpath-device-check-03.md`; usage/time/trace contract: `scanpath-replay-screen.md`.
+
+These are software outputs, not difficulty probabilities, natural gaze accuracy
+or aid-benefit results. Replay checks ran only on this phone. Next implement
+live prompted placement/continuous-order tasks and matched human recording.
+No staging or commit was performed.
+
 ## 2026-10-01 - Same synthetic tests pass on the second phone
 
 At the owner's request, installed the same target/corrected test APKs on the

@@ -353,4 +353,17 @@
     <string name="reading_aids_save_trace">Save aid diagnostics</string>
     <string name="reading_aids_trace_saved">Aid diagnostics saved privately on this device.</string>
     <string name="reading_aids_trace_failed">Could not save aid diagnostics.</string>
+    <string name="scanpath_replay_title">Scanpath replay</string>
+    <string name="scanpath_replay_back">Back</string>
+    <string name="scanpath_replay_controls">Controls</string>
+    <string name="scanpath_replay_notice">Scripted input · camera off. Run saves a private synthetic trace. Focus requires enabling it in Controls.</string>
+    <string name="scanpath_replay_run">Run replay</string>
+    <string name="scanpath_replay_stop">Stop</string>
+    <string name="scanpath_replay_save">Trace</string>
+    <string name="scanpath_replay_ready">Select a scenario and run the replay.</string>
+    <string name="scanpath_replay_preparing">Preparing coordinates from the current text layout…</string>
+    <string name="scanpath_replay_failed">Replay could not use this layout.</string>
+    <string name="scanpath_replay_stopped">Replay stopped. Select a scenario to run again.</string>
+    <string name="scanpath_replay_trace">Replay trace</string>
+    <string name="scanpath_replay_copy">Copy path</string>
 </resources>

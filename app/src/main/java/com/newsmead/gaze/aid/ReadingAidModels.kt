@@ -3,6 +3,7 @@ package com.newsmead.gaze.aid
 /** Pure policy values. Text offsets are UTF-16; all times are capture/delivery milliseconds. */
 enum class ReadingAidType { CURRENT_LINE, NEXT_LINE_START, WORD_MAGNIFIER, FOCUS_REGION }
 enum class ReadingAidDecisionStatus { CHOSEN, SUPPRESSED, CLEARED, EXPIRED }
+enum class ReadingAidInputSource { LIVE_MGAZENET, SYNTHETIC_REPLAY }
 
 data class ReadingAidAnchor(
     val generation: Long,

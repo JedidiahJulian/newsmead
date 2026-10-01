@@ -33,6 +33,7 @@ import com.bumptech.glide.Glide
 import com.newsmead.R
 import com.newsmead.activities.GazeTestActivity
 import com.newsmead.activities.ReadingValidationActivity
+import com.newsmead.activities.ScanpathReplayActivity
 import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.DatabaseHelper
@@ -577,6 +578,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                     getString(R.string.reading_measurement_option),
                     getString(R.string.reading_aids_option),
                     getString(R.string.reading_aids_save_trace),
+                    getString(R.string.scanpath_replay_title),
                 ),
             ) { _, which ->
                 when (which) {
@@ -585,6 +587,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                     2 -> showReadingMeasurementInstructions()
                     3 -> showReadingAidControls()
                     4 -> saveReadingAidTrace()
+                    5 -> launchScanpathReplay()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -1006,6 +1009,14 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         provider.setOnGaze { x,y -> onGaze.onGaze(x,y) }
         gazeProvider = provider
         provider.start(viewLifecycleOwner)
+    }
+
+    private fun launchScanpathReplay() {
+        launchedCalibration = true
+        stopScanpathSession("replay_opened")
+        gazeProvider?.stop()
+        gazeProvider = null
+        startActivity(Intent(requireContext(), ScanpathReplayActivity::class.java))
     }
 
     private fun stopScanpathSession(reason: String) {

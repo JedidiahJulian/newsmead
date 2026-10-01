@@ -1,6 +1,6 @@
 # Scanpath-to-aid runtime checkpoint
 
-**2026-10-01 — branch `measurement/scanpath-pilot`.** The article now connects
+**2026-10-02 — branch `measurement/scanpath-pilot`.** The article now connects
 raw MGazeNet observations to the live word/line engine, an independent aid
 policy, adjustable displays, reader controls and an inspectable action trace.
 This is an experimental implementation, not a validated difficulty detector or
@@ -109,6 +109,17 @@ as complete sessions. Record the installed APK/build identity separately during
 future collection.
 
 ## Software checkpoint and remaining work
+
+The [interactive replay screen](scanpath-replay-screen.md) is the first milestone
+of the pilot screen: five raw-coordinate scenarios use actual Android text
+layout and the same engine, policy and drawing views. Home and article diagnostics
+provide entry points. Its private full-input trace explicitly labels synthetic
+capture times and actual delivery times, with no camera/calibration access.
+Controls, geometry changes and pause terminate a run. The guide records the
+current build/device checks and limits; live prompted measurement remains pending.
+All five real-activity tests pass on SM-G991B/API 35, including expected aid draw
+proxies and causal trace links; [device check 03](scanpath-device-check-03.md)
+retains the initial test lookup failure, correction and successful results.
 
 Focused synthetic JVM checks exercise extraction, prefix parity, policy choices,
 adaptive/fixed strength, reset/suppression and the real engine-to-policy route.

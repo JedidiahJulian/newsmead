@@ -25,6 +25,9 @@ class ArticleReadingAidRuntime(
     private val overlay: ReadingAidOverlayView,
     val config: ReadingAidPolicyConfig = ReadingAidPolicyConfig.experimentalPrototype(),
     preferences: ReaderAidPreferences = ReaderAidPreferences(),
+    private val inputSource: ReadingAidInputSource = ReadingAidInputSource.LIVE_MGAZENET,
+    private val onDecision: (ReadingAidDecision) -> Unit = {},
+    private val onRenderReceipt: (ReadingAidAction, Boolean, String, Double) -> Unit = { _, _, _, _ -> },
 ) {
     private val policy = ReadingAidPolicy(config, preferences)
     val preferences get() = policy.preferences
@@ -33,7 +36,8 @@ class ArticleReadingAidRuntime(
         cycleWindowMs = config.cycleWindowMs, progressionWindowMs = 1000.0,
         lineProgressionMaxUnitsPerS = 0.5, progressionMinObservedFraction = 0.5)
     private val trace = ReadingAidTrace()
-    private val calibrationFingerprint = MgazeNetCalibrationStore(body.context).fingerprint()
+    private val calibrationFingerprint = if (inputSource == ReadingAidInputSource.LIVE_MGAZENET)
+        MgazeNetCalibrationStore(body.context).fingerprint() else null
     private val handler = Handler(Looper.getMainLooper())
     private var snapshot: ScanpathGeometry? = null
     private var latestFixation: ScanpathFixation? = null
@@ -51,7 +55,10 @@ class ArticleReadingAidRuntime(
     }
 
     init {
-        overlay.onRender = { action, drawn, reason, at -> trace.render(action, drawn, reason, at) }
+        overlay.onRender = { action, drawn, reason, at ->
+            trace.render(action, drawn, reason, at)
+            onRenderReceipt(action, drawn, reason, at)
+        }
         wordDock.onRender = overlay.onRender
         trace.record("started", elapsedMs(), configuration())
         updateDockVisibility()
@@ -152,10 +159,12 @@ class ArticleReadingAidRuntime(
     }
 
     fun export(context: Context): File = trace.export(context, configuration())
+    fun configurationSnapshot(): JSONObject = configuration()
+    fun activeActions(): List<ReadingAidAction> = policy.activeActions()
 
     private fun decisions(values: List<ReadingAidDecision>) {
         trace.context(context)
-        values.forEach(trace::decision)
+        values.forEach { trace.decision(it); onDecision(it) }
         val actions = if (closed || suspended) emptyList() else policy.activeActions()
         overlay.setActions(body, snapshot, context.generation, actions)
         wordDock.showAction(actions.firstOrNull { it.aidType == ReadingAidType.WORD_MAGNIFIER }, body)
@@ -195,7 +204,9 @@ class ArticleReadingAidRuntime(
         return JSONObject().put("policy_version", 1).put("extractor_version", ScanpathEngine.EXTRACTOR_VERSION)
             .put("classifier_version", ScanpathEngine.CLASSIFIER_VERSION)
             .put("provisional_evidence_version", ScanpathEngine.PROVISIONAL_EVIDENCE_VERSION)
-            .put("model", "mgazenet").put("settings", values).put("settings_sha256", digest)
+            .put("input_source", inputSource.name)
+            .put("model", if (inputSource == ReadingAidInputSource.LIVE_MGAZENET) "mgazenet" else "synthetic_coordinates")
+            .put("settings", values).put("settings_sha256", digest)
             .put("calibration_sha256", calibrationFingerprint ?: JSONObject.NULL)
             .put("body_sha256", sha256(body.text.toString()))
             .put("max_history_fixations", com.newsmead.gaze.scanpath.ArticleScanpathSession.MAX_HISTORY_FIXATIONS)

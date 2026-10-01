@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/replayRoot" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="?primaryBackgroundColor">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:gravity="center_vertical">
+        <Button android:id="@+id/replayBack" android:layout_width="72dp" android:layout_height="match_parent"
+            android:paddingHorizontal="8dp" android:minWidth="0dp" android:maxLines="1" android:textSize="14sp"
+            android:text="@string/scanpath_replay_back" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:text="@string/scanpath_replay_title" android:textSize="20sp" android:textColor="?primaryTextColor" />
+        <Button android:id="@+id/replayControls" android:layout_width="100dp" android:layout_height="match_parent"
+            android:paddingHorizontal="8dp" android:minWidth="0dp" android:maxLines="1" android:textSize="14sp"
+            android:text="@string/scanpath_replay_controls" />
+    </LinearLayout>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingHorizontal="16dp"
+        android:text="@string/scanpath_replay_notice" android:textSize="13sp" android:textColor="?primaryTextColor" />
+    <Spinner android:id="@+id/replayScenario" android:layout_width="match_parent" android:layout_height="48dp" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp">
+        <Button android:id="@+id/replayRun" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="@string/scanpath_replay_run" />
+        <Button android:id="@+id/replayStop" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="@string/scanpath_replay_stop" />
+        <Button android:id="@+id/replaySave" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="@string/scanpath_replay_save" />
+    </LinearLayout>
+    <TextView android:id="@+id/replayStatus" android:layout_width="match_parent" android:layout_height="90dp"
+        android:paddingHorizontal="16dp" android:gravity="center_vertical" android:textSize="13sp"
+        android:textColor="?primaryTextColor" android:maxLines="4" android:text="@string/scanpath_replay_ready" />
+    <com.newsmead.gaze.aid.ReadingAidWordView android:id="@+id/replayWordDock"
+        android:layout_width="match_parent" android:layout_height="68dp" android:padding="16dp"
+        android:gravity="center" android:singleLine="true" android:textColor="?primaryTextColor" />
+    <FrameLayout android:id="@+id/replayViewport" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+        <androidx.core.widget.NestedScrollView android:id="@+id/replayScroll" android:layout_width="match_parent" android:layout_height="match_parent">
+            <TextView android:id="@+id/replayBody" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:padding="16dp" android:fontFamily="@font/arial_regular" android:textColor="?primaryTextColor" android:lineSpacingExtra="2dp" />
+        </androidx.core.widget.NestedScrollView>
+    </FrameLayout>
+</LinearLayout>

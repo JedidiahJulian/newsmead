@@ -10,6 +10,7 @@ import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.newsmead.R
 import com.newsmead.activities.GazeCalibrationActivity
+import com.newsmead.activities.ScanpathReplayActivity
 import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.FirebaseHelper
@@ -72,6 +73,9 @@ class HomeFragment : Fragment(), clickListener {
         // Gaze calibration button - launches the 16-point calibration screen
         this.viewBinding.btnGazeCalibration.setOnClickListener {
             startActivity(Intent(requireContext(), GazeCalibrationActivity::class.java))
+        }
+        viewBinding.btnScanpathReplay.setOnClickListener {
+            startActivity(Intent(requireContext(), ScanpathReplayActivity::class.java))
         }
     }
 

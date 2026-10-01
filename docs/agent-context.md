@@ -1,4 +1,4 @@
-# Agent context — updated 2026-10-01
+# Agent context — updated 2026-10-02
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -48,6 +48,22 @@ APKs installed with `-r`; the same four synthetic tests passed on the first
 attempt. Source checkpoint `9559c95`, hashes/results/limits in
 [device check 02](scanpath-device-check-02.md). Both phones pass these synthetic
 checks; visible article layout, live gaze and human validity remain unmeasured.
+
+The owner authorized the interactive pilot screen's first replay milestone.
+[Scanpath replay screen](scanpath-replay-screen.md) now provides five explicit
+raw-coordinate scenarios through actual rendered word/line geometry, the existing
+engine/policy and real aid views, with controls and full private synthetic traces.
+Replay stops on geometry change, pause, Stop or changed controls/scenario. Its
+capture clock is scheduled synthetic elapsed time; delivery is actual callback
+time, and >100 ms scheduling lag aborts. Synthetic identity skips calibration
+and creates no camera/provider. This is the scripted inspection route; live
+prompted tasks and matched human recording remain pending. Check the guide's
+dated build/device results before inferring readiness. All 34 focused JVM tests
+and APK assembly pass; [device check 03](scanpath-device-check-03.md) retains the
+initial test lookup failure, authorized correction/retest and final five-test
+pass on SM-G991B/API 35. Actual laid-out replay and variable word/focus choices
+have software evidence on that phone; the synthetic word preview was inspected.
+No human validity follows from synthetic replay.
 
 The [scanpath-to-visual-aid implementation proposal](adaptive-visual-aid-proposal.md)
 is the current **NewsMead feature specification**. Re-reading the source task
