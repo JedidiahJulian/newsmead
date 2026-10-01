@@ -18,6 +18,10 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.Toast
+import android.widget.CheckBox
+import android.widget.LinearLayout
+import android.widget.SeekBar
+import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AlertDialog
 import androidx.constraintlayout.widget.ConstraintLayout
@@ -47,6 +51,11 @@ import com.newsmead.gaze.ScaffoldLevel
 import com.newsmead.gaze.ScaffoldUpdate
 import com.newsmead.gaze.TextTarget
 import com.newsmead.gaze.WindowedStabilityEstimator
+import com.newsmead.gaze.scanpath.ArticleScanpathSession
+import com.newsmead.gaze.scanpath.ScanpathEngine
+import com.newsmead.gaze.aid.ArticleReadingAidRuntime
+import com.newsmead.gaze.aid.ReadingAidOverlayView
+import com.newsmead.gaze.aid.ReaderAidPreferences
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.fragments.layouts.BottomSheetDialogSaveFragment
 import com.newsmead.models.Article
@@ -77,6 +86,18 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var lastStabilityLogMs = 0L
     private var lastAoiLogMs = 0L
     private var readingMeasurement: ReadingMeasurementLog? = null
+    private var scanpathSession: ArticleScanpathSession? = null
+    private var readingAidRuntime: ArticleReadingAidRuntime? = null
+    private var readingAidOverlay: ReadingAidOverlayView? = null
+    private var aidPreferences = ReaderAidPreferences()
+    private val scanpathAidsEnabled: Boolean
+        get() = StudyConfig.SCANPATH_READING_AIDS && !StudyConfig.GAZE_TOUCH_VALIDATION
+    private val scanpathCounts = mutableMapOf<String, Int>()
+    private val scanpathGeometryListener = ViewTreeObserver.OnPreDrawListener {
+        scanpathSession?.checkGeometry()
+        readingAidRuntime?.tick()
+        true
+    }
     private val measurementGeometryListener = ViewTreeObserver.OnPreDrawListener {
         readingMeasurement?.checkGeometry()
         true
@@ -479,6 +500,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
         scaffoldDemoHandler.removeCallbacksAndMessages(null)
         rsiInferencer?.flush()
+        stopScanpathSession("fragment_destroyed")
         gazeProvider?.stop()
         gazeOverlay?.clearScaffold()
         targetStabilizer?.reset()
@@ -494,7 +516,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     override fun onResume() {
         super.onResume()
-        if (StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE && scaffoldController != null) {
+        scanpathSession?.resume()
+        readingAidRuntime?.resume()
+        if (!scanpathAidsEnabled && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE && scaffoldController != null) {
             startScaffoldDemoCycle()
         }
         if (resumeGazeAfterStop && !launchedCalibration) {
@@ -514,6 +538,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     override fun onPause() {
         finishReadingMeasurement("screen_paused", restore = false)
+        readingAidRuntime?.suspend("screen_paused")
+        scanpathSession?.pause("screen_paused")
         super.onPause()
     }
 
@@ -521,6 +547,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         finishReadingMeasurement("screen_left", restore = false)
         scaffoldDemoHandler.removeCallbacksAndMessages(null)
         resumeGazeAfterStop = gazeProvider != null && !StudyConfig.GAZE_TOUCH_VALIDATION
+        stopScanpathSession("screen_left")
         gazeProvider?.stop(); gazeProvider = null
         gazeOverlay?.clearGaze()
         super.onStop()
@@ -530,6 +557,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private fun launchGazeTest() {
         launchedCalibration = true
         rsiInferencer?.flush()
+        stopScanpathSession("calibration_opened")
         gazeProvider?.stop()
         gazeProvider = null
         startActivity(Intent(requireContext(), GazeTestActivity::class.java))
@@ -547,12 +575,16 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                     getString(R.string.reading_validation_accuracy_option),
                     getString(R.string.reading_validation_reading_option),
                     getString(R.string.reading_measurement_option),
+                    getString(R.string.reading_aids_option),
+                    getString(R.string.reading_aids_save_trace),
                 ),
             ) { _, which ->
                 when (which) {
                     0 -> launchGazeTest()
                     1 -> launchReadingValidation()
                     2 -> showReadingMeasurementInstructions()
+                    3 -> showReadingAidControls()
+                    4 -> saveReadingAidTrace()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -574,6 +606,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             return
         }
         val fingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint() ?: return
+        readingAidRuntime?.suspend("diagnostic_recording")
         lateinit var session: ReadingMeasurementLog
         try {
             session = ReadingMeasurementLog(requireContext(), binding.tvArticleText, fingerprint) { file, complete ->
@@ -584,11 +617,13 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                     Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
+            readingAidRuntime?.resume()
             Log.e("ReadingMeasurement", "Cannot open recording", e)
             Toast.makeText(context, R.string.reading_measurement_failed, Toast.LENGTH_LONG).show()
             return
         }
         readingMeasurement = session
+        scanpathSession?.boundary("diagnostic_mode_changed")
         textToSpeech.stop()
         binding.btnReadAloudArticle.isEnabled = false
         scaffoldDemoHandler.removeCallbacksAndMessages(null)
@@ -599,12 +634,14 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private fun finishReadingMeasurement(reason: String, restore: Boolean = true) {
         val session = readingMeasurement ?: return
         readingMeasurement = null
+        scanpathSession?.boundary("diagnostic_mode_changed")
         binding.root.viewTreeObserver.removeOnPreDrawListener(measurementGeometryListener)
         session.finish(reason)
         binding.btnReadAloudArticle.isEnabled = true
         resetAdaptiveReadingSession()
         gazeOverlay?.setDotOnly(false)
-        if (restore && isResumed && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) {
+        if (restore && isResumed) readingAidRuntime?.resume()
+        if (!scanpathAidsEnabled && restore && isResumed && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) {
             startScaffoldDemoCycle()
         }
     }
@@ -613,6 +650,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private fun launchReadingValidation() {
         launchedCalibration = true
         rsiInferencer?.flush()
+        stopScanpathSession("reading_validation_opened")
         gazeProvider?.stop()
         gazeProvider = null
         startActivity(Intent(requireContext(), ReadingValidationActivity::class.java))
@@ -621,6 +659,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private fun restartLiveGazeAfterCalibration() {
         if (StudyConfig.GAZE_TOUCH_VALIDATION) return
         val onGaze = articleGazeSink ?: return
+        stopScanpathSession("provider_restarted")
         gazeProvider?.stop()
         gazeProvider = null
         resetAdaptiveReadingSession()
@@ -733,6 +772,17 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         overlay.bringToFront()
         overlay.translationZ = 1000f
         overlay.setDebugVisualsEnabled(StudyConfig.GAZE_DEBUG_VISUALS)
+        if (scanpathAidsEnabled) {
+            val aidOverlay = ReadingAidOverlayView(requireContext())
+            (binding.root as ViewGroup).addView(aidOverlay, ConstraintLayout.LayoutParams(0, 0).apply {
+                startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+                endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+                topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+                bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+            })
+            aidOverlay.translationZ = 900f
+            readingAidOverlay = aidOverlay
+        }
         val mapper = LineAoiMapper(binding.tvArticleText)
         val stabilizer = GazeTargetStabilizer()
         val estimator = WindowedStabilityEstimator(
@@ -759,6 +809,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         val onGaze = GazeProvider.OnGaze { x, y ->
             overlay.setGazeScreen(x, y)
             if (readingMeasurement != null) return@OnGaze
+            if (scanpathAidsEnabled) return@OnGaze
             val timestampMs = System.currentTimeMillis()
             val rawTarget = mapper.targetAt(x, y)
             val target = stabilizer.update(rawTarget, timestampMs)
@@ -793,7 +844,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             attachLiveGaze(onGaze)
         }
 
-        if (StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) startScaffoldDemoCycle()
+        if (!scanpathAidsEnabled && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) startScaffoldDemoCycle()
     }
 
     /**
@@ -804,6 +855,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
      * demonstrates instability detection.
      */
     private fun startScaffoldDemoCycle() {
+        if (scanpathAidsEnabled) return
         if (readingMeasurement != null) return
         scaffoldDemoHandler.removeCallbacksAndMessages(null)
         scaffoldDemoStep = 0
@@ -868,6 +920,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         })
 
     private fun applyScaffoldUpdate(update: ScaffoldUpdate) {
+        if (scanpathAidsEnabled) return
         gazeOverlay?.setScaffoldState(binding.tvArticleText, update.state)
         update.transition?.let { transition ->
             Log.i(
@@ -920,15 +973,110 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             return
         }
         val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true)
+        stopScanpathSession("provider_replaced")
+        scanpathCounts.clear()
+        val aids = readingAidOverlay?.let { ArticleReadingAidRuntime(binding.tvArticleText,
+            binding.readingAidWordDock, it, preferences = aidPreferences) }
+        readingAidRuntime = aids
+        val liveScanpath = ArticleScanpathSession(binding.tvArticleText,
+            config = aids?.scanpathConfig ?: com.newsmead.gaze.scanpath.ScanpathConfig(),
+            onEvent = { generation, event ->
+            scanpathCounts[event.patternId] = (scanpathCounts[event.patternId] ?: 0) + 1
+            aids?.event(generation, event)
+        }, onGeometry = { generation, geometry -> aids?.geometry(generation, geometry) },
+            onInput = { generation, sample -> aids?.input(generation, sample) },
+            onCandidate = { generation, candidate -> aids?.candidate(generation, candidate) },
+            onFixation = { generation, fixation -> aids?.fixation(generation, fixation) })
+        scanpathSession = liveScanpath
+        binding.root.viewTreeObserver.addOnPreDrawListener(scanpathGeometryListener)
+        liveScanpath.checkGeometry()
+        Log.i("Scanpath", "live raw engine=${ScanpathEngine.EXTRACTOR_VERSION} " +
+            "classifier=${ScanpathEngine.CLASSIFIER_VERSION}; independent experimental aids=${aids != null}")
         provider.onFps = { fps -> gazeOverlay?.setFps(fps) }
-        provider.onFailure = { message -> Toast.makeText(context,message,Toast.LENGTH_LONG).show() }
+        provider.onFailure = { message ->
+            if (scanpathSession === liveScanpath) stopScanpathSession("provider_failed")
+            Toast.makeText(context,message,Toast.LENGTH_LONG).show()
+        }
         provider.onObservation = { observation ->
+            // An old provider's terminal callback must not close a newer article stream.
+            if (scanpathSession === liveScanpath) liveScanpath.record(observation)
             readingMeasurement?.record(observation)
             if (observation.reason != "coordinate") gazeOverlay?.clearGaze()
         }
         provider.setOnGaze { x,y -> onGaze.onGaze(x,y) }
         gazeProvider = provider
         provider.start(viewLifecycleOwner)
+    }
+
+    private fun stopScanpathSession(reason: String) {
+        val session = scanpathSession ?: return
+        scanpathSession = null
+        binding.root.viewTreeObserver.removeOnPreDrawListener(scanpathGeometryListener)
+        readingAidRuntime?.close(reason)
+        readingAidRuntime = null
+        session.close(reason)
+        Log.i("Scanpath", "closed reason=$reason patternRecords=${scanpathCounts.toSortedMap()}")
+    }
+
+    private fun showReadingAidControls() {
+        val runtime = readingAidRuntime ?: run {
+            Toast.makeText(context, R.string.reading_measurement_unavailable, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val panel = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = (20 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding, padding, padding)
+        }
+        fun check(label: Int, selected: Boolean) = CheckBox(requireContext()).apply {
+            setText(label); isChecked = selected; panel.addView(this)
+        }
+        val prefs = runtime.preferences
+        val enabled = check(R.string.reading_aids_enabled, prefs.enabled)
+        val line = check(R.string.reading_aids_line, prefs.lineGuide)
+        val start = check(R.string.reading_aids_start, prefs.lineStartCue)
+        val word = check(R.string.reading_aids_word, prefs.wordMagnifier)
+        val focus = check(R.string.reading_aids_focus, prefs.focusRegion)
+        val adaptive = check(R.string.reading_aids_adaptive, prefs.adaptiveStrength)
+        val label = TextView(requireContext()).apply { panel.addView(this) }
+        val cap = SeekBar(requireContext()).apply {
+            max = 100; progress = (prefs.maxStrength * 100).toInt(); panel.addView(this)
+            label.text = getString(R.string.reading_aids_strength, progress)
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    label.text = getString(R.string.reading_aids_strength, progress)
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+            })
+        }
+        // Interaction ends the reading episode; fresh gaze reacquires after the dialog.
+        runtime.suspend("reader_controls")
+        scanpathSession?.boundary("reader_controls")
+        AlertDialog.Builder(requireContext()).setTitle(R.string.reading_aids_option).setView(panel)
+            .setPositiveButton(R.string.reading_aids_apply) { _, _ ->
+                aidPreferences = ReaderAidPreferences(enabled.isChecked, line.isChecked, start.isChecked,
+                    word.isChecked, focus.isChecked, adaptive.isChecked, cap.progress / 100.0,
+                    cap.progress / 100.0)
+                runtime.updatePreferences(aidPreferences)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .setOnDismissListener {
+                scanpathSession?.boundary("reader_controls_closed")
+                if (isResumed && readingAidRuntime === runtime) runtime.resume()
+            }.show()
+    }
+
+    private fun saveReadingAidTrace() {
+        val runtime = readingAidRuntime ?: return
+        try {
+            val file = runtime.export(requireContext())
+            Log.i("ReadingAidTrace", "Saved ${file.name}")
+            Toast.makeText(context, R.string.reading_aids_trace_saved, Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Log.e("ReadingAidTrace", "Cannot save trace", e)
+            Toast.makeText(context, R.string.reading_aids_trace_failed, Toast.LENGTH_LONG).show()
+        }
     }
 
     /**

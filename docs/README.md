@@ -6,7 +6,8 @@ This directory contains the supporting documentation for the NewsMead gaze-drive
 
 - [Scanpath-to-Visual-Aid Implementation Pilot](scanpath-measurement-pilot.md): revision 6 completes the live engine, policy, independent adjustable aids and logging before participant measurement; source-linked P01–P13 registry, later prompted/shadow/controlled trials and variable-strength evaluation, carrying forward existing gaze evidence.
 - [Scanpath-Based Reading Aid Design](scanpath-adaptive-aid-design.md): independent aid types and strength parameters, exact pattern-to-action relationships, primary-source findings/locations, alternatives to the old ladder and variant identity.
-- [Implemented Offline Scanpath Detectors](scanpath-detectors.md): analyzer v5/classifier v1 named patterns, source provenance, explicit settings, abstention, event timing, output dictionary and replay commands; Android integration remains pending.
+- [Scanpath-to-Aid Runtime](scanpath-aid-runtime.md): integrated article prototype, independent displays, variable-strength word/focus rules, reader controls, exact experimental settings and bounded action provenance; device and human validation remain pending.
+- [Implemented Scanpath Detectors](scanpath-detectors.md): analyzer v5/classifier v1 and live Android engine v1, raw word/line events, causal boundaries, provisional residence evidence, explicit settings, timing, synthetic prefix parity and build commands.
 - [Scanpath Pilot Audit](scanpath-pilot-audit.md): corrected replay/time/coverage errors, protocol gaps and current collection dependencies.
 - [Scanpath Pilot Plan and Session Record](scanpath-pilot-session-record.md): blank phase-specific study plan, software readiness, linked sessions, pattern results and aid/strength outcomes; fill participant copies privately.
 - [Reading Measurement Pilot v1](reading-measurement-pilot.md): original raw natural-reading recording and provisional fixation/word-metric contract.

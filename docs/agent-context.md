@@ -1,4 +1,4 @@
-# Agent context — updated 2026-09-30
+# Agent context — updated 2026-10-01
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -29,8 +29,10 @@ provenance and exact trigger/form/outcome limits. Prioritize line guidance and
 localized word support; optional ruler and word-progress forms get distinct
 versioned IDs. Preserve A4's focus-region meaning rather than pooling variants.
 No forceful intervention follows every return/cycle, and poor tracking cannot
-increase assumed difficulty. This is a design checkpoint; runtime migration
-remains pending and participant evaluation follows the integrated build.
+increase assumed difficulty. The [runtime checkpoint](scanpath-aid-runtime.md)
+now implements the independent line/word/focus route, controls, variable
+word/focus strength and bounded action provenance. The matched instrument,
+device execution and participant evaluation follow this integrated build.
 
 The [scanpath-to-visual-aid implementation proposal](adaptive-visual-aid-proposal.md)
 is the current **NewsMead feature specification**. Re-reading the source task
@@ -157,9 +159,23 @@ does not by itself validate word assignment, fixation detection, or an index.
   and verified LTR direction,
   revisit/frontier episodes, structural A–B–A–B cycles, residence/progression
   descriptors and breaks. Long/slow flags require explicit development settings.
-  This is offline software, not validated natural eye paths/difficulty. Android
-  live extraction and the scanpath-to-aid policy remain pending. Existing
-  renderer/legacy controller code must not be described as that implementation.
+  Live engine v1 now runs P01–P13 from the article's raw observation callback.
+  Focused JVM tests and 13 synthetic cases/183 raw-action prefixes pass; common
+  fixation fields and P01–P12 agree with Python, while live P13 resets immediately.
+  The debug app builds and Android geometry tests compile; device execution,
+  human validity and runtime timing are unmeasured. Layout/bidi caching and old
+  geometry eviction were independently reviewed and corrected. The in-memory
+  adapter uses callback-only event delivery and starts a new generation on
+  text/locale changes or a 512-finalized-candidate resource cap, preserving the
+  capture-time floor. Pattern events require finalization; a separate established
+  ongoing-prefix contract can add observed time without incrementing refixations.
+  `gaze/aid/` now implements a source-linked policy, independent displays,
+  reader controls and bounded numeric action/render journal. Normal article
+  reading selects this route instead of the legacy weighted controller/demo.
+  Word magnification and optional focus strength vary under an explicitly
+  experimental profile; focus requires cycle + residence + slow progression,
+  never a cycle alone. Action audits are exported privately only from the menu;
+  they do not contain raw gaze or replace the matched evaluation instrument.
   Focus new checks on sequence,
   classifier and aid behavior; do not make a broad gaze benchmark restart a
   prerequisite. Raw/smoothed and conditional-reference limits still apply.
@@ -185,8 +201,10 @@ does not by itself validate word assignment, fixation detection, or an index.
   current score cannot pass a raw path placement gate. A separate matched raw
   target/order instrument supports evaluation of the completed prototype,
   without changing frozen v6. The offline registry/classifier is implemented;
-  build the Android causal engine, policy, adjustable aids and action logging
-  next. New participant measurement does not block that implementation. The blank
+  the integrated live engine/policy/displays/controls/action journal are built.
+  Next build the matched raw evaluation instrument, then conduct authorized
+  device checks and participant tasks. New participant measurement was not a
+  prerequisite for prototype implementation. The blank
   record now covers pattern and aid outcomes, condition assignment and holdout
   allocation. Set participant counts, numeric tolerances and study conditions
   from the phase-specific plan before collection; they are not validated defaults.

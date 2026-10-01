@@ -1,5 +1,65 @@
 # NewsMead — Progress Notes
 
+## 2026-10-01 - Integrated independent scanpath reading aids
+
+Connected live word/line scanpath evidence to an independent policy, current-line
+highlight, reactive destination-line marker, reserved localized magnifier and
+optional context-preserving focus region. Word/focus strength varies with observed
+residence under `EXPERIMENTAL_PROFILE_V1`; current-line/start cues have baseline
+prominence. Reader controls cap strength, select fixed strength and enable each
+form. Normal article reading bypasses the old weighted ordinal controller/demo.
+Touch validation and frozen logger/protocol identities are retained.
+
+Added separate established ongoing-prefix evidence: it adds observed duration,
+not finalized refixations. Invalid/late input and lifecycle/geometry changes clear
+stale aids. The magnifier reserves 68 dp while enabled, retaining the paragraph;
+oversized words are suppressed. A4 requires opt-in plus cycle, residence and
+configured slow progression, with all three supporting event IDs retained.
+
+The bounded journal saves numeric trigger facts, settings/source IDs, decisions
+and drawing proxies only through an explicit private export. Partial exports
+report dropped records/missing evidence; drawing is not verified physical
+visibility. Independent review prompted a 512-finalized-candidate history cap
+with explicit breaks and preserved timestamp order, and numeric action support.
+
+Focused JVM policy/pipeline/engine checks, 183 synthetic reference prefixes,
+52 Python tests, fixture consistency, debug assembly and Android test compilation
+pass. Android geometry/drawing tests are not device-executed. Review also checked
+adaptive saturation boundary semantics. No install, camera capture, calibration,
+participant collection, staging or commit was performed. Exact runtime settings,
+forms, controls and remaining evidence limits are saved in `scanpath-aid-runtime.md`.
+Next build the matched raw evaluation instrument; device/human validation follows
+the completed prototype and task-specific authorization.
+
+## 2026-10-01 - Live raw word/line scanpath engine
+
+Implemented `gaze/scanpath/` typed models, incremental provisional I-DT extraction
+and P01–P13 rules, then connected the article's raw MGazeNet observation callback.
+The main-thread adapter uses physical screen bounds, UTF-16 word ranges, cached
+Layout/bidi geometry, capture-time settling and separate word/line ambiguity.
+Pause/scroll/layout/provider/text boundaries reset continuity. No new aid decision
+or recording is created; legacy display/controller and frozen protocols remain.
+
+Checks: eight focused JVM tests plus 13 synthetic cases/**183 raw-action prefixes**
+match common Python fixation fields and P01–P12; 52 Python reference tests pass.
+Live P13 is deliberately immediate and separately reset-tested, whereas offline
+batch breaks may use a later fixation. `:app:assembleDebug` and
+`:app:compileDebugAndroidTestKotlin` pass using installed Java 17 and the
+in-process Kotlin compiler (existing Java 21/Kapt daemon incompatibility).
+Two Android geometry tests are compiled only. Independent review found repeated
+line/bidi scans and retained scroll snapshots; caching and post-flush geometry
+eviction fix these findings, with closure review and a geometry regression.
+
+Default long/slow/sweep endpoint settings remain unset. The pending sample buffer
+has a 4,096-sample guard; callback-only delivery avoids retaining quadratic P12
+event support lists. Fixation history is linear and full P12 support generation
+still costs prefix-length work. Pattern updates wait for candidate finalization;
+ongoing residence evidence needs an explicit contract for within-fixation cues.
+See `scanpath-detectors.md` for code, timing, reproduction and limits. Next build
+the independent aid policy, adjustable renderers/controls and action logging.
+No install, camera capture, calibration, participant collection, staging or
+commit was performed. Software parity does not establish reading validity.
+
 ## 2026-09-30 - Independent reading aids and source-linked mappings
 
 The owner clarified that the old scaffold levels do not constrain the scanpath

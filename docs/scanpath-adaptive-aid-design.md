@@ -5,7 +5,9 @@
 [pilot](scanpath-measurement-pilot.md). The owner requires defensible
 pattern-to-aid connections and permits replacing the previous scaffold design.
 Build the integrated prototype before participant measurement/evaluation.
-This document specifies the next implementation; it does not change Android code.
+The [runtime checkpoint](scanpath-aid-runtime.md) now implements the core line,
+word and focus modules. This document remains the evidence contract; optional
+ruler/coloring variants and participant outcome evidence are still pending.
 
 ## Design decision
 
@@ -105,8 +107,10 @@ aid types through the legacy index or ordinal ladder.
 
 Complete live extraction/classification, independent aid modules, variable-strength
 policy, controls, lifecycle and action/render logging before participant tasks.
-Software replay/build checks accompany implementation. This checkpoint changes
-the design specification; the live engine and policy are still pending.
+Software replay/build checks accompany implementation. The 2026-10-01
+[runtime checkpoint](scanpath-aid-runtime.md) implements the live engine,
+independent policy, adjustable forms, reader controls and action/render journal.
+The matched evaluation instrument and device/participant checks remain pending.
 
 ## Appraisal method
 

@@ -2,11 +2,18 @@
 
 **Revision 6 — 2026-09-30.** Branch: `measurement/scanpath-pilot`. Development and evaluation plan for the [current feature proposal](adaptive-visual-aid-proposal.md). Preserve revision 5's build-before-participant-evaluation order. The owner permits replacing the old scaffold design; use independent study-linked aid types and within-type strength parameters, not mandatory levels. The [aid design and evidence contract](scanpath-adaptive-aid-design.md) records mappings, source locations and limits.
 
-**Implementation checkpoint:** the [offline P01–P13 detector layer](scanpath-detectors.md)
-is now integrated into analyzer v5. P09 requires explicit geometric endpoint
+**Implementation checkpoint — 2026-10-01:** the [P01–P13 detector layer](scanpath-detectors.md)
+is integrated into analyzer v5 and the article's live raw-observation stream.
+Focused JVM extraction, policy and pipeline checks and 13 synthetic cases/183
+raw prefixes pass; the debug app builds. P01–P12/common fixation fields match the reference; live P13 resets
+immediately rather than relying on a future fixation. Android geometry tests
+compile but have not run on a device. P09 requires explicit geometric endpoint
 settings and verified LTR direction; P12 long/slow flags require explicit thresholds and coverage/window
-settings. P11 currently implements A–B–A–B alternation. Live Android processing,
-the matched task instrument and aid policy remain pending.
+settings. P11 currently implements A–B–A–B alternation. The matched task
+instrument remains pending. The [runtime checkpoint](scanpath-aid-runtime.md)
+implements independent adjustable line/word/focus displays, reader controls and
+bounded numeric action/render provenance, including experimental variable
+word/focus strength. Device tests and participant evaluation remain pending.
 
 **Current phase: prototype implementation.** Build the live word/line engine,
 pattern-to-aid policy, adjustable A0–A4 displays, reader controls and action
@@ -54,7 +61,12 @@ Carry forward completed gaze evaluation. New checks address sequence extraction,
 | WORD/LINE/FOCUS/REENTRY renderers | Reusable UI assets. | Adjustable parameters and new policy. Legacy weighted control and DEMO_CYCLE do not implement this feature. |
 | [First natural-reading diagnostic](reading-measurement-run-01.md) | Analysis v2: 87 candidates, 35 ambiguous word assignments, four eligible word transitions; reported vertical misalignment. | Extraction diagnosis, not natural eye-position validation. Historical counts have not been rerun under v4. |
 
-**Pending:** live dual-resolution engine; matched raw placement/continuous-order instrument; pattern-to-aid policy; action logging; participant pilot. Offline named rules are implemented with the scope/configuration limits in the detector dictionary.
+**Implemented:** live/offline named rules, independent aid policy, adjustable displays,
+reader controls and action/render journal. The runtime uses finalized P01–P13
+evidence and a separate established ongoing-prefix contract for residence; that
+prefix adds time, not a finalized refixation. The [runtime guide](scanpath-aid-runtime.md)
+records experimental parameters and limits. **Pending:** matched raw
+placement/continuous-order instrument, device execution and participant pilot.
 
 The owner is requesting a stronger research model from its provider. Artifact, weights, requirements and phone performance are unverified. Continue development around a versioned observation interface. If supplied, record model/runtime/calibration identity and repeat affected input-to-event checks; retain separate results by model. No improvement is assumed.
 
@@ -64,7 +76,7 @@ The owner is requesting a stronger research model from its provider. Artifact, w
 | --- | --- | --- |
 | WP1. Extraction reference | Extend `tools/gaze/analyze_reading_measurement.py` around v4 contracts, retaining raw/display provenance, capture time, geometry, paths and uncertainty. | Existing suite passes; fixtures reproduce order/spans; boundaries cannot manufacture links. Version and review semantic changes. |
 | WP2. Pattern classifier | Implement P01–P13 with source, input sequence, rule, parameters, minimum evidence and counterexamples. | Positive, negative, boundary and ambiguous cases for each pattern; outputs retain evidence IDs and resolution. |
-| WP4. Causal live engine | Port frozen semantics under `app/src/main/java/com/newsmead/gaze/`; consume each observation once; reset on quality/layout/calibration boundaries. | Every replay prefix matches live events and evidence-available time. No early use of final visit duration or future observations. |
+| WP4. Causal live engine | Implemented under `app/src/main/java/com/newsmead/gaze/scanpath/`; consume each raw observation once; reset on quality/layout/calibration boundaries. | P01–P12/common fixation fields match synthetic replay prefixes and evidence availability; immediate live P13 has separate reset tests. No early use of final visit duration or future observations. Device timing/geometry execution remains to be measured after prototype completion. |
 | WP5. Policy, UI, action record | Separate policy; extend `GazeOverlayView`/article controls. Log candidate, suppressed, chosen and displayed actions. | Reproducible decisions; current anchors/geometry; strength and user-off work; unknown/stale input suppresses new actions. Record event evidence times and render/frame acknowledgment; identify whether the acknowledgment is a render proxy or verified visibility. |
 | WP3. Separate pilot instrument | After the integrated core is built, add matched raw word/line location and uninterrupted sequence tasks with timestamped prompts/compliance notes; preserve frozen v6. Run these tasks during evaluation. | Target/layout identity, raw scoring stream, capture-clock intervals and full denominators. Holds and continuous order scored separately. |
 | WP6. Shadow/controlled pilot | Run phases below with the completed study plan and collection authorization. | Per-pattern feasibility, timing, independent outcomes and feedback reported with failures/denominators. |
@@ -261,9 +273,9 @@ Contracts: [raw recording specification](reading-measurement-pilot.md), [audit](
 ## Immediate implementation order
 
 1. **Offline rule layer implemented:** P01–P13 registry/classifier, unknowns, continuous values and fixtures. Freeze/inspect configuration before applying study labels; P11 v1 covers A–B–A–B.
-2. Build the Android causal word/line extractor and P01–P13 engine; verify parity with causal replay during implementation.
-3. Build the pattern-to-aid policy with explicit target, type, variable strength, duration, release and suppression reasons.
-4. Integrate adjustable A0–A4 renderers, reader controls and action/render logging into article reading. Exercise the full path with synthetic/replay inputs and complete the Android build checkpoint.
+2. **Implemented:** Android causal word/line extractor and P01–P13 engine, with synthetic causal-prefix parity and immediate boundary checks.
+3. **Implemented experimentally:** independent pattern-to-aid policy with target, type, variable word/focus strength, duration, release and suppression reasons.
+4. **Integrated/build-checked:** adjustable line/word/focus displays, reader controls and bounded numeric action/render journal. Synthetic engine-to-policy checks pass; Android geometry/render tests compile and still need device execution.
 5. Build the matched raw placement/sequence instrument for the completed core and finish the phase-specific participant plan. Do not make new participant measurement a prerequisite for steps 2–4.
 6. After prototype completion and collection authorization, run prompted feasibility, ordinary-reading shadow evaluation and controlled aid/strength trials. Use development results to revise/freeze the candidate policy, then evaluate on untouched readers/passages.
 
@@ -276,6 +288,6 @@ python -m unittest discover -s tools/gaze -p test_scanpath_patterns.py -v
 
 The v4 audit's 31 extraction tests are retained. New software tests cover named
 patterns, geometry/availability, configuration and raw-record/CLI integration.
-These checks establish software behavior; Android causal processing, the new aid
-policy and participant validation remain pending. See the detector dictionary for
-the precise output/parameter contract.
+These checks establish software behavior. The Android causal engine and aid
+prototype now build; device processing/render timing and participant validation
+remain pending. See the detector dictionary and runtime guide for exact contracts.

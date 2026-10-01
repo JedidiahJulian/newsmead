@@ -56,6 +56,9 @@ object StudyConfig {
      */
     const val GAZE_TOUCH_VALIDATION = false
 
+    /** Independent scanpath aid prototype in the article; no change to frozen validation activities. */
+    const val SCANPATH_READING_AIDS = true
+
     // ---- Adaptive graded visual scaffolding (manuscript Section 4.3.5) ----
 
     enum class ScaffoldMode {

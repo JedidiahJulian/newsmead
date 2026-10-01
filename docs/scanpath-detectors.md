@@ -1,4 +1,4 @@
-# Offline scanpath detectors — implementation v1
+# Scanpath detectors — offline and live implementation v1
 
 **Implemented 2026-09-30:** `tools/gaze/scanpath_patterns.py`, integrated into
 `tools/gaze/analyze_reading_measurement.py` **analysis version 5**. The original
@@ -131,13 +131,89 @@ Verification checkpoint: **52 focused tests passed** (39 extraction/integration,
 regressions for backward episode movement, ordered complete resumption evidence,
 unknown/RTL direction and censored residence. No device data was used.
 
+## Live Android checkpoint — 2026-10-01
+
+The live engine now runs from the article's raw MGazeNet `Observation` callback:
+
+- `app/src/main/java/com/newsmead/gaze/scanpath/ScanpathEngine.kt`: incremental
+  provisional I-DT extraction and P01–P13; extractor/classifier version 1.
+- `ScanpathModels.kt`: typed raw sample, UTF-16 word, physical-line geometry,
+  configuration, fixation and event contracts.
+- `ScanpathTextGeometry.kt` and `ArticleScanpathSession.kt`: physical-screen
+  origin/visibility, actual Layout lines, conservative bidi direction, raw word
+  assignment and a 150 ms geometry eligibility guard. Layout/bidi data are cached;
+  scrolling still updates screen bounds before drawing and receiving gaze.
+- `app/src/main/java/com/newsmead/fragments/article/ArticleFragment.kt`: one raw
+  observation entry, lifecycle/provider boundaries and in-memory pattern counts.
+
+Both resolutions retain independent assignment agreement. Layout/text changes,
+invalid observations, timestamp reversals, sample/unclassified gaps and screen
+interruptions break continuity. Changing body text/locale starts a new generation;
+event/fixation IDs are scoped to that generation. Touch input is not fed as gaze.
+The adapter does not record raw gaze. Its events and established ongoing-prefix
+evidence now feed the independent [aid runtime](scanpath-aid-runtime.md), which
+keeps a bounded numeric action journal for explicit private export. The schema-1
+diagnostic logger and frozen validation protocols retain their existing meanings.
+
+Default live settings match the reference extractor: half a line-height
+dispersion, 100 ms minimum span, at least three samples, 125 ms maximum sample
+and transition gaps, and 80% assignment agreement. These are provisional
+engineering settings. Generic-engine P09 endpoint and P12 long/slow settings remain
+unset; the article runtime supplies the explicit experimental profile in the
+runtime guide, including 0.25/0.75 endpoints and configured residence/progression.
+The live pending buffer is capped at **4,096 samples**; exceeding it right-censors
+the established candidate, emits `sample_buffer_limit`, and starts a fresh
+segment. This memory guard is not a reading threshold. Android uses
+`retainEvents=false`: callbacks receive events without retaining every support
+list. Only the current full geometry snapshot is retained. The Android adapter
+rotates after **512 finalized candidates**, emitting `history_limit` and starting
+a new generation with the capture-time floor preserved. This bounds retained
+history and P12 prefix-support work; no episode joins across that resource break.
+
+**Causal boundary contract:** live P13 is emitted immediately on an explicit
+boundary, with no future fixation support, and resets both paths. Offline batch
+P13 can instead describe a between-segment break using the next fixation.
+Therefore these P13 representations are intentionally different. Behavioral
+P01–P12 and common fixation fields are compared at each raw-action prefix;
+event IDs and episode group IDs are normalized, numbers to eight decimals.
+P13 immediacy/reset and censoring are tested separately. Pattern emission waits
+for candidate finalization. `currentCandidateEvidence()` separately returns an
+established ongoing compact prefix with capture/delivery, assignment agreement
+and observed duration. It does not mutate finalized candidates, increment P04 or
+emit a P12 event. The aid policy may add its observed duration to earlier
+finalized within-visit evidence, with separate provenance.
+
+**Software checks:** nine focused engine JVM tests plus one parity test covering
+**13 synthetic cases / 183 raw-action prefixes** pass. The 52 Python reference
+tests still pass. `:app:assembleDebug` and `:app:compileDebugAndroidTestKotlin`
+succeed. Two Android geometry tests cover UTF-16/origin mapping and cached
+layout/mixed bidi; two additional aid drawing tests cover magnifier preservation
+and expiration. They were **compiled, not run on a device**. Aid policy and real
+engine-to-policy tests cover variable strength, source support, controls and
+invalid-input clearing. Focused independent
+review found excessive repeated layout scans and retained scroll geometry;
+both were corrected and closure-reviewed. Integrated review also led to bounded
+history and embedded numeric action support. Human accuracy, phone runtime latency,
+natural fixation validity and aid benefit remain unmeasured in this checkpoint.
+
+Reproduce the reference fixture without reading participant data:
+
+~~~powershell
+python tools/gaze/build_live_scanpath_parity_fixtures.py --check
+& 'C:\Program Files\Java\jdk-17\bin\java.exe' '-Dorg.gradle.java.home=C:\Program Files\Java\jdk-17' -classpath gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain --gradle-user-home "$env:USERPROFILE\.gradle" --offline '-Pkotlin.compiler.execution.strategy=in-process' :app:testDebugUnitTest --tests 'com.newsmead.gaze.scanpath.*' --tests 'com.newsmead.gaze.aid.*' :app:assembleDebug :app:compileDebugAndroidTestKotlin
+~~~
+
+The explicit Java 17/in-process compiler avoids the existing Java 21/Kapt
+compatibility issue and reuse of a Java 21 Kotlin compiler daemon.
+
 ## Remaining implementation
 
-The next build is the Android causal engine, pattern-to-aid policy, adjustable
-visual aids and action/render logging. The [aid design contract](scanpath-adaptive-aid-design.md)
-specifies independent aid forms and source-linked rules rather than ordinal
-scaffold levels; not every pattern activates help. Complete the integrated prototype and
-its evaluation instrument before running matched prompted raw/order tasks or
+The independent policy, adjustable aids, reader controls and bounded action/render
+journal are integrated; see the [runtime checkpoint](scanpath-aid-runtime.md).
+The [aid design contract](scanpath-adaptive-aid-design.md) specifies independent
+forms and source-linked rules; not every pattern activates help. The next build
+is the matched raw placement/continuous-order evaluation instrument. Complete
+that instrument before running matched prompted raw/order tasks or
 participant aid evaluation. Whole-path clusters and HMM/HSMM phases are outside
-this deterministic implementation. The offline events provide inspectable inputs
+this deterministic implementation. The live and offline events provide inspectable inputs
 for the prototype; software checks accompany implementation.

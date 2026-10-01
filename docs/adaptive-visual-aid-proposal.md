@@ -2,7 +2,7 @@
 
 **Version:** 2026-09-23. **Status:** implementation specification for development and validation; no claim that the complete feature improves reading yet. **Target task:** adults aged 45+ reading news in NewsMead. The feature adapts during ordinary reading. Aid type, target, strength, and duration may change; a known interruption and the existing four scaffold levels are not its organizing rule.
 
-**Implementation checkpoint 2026-09-30:** [pilot revision 6](scanpath-measurement-pilot.md) puts completion of the integrated live engine, aid policy, adjustable displays and logging before participant measurement/evaluation. It carries forward completed gaze evaluation and specifies objectives, P01–P13 patterns, A0–A4 aids and strength evaluation. [Offline analyzer v5/classifier v1](scanpath-detectors.md) now emits named word/line movements, configurable geometric sweeps, revisit/frontier episodes, A–B–A–B cycles, residence/progression and breaks. Long/slow flags need explicit development settings. Android live engine/new policy remain pending; a stronger provider model is requested but unverified.
+**Implementation checkpoint 2026-10-01:** [pilot revision 6](scanpath-measurement-pilot.md) puts the integrated prototype before participant evaluation. The [runtime checkpoint](scanpath-aid-runtime.md) now connects the [live P01–P13 engine](scanpath-detectors.md) to independent line guidance, reactive line-start cues, localized magnification and optional context focus, with reader controls and action/render provenance. Word and focus prominence vary with observed residence under an explicit experimental profile. An established ongoing prefix adds duration without inventing a finalized refixation. Synthetic parity covers 183 raw prefixes; focused policy/pipeline checks and the debug build pass. Device execution, matched raw evaluation instrumentation, human validity and benefit remain pending; the requested stronger provider model remains unverified.
 
 **Aid design decision:** implement independent reading aids selected from scanpath
 events, with strength parameters inside each aid type. The owner permits replacing
@@ -27,7 +27,7 @@ MGazeNet observation + capture time + validity + current article geometry
   -> ordered word-fixation path + word visits + line visits
   -> descriptive transition and duration events, or unclassified
   -> evidence-gated policy {aid type, target, prominence, duration, reason}
-  -> article overlay + complete replay record
+  -> article display + bounded action audit (matched raw replay instrument pending)
 ~~~
 
 ## How NewsMead derives the scanpaths
@@ -43,7 +43,7 @@ For example, word fixations 12 -> 13 -> 12 -> 13 show a word revisit, while line
 
 For the slow-progress example, record **observed line residence** as the sum of eligible fixation durations on that line, together with the rendered text amount and covered time. Where word assignments are reliable, also record forward document-word displacement per observed second and backward returns separately. A line-only sequence cannot locate slow movement *within* a line; it can report only residence. Compare like text lengths, layout, and each reader's measured variation before calling a duration unusually long. These quantities describe pace and exposure, not a validated need for a focus aid.
 
-The offline analyzer now derives provisional fixation candidates, word and line visits, assignment-quality fields, signed edges, explicit breaks and P01–P13 named patterns from natural-reading records. Next build the causal on-device engine, candidate aid policy, adjustable renderers and action records as one integrated prototype. Software replay checks accompany implementation; participant measurement follows prototype completion. We will then evaluate **word and line viability independently**. Word-level is included because the strongest scanpath methods use words; it is not assumed to be feasible on this phone.
+The offline analyzer and live article engine derive provisional fixation candidates, word and line visits, assignment-quality fields, signed edges, breaks and P01–P13 patterns. The article now connects these to the independent aid policy, adjustable displays, reader controls and action records. Finalized pattern evidence and established ongoing-prefix residence have separate contracts; an ongoing prefix does not increment refixations. Exact settings, display rules, bounded history and trace limits are saved in the [runtime checkpoint](scanpath-aid-runtime.md). Participant measurement follows the integrated build and matched evaluation instrument. We will evaluate **word and line viability independently**; word-level feasibility on this phone is not assumed.
 
 ## Where the order categories come from
 
@@ -102,7 +102,13 @@ The focus-window example is retained as a **research candidate**, with an explic
 | Policy and renderer | Add a separate pattern-to-aid policy with shadow and experimental display modes. Use named aid types, form IDs and parameters, not ordinal ScaffoldLevel escalation. Extend GazeOverlayView and article controls for current/next-line cues, localized word magnifier, and separately identified ruler/context-region variants. Existing drawing primitives are reusable; the legacy weighted ladder does not select the new actions. Keep reader disable and preference controls. |
 | Replay record | Log source observation, assignment quality, break, classified event, policy inputs, chosen and displayed action, strength, timing, and reason. A frozen record/configuration must reproduce actions. Do not retain camera frames or upload private recordings. |
 
-Current runtime still uses the legacy weighted ReadingStateInferencer/AdaptiveScaffoldController, and StudyConfig selects DEMO_CYCLE. Their four renderers do not implement this proposal. Offline dual-resolution paths and named pattern descriptors exist in analysis v5; the live dual-resolution engine and its policy remain pending. The offline detector dictionary records each rule's scope and configuration limits.
+The ordinary article runtime now selects the independent scanpath route through
+`StudyConfig.SCANPATH_READING_AIDS`, bypassing the legacy weighted controller and
+demo cycle. Offline analysis v5 and the live engine emit dual-resolution events;
+the new policy, displays, controls and bounded numeric journal are integrated.
+The [runtime checkpoint](scanpath-aid-runtime.md) states exact profile/form rules
+and audit limits. The full matched raw evaluation instrument remains to be built;
+the action journal alone cannot reproduce raw scanpaths or establish human validity.
 
 ## Build, evaluation and release sequence
 

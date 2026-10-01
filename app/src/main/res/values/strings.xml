@@ -341,4 +341,16 @@
     <string name="home_show_filipino">Show me Filipino news</string>
     <string name="home_gaze_calibration">Calibrate eye tracker</string>
 
+    <string name="reading_aids_option">Reading aids</string>
+    <string name="reading_aids_enabled">Enable reading aids</string>
+    <string name="reading_aids_line">Follow the current line</string>
+    <string name="reading_aids_start">Emphasize a line start after a return sweep</string>
+    <string name="reading_aids_word">Magnify a repeatedly inspected word</string>
+    <string name="reading_aids_focus">Allow a soft focus region</string>
+    <string name="reading_aids_adaptive">Adjust strength during reading</string>
+    <string name="reading_aids_strength">Maximum strength: %1$d%% (fixed strength when adjustment is off)</string>
+    <string name="reading_aids_apply">Apply</string>
+    <string name="reading_aids_save_trace">Save aid diagnostics</string>
+    <string name="reading_aids_trace_saved">Aid diagnostics saved privately on this device.</string>
+    <string name="reading_aids_trace_failed">Could not save aid diagnostics.</string>
 </resources>
