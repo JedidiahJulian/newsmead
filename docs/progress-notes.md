@@ -1,5 +1,16 @@
 # NewsMead — Progress Notes
 
+## 2026-10-01 - Same synthetic tests pass on the second phone
+
+At the owner's request, installed the same target/corrected test APKs on the
+connected SM-G991B/API 35 with `install -r`. All four geometry/magnifier tests
+passed on the first attempt. No code change or rebuild was needed. Source
+checkpoint `9559c95`, matching APK hashes and runner results are retained in
+`scanpath-device-check-02.md`. The same four tests now pass on two phones; this
+does not validate visible article layout, live gaze or reading benefit. No camera,
+calibration or reading collection was started. Further tests remain as specified
+in the runtime guide and pilot.
+
 ## 2026-10-01 - First Android device checks and corrected retest
 
 Installed the checkpoint debug app on the owner's connected SM-A566B/API 36

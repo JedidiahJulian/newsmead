@@ -117,8 +117,9 @@ detector contract. Debug APK assembly and Android test compilation establish
 build readiness. [Device check 01](scanpath-device-check-01.md) ran four synthetic
 geometry/render tests on SM-A566B/API 36. The first attempt had one pass and three
 failures from missing fixture layout parameters. After correction and an
-owner-authorized retest, **all four passed**. Visible article UI and live gaze
-behaviour still need separate checks.
+owner-authorized retest, **all four passed**. [Device check 02](scanpath-device-check-02.md)
+then passed the same four tests on SM-G991B/API 35 using identical APKs. Visible
+article UI and live gaze behaviour still need separate checks.
 Independent source review covered timestamp/geometry boundaries, causal support,
 policy state, resource bounds and action provenance.
 

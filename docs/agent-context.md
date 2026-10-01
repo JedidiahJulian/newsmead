@@ -43,6 +43,12 @@ No gaze capture or participant measurement was started. Record and limits:
 [device check 01](scanpath-device-check-01.md). Keep this distinct from natural
 gaze or visible article-aid validation.
 
+The owner then requested the other phone: SM-G991B/API 35. Identical target/test
+APKs installed with `-r`; the same four synthetic tests passed on the first
+attempt. Source checkpoint `9559c95`, hashes/results/limits in
+[device check 02](scanpath-device-check-02.md). Both phones pass these synthetic
+checks; visible article layout, live gaze and human validity remain unmeasured.
+
 The [scanpath-to-visual-aid implementation proposal](adaptive-visual-aid-proposal.md)
 is the current **NewsMead feature specification**. Re-reading the source task
 **Explore feasible gaze metrics** clarified the owner's final intent: preserve

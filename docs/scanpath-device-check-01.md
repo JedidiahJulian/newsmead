@@ -70,3 +70,6 @@ does not change the tested application, scanpath rules or strength policy.
 These detached synthetic view tests do not establish visible article UI behavior,
 natural word/line accuracy, scanpath difficulty classification, eye-to-aid timing
 or reading benefit. The dedicated matched raw/order pilot screen remains pending.
+
+The same APKs and corrected tests subsequently passed on a second phone,
+SM-G991B/API 35; see [device check 02](scanpath-device-check-02.md).
