@@ -3,7 +3,7 @@
 **Implemented 2026-09-30:** `tools/gaze/scanpath_patterns.py`, integrated into
 `tools/gaze/analyze_reading_measurement.py` **analysis version 5**. The original
 schema-1 logger and Android behavior are unchanged. This is the offline named
-pattern layer in [pilot revision 4](scanpath-measurement-pilot.md).
+pattern layer in [pilot revision 6](scanpath-measurement-pilot.md).
 
 ## Input and output
 
@@ -133,7 +133,11 @@ unknown/RTL direction and censored residence. No device data was used.
 
 ## Remaining implementation
 
-Matched prompted raw/order tasks, an Android causal engine, action/render
-logging and the pattern-to-aid policy remain pending. Whole-path clusters and
-HMM/HSMM phases are outside this deterministic implementation. The new offline
-events provide inspectable inputs for those next steps under the pilot plan.
+The next build is the Android causal engine, pattern-to-aid policy, adjustable
+visual aids and action/render logging. The [aid design contract](scanpath-adaptive-aid-design.md)
+specifies independent aid forms and source-linked rules rather than ordinal
+scaffold levels; not every pattern activates help. Complete the integrated prototype and
+its evaluation instrument before running matched prompted raw/order tasks or
+participant aid evaluation. Whole-path clusters and HMM/HSMM phases are outside
+this deterministic implementation. The offline events provide inspectable inputs
+for the prototype; software checks accompany implementation.

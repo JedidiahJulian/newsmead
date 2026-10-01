@@ -1,12 +1,20 @@
 # NewsMead scanpath-to-visual-aid implementation pilot
 
-**Revision 4 — 2026-09-30.** Branch: `measurement/scanpath-pilot`. Development and evaluation plan for the [current feature proposal](adaptive-visual-aid-proposal.md). This revision replaces the measurement-led organization of revisions 1–3.
+**Revision 6 — 2026-09-30.** Branch: `measurement/scanpath-pilot`. Development and evaluation plan for the [current feature proposal](adaptive-visual-aid-proposal.md). Preserve revision 5's build-before-participant-evaluation order. The owner permits replacing the old scaffold design; use independent study-linked aid types and within-type strength parameters, not mandatory levels. The [aid design and evidence contract](scanpath-adaptive-aid-design.md) records mappings, source locations and limits.
 
 **Implementation checkpoint:** the [offline P01–P13 detector layer](scanpath-detectors.md)
 is now integrated into analyzer v5. P09 requires explicit geometric endpoint
 settings and verified LTR direction; P12 long/slow flags require explicit thresholds and coverage/window
 settings. P11 currently implements A–B–A–B alternation. Live Android processing,
 the matched task instrument and aid policy remain pending.
+
+**Current phase: prototype implementation.** Build the live word/line engine,
+pattern-to-aid policy, adjustable A0–A4 displays, reader controls and action
+logging before participant evaluation. Build software checks and the evaluation
+instrument into that work; running measurement tasks is a later phase. Existing
+gaze evidence carries forward. Configurable pattern/strength rules can be
+implemented as experimental methods without claiming validated difficulty or
+aid benefit.
 
 ## Purpose and objectives
 
@@ -56,9 +64,9 @@ The owner is requesting a stronger research model from its provider. Artifact, w
 | --- | --- | --- |
 | WP1. Extraction reference | Extend `tools/gaze/analyze_reading_measurement.py` around v4 contracts, retaining raw/display provenance, capture time, geometry, paths and uncertainty. | Existing suite passes; fixtures reproduce order/spans; boundaries cannot manufacture links. Version and review semantic changes. |
 | WP2. Pattern classifier | Implement P01–P13 with source, input sequence, rule, parameters, minimum evidence and counterexamples. | Positive, negative, boundary and ambiguous cases for each pattern; outputs retain evidence IDs and resolution. |
-| WP3. Separate pilot instrument | Matched raw word/line location and uninterrupted sequence tasks with timestamped prompts/compliance notes; preserve frozen v6. | Target/layout identity, raw scoring stream, capture-clock intervals and full denominators. Holds and continuous order scored separately. |
 | WP4. Causal live engine | Port frozen semantics under `app/src/main/java/com/newsmead/gaze/`; consume each observation once; reset on quality/layout/calibration boundaries. | Every replay prefix matches live events and evidence-available time. No early use of final visit duration or future observations. |
 | WP5. Policy, UI, action record | Separate policy; extend `GazeOverlayView`/article controls. Log candidate, suppressed, chosen and displayed actions. | Reproducible decisions; current anchors/geometry; strength and user-off work; unknown/stale input suppresses new actions. Record event evidence times and render/frame acknowledgment; identify whether the acknowledgment is a render proxy or verified visibility. |
+| WP3. Separate pilot instrument | After the integrated core is built, add matched raw word/line location and uninterrupted sequence tasks with timestamped prompts/compliance notes; preserve frozen v6. Run these tasks during evaluation. | Target/layout identity, raw scoring stream, capture-clock intervals and full denominators. Holds and continuous order scored separately. |
 | WP6. Shadow/controlled pilot | Run phases below with the completed study plan and collection authorization. | Per-pattern feasibility, timing, independent outcomes and feedback reported with failures/denominators. |
 | WP7. Policy decision | Select resolution, aid forms and strength rules from development evidence; freeze for untouched evaluation. | Decisions trace to support-need and intervention results; unsupported mappings stay experimental; no-aid retained. |
 
@@ -92,12 +100,24 @@ The [classification dictionary](scanpath-classification-map.md) also catalogs em
 
 Implement strength as explicit parameters, then test which values help in a defined situation before automatic escalation.
 
+A0–A4 are aid/decision identifiers, not ordered levels. Type addresses a task;
+strength changes parameters within that type. The new policy does not use
+`ScaffoldLevel.ordinal` or legacy index thresholds to move through aid families.
+Every rule records its source and whether evidence matches its trigger, aid form
+or outcome; numerical settings and stronger-help assumptions cannot be borrowed
+from paper significance or cluster membership. Build the adjustable modules now;
+their participant evaluation follows prototype completion. Preserve A4's focus
+definition and give ruler/coloring variants distinct versioned form IDs; report
+their exposures separately.
+
 | Aid / candidate event | Display and strength parameters | Evidence and pilot decision |
 | --- | --- | --- |
 | A1. Current-line highlight/anchor | Emphasize reliable current line/start; vary prominence and duration. Preserve earlier text during returns. | [GazePrompt](https://arxiv.org/html/2402.12772) supplies line-aware highlighting precedent. Establish phone placement, cue burden and independent outcomes; returns alone do not justify escalation. |
 | A2. Next-line start cue | Test prospective line-end and reactive P09 cues separately; vary marker prominence/duration and log their timing. | GazePrompt: 13 low-vision adults, reading aloud, 120 Hz desktop tracker; switching time improved (p = .014), accuracy did not significantly improve. Check whether phone timing offers useful support. |
-| A3. Local word magnifier | At eligible word anchor, magnify while preserving surroundings; vary scale/prominence/duration. Test P04/P10/P12 candidate triggers. | GazePrompt used prolonged inspection/refixation triggers; maximum first-pass fixation time and misread-word counts did not significantly improve. Establish word placement and benefit. Existing WORD highlighting is not magnification. |
+| A3. Local word magnifier | At eligible word anchor, magnify while preserving surroundings; vary scale/prominence/duration. P04/P12 within-visit inspection supplies a candidate method; a P10 revisit trigger is a separate unsupported extension. | GazePrompt's within-one-pass duration/refixation rules are a precedent, not equivalent to any single P04/P12 event. Tested word outcomes did not significantly improve. Establish word placement and benefit. Existing WORD highlighting is not magnification. |
 | A4. Context-preserving focus region | Lightly emphasize line/region; vary span/prominence/duration. Test usable P11/P12 episodes and directly requested help. | Experimental mapping. [Rayner et al. (2010)](https://pmc.ncbi.nlm.nih.gov/articles/PMC3075059/) and [Paterson et al. (2013)](https://pubmed.ncbi.nlm.nih.gov/23066801/) measured perceptual span, not slow-progress-triggered aid benefit. Test preview/distraction costs. |
+| RULER_GREY_BAR_V1 / RULER_UNDERLINE_V1 | Optional line bar/underline forms with explicit anchors and adjustable prominence; independent from A4. Slow/return triggers remain experimental. | [Digital Reading Rulers](https://doi.org/10.1145/3544548.3581367) supplies a mouse-controlled form comparison; Grey Bar versus no ruler is the stronger result. Exact comparisons and transfer limits: [design contract](scanpath-adaptive-aid-design.md). |
+| WORD_PROGRESS_COLOR_V1 | Optional persistent coloring of visited words, independent from A3 magnification. | [Rummens & Beier](https://doi.org/10.1080/00140139.2025.2514600) supplies a continuous gaze-progress form in children, not an adult difficulty-triggered aid. |
 | A0. No new cue/suspend | Suppress on P13, unsupported placement, stale geometry or user-off; specify existing-cue expiration/clearing. | Report withheld opportunities as well as incorrect cues. Uncertainty cannot cause stronger assumed difficulty. |
 
 [Schotter et al. (2014)](https://doi.org/10.1177/0956797614531148) found preventing rereading reduced comprehension. [Cheong et al. (2009)](https://pubmed.ncbi.nlm.nih.gov/19661837/) found mixed line-guide effects in macular degeneration. Preserve rereading and measure tradeoffs. Full populations/hardware/findings: [aid evidence map](scanpath-visual-aid-evidence-map.md), [primary-study ledger](scanpath-scaffolding-evidence.md).
@@ -108,13 +128,31 @@ Implement strength as explicit parameters, then test which values help in a defi
 
 Development can proceed before new participant recording. Phone-only prompts supply intended target/order references conditional on compliance; they do not independently observe natural eye position.
 
-### Phase A — offline build and replay
+### Phase A — complete the integrated prototype
 
 Use the implemented offline P01–P13 rules with deterministic tools, fixtures and approved development records. Retain evidence IDs, settings and counterexamples. Exercise timestamp reversal/duplicates, sparse data, ambiguity, complete loss, scroll/reflow and calibration boundaries.
 
 Add causal prefix replay, checking when each event becomes available and comparing with live processing. Replay A0–A4 decisions in shadow mode with exact target, strength, suppression reason and timing.
 
-**Result:** software correctness and inspectable decisions. Synthetic inputs and coding of the same estimated stream establish processing semantics, not human eye-position accuracy.
+Port the causal extractor/classifier into Android, connect its events to a
+configurable aid policy, and integrate current-line highlighting, next-line
+cues, localized word magnification and separately identified ruler/focus variants into
+article reading. Implement variable strength, duration/release, reader-off,
+uncertainty suppression and action/render logging. Keep configuration provenance
+and experimental trigger status explicit; strength parameters are not validated
+difficulty probabilities.
+
+**Prototype completion checkpoint before Phase B:** an Android build contains
+the full gaze-to-scanpath-to-event-to-aid path. Synthetic/replay inputs through
+that path exercise every implemented pattern, each aid, varying strength,
+resets, dismissal and user-off. Decision and rendered-action records identify
+the actual target, strength, timing and reason. Complete the matched evaluation
+instrument after core integration, before running the participant tasks.
+
+**Result:** an integrated experimental prototype with software checks and
+inspectable decisions. Synthetic inputs and coding of the same estimated stream
+establish processing semantics, not human eye-position accuracy or aid benefit.
+Participant measurement and evaluation start after this build checkpoint.
 
 ### Phase B — prompted pattern feasibility
 
@@ -223,11 +261,11 @@ Contracts: [raw recording specification](reading-measurement-pilot.md), [audit](
 ## Immediate implementation order
 
 1. **Offline rule layer implemented:** P01–P13 registry/classifier, unknowns, continuous values and fixtures. Freeze/inspect configuration before applying study labels; P11 v1 covers A–B–A–B.
-2. Specify/build the separate matched raw placement/sequence instrument alongside that work.
-3. Port frozen causal semantics; verify prefix parity.
-4. Add policy, action/render logging and controls; replay A0–A4 in shadow mode.
-5. Complete/authorize the phase-specific participant plan; run prompted feasibility and shadow reading.
-6. Inspect controlled aid/strength outcomes; freeze/evaluate the candidate policy on untouched data.
+2. Build the Android causal word/line extractor and P01–P13 engine; verify parity with causal replay during implementation.
+3. Build the pattern-to-aid policy with explicit target, type, variable strength, duration, release and suppression reasons.
+4. Integrate adjustable A0–A4 renderers, reader controls and action/render logging into article reading. Exercise the full path with synthetic/replay inputs and complete the Android build checkpoint.
+5. Build the matched raw placement/sequence instrument for the completed core and finish the phase-specific participant plan. Do not make new participant measurement a prerequisite for steps 2–4.
+6. After prototype completion and collection authorization, run prompted feasibility, ordinary-reading shadow evaluation and controlled aid/strength trials. Use development results to revise/freeze the candidate policy, then evaluate on untouched readers/passages.
 
 Focused extraction check:
 

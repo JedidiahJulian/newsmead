@@ -13,11 +13,24 @@ protocol remain authoritative for NewsMead-specific decisions and tools.
 ## Objective and current direction
 
 Help older adults sustain attentive reading through real-time visual assistance
-in the on-device Android NewsMead prototype. The immediate research priority is
-operationally sound gaze-to-text measurements and independently evaluated
-reading assistance. The user explicitly allows continuous, combined, or variable
+in the on-device Android NewsMead prototype. The immediate development priority
+is to complete the integrated live scanpath-to-visual-aid prototype before
+participant measurement/evaluation. Build software replay checks during
+implementation; carry forward existing gaze evidence. The user explicitly
+allows continuous, combined, or variable
 intensity scaffolds; four mutually exclusive levels are an existing implementation,
 not a fixed requirement for future research. Re-entry is only one possible use.
+
+Owner clarification on 2026-09-30: visual help need not be called scaffolds or
+organized as levels. Replace the legacy design when a better suited,
+study-defensible design exists. The [aid design and evidence contract](scanpath-adaptive-aid-design.md)
+now specifies independent aid types with within-type strength, per-rule source
+provenance and exact trigger/form/outcome limits. Prioritize line guidance and
+localized word support; optional ruler and word-progress forms get distinct
+versioned IDs. Preserve A4's focus-region meaning rather than pooling variants.
+No forceful intervention follows every return/cycle, and poor tracking cannot
+increase assumed difficulty. This is a design checkpoint; runtime migration
+remains pending and participant evaluation follows the integrated build.
 
 The [scanpath-to-visual-aid implementation proposal](adaptive-visual-aid-proposal.md)
 is the current **NewsMead feature specification**. Re-reading the source task
@@ -129,9 +142,14 @@ does not by itself validate word assignment, fixation detection, or an index.
 
 - Owner clarification on 2026-09-30: the pilot's objective is to build and evaluate
   the scanpath-to-visual-aid system, carrying forward existing gaze evaluation.
-  [Pilot revision 4](scanpath-measurement-pilot.md) is the current build/evaluation
+  The owner clarified that measurement tasks follow completion of the prototype.
+  [Pilot revision 6](scanpath-measurement-pilot.md) is the current build/evaluation
   plan: six objectives, seven work packages, P01–P13 pattern rules and A0–A4 aid
-  candidates. Phases cover offline/prefix replay, matched prompted feasibility,
+  candidates, plus separately identified optional ruler/coloring forms. Build
+  the Android causal word/line engine, pattern-to-aid policy,
+  adjustable renderers with variable strength, reader controls and action/render
+  logging first. Complete software replay/build checks and the matched evaluation
+  instrument before running participant measurement. Phases then cover prompted feasibility,
   ordinary-reading shadow decisions and independent support-need reports,
   controlled aid/strength trials, then frozen varying-strength evaluation.
   Offline analyzer v5 now includes the [P01–P13 named detector layer](scanpath-detectors.md):
@@ -165,9 +183,10 @@ does not by itself validate word assignment, fixation detection, or an index.
   structured v6 target score is based on smoothed displayed coordinates, whereas
   the natural-reading replay uses raw coordinates and raw-derived AOIs; v6's
   current score cannot pass a raw path placement gate. A separate matched raw
-  target/order instrument is the next instrument step, without changing frozen
-  v6. The offline registry/classifier is implemented; prepare the matched
-  instrument, then Android causal live parity and policy/action logging. The blank
+  target/order instrument supports evaluation of the completed prototype,
+  without changing frozen v6. The offline registry/classifier is implemented;
+  build the Android causal engine, policy, adjustable aids and action logging
+  next. New participant measurement does not block that implementation. The blank
   record now covers pattern and aid outcomes, condition assignment and holdout
   allocation. Set participant counts, numeric tolerances and study conditions
   from the phase-specific plan before collection; they are not validated defaults.

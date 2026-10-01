@@ -1,5 +1,31 @@
 # NewsMead — Progress Notes
 
+## 2026-09-30 - Independent reading aids and source-linked mappings
+
+The owner clarified that the old scaffold levels do not constrain the scanpath
+design. Added `scanpath-adaptive-aid-design.md`: independent aid types,
+within-type strength, complete P01–P13 action relationships, exact evidence
+limits/source locations and migration from the weighted ordinal ladder.
+Primary-source checks cover GazePrompt, line-start salience, digital rulers,
+word-progress coloring and preservation of rereading. Digital ruler comparisons
+distinguish a significant Grey Bar/no-ruler result from descriptive mean gains.
+Focused review caught reuse of A4 for different forms; kept A4's focus meaning
+and assigned ruler/coloring variants separate versioned form IDs and condition
+records. Pilot revision 6 preserves build-before-participant-evaluation order.
+This updates the specification and evidence notes; Android migration is pending.
+
+## 2026-09-30 - Prototype completion before participant measurement
+
+At the owner's correction, pilot revision 5 moves live scanpath extraction,
+P01–P13 classification, the pattern-to-aid policy, adjustable A0–A4 displays,
+variable strength, reader controls and action/render logging ahead of participant
+measurement/evaluation. Complete the integrated Android build, software replay
+checks and matched evaluation instrument before running the participant tasks.
+Existing gaze evidence carries forward; experimental trigger/strength rules are
+implemented for later evaluation without claiming validated difficulty or benefit.
+Updated the proposal, detector guide, context and documentation index to retain
+this order. This changes the saved plan; Android implementation remains pending.
+
 ## 2026-09-30 - Named offline scanpath detectors implemented
 
 Added `tools/gaze/scanpath_patterns.py` classifier v1 and integrated P01–P13

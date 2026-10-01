@@ -4,6 +4,11 @@
 
 ## Evidence key
 
+**2026-09-30 design checkpoint:** the [independent aid design](scanpath-adaptive-aid-design.md)
+uses task-specific types and within-type strength, with study references for each
+rule. Added N23 as a ruler-form precedent. Its aid results do not fill the gap
+between slow/cyclic scanpaths and need for help; retain exact form/condition IDs.
+
 | Relationship | Meaning |
 | --- | --- |
 | **Movement-matched aid test** | A study changed a visual aid and measured a closely related movement or place-finding outcome. Population, task, display, or cue timing may still differ from NewsMead. |
@@ -12,6 +17,10 @@
 | **No direct aid evidence located** | The pattern-to-aid rule remains a NewsMead hypothesis. |
 
 The evidence relationship applies to the **whole chain** from observed pattern to aid outcome. A fixed line marker that changes return-sweep landings does not prove a phone can predict a sweep early enough to add it adaptively.
+
+Parenthetical A1–A4/B labels in the classification column refer to the
+[classification dictionary](scanpath-classification-map.md), not the pilot's
+separate A0–A4 aid IDs. Record namespace and exact form when tracing a rule.
 
 **Timing distinction:** Slattery and Vasilev's line-start bolding was continuously visible before the sweep. GazePrompt identified the target from recent fixations and augmented the new line after detecting the sweep. Its faster switching result does not show that an early cue improved the initial landing.
 
@@ -33,6 +42,15 @@ The evidence relationship applies to the **whole chain** from observed pattern t
 | **Resuming after an earlier-line detour** (A3/B) | Highlight a known departure point, sentence, or block for re-entry, leaving the detour text readable. | **Movement-matched only to a known interruption:** [Cane et al. (2012)](https://doi.org/10.1080/17470218.2012.656666) highlighted the interruption word; after a forced 60-second interruption, rereading time was 3.71 versus 5.90 s (p&lt;.001) in 28 young adults. [EyeBookmark (Jo et al., 2015)](https://doi.org/10.1145/2702123.2702340) found block/sentence highlighting reduced resumption lag from 2.4 to 1.4 s in 13 young adults, without significant comprehension gain. | Use only when departure is known; spontaneous multiline rereading is not a known interruption. A bookmark after an unobserved detour requires its own detector and evaluation, and is not the project's primary adaptive response. |
 | **Sustained line residence or slow within-line movement** (B; timing, not order) | A context-preserving focus-region emphasis is an **experimental option**. Avoid dark masks or narrow single-word windows as a default; compare a simpler line anchor and no cue. | **No matched aid benefit found.** [Rayner, Slattery, & Bélanger (2010)](https://doi.org/10.3758/PBR.17.6.834) and [Paterson et al. (2013)](https://doi.org/10.1037/a0030350) varied available or filtered surrounding text to measure perceptual span; they show that context matters, including in older adults. These are measurement manipulations, not focus-aid trials. [Huth et al. (2024)](https://doi.org/10.1145/3649902.3653521) found static highlights drew fixations toward highlighted regions, without significant reading-time or answer-accuracy benefit in 12 mostly young adults. | Keep out of the automatic policy until tested. First rule out tracker loss, long text, complex content, or deliberate rereading. Compare no cue, line anchor, and lightly emphasized region on comprehension, place keeping, pace, distraction, and context loss. |
 | **Gap-spanning jump or ambiguous assignment** (B; missing evidence) | Hold or clear a stale cue; wait to reacquire location before a new gaze-conditioned aid. | No intervention study validates this NewsMead abstention rule. The path across missing samples was never observed; [Carr et al. (2022)](https://doi.org/10.3758/s13428-021-01554-0) documents difficult line assignment under drift. | Measurement safeguard. Log wrong cues prevented and potentially useful cues withheld. Do not relabel a gap as skipping or return. |
+
+### Additional placekeeping form: digital reading ruler
+
+[Niklaus et al. (2023)](https://doi.org/10.1145/3544548.3581367) supplies a
+mouse-controlled ruler-form comparison, not a slow/return-triggered gaze policy.
+Primary conditions, corrected comparisons and source locations are recorded in
+the [aid design contract](scanpath-adaptive-aid-design.md). Keep the ruler forms
+distinct from a focus-region condition and do not infer stronger help from a
+long residence or cycle alone.
 
 ## C. Whole-path clusters and modeled phases
 
@@ -71,6 +89,7 @@ No identified trial validates NewsMead's full phone sequence of pattern detectio
 | Key | Primary source and role |
 | --- | --- |
 | S19 | [Slattery & Vasilev (2019), line-initial bolding](https://doi.org/10.3758/s13414-019-01742-3). |
+| N23 | [Niklaus et al. (2023), Digital Reading Rulers](https://doi.org/10.1145/3544548.3581367); [primary PDF, Table 4](https://thereadabilityconsortium.org/wp-content/uploads/2023/08/Digital-Reading-Rulers-Evaluating-Inclusively-Designed-Rulers-for-Readers-With-Dyslexia-and-Without.pdf#page=11). |
 | W24 | [Wang et al. (2024), GazePrompt line and word aid conditions](https://doi.org/10.1145/3613904.3642878); [author full text](https://arxiv.org/html/2402.12772). |
 | R26 | [Rummens & Beier (2025 online; 2026 issue), gaze-linked word coloring](https://doi.org/10.1080/00140139.2025.2514600). |
 | Y26 | [Yang, Yan, & Du (2026), See Where You Read progress highlighting](https://doi.org/10.1145/3803853). |
