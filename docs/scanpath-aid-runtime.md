@@ -116,7 +116,9 @@ layout and the same engine, policy and drawing views. Home and article diagnosti
 provide entry points. Its private full-input trace explicitly labels synthetic
 capture times and actual delivery times, with no camera/calibration access.
 Controls, geometry changes and pause terminate a run. The guide records the
-current build/device checks and limits; live prompted measurement remains pending.
+current build/device checks and limits. The separate
+[live pilot screen](scanpath-live-pilot.md) now implements prompted placement/order
+tasks and matched raw reading conditions; their human measurement remains pending.
 All five real-activity tests pass on SM-G991B/API 35, including expected aid draw
 proxies and causal trace links; [device check 03](scanpath-device-check-03.md)
 retains the initial test lookup failure, correction and successful results.
@@ -134,9 +136,11 @@ article UI and live gaze behaviour still need separate checks.
 Independent source review covered timestamp/geometry boundaries, causal support,
 policy state, resource bounds and action provenance.
 
-The next implementation package is the matched raw placement/continuous-order
-evaluation instrument, followed by further authorized device inspection and participant
-tasks in [pilot revision 6](scanpath-measurement-pilot.md). Natural fixation
+The matched raw placement/continuous-order instrument is now built under its own
+pilot identity, with capture-window agreement, private full-input traces and
+no-aid/shadow/display conditions. Further authorized device inspection and
+phase-specific study procedures precede participant tasks in
+[pilot revision 6](scanpath-measurement-pilot.md). Natural fixation
 validity, word/line accuracy, processing/render latency, unwanted cues and human
 benefit remain unmeasured. Whole-path clusters, HMM/HSMM phases, a trained
 difficulty model and calibrated decision weights are not implemented.

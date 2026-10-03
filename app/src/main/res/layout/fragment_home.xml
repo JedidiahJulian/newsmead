@@ -78,6 +78,17 @@
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/btnGazeCalibration" />
 
+                <Button
+                    android:id="@+id/btnScanpathPilot"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="8dp"
+                    android:text="@string/scanpath_pilot_title"
+                    android:textSize="16sp"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/btnScanpathReplay" />
+
                 <TextView
                     android:id="@+id/tvHome"
                     style="@style/ts_display_large"

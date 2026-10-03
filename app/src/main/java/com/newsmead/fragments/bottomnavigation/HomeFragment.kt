@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.newsmead.R
 import com.newsmead.activities.GazeCalibrationActivity
 import com.newsmead.activities.ScanpathReplayActivity
+import com.newsmead.activities.ScanpathPilotActivity
 import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.FirebaseHelper
@@ -76,6 +77,9 @@ class HomeFragment : Fragment(), clickListener {
         }
         viewBinding.btnScanpathReplay.setOnClickListener {
             startActivity(Intent(requireContext(), ScanpathReplayActivity::class.java))
+        }
+        viewBinding.btnScanpathPilot.setOnClickListener {
+            startActivity(Intent(requireContext(), ScanpathPilotActivity::class.java))
         }
     }
 

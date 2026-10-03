@@ -28,6 +28,7 @@ class ArticleReadingAidRuntime(
     private val inputSource: ReadingAidInputSource = ReadingAidInputSource.LIVE_MGAZENET,
     private val onDecision: (ReadingAidDecision) -> Unit = {},
     private val onRenderReceipt: (ReadingAidAction, Boolean, String, Double) -> Unit = { _, _, _, _ -> },
+    private val renderAids: Boolean = true,
 ) {
     private val policy = ReadingAidPolicy(config, preferences)
     val preferences get() = policy.preferences
@@ -165,13 +166,13 @@ class ArticleReadingAidRuntime(
     private fun decisions(values: List<ReadingAidDecision>) {
         trace.context(context)
         values.forEach { trace.decision(it); onDecision(it) }
-        val actions = if (closed || suspended) emptyList() else policy.activeActions()
+        val actions = if (closed || suspended || !renderAids) emptyList() else policy.activeActions()
         overlay.setActions(body, snapshot, context.generation, actions)
         wordDock.showAction(actions.firstOrNull { it.aidType == ReadingAidType.WORD_MAGNIFIER }, body)
     }
 
     private fun updateDockVisibility() {
-        wordDock.visibility = if (!closed && !suspended && preferences.enabled && preferences.wordMagnifier)
+        wordDock.visibility = if (renderAids && !closed && !suspended && preferences.enabled && preferences.wordMagnifier)
             View.VISIBLE else View.GONE
     }
 
@@ -205,6 +206,7 @@ class ArticleReadingAidRuntime(
             .put("classifier_version", ScanpathEngine.CLASSIFIER_VERSION)
             .put("provisional_evidence_version", ScanpathEngine.PROVISIONAL_EVIDENCE_VERSION)
             .put("input_source", inputSource.name)
+            .put("aid_rendering_enabled", renderAids)
             .put("model", if (inputSource == ReadingAidInputSource.LIVE_MGAZENET) "mgazenet" else "synthetic_coordinates")
             .put("settings", values).put("settings_sha256", digest)
             .put("calibration_sha256", calibrationFingerprint ?: JSONObject.NULL)

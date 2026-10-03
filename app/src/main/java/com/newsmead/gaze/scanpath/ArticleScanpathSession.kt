@@ -21,6 +21,7 @@ class ArticleScanpathSession(
     private val onInput: (generation: Int, sample: ScanpathSample) -> Unit = { _, _ -> },
     private val onCandidate: (generation: Int, candidate: ScanpathCandidateEvidence?) -> Unit = { _, _ -> },
     private val onFixation: (generation: Int, fixation: ScanpathFixation) -> Unit = { _, _ -> },
+    private val onAcceptance: (generation: Int, sample: ScanpathSample, accepted: Boolean) -> Unit = { _, _, _ -> },
 ) {
     var generation: Int = 0
         private set
@@ -123,6 +124,7 @@ class ArticleScanpathSession(
         )
         onInput(generation, sample)
         val accepted = engine.onSample(sample)
+        onAcceptance(generation, sample, accepted)
         onCandidate(generation, if (accepted) engine.currentCandidateEvidence() else null)
         if (engine.fixationCount >= MAX_HISTORY_FIXATIONS) {
             // An explicit operational boundary bounds full P12 support work and retained history.

@@ -3,8 +3,9 @@
 **2026-10-02 — branch `measurement/scanpath-pilot`.** First milestone of the
 interactive pilot screen: scripted raw coordinates run through actual Android
 text geometry, the existing scanpath engine, the aid policy and real aid views.
-This is a software inspection tool. Live prompted tasks and the matched human
-measurement instrument remain a subsequent implementation package.
+This is a software inspection tool. The subsequent
+[live pilot instrument](scanpath-live-pilot.md) now implements prompted tasks and
+matched raw reading conditions; its human measurement remains pending.
 
 ## Use
 
@@ -126,7 +127,7 @@ The synthetic preview was visually inspected and clipped button labels corrected
 Existing phone geometry checks remain separate:
 [check 01](scanpath-device-check-01.md), [check 02](scanpath-device-check-02.md).
 
-Next implement live prompted raw placement/continuous-order tasks and their
-matched recording contract, then conduct authorized participant evaluation.
-This replay milestone completes the scripted inspection route; it does not
-replace that live instrument or restart a general gaze-model benchmark.
+The separate live pilot now implements raw placement/continuous-order tasks
+and their matched recording contract. Further authorized device execution and
+phase-specific study procedures precede participant evaluation. Replay supplies
+the scripted inspection route alongside that live instrument.

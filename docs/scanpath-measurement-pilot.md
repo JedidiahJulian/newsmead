@@ -33,6 +33,17 @@ It creates no camera/provider or human reference. Its guide records focused
 software/device checks. Live prompted placement/order tasks and the matched
 human evaluation record are still a subsequent package.
 
+**Live instrument checkpoint — 2026-10-03:** the
+[separate pilot screen](scanpath-live-pilot.md) adds ten raw-derived prompted
+word/line tasks and uninterrupted engine processing. Ordinary reading supplies
+hidden-dot no-aid/shadow/display conditions with the same reserved viewport.
+Private records include capture-window target agreement, unshown opportunities,
+descriptive path segments/alignment, engine acceptance, full evidence/actions,
+draw proxies, adherence reports and terminal counters. Holds do not label
+physiological refixations; descriptive alignment is not temporally matched event
+scoring. Focused JVM/host checks and APK builds pass; new device execution,
+phase-specific study procedures and participant collection remain pending.
+
 ## Purpose and objectives
 
 **General objective:** build a phone-based system that derives ordered word and physical-line scanpaths, recognizes defined reading-navigation patterns, and varies visual aid type and strength during reading. Determine which measurements, triggers and strengths are usable for adults aged 45+ reading news in NewsMead.
@@ -188,7 +199,12 @@ Report target agreement, recovered prescribed events, extra/missed events, timin
 
 ### Phase C — ordinary reading in shadow mode
 
-Use fresh news passages; record both resolutions and shadow decisions with aids off. The existing recorder shows the diagnostic dot: retain that condition label. If the later study needs hidden-dot reading, implement/verify a separate condition and hold visibility constant across compared arms.
+Use fresh news passages; record both resolutions and shadow decisions with aids
+off. The earlier diagnostic recorder shows the gaze dot: retain that condition
+label. The separate live pilot now implements hidden-dot reading with matched
+no-aid/shadow/display viewports; verify the new condition on the study phone and
+hold visibility constant across compared arms. Its bundled fictional passages
+are practice material, not the required fresh-news evaluation corpus.
 
 Specify independent support-need reports, such as reader-initiated help/lost-place responses and/or passage difficulty ratings, plus comprehension questions. A help response timestamps a report, not true difficulty onset. Reporting can interrupt reading; record the procedure/burden. Keep momentary reported need and passage comprehension as separate outcomes.
 

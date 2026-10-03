@@ -1,5 +1,32 @@
 # NewsMead — Progress Notes
 
+## 2026-10-03 - Separate live scanpath pilot and raw recording
+
+Based on `50ff2b7`, built ten prompted word/line placement/order tasks with actual
+visible native geometry and continuous existing engine processing. Added
+hidden-dot ordinary reading with no-aid/shadow/display conditions and a constant
+68 dp reserved strip. The front camera starts only on explicit Start live with
+compatible saved calibration. Prompted geometry changes and activity pause stop
+the run; shutdown retains trailing callbacks/counters without post-stop mapping.
+
+Shared the typed full-input trace writer with replay under separate instrument
+identities. Added exact engine-acceptance callbacks, capture-window prompted
+agreement, explicit unknown/missing denominators, unshown targets, descriptive
+path segments/alignment and adherence reporting before scores. Independent
+review found counter contamination and scoring interpretation risks; fixed
+reset-before-setup, unavailable word references, continuity metadata and separation
+of descriptive alignment from drawn capture-window opportunities. Later cue
+settling does not erase transitions from descriptive raw paths. The repeated-word
+cue task remains a negative control, never refixation truth.
+
+All 51 focused JVM tests pass (17 new task/scorer cases); 8 host summary contract
+tests pass; app/test APKs assemble. Five new camera-free activity integration
+tests compile. New pilot device execution awaits task-specific authorization.
+No camera capture, calibration, participant data, staging or commit was performed.
+Usage, time/denominator/provenance rules, host tool and remaining study procedures:
+`scanpath-live-pilot.md`. Software completion does not establish natural scanpath
+truth, difficulty classification or aid benefit.
+
 ## 2026-10-02 - Interactive raw-coordinate scanpath replay
 
 Built the pilot screen's first replay milestone. Five explicit raw-coordinate

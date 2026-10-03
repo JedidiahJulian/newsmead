@@ -1,6 +1,6 @@
 # NewsMead scanpath-to-aid pilot — blank plan and session record
 
-Use with [pilot revision 4](scanpath-measurement-pilot.md). This is a blank template, not participant data. Fill copies in an approved private study location; keep identities/contact details and recordings out of this repository.
+Use with [pilot revision 6](scanpath-measurement-pilot.md) and the [live instrument guide](scanpath-live-pilot.md). This is a blank template, not participant data. Fill copies in an approved private study location; keep identities/contact details and recordings out of this repository.
 
 ## Study plan frozen before recruitment
 

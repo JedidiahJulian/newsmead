@@ -1,4 +1,4 @@
-# Agent context — updated 2026-10-02
+# Agent context — updated 2026-10-03
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -31,8 +31,10 @@ versioned IDs. Preserve A4's focus-region meaning rather than pooling variants.
 No forceful intervention follows every return/cycle, and poor tracking cannot
 increase assumed difficulty. The [runtime checkpoint](scanpath-aid-runtime.md)
 now implements the independent line/word/focus route, controls, variable
-word/focus strength and bounded action provenance. The matched instrument,
-device execution and participant evaluation follow this integrated build.
+word/focus strength and bounded action provenance. The
+[matched pilot instrument](scanpath-live-pilot.md) now provides prompted tasks
+and ordinary-reading raw/shadow/display conditions. Further authorized device
+execution and participant evaluation follow this integrated build.
 
 First device check on 2026-10-01: Samsung SM-A566B/API 36, target APK from
 `e5fa5b2` installed with data-preserving update. Four synthetic geometry/magnifier
@@ -63,6 +65,21 @@ and APK assembly pass; [device check 03](scanpath-device-check-03.md) retains th
 initial test lookup failure, authorized correction/retest and final five-test
 pass on SM-G991B/API 35. Actual laid-out replay and variable word/focus choices
 have software evidence on that phone; the synthetic word preview was inspected.
+
+**2026-10-03 implementation:** starting from `50ff2b7`, a separate live pilot
+screen now provides ten geometry-derived prompted word/line tasks, continuous
+engine processing, hidden-dot ordinary reading and no-aid/shadow/display
+conditions with the same reserved viewport. Private JSONL retains raw inputs,
+capture-time prompted intervals, engine acceptance, full evidence/action/draw
+provenance, adherence reports and shutdown counters. Per-target agreement and
+unshown opportunities are separate from descriptive global alignment; holds
+cannot label physiological refixations. Five camera-free activity tests compile,
+51 focused JVM and 8 host summary tests pass, and both APKs assemble. Focused
+independent review found no remaining issue after scoring/lifecycle fixes.
+Device execution of the new pilot awaits task-specific authorization; no live
+gaze or human data were collected. Read [the guide](scanpath-live-pilot.md) for
+units, denominators, time assumptions, partial-file rules and remaining study
+procedures. Do not infer a completed participant plan from default task settings.
 No human validity follows from synthetic replay.
 
 The [scanpath-to-visual-aid implementation proposal](adaptive-visual-aid-proposal.md)

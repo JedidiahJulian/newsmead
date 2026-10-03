@@ -34,6 +34,7 @@ import com.newsmead.R
 import com.newsmead.activities.GazeTestActivity
 import com.newsmead.activities.ReadingValidationActivity
 import com.newsmead.activities.ScanpathReplayActivity
+import com.newsmead.activities.ScanpathPilotActivity
 import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.DatabaseHelper
@@ -579,6 +580,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                     getString(R.string.reading_aids_option),
                     getString(R.string.reading_aids_save_trace),
                     getString(R.string.scanpath_replay_title),
+                    getString(R.string.scanpath_pilot_title),
                 ),
             ) { _, which ->
                 when (which) {
@@ -588,6 +590,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                     3 -> showReadingAidControls()
                     4 -> saveReadingAidTrace()
                     5 -> launchScanpathReplay()
+                    6 -> launchScanpathPilot()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -1017,6 +1020,18 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         gazeProvider?.stop()
         gazeProvider = null
         startActivity(Intent(requireContext(), ScanpathReplayActivity::class.java))
+    }
+
+    private fun launchScanpathPilot() {
+        launchedCalibration = true
+        stopScanpathSession("pilot_opened")
+        val current = gazeProvider
+        gazeProvider = null
+        val open = {
+            if (isAdded && viewLifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))
+                startActivity(Intent(requireContext(), ScanpathPilotActivity::class.java))
+        }
+        if (current is MgazeNetGazeProvider) current.stopAndThen(open) else { current?.stop(); open() }
     }
 
     private fun stopScanpathSession(reason: String) {

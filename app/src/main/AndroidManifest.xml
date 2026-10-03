@@ -51,6 +51,10 @@
         <activity
             android:name=".activities.ScanpathReplayActivity"
             android:exported="true" />
+        <!-- Opens idle; only the on-screen Start action can request live capture. -->
+        <activity
+            android:name=".activities.ScanpathPilotActivity"
+            android:exported="true" />
         <!-- Researcher-only candidate throughput preview. It cannot emit gaze or write calibration. -->
         <activity
             android:name=".activities.HybridEyePerformanceActivity"

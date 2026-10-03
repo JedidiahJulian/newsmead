@@ -366,4 +366,9 @@
     <string name="scanpath_replay_stopped">Replay stopped. Select a scenario to run again.</string>
     <string name="scanpath_replay_trace">Replay trace</string>
     <string name="scanpath_replay_copy">Copy path</string>
+    <string name="scanpath_pilot_title">Scanpath pilot</string>
+    <string name="scanpath_pilot_settings">Settings</string>
+    <string name="scanpath_pilot_notice">Start uses the front camera and saves raw gaze privately. Follow the blue targets. Prompted tasks have aids off.</string>
+    <string name="scanpath_pilot_start">Start live</string>
+    <string name="scanpath_pilot_ready">Choose a task and passage. Settings start in practice mode. The camera is off.</string>
 </resources>
