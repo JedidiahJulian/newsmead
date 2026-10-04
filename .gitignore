@@ -22,6 +22,10 @@ local.properties
 # Local gaze diagnostics and generated analysis artifacts
 /diagnostics-local/
 /tmp/
+/.venv-runtime/
+/output/
+# Stray redirected Git diff output; keep local without committing it
+/canpath-driven adjustable reading aids*
 __pycache__/
 *.py[cod]
 
