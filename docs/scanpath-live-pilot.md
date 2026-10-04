@@ -1,5 +1,40 @@
 # Live scanpath pilot instrument
 
+**2026-10-04 line-start spacing:** the existing 16 dp body padding is now used
+as a gutter for the same marker renderer selected in the article. The cue ends
+4 dp before the first letter in ordinary-reading display conditions. No padding
+changes occur between conditions; word/line targets still come from the actual
+rendered TextView geometry. A clipped gutter withholds the marker. Prompted
+placement tasks keep assistance off as specified below.
+
+**2026-10-04 current article aid profile:** new runs use `DEFINITION_PROFILE_V2`
+and `PILOT_DEFINITION_NO_AIDS_V2`, `PILOT_DEFINITION_SHADOW_V2` or
+`PILOT_DEFINITION_DISPLAY_V2`. The current near-word card, highlight, close control
+and consultation gate replace the word magnifier. Its 800 ms trigger remains
+exploratory. All conditions reserve **0 dp** for a word strip and keep the same
+viewport. Settings control word definitions. Live runs use the 75-entry original
+glossary and online fallback; explicitly synthetic checks use the same adapter
+with networking disabled. Header/configuration record `dictionary_mode`,
+`ui_layout_id=CONTEXT_DEFINITION_GUTTER_V1` and `reserved_word_strip_dp=0`.
+Historical magnifier runs/device checks retain their earlier meaning; do not pool
+them with the new profile.
+
+The [continuation marker](scanpath-continuation-marker.md) replaces the old
+post-P09 cue. In ordinary-reading shadow/display runs, supported first-quarter
+then last-quarter progress remembers the next visible line; a supported landing
+elsewhere offers a fixed marker at that expected line. Normal next-line arrival
+does not choose it. Definition consultation, layout/input boundaries and expiry
+clear it. Prompted tasks remain aids-off. Configuration is policy v3; source/end/
+landing times and observed lines are saved in `continuation_evidence`. V1 runs
+and the 64-test checkpoint below describe the preceding build.
+
+Current local checks: **64 focused JVM tests pass**; app/test APK assembly, XML
+parsing and whitespace checks pass. Updated camera-free activity fixtures compile
+for all prompted tasks, matched no-aid/shadow/display geometry, current definition
+choices and offline consultation/raw exclusion/resumption. Their phone execution
+is pending. Independent source review found no actionable P1/P2 issue. Exact
+APK hashes and copied JVM XML: `output/evaluator-current-aids-check-01/summary.json`.
+
 **2026-10-03 — branch `measurement/scanpath-pilot`, based on `50ff2b7`.**
 The separate pilot screen adds prompted placement/order tasks and matched raw
 recording to the completed scanpath-to-aid prototype. It uses the existing
@@ -57,8 +92,8 @@ blank paragraph rows retain their indices and are never selected as targets.
 | `word_hold` | One visible word | Conditional word/line assignment and observed residence. A hold cannot label refixations. |
 | `line_hold` | One full visible line | Conditional line assignment; no prescribed word-order reference. |
 | `forward_words` | Three adjacent words A → B → C | P01 forward-word navigation, conditional on following the prompts. |
-| `backward_words` | The same words C → B → A | P02 backward-word navigation; no inference of difficulty. |
-| `nonadjacent_words` | A → C → A | P03 nonadjacent word transitions and revisit opportunities. |
+| `backward_words` | The same words C → B → A | P03 backward-word navigation and P07 same-line backward returns; no inference of difficulty. |
+| `nonadjacent_words` | A → C → A | P02 forward word jump, P03 backward return and revisit opportunities. |
 | `next_line` | Line end → next line start | Adjacent line advance and P09 geometric return-sweep candidate; verified LTR endpoints ≥75% / ≤25%. Not independently measured saccade truth. |
 | `earlier_line` | Lower line B → preceding line A | Earlier-line return opportunity. |
 | `multiline` | Line A → A+2 | P06 multi-line advance opportunity, rather than two adjacent advances. |
@@ -101,11 +136,16 @@ marks the score incomplete.
 | `SHADOW` | Raw stream, engine events, candidate/suppressed/chosen policy decisions | No reading aid |
 | `DISPLAY` | Same route and experimental policy, reader-selected forms and strength | Actual aid views with drawing receipts |
 
-The 68 dp word-strip parent stays reserved in all pilot conditions, including
-prompted tasks, to keep the available viewport comparable. The child magnifier
-is hidden in no-aid/shadow conditions. Reading has a hidden gaze dot, no scoring
+The legacy strip is hidden and reserves 0 dp in all current pilot conditions,
+including prompted tasks, keeping the available viewport comparable. Definitions
+are overlays in the text viewport. Reading has a hidden gaze dot, no scoring
 target reference and no prompted score. A reported interruption/adherence note
 cannot label every reading moment.
+
+Historical 2026-10-03 magnifier display correction: the child used 16 dp horizontal and 10 dp vertical
+padding, preserving the parent height while leaving 48 dp for the maximum
+magnifier font. The [trigger review](scanpath-trigger-evidence-review.md) records
+the font-height issue and explicit demo checks.
 
 Match linked-set codes, calibration/model/build, passage/geometry, font, settings
 and exposure conditions in the external plan. A linked code alone does not make
@@ -155,6 +195,14 @@ and terminal counters. There are no camera images or uploads. Free-text notes
 may contain private information; participant copies belong in approved private
 storage, outside this repository.
 
+Current display runs also retain `definition_consultation` open/close records.
+Every raw callback is still recorded while the card is open. Its derived sample
+has no article target, is ineligible and is not passed to the article engine;
+the consultation and late-boundary exclusions identify why. Opening/closing
+breaks sequence continuity. Shadow runs make choices without displaying a card,
+so they do not have a consultation exclusion. Matched viewport does not imply
+identical observed paths between display and shadow.
+
 For an explicitly authorized trace, export its exact filename with `adb exec-out
 run-as com.newsmead cat no_backup/<filename>` into approved private storage.
 CMD redirection preserves its UTF-8 bytes. Then inspect it locally:
@@ -170,7 +218,7 @@ descriptive alignment. Exit 0 means this bounded integrity check passed;
 exit 1 reports inconsistencies/partial status; exit 2 reports unreadable or
 unsupported input. It does not reclassify gaze or prove human validity.
 
-## Software checks and remaining gates
+## Earlier magnifier software checks and remaining gates
 
 - **51 focused JVM tests pass**, including 17 pure task/scorer tests. These cover
   native line IDs, visible targets, delayed capture assignment, half-open windows,
@@ -185,8 +233,18 @@ unsupported input. It does not reclassify gaze or prove human validity.
   counters, prompted/descriptive score distinction, geometry termination or
   terminal unknown-data retention.
 
-Device execution of this new instrument awaits task-specific authorization.
+Five synthetic activity checks pass on A56/API 36 in device check 04.
 Earlier replay/device results apply to their dated builds. Live camera execution,
 shutdown timing, actual prompt visibility, human adherence, natural scanpath
 accuracy, independent event scoring and aid effectiveness remain unmeasured.
 Do not begin participant measurement merely because software checks pass.
+
+**2026-10-03 A56/API 36 software execution:** all five pilot activity tests
+passed under synthetic input, including all ten prompted task plans, raw scoring
+and provenance, idle/setup reset behavior, scroll/pause and matched shadow/display
+viewports with distinct rendering. [Device check 04](scanpath-device-check-04.md)
+retains installed hashes and the first combined 14-test runner, including its
+eight demo/replay failures. After local timing/fit fixes and explicit owner
+retest authorization, all **15 checks pass** (including the same five pilot
+checks). The corrected APKs are installed. No camera or human measurement ran;
+actual human target placement, natural paths and benefit remain unmeasured.

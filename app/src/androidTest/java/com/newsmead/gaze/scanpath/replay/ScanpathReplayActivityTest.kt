@@ -50,34 +50,41 @@ class ScanpathReplayActivityTest {
         val deadline = SystemClock.elapsedRealtime() + 10000
         var result: ScanpathReplayResult? = null
         var bitmap: Bitmap? = null
+        var diagnostic = "Activity did not provide a replay snapshot."
         while (result == null && SystemClock.elapsedRealtime() < deadline) {
             activity.onActivity { a ->
                 result = a.lastResult
-                if (capturePreview && bitmap == null && a.findViewById<TextView>(R.id.replayStatus).text.contains("WORD_MAGNIFIER")) {
-                    val root = a.findViewById<android.view.View>(R.id.replayRoot)
+                val root = a.findViewById<android.view.View>(R.id.replayRoot)
+                val body = a.findViewById<TextView>(R.id.replayBody)
+                diagnostic = "replaying=${a.isReplaying} termination=${result?.termination} samples=${result?.samples} trace=${result?.trace?.name}\n" +
+                    "status=${a.findViewById<TextView>(R.id.replayStatus).text}\n" +
+                    "root=${root.width}x${root.height} body=${body.width}x${body.height} lines=${body.layout?.lineCount}\n"
+                if (capturePreview && bitmap == null && a.findViewById<TextView>(R.id.replayStatus).text.contains("WORD_DEFINITION")) {
                     bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { root.draw(Canvas(it)) }
                 }
             }
             if (result == null) Thread.sleep(25)
         }
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        File(context.noBackupFilesDir, "scanpath_replay_last_status.txt")
+            .appendText("elapsed_ns=${SystemClock.elapsedRealtimeNanos()}\n$diagnostic\n")
         bitmap?.let { preview ->
-            val context = InstrumentationRegistry.getInstrumentation().targetContext
             try { File(context.noBackupFilesDir, "scanpath_replay_word_preview.png").outputStream().use { preview.compress(Bitmap.CompressFormat.PNG, 100, it) } }
             finally { preview.recycle() }
         }
-        return checkNotNull(result) { "Replay did not finish within 10 seconds." }
+        return checkNotNull(result) { "Replay did not finish within 10 seconds: $diagnostic" }
     }
 
-    @Test fun allScenariosUseActualLayoutAndProduceExpectedPatternsAndDrawReceipts() {
+    @Test fun allScenariosWithAidsDisabledRetainLegacyDetectorOutcomes() {
         ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
             ScanpathReplayScenarios.scenarios.forEach { scenario ->
-                select(activity, scenario.id, ReaderAidPreferences(focusRegion = true))
+                select(activity, scenario.id, ReaderAidPreferences(enabled = false, wordDefinition = false))
                 val result = await(activity, scenario.id == "word_refixations")
                 assertEquals("${scenario.id}: ${result.termination}", "completed", result.termination)
                 assertNull(result.traceFailure)
                 assertTrue("${scenario.id}: patterns ${result.patterns}", result.patterns.containsAll(scenario.expectedPatternIds))
-                assertTrue("${scenario.id}: chosen ${result.chosenAids}", result.chosenAids.containsAll(scenario.expectedAidTypes))
-                assertTrue("${scenario.id}: drawn ${result.drawnAids}", result.drawnAids.containsAll(scenario.expectedAidTypes))
+                assertTrue(result.chosenAids.isEmpty())
+                assertTrue(result.drawnAids.isEmpty())
                 val records = result.trace!!.readLines().map(::JSONObject)
                 assertEquals("header", records.first().getString("kind"))
                 val header = records.first().getJSONObject("detail")
@@ -91,6 +98,140 @@ class ScanpathReplayActivityTest {
                 assertEquals("footer", footer.getString("kind"))
                 assertTrue(footer.getJSONObject("detail").getBoolean("complete_trace"))
                 assertTrue(footer.getJSONObject("detail").getBoolean("software_expectations_met"))
+            }
+        }
+    }
+
+    @Test fun currentDefinitionProfileDrawsPopupAndRetainsExcludedRawCallbacks() {
+        ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
+            select(activity, "word_refixations", ReaderAidPreferences())
+            val result = await(activity, capturePreview = true)
+            assertEquals("completed", result.termination)
+            assertNull(result.traceFailure)
+            assertTrue(result.patterns.containsAll(setOf("P04", "P13")))
+            assertTrue(result.chosenAids.containsAll(setOf("CURRENT_LINE", "WORD_DEFINITION")))
+            assertTrue(result.drawnAids.containsAll(setOf("CURRENT_LINE", "WORD_DEFINITION")))
+            assertFalse(result.chosenAids.contains("WORD_MAGNIFIER"))
+            val records = result.trace!!.readLines().map(::JSONObject)
+            val config = records.first().getJSONObject("detail").getJSONObject("configuration")
+            assertEquals("DEFINITION_PROFILE_V2", config.getJSONObject("settings").getString("config_id"))
+            assertEquals("REPLAY_DEFINITION_V2", config.getJSONObject("settings").getString("condition_id"))
+            assertEquals(3, config.getInt("policy_version"))
+            assertEquals("fixed", config.getJSONObject("settings").getString("line_start_marker_strength_mode"))
+            assertEquals("bundled_only", config.getString("dictionary_mode"))
+            assertEquals(0, config.getInt("reserved_word_strip_dp"))
+            val boundaries = records.filter { it.getString("kind") == "definition_consultation" }
+                .map { it.getJSONObject("detail") }
+            assertEquals("one open and one close; no consultation retarget", 2, boundaries.size)
+            assertTrue(boundaries[0].getBoolean("active"))
+            assertFalse(boundaries[1].getBoolean("active"))
+            assertEquals("completed", boundaries[1].getString("reason"))
+            val opened = boundaries[0].getDouble("at_ms")
+            val closed = boundaries[1].getDouble("at_ms")
+            assertTrue(closed >= opened)
+            val excluded = records.filter { it.getString("kind") == "sample" }
+                .map { it.getJSONObject("detail") }
+                .filter { it.optString("exclusion").startsWith("definition_") }
+            assertTrue("consultation retains raw callbacks", excluded.isNotEmpty())
+            excluded.forEach {
+                assertFalse(it.getBoolean("eligible"))
+                assertFalse(it.isNull("x")); assertFalse(it.isNull("y"))
+                assertTrue(it.isNull("line")); assertTrue(it.isNull("word_start_utf16"))
+                assertTrue(it.getDouble("delivery_ms") >= opened)
+                if (it.getString("exclusion") == "definition_boundary_late_capture")
+                    assertTrue(it.getDouble("capture_ms") < opened)
+                else assertTrue(it.getDouble("capture_ms") >= opened)
+                assertTrue(it.getDouble("delivery_ms") <= closed)
+            }
+            assertEquals(result.samples, records.count { it.getString("kind") == "sample" })
+            assertCausalTrace(records)
+            assertTrue(records.last().getJSONObject("detail").getBoolean("software_expectations_met"))
+            activity.onActivity { assertNull(it.findViewById<android.view.View>(R.id.definitionWord)) }
+        }
+    }
+
+    @Test fun definitionEnabledLineCycleKeepsCurrentProfileOutcomesAndConsultationExclusions() {
+        ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
+            select(activity, "line_cycle", ReaderAidPreferences(wordDefinition = true, focusRegion = true))
+            val result = await(activity)
+            assertEquals("completed", result.termination)
+            assertNull(result.traceFailure)
+            // Explicit current outcomes: consultation preempts later residence/focus evidence.
+            assertTrue(result.patterns.containsAll(setOf("P08", "P10", "P11", "P13")))
+            assertTrue(result.chosenAids.containsAll(setOf("CURRENT_LINE", "WORD_DEFINITION")))
+            assertTrue(result.drawnAids.containsAll(setOf("CURRENT_LINE", "WORD_DEFINITION")))
+            assertFalse(result.chosenAids.contains("WORD_MAGNIFIER"))
+            assertFalse(result.chosenAids.contains("FOCUS_REGION"))
+            val records = result.trace!!.readLines().map(::JSONObject)
+            val settings = records.first().getJSONObject("detail").getJSONObject("configuration").getJSONObject("settings")
+            assertEquals("DEFINITION_PROFILE_V2", settings.getString("config_id"))
+            assertEquals("REPLAY_DEFINITION_V2", settings.getString("condition_id"))
+            val boundaries = records.filter { it.getString("kind") == "definition_consultation" }
+                .map { it.getJSONObject("detail") }
+            assertEquals("one fixed-source consultation", 2, boundaries.size)
+            assertTrue(boundaries.first().getBoolean("active"))
+            assertFalse(boundaries.last().getBoolean("active"))
+            assertEquals("completed", boundaries.last().getString("reason"))
+            val opened = boundaries.first().getDouble("at_ms")
+            val excluded = records.filter { it.getString("kind") == "sample" }
+                .map { it.getJSONObject("detail") }
+                .filter { it.optString("exclusion").startsWith("definition_") }
+            assertTrue("line-cycle consultation retains excluded raw samples", excluded.isNotEmpty())
+            excluded.forEach {
+                assertFalse(it.getBoolean("eligible"))
+                assertFalse(it.isNull("x")); assertFalse(it.isNull("y"))
+                assertTrue(it.isNull("line")); assertTrue(it.isNull("word_start_utf16"))
+                assertTrue(it.getDouble("delivery_ms") >= opened)
+            }
+            assertEquals(result.samples, records.count { it.getString("kind") == "sample" })
+            assertCausalTrace(records)
+            assertTrue(records.last().getJSONObject("detail").getBoolean("software_expectations_met"))
+        }
+    }
+
+    @Test fun changingControlsClosesConsultationAndFreshRunDoesNotReusePopup() {
+        ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
+            select(activity, "word_refixations", ReaderAidPreferences())
+            val deadline = SystemClock.elapsedRealtime() + 4000
+            var showing = false
+            while (!showing && SystemClock.elapsedRealtime() < deadline) {
+                activity.onActivity { showing = it.findViewById<android.view.View>(R.id.definitionWord) != null }
+                if (!showing) Thread.sleep(25)
+            }
+            assertTrue("Current replay did not open its definition", showing)
+            activity.onActivity {
+                it.setReaderPreferences(ReaderAidPreferences(wordDefinition = false))
+                assertFalse(it.isReplaying)
+                assertNull(it.findViewById<android.view.View>(R.id.definitionWord))
+            }
+            val stopped = await(activity)
+            assertEquals("reader_controls_changed", stopped.termination)
+            val boundaries = stopped.trace!!.readLines().map(::JSONObject)
+                .filter { it.getString("kind") == "definition_consultation" }
+            assertFalse(boundaries.last().getJSONObject("detail").getBoolean("active"))
+            assertEquals("reader_controls_changed", boundaries.last().getJSONObject("detail").getString("reason"))
+            activity.onActivity { it.startReplay() }
+            val fresh = await(activity)
+            assertEquals("completed", fresh.termination)
+            assertTrue(fresh.patterns.containsAll(setOf("P04", "P12")))
+            assertFalse(fresh.chosenAids.contains("WORD_DEFINITION"))
+            assertNotEquals(stopped.trace, fresh.trace)
+            activity.onActivity { assertNull(it.findViewById<android.view.View>(R.id.definitionWord)) }
+        }
+    }
+
+    @Test fun currentLineStartAndOptInFocusRenderWithDefinitionsDisabled() {
+        ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
+            listOf("navigation", "return_sweep", "continuation_return", "continuation_skip", "line_cycle", "loss_recovery").forEach { id ->
+                select(activity, id, ReaderAidPreferences(wordDefinition = false, focusRegion = true))
+                val result = await(activity)
+                val fixture = ScanpathReplayScenarios.scenarios.single { it.id == id }
+                assertEquals("completed", result.termination)
+                assertTrue(result.patterns.containsAll(fixture.expectedPatternIds))
+                assertTrue(result.chosenAids.containsAll(fixture.expectedAidTypes))
+                assertTrue(result.drawnAids.containsAll(fixture.expectedAidTypes))
+                assertFalse(result.chosenAids.contains("WORD_DEFINITION"))
+                assertCausalTrace(result.trace!!.readLines().map(::JSONObject))
             }
         }
     }
@@ -124,6 +265,22 @@ class ScanpathReplayActivityTest {
                     }
                     assertTrue(action.getDouble("last_capture_ms") <= action.getDouble("evidence_available_ms"))
                     assertTrue(action.getDouble("evidence_available_ms") <= d.getDouble("decision_ms"))
+                    if (action.getString("aid_type") == "NEXT_LINE_START") {
+                        assertEquals("A2_CONTINUATION_MISMATCH_V1", action.getString("rule_id"))
+                        assertEquals(1.0, action.getDouble("strength"), 0.0)
+                        val supports = action.getJSONArray("continuation_evidence")
+                        assertEquals(3, supports.length())
+                        val source = supports.getJSONObject(0).getInt("line")
+                        val landing = supports.getJSONObject(2).getInt("line")
+                        assertEquals(source + 1, action.getInt("line"))
+                        assertNotEquals(landing, action.getInt("line"))
+                        repeat(supports.length()) { index ->
+                            val support = supports.getJSONObject(index)
+                            assertTrue(support.getString("evidence_id") in evidence)
+                            assertTrue(support.getDouble("last_capture_ms") <= support.getDouble("evidence_available_ms"))
+                            assertTrue(support.getDouble("evidence_available_ms") <= d.getDouble("decision_ms"))
+                        }
+                    }
                     actions[action.getString("id")] = action
                 }
                 "render" -> if (d.getBoolean("drawn_proxy")) {

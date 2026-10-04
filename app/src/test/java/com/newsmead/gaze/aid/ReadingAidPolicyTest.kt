@@ -46,14 +46,12 @@ class ReadingAidPolicyTest {
         assertTrue(p.activeActions().isEmpty())
     }
 
-    @Test fun sweepCueIsReactiveLandingAndEventDeduplicates() {
+    @Test fun sweepEvidenceDoesNotActivateCueAndEventDeduplicates() {
         val p = ReadingAidPolicy(ReadingAidPolicyConfig.experimentalPrototype())
         val f = fixation(2, 210.0, line = 1, start = 4, end = 6)
         val e = event("p09", "P09", "line", f, listOf(1, 2), mapOf("status" to "observed"))
         val c = context(210.0, 1, 4, 6)
-        val action = chosen(p.onEvent(e, f, c), ReadingAidType.NEXT_LINE_START)!!
-        assertEquals(1, action.anchor.line)
-        assertEquals(listOf("W24", "S19"), action.sourceIds)
+        assertNull(chosen(p.onEvent(e, f, c), ReadingAidType.NEXT_LINE_START))
         assertTrue(p.onEvent(e, f, c).isEmpty())
         assertTrue(p.onEvent(e.copy(eventId = "p09b", evidenceAvailableMs = null), f, c)
             .any { it.reason == "late_or_unavailable_evidence" })

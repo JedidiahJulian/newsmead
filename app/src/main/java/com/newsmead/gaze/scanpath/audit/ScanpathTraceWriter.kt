@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import com.newsmead.BuildConfig
 import com.newsmead.gaze.aid.ReadingAidAction
+import com.newsmead.gaze.aid.continuationEvidenceJson
 import com.newsmead.gaze.aid.ReadingAidDecision
 import com.newsmead.gaze.scanpath.*
 import org.json.JSONArray
@@ -126,6 +127,7 @@ open class ScanpathTraceWriter(context: Context, prefix: String, header: JSONObj
         .put("onset_ms", a.onsetMs).put("expires_ms", a.expiresMs).put("first_capture_ms", a.firstCaptureMs)
         .put("last_capture_ms", a.lastCaptureMs).put("evidence_available_ms", a.evidenceAvailableMs)
         .put("event_ids", JSONArray(a.eventIds)).put("evidence_ids", JSONArray(a.evidenceIds))
+        .put("continuation_evidence", a.continuationEvidenceJson())
         .put("rule_id", a.ruleId).put("source_ids", JSONArray(a.sourceIds)).put("experimental", a.experimental)
         .put("evidence_relationship", a.evidenceRelationship)
 

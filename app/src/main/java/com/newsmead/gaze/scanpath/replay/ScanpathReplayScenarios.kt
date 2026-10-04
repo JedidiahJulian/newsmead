@@ -16,7 +16,11 @@ object ScanpathReplayScenarios {
         ReplayScenario("navigation", "Forward and backward navigation", "Word advances, a jump and a return to the observed frontier.",
             setOf("P01", "P02", "P03", "P07", "P10"), setOf("CURRENT_LINE")),
         ReplayScenario("return_sweep", "Observed return sweep", "Right end of one LTR line to the left start of the next visible line.",
-            setOf("P05", "P09"), setOf("CURRENT_LINE", "NEXT_LINE_START")),
+            setOf("P05", "P09"), setOf("CURRENT_LINE")),
+        ReplayScenario("continuation_return", "Unexpected return", "Source line begins and ends at its right edge, then lands on an earlier line instead of the expected next line.",
+            setOf("P08"), setOf("CURRENT_LINE", "NEXT_LINE_START")),
+        ReplayScenario("continuation_skip", "Unexpected skip", "Source line begins and ends at its right edge, then lands beyond the expected next line.",
+            setOf("P06"), setOf("CURRENT_LINE", "NEXT_LINE_START")),
         ReplayScenario("word_refixations", "Word refixations and residence", "Separated positions inside one wide word, followed by ongoing observed residence.",
             setOf("P04", "P12"), setOf("CURRENT_LINE", "WORD_MAGNIFIER")),
         ReplayScenario("line_cycle", "Line cycle and residence", "A–B–A–B lines, then word advances on B with recent residence and slow frontier progression; focus requires opt-in.",
@@ -81,6 +85,41 @@ object ScanpathReplayScenarios {
                 val final = usable.firstOrNull { it.line == pair.second.line && separated(center(it), center(pair.second)) }
                     ?: impossible("landing line needs another separated visible word to finalize its candidate")
                 hold(center(pair.first)); hold(center(pair.second)); hold(center(final), 100)
+            }
+            "continuation_return", "continuation_skip" -> {
+                if (geometry.textDirection != ScanpathTextDirection.LTR)
+                    impossible("continuation mismatch requires verified LTR geometry")
+                val visibleLines = usable.map { it.line }.distinct().sorted()
+                if (visibleLines.size < 3) impossible("need three fully visible physical lines")
+                fun fullyVisible(line: Int): Boolean {
+                    val row = geometry.lines.getOrNull(line) ?: return false
+                    return valid(ScanpathRect(geometry.textOriginX + row.left, geometry.textOriginY + row.top,
+                        geometry.textOriginX + row.right, geometry.textOriginY + row.bottom)) &&
+                        geometry.textOriginX + row.left >= v.left && geometry.textOriginX + row.right <= v.right &&
+                        geometry.textOriginY + row.top >= v.top && geometry.textOriginY + row.bottom <= v.bottom
+                }
+                val trio = visibleLines.windowed(3).firstOrNull {
+                    it[1] == it[0] + 1 && it[2] == it[1] + 1 && it.all(::fullyVisible)
+                }
+                    ?: impossible("need three fully visible physical lines")
+                val (first, middle, last) = trio
+                fun edge(line: Int, start: Boolean): ReplayWord? = usable.filter { it.line == line }
+                    .firstOrNull { w ->
+                        val row = geometry.lines[w.line]
+                        val f = (center(w).first - geometry.textOriginX - row.left) / (row.right - row.left)
+                        if (start) f <= 0.25 else f >= 0.75
+                    }
+                val sourceStart = edge(if (id == "continuation_return") middle else first, true)
+                    ?: impossible("source line needs a visible word center at <=25%")
+                val sourceEnd = edge(sourceStart.line, false)
+                    ?: impossible("source line needs a visible word center at >=75%")
+                val destinationLine = if (id == "continuation_return") first else last
+                val destination = edge(destinationLine, true)
+                    ?: impossible("destination line needs a visible word center at <=25%")
+                val expected = if (id == "continuation_return") last else middle
+                val expectedStart = edge(expected, true)
+                    ?: impossible("expected line needs a visible word center at <=25%")
+                hold(center(sourceStart)); hold(center(sourceEnd)); hold(center(destination)); hold(center(expectedStart), 100)
             }
             "word_refixations" -> {
                 val w = usable.filter { it.bounds.right - it.bounds.left >= 3 * threshold }

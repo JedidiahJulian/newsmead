@@ -1,5 +1,13 @@
 # Scanpath-based reading aids: design and evidence contract
 
+**2026-10-03 ordinary-article amendment:** the owner's top-magnifier correction
+adds a separate [definition aid and article demo](article-definition-aid.md).
+H03/M25 support gaze-triggered lexical-assistance precedents, with explicit
+population/hardware/outcome limits. The flat 800 ms rule and English phone benefit
+are experimental. Consultation is a separate commanded interval, excluded from
+article-path interpretation. The previous magnifier form below remains in the
+legacy replay/pilot conditions; existing IDs and frozen protocols retain meaning.
+
 **Decision checkpoint — 2026-09-30.** Companion to the
 [implementation proposal](adaptive-visual-aid-proposal.md) and
 [pilot](scanpath-measurement-pilot.md). The owner requires defensible
@@ -26,7 +34,7 @@ architecture has itself been experimentally validated.
 
 | Family | Display | Adjustable parameters | Implementation priority |
 | --- | --- | --- | --- |
-| Line guidance | Current-line emphasis and a separate destination-line/start cue. Offer highlight/bar and marker variants. | Prominence, color, duration; current/destination anchor. | Primary module, using W24 and S19 precedents. |
+| Line guidance | Ongoing current-line emphasis and a separate expected-continuation marker after supported line-end progress and a mismatched landing. | Highlight prominence; fixed marker visibility, expected-line anchor and temporary duration. | W24/S19 provide form/navigation precedents; the continuation mismatch rule remains an experimental adaptation. See [current marker contract](scanpath-continuation-marker.md). |
 | Local word support | Magnified word beside the source word, retaining the article context. | Magnification, placement and duration. | Primary experimental module, using W24's implemented trigger/aid precedent; benefit remains uncertain. |
 | Placekeeping ruler | Line bar or underline that follows a reliable anchor; compare with an optional context-preserving focus variant. | Style, prominence and span; reader-selected preferences. | Candidate module using N23. Prioritize the bar as the stronger no-ruler comparison precedent; do not assume Lightbox/masking is stronger help. |
 | Word-progress coloring | Optional persistent coloring of visited words. | Color and activation condition. | Optional alternative from R26; different from a difficulty-triggered magnifier. |
@@ -48,7 +56,8 @@ experimental status.
 | Implemented observation | Role or candidate action | Evidence and boundary |
 | --- | --- | --- |
 | P01/P02 word forward movement; P05/P06 line forward movement | Update the target of an enabled line guide; optionally update word-progress coloring. | W24/R26 provide gaze-following forms. Forward jumps do not establish unread text or difficulty. No strength escalation from jump distance alone. |
-| P09 geometric return-sweep candidate | Offer destination-line highlighting/start cue. Keep reactive detection separate from a prospective cue based on a configured line-end region. | W24 supplies a reactive line-transition precedent; S19 supports continuously visible line-start emphasis. A P09 match occurs after supporting landing evidence, so it cannot establish prediction of the initial landing. |
+| Supported source first-quarter → last-quarter progress, followed by a different-line landing | Remember the next physical line and offer its fixed start marker only when the observed landing differs. Normal adjacent continuation consumes the expectation without a cue. | W24/S19 support navigation/salience forms, not this mismatch trigger. The cue offers continuation without classifying a deliberate jump as harmful or erroneous. |
+| P09 geometric return-sweep candidate | Retain the observed movement in detector records; it no longer chooses a marker. | A P09 match occurs after the adjacent landing. It cannot establish prediction of an initial landing or detect a skipped/backward destination by itself. |
 | P04 same-word refixation candidate + P12 word residence | Candidate localized word support based on within-visit repeated inspection/observed time. | W24 uses within-one-pass duration and refixation counts. One P04 event is not its count threshold, and P12's observed span is not automatically its first-fixation measure. Preserve these differences; do not copy desktop thresholds. |
 | P03/P07/P08 backward returns + P10 revisit/resumption | Follow the returned location; preserve access to earlier text. A ruler/anchor response can be explicitly experimental or reader-requested. | S14 supports preserving rereading. N23 supports a ruler form, not a return-triggered benefit. P10 is not proof of a known interruption or lost place. |
 | P11 A–B–A–B cycles + P12 line residence/progression | Retain observations for an experimental ruler/region or strength rule; no forced aid solely because a cycle occurred. | N23 supplies an aid-form comparison. No matched trial in this targeted review validates these exact events as need for a ruler/focus window. Keep the missing trigger evidence explicit. |
@@ -73,6 +82,15 @@ chain for adults 45+ silently reading news. Report a source's studied condition
 and exact supported claim whenever presenting a mapping.
 
 ## Policy and strength contract
+
+**Source recheck — 2026-10-03:** the
+[implementation evidence review](scanpath-trigger-evidence-review.md) records
+exact live predicates and a trigger-focused flowchart. GazePrompt's original
+word detection uses OR across first-fixation, refixation-count and within-pass
+duration criteria; NewsMead's two-refixation AND 750 ms rule is a changed
+experimental condition. None of the reviewed papers validates the current
+cycle-to-focus rule or normalized adaptive dose. Preserve these limits in
+panel/manuscript claims and evaluate the conditions independently.
 
 An action describes `aid_type`, exact `aid_form_id` and study `condition_id`,
 a word/line/region anchor and layout revision,

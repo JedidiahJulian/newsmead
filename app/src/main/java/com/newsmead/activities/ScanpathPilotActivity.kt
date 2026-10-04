@@ -58,6 +58,8 @@ data class PilotRunResult(val taskId: String, val reason: String, val score: Pil
 class ScanpathPilotActivity : AppCompatActivity() {
     private lateinit var binding: ActivityScanpathPilotBinding
     private lateinit var overlay: ReadingAidOverlayView
+    private lateinit var definitionPopup: ReadingAidDefinitionPopup
+    private var consultationAnchor: ReadingAidAnchor? = null
     private lateinit var prompt: PromptView
     private val handler = Handler(Looper.getMainLooper())
     private var settings = PilotRunSettings()
@@ -118,7 +120,8 @@ class ScanpathPilotActivity : AppCompatActivity() {
             }
         binding.pilotBody.textLocale = Locale.ENGLISH
         binding.pilotBody.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, StudyConfig.ARTICLE_FONT_SIZE_DP)
-        overlay = ReadingAidOverlayView(this)
+        overlay = ReadingAidOverlayView(this, lineStartMarkerInGutter = true)
+        definitionPopup = ReadingAidDefinitionPopup(this, binding.pilotViewport, binding.pilotBody)
         prompt = PromptView(this) { index, at -> promptDrawn(index, at) }
         binding.pilotViewport.addView(overlay, FrameLayout.LayoutParams(-1, -1))
         binding.pilotViewport.addView(prompt, FrameLayout.LayoutParams(-1, -1))
@@ -170,6 +173,11 @@ class ScanpathPilotActivity : AppCompatActivity() {
         geometry = null; plannedFrame = null; scorer = null; plan = null; pendingScore = null; pendingStop = null
         skipReport = false
         selectedTask = id; synthetic = softwareOnly; preparing = true; lastResult = null
+        definitionPopup.close()
+        definitionPopup = ReadingAidDefinitionPopup(this, binding.pilotViewport, binding.pilotBody,
+            DictionaryDefinitionRepository(this, allowNetwork = !softwareOnly),
+            unavailableMessageRes = if (softwareOnly) R.string.definition_offline_unavailable else R.string.definition_unavailable)
+        consultationAnchor = null
         startFingerprint = if (synthetic) null else MgazeNetCalibrationStore(this).fingerprint()
         val mine = ++token
         binding.pilotStatus.text = "Preparing ${if (softwareOnly) "software check" else "live task"}…"
@@ -206,12 +214,24 @@ class ScanpathPilotActivity : AppCompatActivity() {
         val condition = if (reading) settings.readingCondition else PilotReadingCondition.NO_AIDS
         val prefs = if (condition == PilotReadingCondition.NO_AIDS) settings.preferences.copy(enabled = false) else settings.preferences
         runtime = ArticleReadingAidRuntime(binding.pilotBody, binding.pilotWordDock, overlay,
-            ReadingAidPolicyConfig.experimentalPrototype("PILOT_${condition.name}_V1"), prefs,
+            ReadingAidPolicyConfig.definitionPrototype().copy(conditionId = "PILOT_DEFINITION_${condition.name}_V2"), prefs,
             if (synthetic) ReadingAidInputSource.SYNTHETIC_REPLAY else ReadingAidInputSource.LIVE_MGAZENET,
             onDecision = { d -> log?.decision(d); if (d.status == ReadingAidDecisionStatus.CHOSEN) d.action?.let { chosen.add(it.aidType.name) } },
             onRenderReceipt = { a, visible, reason, at -> log?.render(a, visible, reason, at); if (visible) drawn.add(a.aidType.name) },
-            renderAids = condition == PilotReadingCondition.DISPLAY)
-        log = ScanpathTraceWriter(this, "scanpath_pilot", header(plan, runtime!!.configurationSnapshot()), 100000)
+            renderAids = condition == PilotReadingCondition.DISPLAY,
+            definitionPopup = definitionPopup,
+            onConsultationChanged = { active, at, reason ->
+                if (active) consultationAnchor = definitionPopup.action?.anchor
+                log?.append("definition_consultation", JSONObject().put("active", active)
+                    .put("elapsed_ms", at).put("reason", reason)
+                    .put("word_start_utf16", consultationAnchor?.wordStartUtf16 ?: JSONObject.NULL)
+                    .put("word_end_utf16", consultationAnchor?.wordEndUtf16 ?: JSONObject.NULL))
+                session?.setConsultation(active, at, reason)
+                if (!active) consultationAnchor = null
+            })
+        log = ScanpathTraceWriter(this, "scanpath_pilot", header(plan, runtime!!.configurationSnapshot()
+            .put("dictionary_mode", if (synthetic) "bundled_only" else "bundled_then_online")
+            .put("ui_layout_id", "CONTEXT_DEFINITION_GUTTER_V1").put("reserved_word_strip_dp", 0)), 100000)
         session = ArticleScanpathSession(binding.pilotBody, runtime!!.scanpathConfig,
             onGeometry = { generation, g ->
                 log?.geometry(generation, g); runtime?.geometry(generation, g); geometry = g; lastGeneration = generation
@@ -370,7 +390,9 @@ class ScanpathPilotActivity : AppCompatActivity() {
             .put("capture_time_basis", if (synthetic) "synthetic_elapsed_realtime_test" else "camera_timestamp_ns_div_1e6_elapsed_realtime")
             .put("delivery_time_basis", "actual_elapsed_realtime_callback").put("prompt_time_basis", "canvas_draw_proxy_elapsed_realtime")
             .put("raw_scoring", true).put("smoothing", false).put("alignment_correction", false).put("gaze_dot_visible", false)
-            .put("terminal_delivery_rule", "retained_unknown_no_post_stop_mapping").put("reserved_word_strip_dp", 68)
+            .put("terminal_delivery_rule", "retained_unknown_no_post_stop_mapping").put("reserved_word_strip_dp", 0)
+            .put("ui_layout_id", "CONTEXT_DEFINITION_GUTTER_V1")
+            .put("dictionary_mode", if (synthetic) "bundled_only" else "bundled_then_online")
             .put("task_id", selectedTask).put("plan", task?.let(PilotRecordJson::plan) ?: JSONObject.NULL)
             .put("run_settings", values).put("run_settings_sha256", hash(values.toString()))
             .put("configuration", configuration).put("passage_id", passage.id).put("passage_origin", passage.origin)
@@ -410,10 +432,10 @@ class ScanpathPilotActivity : AppCompatActivity() {
         val enabled = check(R.string.reading_aids_enabled, p.enabled)
         val line = check(R.string.reading_aids_line, p.lineGuide)
         val start = check(R.string.reading_aids_start, p.lineStartCue)
-        val word = check(R.string.reading_aids_word, p.wordMagnifier)
+        val word = check(R.string.reading_aids_word_definition, p.wordDefinition)
         val focus = check(R.string.reading_aids_focus, p.focusRegion)
         val adaptive = check(R.string.reading_aids_adaptive, p.adaptiveStrength)
-        val strength = field("Maximum / fixed strength, 0–100%", (p.maxStrength * 100).toInt().toString())
+        val strength = field("Aid strength, 0–100% (continuation marker stays fixed)", (p.maxStrength * 100).toInt().toString())
         val scroll = ScrollView(this).apply { addView(panel) }
         val dialog = AlertDialog.Builder(this).setTitle("Pilot settings").setView(scroll).setPositiveButton("Apply", null).setNegativeButton(android.R.string.cancel, null).create()
         dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -422,13 +444,19 @@ class ScanpathPilotActivity : AppCompatActivity() {
                 require(amount.isFinite() && amount in 0.0..1.0)
                 settings = PilotRunSettings(linked.text.toString(), protocol.text.toString(), PilotAllocation.values()[allocation.selectedItemPosition],
                     duration.text.toString().toLong(), settle.text.toString().toDouble(), PilotReadingCondition.values()[condition.selectedItemPosition],
-                    ReaderAidPreferences(enabled.isChecked, line.isChecked, start.isChecked, word.isChecked, focus.isChecked, adaptive.isChecked, amount, amount))
+                    ReaderAidPreferences(enabled = enabled.isChecked, lineGuide = line.isChecked, lineStartCue = start.isChecked,
+                        wordMagnifier = false, wordDefinition = word.isChecked, focusRegion = focus.isChecked,
+                        adaptiveStrength = adaptive.isChecked, maxStrength = amount, manualStrength = amount))
                 dialog.dismiss()
             } catch (_: Exception) { Toast.makeText(this, "Use valid codes, a named plan outside practice, and a settling interval shorter than the target duration.", Toast.LENGTH_LONG).show() }
         } }; dialog.show()
     }
     override fun onPause() { stopRun("activity_paused"); saveReport("not_assessed", ""); super.onPause() }
-    override fun onDestroy() { stopRun("activity_destroyed"); saveReport("not_assessed", ""); super.onDestroy() }
+    override fun onDestroy() {
+        stopRun("activity_destroyed"); saveReport("not_assessed", "")
+        if (::definitionPopup.isInitialized) definitionPopup.close()
+        super.onDestroy()
+    }
 
     private class PromptView(context: Context, private val receipt: (Int, Double) -> Unit) : View(context) {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)

@@ -16,7 +16,10 @@ import com.newsmead.gaze.scanpath.ScanpathGeometry
 import kotlin.math.abs
 
 /** Independent adjustable aid forms. This view never consumes article touches. */
-class ReadingAidOverlayView(context: Context) : View(context) {
+class ReadingAidOverlayView(
+    context: Context,
+    private val lineStartMarkerInGutter: Boolean = false,
+) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val visible = Rect()
     private val origin = IntArray(2)
@@ -51,7 +54,7 @@ class ReadingAidOverlayView(context: Context) : View(context) {
             abs(textLocation[0] + view.totalPaddingLeft - view.scrollX - g.textOriginX) < 1 &&
             abs(textLocation[1] + view.totalPaddingTop - view.scrollY - g.textOriginY) < 1 &&
             layout.lineCount == g.lines.size
-        for (action in actions.filter { it.aidType != ReadingAidType.WORD_MAGNIFIER }) {
+        for (action in actions.filter { it.aidType != ReadingAidType.WORD_MAGNIFIER && it.aidType != ReadingAidType.WORD_DEFINITION }) {
             val reason = when {
                 action.expiresMs <= now -> "expired_before_draw"
                 action.anchor.generation != generation || action.anchor.geometrySnapshotId != g?.snapshotId -> "stale_anchor"
@@ -73,10 +76,17 @@ class ReadingAidOverlayView(context: Context) : View(context) {
                         bottom.toFloat() - origin[1]), dp(4f), dp(4f), paint)
                 }
                 ReadingAidType.NEXT_LINE_START -> {
-                    paint.color = Color.argb((240 * action.strength).toInt(), 44, 128, 220)
-                    val start = (g.textOriginX + row.left - origin[0]).toFloat()
+                    paint.color = Color.argb(LineStartMarkerAppearance.ALPHA, 44, 128, 220)
+                    val textStart = (g.textOriginX + row.left - origin[0]).toFloat()
+                    val markerWidth = dp(LineStartMarkerAppearance.WIDTH_DP)
+                    val start = if (lineStartMarkerInGutter) textStart - dp(4f) - markerWidth else textStart
+                    // Article padding reserves this space from inflation, in every aid condition.
+                    // Withhold a clipped gutter marker rather than painting over the source text.
+                    if (lineStartMarkerInGutter && (start < left || textStart - dp(4f) > right)) {
+                        receipt(action, false, "line_start_gutter_not_visible", now); continue
+                    }
                     canvas.drawRoundRect(RectF(start, top.toFloat() - origin[1],
-                        (start + dp((3 + 5 * action.strength).toFloat())).coerceAtMost(right),
+                        (start + markerWidth).coerceAtMost(right),
                         bottom.toFloat() - origin[1]), dp(2f), dp(2f), paint)
                 }
                 ReadingAidType.FOCUS_REGION -> {
@@ -90,7 +100,7 @@ class ReadingAidOverlayView(context: Context) : View(context) {
                     canvas.drawRect(left, visible.top.toFloat() - origin[1], right, windowTop, paint)
                     canvas.drawRect(left, windowBottom, right, visible.bottom.toFloat() - origin[1], paint)
                 }
-                ReadingAidType.WORD_MAGNIFIER -> Unit
+                ReadingAidType.WORD_MAGNIFIER, ReadingAidType.WORD_DEFINITION -> Unit
             }
             receipt(action, true, "canvas_draw_proxy", now)
         }
@@ -131,8 +141,10 @@ class ReadingAidWordView @JvmOverloads constructor(context: Context, attrs: Attr
         setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,
             source.textSize * (value.magnificationScale ?: 1.0).toFloat())
         val word = source.text.subSequence(start, end).toString()
+        // Total vertical padding includes centering offsets from the previous text layout.
+        // Fit the new font against the reserved content box, including actual drawable padding.
         if (width <= 0 || paint.measureText(word) > width - totalPaddingLeft - totalPaddingRight ||
-            paint.fontMetrics.let { it.bottom - it.top } > height - totalPaddingTop - totalPaddingBottom) {
+            paint.fontMetrics.let { it.bottom - it.top } > height - compoundPaddingTop - compoundPaddingBottom) {
             receipt(value, false, "magnified_word_does_not_fit", now); return
         }
         text = word

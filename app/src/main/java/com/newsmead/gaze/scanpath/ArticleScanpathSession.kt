@@ -39,6 +39,9 @@ class ArticleScanpathSession(
     private var geometryChangedMs = Double.POSITIVE_INFINITY
     private var active = true
     private var closed = false
+    private val consultation = ConsultationCaptureGate()
+    private var engineDispatchDepth = 0
+    private val pendingConsultationBoundaries = ArrayDeque<Pair<String, Double>>()
     private val textWatcher = object : TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -65,7 +68,7 @@ class ArticleScanpathSession(
         bodyDirty = false
         if (currentBody != body || textView.textLocale != locale) {
             onGeometry(generation, null)
-            engine.boundary("text_changed", now)
+            dispatchEngine { engine.boundary("text_changed", now) }
             generation++
             body = currentBody
             locale = textView.textLocale
@@ -80,7 +83,7 @@ class ArticleScanpathSession(
         val current = geometryReader.read(textView)
         if (current == null) {
             onGeometry(generation, null)
-            if (geometry != null) engine.boundary("layout_unavailable", now)
+            if (geometry != null) dispatchEngine { engine.boundary("layout_unavailable", now) }
             geometry = null
             snapshotId = null
             geometryChangedMs = Double.POSITIVE_INFINITY
@@ -92,7 +95,7 @@ class ArticleScanpathSession(
         geometryChangedMs = now
         val snapshot = current.forEngine(snapshotId!!)
         onGeometry(generation, snapshot)
-        engine.updateGeometry(snapshot, now)
+        dispatchEngine { engine.updateGeometry(snapshot, now) }
     }
 
     fun record(observation: MgazeNetGazeProvider.Observation) {
@@ -106,7 +109,8 @@ class ArticleScanpathSession(
         val valid = observation.reason == "coordinate" && x != null && y != null &&
             x.isFinite() && y.isFinite() && capture != null && capture.isFinite()
         val settled = capture != null && capture >= geometryChangedMs + GEOMETRY_SETTLE_MS
-        val target = if (valid && settled && current != null)
+        val consultationReason = consultation.exclusion(capture)
+        val target = if (valid && settled && current != null && consultationReason == null)
             words.targetAt(textView, current, x!!, y!!) else TextTarget.INVALID
         val eligible = valid && settled && target.isValid
         val sample = ScanpathSample(
@@ -115,6 +119,7 @@ class ArticleScanpathSession(
             target.wordStart.takeIf { target.hasWord }, target.wordEnd.takeIf { target.hasWord },
             snapshotId, eligible,
             when {
+                consultationReason != null -> consultationReason
                 !valid -> observation.reason
                 current == null -> "layout_unavailable"
                 !settled -> "geometry_unsettled"
@@ -123,27 +128,53 @@ class ArticleScanpathSession(
             },
         )
         onInput(generation, sample)
-        val accepted = engine.onSample(sample)
+        val accepted = if (consultationReason == null) dispatchEngine { engine.onSample(sample) } else false
         onAcceptance(generation, sample, accepted)
         onCandidate(generation, if (accepted) engine.currentCandidateEvidence() else null)
         if (engine.fixationCount >= MAX_HISTORY_FIXATIONS) {
             // An explicit operational boundary bounds full P12 support work and retained history.
             val now = elapsedMs()
             onGeometry(generation, null)
-            engine.boundary("history_limit", now)
+            dispatchEngine { engine.boundary("history_limit", now) }
             generation++
             engine = createEngine(engine.latestObservedCaptureMs)
             geometry?.let { state -> snapshotId?.let { id ->
                 val snapshot = state.forEngine(id)
                 onGeometry(generation, snapshot)
-                engine.updateGeometry(snapshot, now)
+                dispatchEngine { engine.updateGeometry(snapshot, now) }
             } }
         }
     }
 
     fun boundary(reason: String) {
         checkMainThread()
-        if (!closed && active) engine.boundary(reason, elapsedMs())
+        if (!closed && active) dispatchEngine { engine.boundary(reason, elapsedMs()) }
+    }
+
+    fun setConsultation(value: Boolean, atMs: Double, reason: String) {
+        checkMainThread()
+        if (closed) return
+        consultation.change(value, atMs)
+        pendingConsultationBoundaries.addLast("definition_${if (value) "opened" else "closed"}:$reason" to atMs)
+        if (engineDispatchDepth == 0) dispatchEngine { Unit }
+    }
+
+    /** Callbacks may open help inside classification; never mutate pending state recursively. */
+    private fun <T> dispatchEngine(block: () -> T): T {
+        engineDispatchDepth++
+        try { return block() }
+        finally {
+            engineDispatchDepth--
+            if (engineDispatchDepth == 0) {
+                engineDispatchDepth++
+                try {
+                    while (pendingConsultationBoundaries.isNotEmpty()) {
+                        val (reason, at) = pendingConsultationBoundaries.removeFirst()
+                        engine.boundary(reason, at)
+                    }
+                } finally { engineDispatchDepth-- }
+            }
+        }
     }
 
     fun pause(reason: String) {

@@ -92,6 +92,55 @@
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
+    <LinearLayout
+        android:id="@+id/articleAidDemoPanel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:visibility="gone"
+        android:background="?primaryBackgroundColor"
+        app:layout_constraintTop_toBottomOf="@id/clArticleTopBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/articleAidDemoStatus"
+            android:layout_width="match_parent"
+            android:layout_height="72dp"
+            android:maxLines="3"
+            android:ellipsize="end"
+            android:textColor="?primaryTextColor"
+            android:textSize="14sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <Button
+                android:id="@+id/articleAidDemoPrevious"
+                style="@style/ButtonSmall_LowEmphasis"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:text="@string/scanpath_demo_previous" />
+            <Button
+                android:id="@+id/articleAidDemoNext"
+                style="@style/ButtonSmall_LowEmphasis"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:text="@string/scanpath_demo_next" />
+            <Button
+                android:id="@+id/articleAidDemoStop"
+                style="@style/ButtonSmall_LowEmphasis"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:text="@string/scanpath_replay_stop" />
+        </LinearLayout>
+    </LinearLayout>
+
     <com.newsmead.gaze.aid.ReadingAidWordView
         android:id="@+id/readingAidWordDock"
         android:layout_width="0dp"
@@ -102,7 +151,7 @@
         android:visibility="gone"
         android:background="?primaryBackgroundColor"
         android:textColor="?primaryTextColor"
-        app:layout_constraintTop_toBottomOf="@id/clArticleTopBar"
+        app:layout_constraintTop_toBottomOf="@id/articleAidDemoPanel"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
@@ -318,6 +367,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_margin="@dimen/text_margin"
+                    android:paddingStart="@dimen/common_padding"
                     android:text="@string/article_text_loading"
                     android:textColor="?primaryTextColor" />
 

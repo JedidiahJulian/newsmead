@@ -125,7 +125,7 @@ class ScanpathPilotActivityTest {
     @Test fun shadowAndDisplayUseIdenticalViewportAndDifferentRendering() {
         ActivityScenario.launch(ScanpathPilotActivity::class.java).use { activity ->
             var initialOrigin: Double? = null
-            for (condition in listOf(PilotReadingCondition.SHADOW, PilotReadingCondition.DISPLAY)) {
+            for (condition in PilotReadingCondition.values()) {
                 var points = emptyList<ReplayPoint>()
                 var start = 0.0
                 activity.onActivity { a -> a.startSyntheticCheck("ordinary_reading", PilotRunSettings(readingCondition = condition)) }
@@ -156,11 +156,75 @@ class ScanpathPilotActivityTest {
                 Thread.sleep(80)
                 activity.onActivity { it.stopRun("reader_stop") }
                 val r = completeTargets(activity)
-                assertTrue(r.chosenAids.contains("WORD_MAGNIFIER"))
-                if (condition == PilotReadingCondition.SHADOW) assertTrue(r.drawnAids.isEmpty())
-                else assertTrue(r.drawnAids.contains("WORD_MAGNIFIER"))
+                if (condition == PilotReadingCondition.NO_AIDS) assertTrue(r.chosenAids.isEmpty())
+                else assertTrue(r.chosenAids.contains("WORD_DEFINITION"))
+                if (condition != PilotReadingCondition.DISPLAY) assertTrue(r.drawnAids.isEmpty())
+                else assertTrue(r.drawnAids.contains("WORD_DEFINITION"))
+                assertFalse(r.chosenAids.contains("WORD_MAGNIFIER"))
+                val header = r.trace.readLines().first().let(::JSONObject).getJSONObject("detail")
+                assertEquals(0, header.getInt("reserved_word_strip_dp"))
+                assertEquals("bundled_only", header.getString("dictionary_mode"))
+                val policy = header.getJSONObject("configuration").getJSONObject("settings")
+                assertEquals("DEFINITION_PROFILE_V2", policy.getString("config_id"))
+                assertEquals("PILOT_DEFINITION_${condition.name}_V2", policy.getString("condition_id"))
+                assertEquals("A2_CONTINUATION_MISMATCH_V1", policy.getString("line_start_marker_rule"))
                 assertNull(r.score)
             }
+        }
+    }
+
+    @Test fun displayedOfflineDefinitionExcludesConsultationAndRetainsRawCallbacks() {
+        ActivityScenario.launch(ScanpathPilotActivity::class.java).use { activity ->
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            activity.onActivity { a ->
+                a.findViewById<TextView>(R.id.pilotBody).text = "keyboard ${ScanpathReplayActivity.REPLAY_TEXT}"
+                a.startSyntheticCheck("ordinary_reading", PilotRunSettings(readingCondition = PilotReadingCondition.DISPLAY))
+            }
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            var x = 0.0
+            var y = 0.0
+            activity.onActivity { a ->
+                val body = a.findViewById<TextView>(R.id.pilotBody)
+                val g = ScanpathTextGeometryReader().read(body)!!
+                x = g.originX + (body.layout.getPrimaryHorizontal(0) + body.layout.getPrimaryHorizontal(8)) / 2
+                y = g.originY + (body.layout.getLineTop(0) + body.layout.getLineBottom(0)) / 2
+            }
+            repeat(32) { i ->
+                activity.onActivity { a -> observe(a, x, y, i.toLong()) }
+                Thread.sleep(50)
+            }
+            activity.onActivity { a ->
+                assertEquals("keyboard", a.findViewById<TextView>(R.id.definitionWord).text.toString())
+                assertTrue(a.findViewById<TextView>(R.id.definitionSource).text.contains("Offline"))
+                a.findViewById<View>(R.id.definitionClose).performClick()
+            }
+            repeat(6) { i ->
+                Thread.sleep(50)
+                activity.onActivity { a -> observe(a, x, y, (32 + i).toLong()) }
+            }
+            activity.onActivity { it.stopRun("reader_stop") }
+            val result = completeTargets(activity)
+            val records = result.trace.readLines().map(::JSONObject)
+            val boundaries = records.filter { it.getString("kind") == "definition_consultation" }
+            assertEquals(listOf(true, false), boundaries.map { it.getJSONObject("detail").getBoolean("active") })
+            val excluded = records.filter { it.getString("kind") == "sample" &&
+                it.getJSONObject("detail").optString("exclusion") == "definition_consultation" }
+            assertTrue("Consultation must have retained samples", excluded.isNotEmpty())
+            val acceptances = records.filter { it.getString("kind") == "input_acceptance" }
+                .associate { it.getJSONObject("detail").let { d -> d.getInt("input_ordinal") to d.getBoolean("engine_accepted") } }
+            excluded.forEach { r ->
+                val d = r.getJSONObject("detail")
+                assertFalse(d.getBoolean("eligible"))
+                assertTrue(d.isNull("line")); assertTrue(d.isNull("word_start_utf16"))
+                assertFalse(d.isNull("x")); assertFalse(d.isNull("y"))
+                assertEquals(false, acceptances[d.getInt("input_ordinal")])
+            }
+            assertEquals(result.observations, records.count { it.getString("kind") == "raw_observation" })
+            assertEquals(result.observations, records.count { it.getString("kind") == "sample" })
+            val closedAt = boundaries.last().getJSONObject("detail").getDouble("elapsed_ms")
+            assertTrue("Fresh article input resumes after closing", records.any { it.getString("kind") == "sample" &&
+                it.getJSONObject("detail").let { d -> d.getDouble("capture_ms") > closedAt && d.getBoolean("eligible") } })
+            assertNull(result.score)
         }
     }
 }

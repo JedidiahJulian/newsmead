@@ -20,12 +20,20 @@
         <Button android:id="@+id/replayStop" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="@string/scanpath_replay_stop" />
         <Button android:id="@+id/replaySave" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="@string/scanpath_replay_save" />
     </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp">
+        <Button android:id="@+id/replayDemo" android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1.4" android:text="@string/scanpath_demo_cycle" android:textSize="13sp" android:minWidth="0dp" android:paddingHorizontal="4dp" />
+        <Button android:id="@+id/replayDemoPrevious" android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:text="@string/scanpath_demo_previous" android:textSize="13sp" android:minWidth="0dp" android:paddingHorizontal="4dp" />
+        <Button android:id="@+id/replayDemoNext" android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:text="@string/scanpath_demo_next" android:textSize="13sp" android:minWidth="0dp" android:paddingHorizontal="4dp" />
+    </LinearLayout>
     <TextView android:id="@+id/replayStatus" android:layout_width="match_parent" android:layout_height="90dp"
         android:paddingHorizontal="16dp" android:gravity="center_vertical" android:textSize="13sp"
         android:textColor="?primaryTextColor" android:maxLines="4" android:text="@string/scanpath_replay_ready" />
     <com.newsmead.gaze.aid.ReadingAidWordView android:id="@+id/replayWordDock"
-        android:layout_width="match_parent" android:layout_height="68dp" android:padding="16dp"
-        android:gravity="center" android:singleLine="true" android:textColor="?primaryTextColor" />
+        android:layout_width="match_parent" android:layout_height="68dp" android:paddingHorizontal="16dp" android:paddingVertical="10dp"
+        android:visibility="gone" android:gravity="center" android:singleLine="true" android:textColor="?primaryTextColor" />
     <FrameLayout android:id="@+id/replayViewport" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
         <androidx.core.widget.NestedScrollView android:id="@+id/replayScroll" android:layout_width="match_parent" android:layout_height="match_parent">
             <TextView android:id="@+id/replayBody" android:layout_width="match_parent" android:layout_height="wrap_content"

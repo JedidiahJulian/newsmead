@@ -103,6 +103,7 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
         .put("first_capture_ms", a.firstCaptureMs).put("last_capture_ms", a.lastCaptureMs)
         .put("evidence_available_ms", a.evidenceAvailableMs)
         .put("event_ids", JSONArray(a.eventIds)).put("evidence_ids", JSONArray(a.evidenceIds))
+        .put("continuation_evidence", a.continuationEvidenceJson())
         .put("rule_id", a.ruleId).put("sources", JSONArray(a.sourceIds))
         .put("evidence_relationship", a.evidenceRelationship).put("experimental", a.experimental)
 

@@ -29,6 +29,8 @@ class ArticleReadingAidRuntime(
     private val onDecision: (ReadingAidDecision) -> Unit = {},
     private val onRenderReceipt: (ReadingAidAction, Boolean, String, Double) -> Unit = { _, _, _, _ -> },
     private val renderAids: Boolean = true,
+    private val definitionPopup: ReadingAidDefinitionPopup? = null,
+    private val onConsultationChanged: (Boolean, Double, String) -> Unit = { _, _, _ -> },
 ) {
     private val policy = ReadingAidPolicy(config, preferences)
     val preferences get() = policy.preferences
@@ -45,6 +47,10 @@ class ArticleReadingAidRuntime(
     private var latestCapture = Double.NEGATIVE_INFINITY
     private var suspended = false
     private var closed = false
+    private var consulting = false
+    private var consultationAnchor: ReadingAidAnchor? = null
+    private var dismissedDefinitionAnchor: ReadingAidAnchor? = null
+    private var unsupportedDefinitionActionId: String? = null
     private var context = ReadingAidContext(0, "", 0, null, null, null,
         elapsedMs(), null, null, false)
     private val pulse = object : Runnable {
@@ -61,6 +67,24 @@ class ArticleReadingAidRuntime(
             onRenderReceipt(action, drawn, reason, at)
         }
         wordDock.onRender = overlay.onRender
+        definitionPopup?.onRender = overlay.onRender
+        definitionPopup?.onConsultationChanged = { active, at, reason ->
+            consulting = active
+            if (active) consultationAnchor = definitionPopup?.action?.anchor
+            else { dismissedDefinitionAnchor = consultationAnchor; consultationAnchor = null }
+            context = context.copy(nowMs = at, validLiveInput = false)
+            latestFixation = null
+            trace.record("definition_consultation", at, JSONObject().put("active", active).put("reason", reason)
+                .put("anchor_start_utf16", (consultationAnchor ?: dismissedDefinitionAnchor)?.wordStartUtf16 ?: JSONObject.NULL)
+                .put("anchor_end_utf16", (consultationAnchor ?: dismissedDefinitionAnchor)?.wordEndUtf16 ?: JSONObject.NULL))
+            // Clear article interpretation without dismissing the consultation itself.
+            val resets = policy.reset(context)
+            trace.context(context)
+            resets.forEach { trace.decision(it); onDecision(it) }
+            overlay.setActions(body, snapshot, context.generation, emptyList())
+            wordDock.showAction(null, body)
+            onConsultationChanged(active, at, reason)
+        }
         trace.record("started", elapsedMs(), configuration())
         updateDockVisibility()
         handler.post(pulse)
@@ -69,11 +93,14 @@ class ArticleReadingAidRuntime(
     fun geometry(generation: Int, value: ScanpathGeometry?) {
         checkMain()
         if (closed) return
+        definitionPopup?.clear("geometry_changed")
+        dismissedDefinitionAnchor = null
         snapshot = value
         if (context.generation != generation.toLong()) latestFixation = null
         context = context.copy(generation = generation.toLong(), geometrySnapshotId = value?.snapshotId ?: "",
             lineCount = value?.lines?.size ?: 0, targetLine = null, targetWordStartUtf16 = null,
-            targetWordEndUtf16 = null, nowMs = elapsedMs(), validLiveInput = false)
+            targetWordEndUtf16 = null, nowMs = elapsedMs(), validLiveInput = false,
+            geometry = value, targetX = null)
         trace.record("geometry", context.nowMs, JSONObject().put("generation", generation)
             .put("geometry_snapshot_id", value?.snapshotId ?: JSONObject.NULL)
             .put("body_sha256", sha256(body.text.toString())).put("line_count", value?.lines?.size ?: 0))
@@ -88,23 +115,32 @@ class ArticleReadingAidRuntime(
         val delivery = sample.deliveryMs
         val ordered = capture != null && capture.isFinite() && capture > latestCapture
         if (capture != null && capture.isFinite()) latestCapture = maxOf(latestCapture, capture)
-        val valid = !suspended && sample.eligible && ordered && delivery != null && delivery.isFinite() &&
+        val valid = !suspended && !consulting && sample.eligible && ordered && delivery != null && delivery.isFinite() &&
             delivery >= capture!! && delivery <= now && sample.geometrySnapshotId == snapshot?.snapshotId
         context = ReadingAidContext(generation.toLong(), snapshot?.snapshotId ?: "",
             snapshot?.lines?.size ?: 0, sample.line, sample.wordStartUtf16, sample.wordEndUtf16,
-            now, capture, delivery, valid)
+            now, capture, delivery, valid, geometry = snapshot, targetX = sample.rawX)
+        val dismissed = dismissedDefinitionAnchor
+        if (valid && dismissed != null && (dismissed.generation != generation.toLong() ||
+            dismissed.wordStartUtf16 != sample.wordStartUtf16 || dismissed.wordEndUtf16 != sample.wordEndUtf16))
+            dismissedDefinitionAnchor = null
+        if (sample.exclusion?.startsWith("definition_") == true) trace.record("consultation_input", now,
+            JSONObject().put("capture_ms", capture ?: JSONObject.NULL).put("delivery_ms", delivery ?: JSONObject.NULL)
+                .put("raw_x_px", sample.rawX?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+                .put("raw_y_px", sample.rawY?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+                .put("exclusion", sample.exclusion).put("article_eligible", false))
         // Clear before an invalid observation can flush the earlier candidate and its events.
         if (!valid) decisions(policy.onObservation(null, context))
     }
 
     fun fixation(generation: Int, value: ScanpathFixation) {
         trace.fixation(generation, value)
-        if (!closed && generation.toLong() == context.generation) latestFixation = value
+        if (!closed && !consulting && generation.toLong() == context.generation) latestFixation = value
     }
 
     fun event(generation: Int, value: ScanpathEvent) {
         checkMain()
-        if (closed || suspended || generation.toLong() != context.generation) return
+        if (closed || suspended || consulting || generation.toLong() != context.generation) return
         trace.event(generation, value)
         context = context.copy(nowMs = elapsedMs())
         decisions(policy.onEvent(value, latestFixation, context))
@@ -112,7 +148,7 @@ class ArticleReadingAidRuntime(
 
     fun candidate(generation: Int, value: ScanpathCandidateEvidence?) {
         checkMain()
-        if (closed || suspended || generation.toLong() != context.generation) return
+        if (closed || suspended || consulting || generation.toLong() != context.generation) return
         trace.candidate(generation, value)
         context = context.copy(nowMs = elapsedMs())
         decisions(policy.onObservation(value, context))
@@ -120,6 +156,8 @@ class ArticleReadingAidRuntime(
 
     fun updatePreferences(value: ReaderAidPreferences) {
         checkMain()
+        if (!value.enabled || !value.wordDefinition || value.maxStrength == 0.0 ||
+            (!value.adaptiveStrength && value.manualStrength == 0.0)) definitionPopup?.clear("reader_controls_changed")
         context = context.copy(nowMs = elapsedMs())
         decisions(policy.updatePreferences(value, context))
         trace.record("preferences", context.nowMs, preferenceJson())
@@ -130,6 +168,7 @@ class ArticleReadingAidRuntime(
         checkMain()
         if (closed) return
         suspended = true
+        definitionPopup?.clear(reason)
         context = context.copy(nowMs = elapsedMs(), validLiveInput = false)
         decisions(policy.reset(context))
         trace.record("suspended", context.nowMs, JSONObject().put("reason", reason))
@@ -166,31 +205,52 @@ class ArticleReadingAidRuntime(
     private fun decisions(values: List<ReadingAidDecision>) {
         trace.context(context)
         values.forEach { trace.decision(it); onDecision(it) }
-        val actions = if (closed || suspended || !renderAids) emptyList() else policy.activeActions()
+        val actions = if (closed || suspended || consulting || !renderAids) emptyList() else policy.activeActions()
         overlay.setActions(body, snapshot, context.generation, actions)
         wordDock.showAction(actions.firstOrNull { it.aidType == ReadingAidType.WORD_MAGNIFIER }, body)
+        if (!consulting) {
+            val definition = actions.firstOrNull { it.aidType == ReadingAidType.WORD_DEFINITION }
+                ?.takeUnless { it.anchor == dismissedDefinitionAnchor }
+            if (definition != null && definitionPopup?.languageSupported == false) {
+                if (unsupportedDefinitionActionId != definition.id) {
+                    unsupportedDefinitionActionId = definition.id
+                    trace.render(definition, false, "dictionary_language_unsupported", context.nowMs)
+                    onRenderReceipt(definition, false, "dictionary_language_unsupported", context.nowMs)
+                }
+            } else definitionPopup?.showAction(definition)
+        }
     }
 
     private fun updateDockVisibility() {
-        wordDock.visibility = if (renderAids && !closed && !suspended && preferences.enabled && preferences.wordMagnifier)
+        wordDock.visibility = if (config.wordAidType == ReadingAidType.WORD_MAGNIFIER && renderAids && !closed && !suspended && preferences.enabled && preferences.wordMagnifier)
             View.VISIBLE else View.GONE
     }
 
     private fun preferenceJson() = JSONObject().put("enabled", preferences.enabled)
         .put("line_guide", preferences.lineGuide).put("line_start_cue", preferences.lineStartCue)
         .put("word_magnifier", preferences.wordMagnifier).put("focus_region", preferences.focusRegion)
+        .put("word_definition", preferences.wordDefinition)
         .put("adaptive_strength", preferences.adaptiveStrength).put("max_strength", preferences.maxStrength)
         .put("manual_strength", preferences.manualStrength)
 
     private fun configuration(): JSONObject {
         val values = JSONObject().put("config_id", config.configId).put("condition_id", config.conditionId)
             .put("automatic_rules_enabled", config.automaticRulesEnabled).put("word_min_refixations", config.wordMinRefixations)
+            .put("word_aid_type", config.wordAidType.name).put("definition_min_observed_ms", config.definitionMinObservedMs)
             .put("word_min_observed_ms", config.wordMinObservedMs).put("word_saturation_ms", config.wordSaturationMs)
             .put("line_min_observed_ms", config.lineMinObservedMs).put("line_saturation_ms", config.lineSaturationMs)
             .put("cycle_window_ms", config.cycleWindowMs)
             .put("aid_ttl_ms", config.aidTtlMs).put("cooldown_ms", config.cooldownMs)
             .put("max_evidence_age_ms", config.maxEvidenceAgeMs).put("min_adaptive_strength", config.minAdaptiveStrength)
             .put("max_magnification_scale", config.maxMagnificationScale).put("focus_context_radius_lines", config.focusContextRadiusLines)
+            .put("continuation_start_fraction", config.continuationStartFraction)
+            .put("continuation_end_fraction", config.continuationEndFraction)
+            .put("continuation_window_ms", config.continuationWindowMs)
+            .put("line_start_marker_rule", "A2_CONTINUATION_MISMATCH_V1")
+            .put("line_start_marker_form", LineStartMarkerAppearance.FORM_ID)
+            .put("line_start_marker_width_dp", LineStartMarkerAppearance.WIDTH_DP.toDouble())
+            .put("line_start_marker_alpha", LineStartMarkerAppearance.ALPHA)
+            .put("line_start_marker_strength_mode", "fixed")
             .put("return_sweep_start_fraction", scanpathConfig.returnSweepStartFraction)
             .put("return_sweep_end_fraction", scanpathConfig.returnSweepEndFraction)
             .put("progression_window_ms", scanpathConfig.progressionWindowMs)
@@ -202,7 +262,7 @@ class ArticleReadingAidRuntime(
             .put("assignment_agreement", scanpathConfig.assignmentAgreement)
         val digest = MessageDigest.getInstance("SHA-256").digest(values.toString().toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
-        return JSONObject().put("policy_version", 1).put("extractor_version", ScanpathEngine.EXTRACTOR_VERSION)
+        return JSONObject().put("policy_version", 3).put("extractor_version", ScanpathEngine.EXTRACTOR_VERSION)
             .put("classifier_version", ScanpathEngine.CLASSIFIER_VERSION)
             .put("provisional_evidence_version", ScanpathEngine.PROVISIONAL_EVIDENCE_VERSION)
             .put("input_source", inputSource.name)

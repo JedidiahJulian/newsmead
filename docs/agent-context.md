@@ -1,4 +1,4 @@
-# Agent context — updated 2026-10-03
+# Agent context — updated 2026-10-04
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,90 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-10-04 continuation-marker amendment:** the owner approved replacing the
+post-P09 landing cue with an expected-continuation cue. Supported first-quarter
+to last-quarter progress remembers the next fully visible LTR line; a supported
+landing elsewhere offers a fixed marker at that expected line. A normal next-line
+arrival produces no marker. This is optional navigation assistance, not an error
+or difficulty diagnosis. Appearance is fixed 6 dp / alpha 240, with the existing
+4 dp gutter gap; positive strength controls do not attenuate it. New conditions
+use `DEFINITION_PROFILE_V2`, policy v3 and `PILOT_DEFINITION_*_V2` /
+`REPLAY_DEFINITION_V2`; detector/frozen protocols retain their identities. Exact
+state, evidence limits and sources: [continuation marker](scanpath-continuation-marker.md).
+The prior V1/evaluator/device checkpoints below remain historical.
+Both APKs assemble and Android fixtures compile; they have no current phone
+result. The first JVM gate stopped at a corrected test-only field-name error;
+retest approval is pending under the one-failed-attempt boundary. Scoped
+whitespace and resource XML checks pass. Independent review findings were
+resolved, including first-prefix censoring, row wobble and departed-finalization
+handling. Evidence/hashes: `output/continuation-marker-check-01/summary.json`.
+No device install/capture, staging, commit or participant validation ran.
+
+**2026-10-04 evaluator alignment:** the owner explicitly selected matching the
+current article aids for pilot and replay. Both now use `DEFINITION_PROFILE_V1`,
+gutter markers and the same near-word popup; the obsolete strip reserves 0 dp in
+every condition. Pilot conditions are `PILOT_DEFINITION_*_V1`; replay is
+`REPLAY_DEFINITION_V1`. Their UI/dictionary mode is recorded separately from old
+magnifier traces. Pilot live lookup retains the offline glossary/online fallback;
+synthetic pilot/replay disable network. Consultation boundaries preserve raw
+callbacks and exclude card intervals/late captures from article paths. Prompted
+tasks remain aids-off; shadow/display share geometry. Replay uses the shared
+six-stage article presenter with callbacks detached from closed runtimes.
+Historical detector-only replay assertions remain; current display checks are
+separate because consultation changes later article evidence. See
+[pilot](scanpath-live-pilot.md) and [replay](scanpath-replay-screen.md). Independent
+source review found no P1/P2 issue; direct line-cycle and replay-to-demo regressions
+address its coverage limits. 64 focused JVM tests and both APK assemblies pass;
+updated Android fixtures compile but have not run on a phone. Evidence/hashes:
+`output/evaluator-current-aids-check-01/summary.json`. No device capture/install,
+staging or commit ran.
+
+**2026-10-04 article line-start spacing:** the owner's screenshot showed the
+marker covering the first letter. The article body reserves 16 dp start padding
+from inflation; article overlays put the marker in this gutter with a 4 dp text
+gap. Both live and demo construction select this placement. Existing geometry
+already accounts for TextView total padding; marker clipping abstains. Text may
+wrap differently in the narrower column. A camera-free pixel rendering regression
+compiles for separation from the text. App/test APK assembly, article XML parsing
+and whitespace checks pass; device execution/appearance remain pending.
+
+**2026-10-04 definition layout/offline amendment:** the owner clarified that the
+card should follow an internet template and requested a light offline dictionary.
+The native card adapts Flowbite React's Default Popover (shaded header, divider,
+border, pointer) using NewsMead colors/fonts, with the larger compact close control
+and source highlight. A 75-entry original English glossary supplies immediate,
+explicitly attributed offline definitions. The article demo prefers a covered
+actual visible source word; no text substitution. Uncovered words retain the API
+route/unavailable state; unsupported languages still abstain live. Source links,
+coverage and check results are in [Article definition aid](article-definition-aid.md).
+64 focused JVM tests pass; app/test APK assembly and popup XML parsing pass.
+New offline/word-selection Android fixtures compile but have not run on a device.
+Phone rendering of this revision remains unverified; no device install/capture,
+staging, commit or backend change ran.
+
+**Historical article UI checkpoint — 2026-10-03:** the owner rejected the top word
+magnifier and requested a definition popup and demo inside the loaded article.
+[Article definition aid](article-definition-aid.md) now records the implementation,
+H03/M25 lexical-assistance precedents, transfer limits and consultation exclusions.
+Ordinary articles select separate `DEFINITION_PROFILE_V1` / `EXPERIMENTAL_DEFINITION_V1`;
+the configurable 800 ms current-word residence trigger is exploratory, not a
+validated difficulty cutoff. Cards remain during consultation and preserve source
+layout; open/close boundaries exclude consultation and late captures from article
+sequences while retaining numeric raw callbacks. The source word stays highlighted
+using a noninteractive overlay while its definition is open. Close uses a large
+vector × and a compact 28 dp gray box inside a 48 dp tap area, without source
+spans/font changes. Callback resets are deferred
+until engine dispatch completes. The explicit article demo stops the provider,
+cycles real aid views and keeps camera off afterward. `origin/Recommendation`
+was fetched at `501e9be1f83d4d962dc4931ef9044ab1f18a3e1b`, without merge; no dictionary
+endpoint was found. A replaceable English Free Dictionary API adapter provides
+actual definitions and bounded caching; unsupported languages abstain live.
+61 focused JVM tests pass and app/test APKs assemble. New camera-free Android
+fixtures compile but have not run on a device; the earlier A56 15-test evidence
+applies to the preceding build. The evaluator migration above supersedes this
+checkpoint's deferred replay/pilot update; frozen protocols retain their meaning.
+No device install/capture, staging or commit ran.
 
 Help older adults sustain attentive reading through real-time visual assistance
 in the on-device Android NewsMead prototype. The immediate development priority
@@ -81,6 +165,40 @@ gaze or human data were collected. Read [the guide](scanpath-live-pilot.md) for
 units, denominators, time assumptions, partial-file rules and remaining study
 procedures. Do not infer a completed participant plan from default task settings.
 No human validity follows from synthetic replay.
+
+**Trigger review/demo — 2026-10-03:** [evidence review and flowchart](scanpath-trigger-evidence-review.md)
+rechecked primary methods/outcomes and current decision predicates. Line guidance
+has the strongest intervention precedent; the exact word AND trigger differs
+from GazePrompt's OR trigger, while the cycle-to-focus and monotonic dose rules
+lack direct validation. The [replay screen](scanpath-replay-screen.md) now adds
+an explicit render-only Demo cycle with seven four-second stages, Previous/Next
+and Stop. Manufactured actions never enter detector/policy/results/traces, and
+no camera/calibration opens. Independent review fixed insufficient max-word
+height in replay/pilot strips: 68 dp reserved height remains, vertical padding
+is 10 dp. All 53 focused JVM tests pass and app/test APKs assemble; new device
+execution awaits task-specific authorization. Preserve this status when making
+panel claims. No human difficulty/aid-benefit evidence was collected.
+
+**A56 compatibility — 2026-10-03:** the owner explicitly approved installation
+and camera-free checks after automatic installation review required explicit
+A56 approval. Both APKs installed with `-r`. [Device check 04](scanpath-device-check-04.md)
+records one bounded 14-test attempt: **6 pass, 8 fail**. All five pilot tests
+pass, including all ten prompted plans and shadow/display behavior. Four demo
+tests fail readiness; four replay tests abort because tiny negative callback
+lag was treated as late. Later replay scenarios were not executed. Known
+synthetic traces and an app-only pilot preview are retained locally. Device
+attempts stopped; local fixes now retry unchanged early deadlines and use the
+actual compound-padded word-strip height. Source review closed; all 56 focused
+JVM tests and both APK assemblies pass. Improved status diagnostics and a
+centered-strip regression compile. The owner then authorized the corrected
+installation/retest: **all 15 tests pass, 50.908 s** on A56/API 36. All five replay
+scenarios completed with expected patterns/aid draw proxies, strict causal
+timing and synthetic callback lag 0.013–2.879 ms. Demo/renderer and all five pilot
+checks pass. App-only demo word/focus and replay word previews are readable.
+Corrected hashes/results/evidence paths are in check 04; this build has not been
+tested on S21. Home → Scanpath replay → Demo cycle is ready for camera-free
+inspection. Earlier pending-device statements describe pre-attempt status.
+No camera/human collection, staging or commit ran.
 
 The [scanpath-to-visual-aid implementation proposal](adaptive-visual-aid-proposal.md)
 is the current **NewsMead feature specification**. Re-reading the source task

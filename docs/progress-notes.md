@@ -1,5 +1,159 @@
 # NewsMead — Progress Notes
 
+## 2026-10-04 - Expected-continuation marker
+
+The owner approved replacing the successful-P09 landing cue. Supported
+first-quarter then last-quarter progress remembers the next fully visible LTR
+line. A supported landing elsewhere offers a fixed 6 dp blue marker at that
+expected line; normal next-line arrival produces none. The cue clears on
+supported arrival, distinct continued reading, expiry or tracking/layout
+boundaries. Positive strength settings do not attenuate it. Deliberate rereading
+and skipping are not labeled errors or difficulty.
+
+Article/demo/pilot/replay and trace metadata now share this rule under definition
+profile V2 and policy v3. Beginning/end/landing support is exported separately;
+P01–P13 and frozen protocols retain their identities. Raw-coordinate replay adds
+backward-return and forward-skip examples. [Exact rule, flowchart and study
+limits](scanpath-continuation-marker.md) preserve the implementation decision.
+Focused independent review found and resolved left-censored prefix loss,
+row-wobble clearing and departed-finalization issues; final fixture corrections
+have no remaining actionable review finding.
+
+Both APKs assemble; Android fixtures compile but have not run on a phone.
+The first JVM gate stopped at a new test's incorrect `lineAgreement` field;
+`lineSampleAgreement` is now used. Rerun approval is pending under AGENTS.md's
+one-failed-attempt boundary. Resource XML and scoped whitespace checks pass.
+Evidence/hashes: `output/continuation-marker-check-01/summary.json`.
+No device install/capture, staging, commit or participant validation ran.
+
+## 2026-10-04 - Pilot/replay match current contextual aids
+
+The owner selected full aid alignment. Both evaluators now use the article's
+definition profile, same popup/highlight/close/gutter rendering and no reserved
+magnifier strip. New condition IDs and UI/dictionary metadata distinguish them
+from historical magnifier results. Live pilot keeps bundled/online lookup;
+synthetic pilot/replay use bundled-only lookup. Consultation boundaries retain
+raw callbacks and exclude popup/late captures from article patterns. Prompted
+tasks keep aids off, and no-aid/shadow/display viewports match.
+
+Replay uses the shared six-stage presenter with detached runtime callbacks.
+Detector-only expectations remain independently checked; current aid checks
+account for consultation interrupting later evidence. Independent source review
+found no P1/P2 issue. Direct line-cycle and replay-to-demo regressions address its
+coverage limits. All 64 focused JVM tests pass; app/test APK assembly, XML parsing
+and whitespace checks pass. Updated Android fixtures compile; phone execution
+remains pending. Evidence/hashes: `output/evaluator-current-aids-check-01/summary.json`.
+No device install/capture, staging, commit or protocol edit ran.
+
+## 2026-10-04 - Article gutter for the line-start marker
+
+The owner's screenshot showed the marker covering the first letter. Added 16 dp
+start padding to the article body, present in every aid stage. Live/demo article
+overlays place the marker in that gutter with a 4 dp gap before the text and
+withhold it when the gutter is clipped. Source anchors use the existing
+padding-aware TextView geometry; the narrower column can change wrapping.
+A camera-free rendering fixture compiles to check actual marker pixels clear the
+text. App/test APK assembly, article XML parsing and whitespace checks pass;
+the new fixture has not run on a phone and visual inspection is pending.
+No device install/capture, staging or commit ran.
+
+## 2026-10-04 - Internet popover template and light offline glossary
+
+The definition card now adapts the official Flowbite React Default Popover in
+native Android, using NewsMead theme colors/fonts. It preserves the highlighted
+source word and compact larger close control. A 75-entry original English glossary
+returns immediately with explicit offline attribution; a lazy network queue is
+created only for uncovered words. The article demo prefers a covered actual source
+word without changing article text or UTF-16 geometry. Unsupported languages still
+abstain live. [Source, coverage and checks](article-definition-aid.md) record this
+amendment. No device install/capture, staging, commit or backend change ran.
+All 64 focused JVM tests pass, both APKs assemble and popup XML parsing/whitespace
+checks pass. Offline delivery and covered-word/fallback Android fixtures compile;
+their device execution and the new card's phone appearance remain unverified.
+
+## 2026-10-03 - Article-native demo and definition prototype
+
+The owner's correction replaces the top magnifier in ordinary articles with a
+near-word dictionary card and adds an explicit demo in the actual loaded article.
+[Implementation/evidence record](article-definition-aid.md) documents H03/M25,
+the exploratory 800 ms trigger, provider contract and consultation boundaries.
+Fetched Recommendation at `501e9be` for inspection only; it has news/recommendation
+and logging work, with no dictionary endpoint found. The prototype uses a
+replaceable English dictionary API, bounded cache and honest unavailable states.
+
+Review found and fixed callback reentrancy when finalized word evidence opens
+help. Raw consultation callbacks remain available with capture-time exclusions;
+engine continuity breaks on opening/closing. Source layout is unchanged. Demo
+stops the provider and never enters the live journal. Legacy pilot/replay and
+frozen comparison identities are retained. The first compile's nullable receiver
+error was corrected; 61 focused JVM tests and both APK assemblies pass. New
+camera-free Android fixtures compile, including the finalized-P12 regression;
+device execution, API service availability, natural word assignment and human
+benefit remain unmeasured. No device operation, staging, commit or backend merge.
+
+## 2026-10-03 - Corrected A56 retest passes all 15 checks
+
+The owner approved corrected app/test installation and a bounded camera-free
+retest. Both APKs installed with data-preserving updates; **OK (15 tests)** in
+50.908 s on SM-A566B/API 36. All four demo, the centered magnifier regression,
+all five replay and all five pilot checks pass. All five synthetic replay
+scenarios complete with expected patterns/aid draw proxies and strict causal
+time/evidence ordering; 265 scheduled samples have callback lag 0.013–2.879 ms.
+This is synthetic delivery timing, not gaze/camera or eye-to-cue latency.
+
+Inspected app-root demo word/focus and detector-driven replay word drawings:
+readable labels/text, full words fit, context-preserving veil. Demo preparation
+diagnostics corroborate the old gravity-including padding defect: 191 px strip,
+28 px compound versus 72 px total vertical padding per edge. Initial failures remain
+in `scanpath-device-check-04.md` alongside corrected hashes/results and local
+evidence paths. Software inspection is ready on A56; this corrected build has
+not been checked on S21. No camera, calibration, human gaze/benefit measurement,
+staging or commit occurred.
+
+## 2026-10-03 - A56 compatibility attempt and local corrections
+
+After explicit owner approval, both current APKs installed with data-preserving
+updates on SM-A566B/API 36. One camera-free synthetic run finished: 6 of 14 pass,
+8 fail. All five pilot tests pass, including all ten prompted task plans and
+shadow/display viewport/rendering checks. Four demo tests fail readiness; four
+replay tests stop on fractional negative callback lag mislabeled late. Captured
+known synthetic replay traces and an app-only pilot drawing; no human files or
+camera collection. `scanpath-device-check-04.md` retains hashes, results and limits.
+
+Locally fixed early callbacks to retry the same deadline/ordinal before input,
+preserving actual delivery and the 100 ms lateness guard. Source review found the
+demo/word renderer used gravity-including total padding to estimate capacity;
+switched vertical checks to compound padding. The exact original demo exception
+was not retained, so device confirmation remains needed. Added timing and
+centered low/high-fit/oversize regressions plus app-only diagnostic/previews.
+Independent review closed; all 56 focused JVM tests and app/test assembly pass
+using Java 17 and offline user cache. One helper build failed before tests on its
+Android home path; its daemon finished before the successful lead build.
+At that local checkpoint, no corrected APK had been installed: AGENTS.md required
+explicit authorization after the first failure. The successful authorized retest
+is recorded above. No staging/commit occurred.
+
+## 2026-10-03 - Trigger evidence review and explicit aid demo
+
+Rechecked the actual aid predicates and primary findings for panel presentation.
+Added `scanpath-trigger-evidence-review.md` with a decision flowchart, source
+locations, transfer limits, the changed GazePrompt word predicate and unsupported
+focus/strength claims. No live policy threshold or frozen protocol was changed.
+
+Added an explicit render-only Demo cycle to Scanpath replay: seven four-second
+stages show baseline, line highlight, start marker and low/high word/focus forms.
+Previous/Next, Stop, pause and geometry changes cancel presentation. No detector,
+provider/calibration, runtime, trace or replay result is created; status explicitly
+identifies manufactured button/timer activation. Required renderer timing fields
+use presentation elapsed time and are excluded from measurement outputs.
+
+Independent review found that replay's strip could not fit the maximum Arial
+magnifier; reduced vertical padding to 10 dp in replay and pilot, preserving 68 dp
+reservation and giving 48 dp content height. New demo tests assert both word
+strengths display text. All 53 focused JVM tests pass; both APKs assemble; four
+camera-free demo activity tests compile. Installation/device checks await task-
+specific authorization. No camera/human collection, staging or commit occurred.
+
 ## 2026-10-03 - Separate live scanpath pilot and raw recording
 
 Based on `50ff2b7`, built ten prompted word/line placement/order tasks with actual

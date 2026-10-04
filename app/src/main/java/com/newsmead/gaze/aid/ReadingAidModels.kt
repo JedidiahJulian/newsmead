@@ -1,7 +1,9 @@
 package com.newsmead.gaze.aid
 
+import com.newsmead.gaze.scanpath.ScanpathGeometry
+
 /** Pure policy values. Text offsets are UTF-16; all times are capture/delivery milliseconds. */
-enum class ReadingAidType { CURRENT_LINE, NEXT_LINE_START, WORD_MAGNIFIER, FOCUS_REGION }
+enum class ReadingAidType { CURRENT_LINE, NEXT_LINE_START, WORD_MAGNIFIER, FOCUS_REGION, WORD_DEFINITION }
 enum class ReadingAidDecisionStatus { CHOSEN, SUPPRESSED, CLEARED, EXPIRED }
 enum class ReadingAidInputSource { LIVE_MGAZENET, SYNTHETIC_REPLAY }
 
@@ -33,7 +35,14 @@ data class ReadingAidAction(
     val sourceIds: List<String>,
     val evidenceRelationship: String,
     val experimental: Boolean,
-    val configId: String
+    val configId: String,
+    val continuationEvidence: List<ReadingAidContinuationEvidence> = emptyList()
+)
+
+/** Separate source/landing support bounds; candidate IDs do not imply finalized fixations. */
+data class ReadingAidContinuationEvidence(
+    val evidenceId: String, val segment: Int, val line: Int,
+    val firstCaptureMs: Double, val lastCaptureMs: Double, val evidenceAvailableMs: Double
 )
 
 data class ReadingAidDecision(
@@ -54,7 +63,8 @@ data class ReaderAidPreferences(
     val focusRegion: Boolean = false,
     val adaptiveStrength: Boolean = true,
     val maxStrength: Double = 1.0,
-    val manualStrength: Double = 0.5
+    val manualStrength: Double = 0.5,
+    val wordDefinition: Boolean = true
 ) {
     init { require(maxStrength.isFinite() && maxStrength in 0.0..1.0 && manualStrength.isFinite() && manualStrength in 0.0..1.0) }
 }
@@ -70,7 +80,9 @@ data class ReadingAidContext(
     val nowMs: Double,
     val captureMs: Double?,
     val evidenceAvailableMs: Double?,
-    val validLiveInput: Boolean = true
+    val validLiveInput: Boolean = true,
+    val geometry: ScanpathGeometry? = null,
+    val targetX: Double? = null
 )
 
 /** Engineering prototype settings, not paper thresholds or calibrated difficulty cutoffs. */
@@ -89,10 +101,21 @@ data class ReadingAidPolicyConfig(
     val maxEvidenceAgeMs: Double = 250.0,
     val minAdaptiveStrength: Double = 0.25,
     val maxMagnificationScale: Double = 1.5,
-    val focusContextRadiusLines: Int = 2
+    val focusContextRadiusLines: Int = 2,
+    val wordAidType: ReadingAidType = ReadingAidType.WORD_MAGNIFIER,
+    val definitionMinObservedMs: Double = 800.0,
+    val continuationStartFraction: Double = 0.25,
+    val continuationEndFraction: Double = 0.75,
+    val continuationWindowMs: Double = 2000.0
 ) {
     init {
         require(configId.isNotBlank() && conditionId.isNotBlank())
+        require(wordAidType in listOf(ReadingAidType.WORD_MAGNIFIER, ReadingAidType.WORD_DEFINITION))
+        require(definitionMinObservedMs.isFinite() && definitionMinObservedMs > 0)
+        require(continuationStartFraction.isFinite() && continuationEndFraction.isFinite() &&
+            continuationStartFraction >= 0 && continuationStartFraction < continuationEndFraction &&
+            continuationEndFraction <= 1)
+        require(continuationWindowMs.isFinite() && continuationWindowMs > 0)
         require(wordMinRefixations >= 1 && focusContextRadiusLines >= 1)
         require(listOf(wordMinObservedMs, wordSaturationMs, lineMinObservedMs, lineSaturationMs, cycleWindowMs,
             aidTtlMs, cooldownMs, maxEvidenceAgeMs, maxMagnificationScale).all { it.isFinite() && it > 0 })
@@ -101,8 +124,10 @@ data class ReadingAidPolicyConfig(
         require(minAdaptiveStrength.isFinite() && minAdaptiveStrength in 0.0..1.0)
     }
     companion object {
+        fun definitionPrototype() = ReadingAidPolicyConfig("DEFINITION_PROFILE_V2", "EXPERIMENTAL_DEFINITION_V2",
+            true, wordAidType = ReadingAidType.WORD_DEFINITION)
         fun experimentalPrototype(conditionId: String = "EXPERIMENTAL_AIDS_V1") =
-            ReadingAidPolicyConfig("EXPERIMENTAL_PROFILE_V1", conditionId, true)
+            ReadingAidPolicyConfig("EXPERIMENTAL_PROFILE_V2", conditionId, true)
         fun manualOnly(conditionId: String = "MANUAL_AIDS_V1") =
             ReadingAidPolicyConfig("MANUAL_ONLY_V1", conditionId, false)
     }

@@ -21,10 +21,10 @@
     </LinearLayout>
     <TextView android:id="@+id/pilotStatus" android:layout_width="match_parent" android:layout_height="90dp" android:paddingHorizontal="16dp"
         android:gravity="center_vertical" android:textSize="13sp" android:textColor="?primaryTextColor" android:maxLines="4" android:text="@string/scanpath_pilot_ready" />
-    <!-- Reserve the same space in every condition, including no-aid and shadow. -->
-    <FrameLayout android:layout_width="match_parent" android:layout_height="68dp">
+    <!-- Current definitions use the text viewport; no magnifier strip in any condition. -->
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:visibility="gone">
         <com.newsmead.gaze.aid.ReadingAidWordView android:id="@+id/pilotWordDock" android:layout_width="match_parent"
-            android:layout_height="match_parent" android:padding="16dp" android:gravity="center" android:singleLine="true" android:textColor="?primaryTextColor" />
+            android:layout_height="match_parent" android:paddingHorizontal="16dp" android:paddingVertical="10dp" android:gravity="center" android:singleLine="true" android:textColor="?primaryTextColor" />
     </FrameLayout>
     <FrameLayout android:id="@+id/pilotViewport" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
         <androidx.core.widget.NestedScrollView android:id="@+id/pilotScroll" android:layout_width="match_parent" android:layout_height="match_parent">

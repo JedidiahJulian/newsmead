@@ -7,12 +7,17 @@ import org.junit.Test
 /** The real extractor/classifier feeds the policy; samples are synthetic assignments. */
 class ScanpathAidPipelineTest {
     private class Pipeline {
-        var context = ReadingAidContext(0, "g1", 2, null, null, null, 0.0, null, null, false)
-        val policy = ReadingAidPolicy(ReadingAidPolicyConfig.experimentalPrototype())
+        private val geometry = ScanpathGeometry("g1", 0.0, 0.0, ScanpathRect(0.0, 0.0, 100.0, 60.0),
+            20.0, listOf(ScanpathLine(0, 20, 0.0, 100.0, 0.0, 20.0),
+                ScanpathLine(20, 40, 0.0, 100.0, 20.0, 40.0),
+                ScanpathLine(40, 60, 0.0, 100.0, 40.0, 60.0)), ScanpathTextDirection.LTR)
+        var context = ReadingAidContext(0, "g1", 3, null, null, null, 0.0, null, null, false, geometry, null)
+        val policy = ReadingAidPolicy(ReadingAidPolicyConfig.experimentalPrototype(),
+            ReaderAidPreferences(wordDefinition = false))
         val decisions = mutableListOf<ReadingAidDecision>()
         val patterns = mutableListOf<ScanpathEvent>()
         var latest: ScanpathFixation? = null
-        val words = (0 until 8).map { WordRange(it * 5, it * 5 + 4) }
+        val words = (0 until 12).map { WordRange(it * 5, it * 5 + 4) }
         val engine = ScanpathEngine(words,
             ScanpathConfig(returnSweepStartFraction = 0.25, returnSweepEndFraction = 0.75),
             onFixation = { latest = it }, onEvent = {
@@ -20,21 +25,21 @@ class ScanpathAidPipelineTest {
                 decisions.addAll(policy.onEvent(it, latest, context))
             }, retainEvents = false)
         init {
-            engine.updateGeometry(ScanpathGeometry("g1", 0.0, 0.0, ScanpathRect(0.0, 0.0, 100.0, 40.0),
-                20.0, listOf(ScanpathLine(0, 20, 0.0, 100.0, 0.0, 20.0),
-                    ScanpathLine(20, 40, 0.0, 100.0, 20.0, 40.0)), ScanpathTextDirection.LTR), 0.0)
+            engine.updateGeometry(geometry, 0.0)
         }
-        fun sample(capture: Double, x: Double, word: Int, line: Int = 0, valid: Boolean = true) {
+        fun sample(capture: Double, x: Double, word: Int, line: Int = 0, valid: Boolean = true,
+                    rawY: Double = line * 20.0 + 10) {
             val range = words[word]
-            context = ReadingAidContext(0, "g1", 2, line, range.startUtf16, range.endUtf16,
-                capture + 10, capture, capture + 10, valid)
+            context = ReadingAidContext(0, "g1", geometry.lines.size, line, range.startUtf16, range.endUtf16,
+                capture + 10, capture, capture + 10, valid, geometry, x)
             if (!valid) decisions.addAll(policy.onObservation(null, context))
-            val accepted = engine.onSample(ScanpathSample(capture, capture + 10, x, line * 20.0 + 10,
+            val accepted = engine.onSample(ScanpathSample(capture, capture + 10, x, rawY,
                 line, range.startUtf16, range.endUtf16, "g1", valid))
             decisions.addAll(policy.onObservation(if (accepted) engine.currentCandidateEvidence() else null, context))
         }
-        fun hold(start: Double, x: Double, word: Int, line: Int = 0, span: Int = 250) {
-            for (dt in 0..span step 50) sample(start + dt, x, word, line)
+        fun hold(start: Double, x: Double, word: Int, line: Int = 0, span: Int = 250,
+                 rawY: Double = line * 20.0 + 10) {
+            for (dt in 0..span step 50) sample(start + dt, x, word, line, rawY = rawY)
         }
     }
 
@@ -66,16 +71,38 @@ class ScanpathAidPipelineTest {
         assertTrue(p.engine.fixations.last().rightCensored)
     }
 
-    @Test fun sweepChoosesTheObservedLandingLineAndNeverTheFollowingLine() {
+    @Test fun normalSweepDoesNotTriggerContinuationCue() {
         val p = Pipeline()
         p.hold(200.0, 90.0, 3, line = 0, span = 100)
         p.hold(350.0, 10.0, 4, line = 1, span = 100)
         p.sample(500.0, 40.0, 5, line = 1)
         assertTrue(p.patterns.any { it.patternId == "P09" && it.metrics["status"] == "observed" })
-        val cue = p.decisions.single { it.status == ReadingAidDecisionStatus.CHOSEN &&
-            it.action?.aidType == ReadingAidType.NEXT_LINE_START }.action!!
-        assertEquals(1, cue.anchor.line)
-        assertTrue(cue.eventIds.any { id -> p.patterns.any { it.eventId == id && it.patternId == "P09" } })
-        assertEquals(listOf("W24", "S19"), cue.sourceIds)
+        assertTrue(p.decisions.none { it.status == ReadingAidDecisionStatus.CHOSEN &&
+            it.action?.aidType == ReadingAidType.NEXT_LINE_START })
+    }
+
+    @Test fun boundaryRowWobblePreservesExistingContinuationMarker() {
+        val p = Pipeline()
+        p.hold(200.0, 10.0, 4, line = 1, rawY = 39.0)
+        p.hold(500.0, 90.0, 7, line = 1, rawY = 39.0)
+        p.hold(800.0, 10.0, 0, line = 0, rawY = 19.0)
+        val marker = p.policy.activeActions().single { it.aidType == ReadingAidType.NEXT_LINE_START }
+        assertEquals(2, marker.anchor.line)
+        val chosenCount = p.decisions.count { it.status == ReadingAidDecisionStatus.CHOSEN &&
+            it.action?.aidType == ReadingAidType.NEXT_LINE_START }
+
+        // Five supported row-0 samples plus one 2 px boundary wobble assigned to row 1.
+        p.hold(1100.0, 10.0, 0, line = 0, span = 200, rawY = 19.0)
+        p.sample(1350.0, 10.0, 4, line = 1, rawY = 21.0)
+        val candidate = p.engine.currentCandidateEvidence()!!
+        assertEquals(0, candidate.line)
+        assertTrue(candidate.lineSampleAgreement >= 0.8)
+        assertTrue(p.decisions.count { it.status == ReadingAidDecisionStatus.CHOSEN &&
+            it.action?.aidType == ReadingAidType.NEXT_LINE_START } == chosenCount)
+        val stillActive = p.policy.activeActions().single { it.aidType == ReadingAidType.NEXT_LINE_START }
+        assertEquals(marker.id, stillActive.id)
+        assertEquals(2, stillActive.anchor.line)
+        assertFalse(p.decisions.any { it.status == ReadingAidDecisionStatus.CLEARED &&
+            it.action?.aidType == ReadingAidType.NEXT_LINE_START })
     }
 }

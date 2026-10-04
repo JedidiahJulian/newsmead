@@ -24,11 +24,16 @@ class ScanpathReplayScenariosTest {
         lateinit var engine: ScanpathEngine
         val actions get() = decisions.filter { it.status == ReadingAidDecisionStatus.CHOSEN }.mapNotNull { it.action }
     }
-    private fun run(id: String, focus: Boolean = true): Result {
+    private fun run(id: String, focus: Boolean = true, scriptedPoints: List<ReplayPoint>? = null,
+                    continuationStrengthProbe: Boolean = false): Result {
         val result = Result()
         val profile = ReadingAidPolicyConfig.experimentalPrototype()
-        val policy = ReadingAidPolicy(profile, ReaderAidPreferences(focusRegion = focus))
-        var context = ReadingAidContext(0, geometry.snapshotId, geometry.lines.size, null, null, null, 0.0, null, null, false)
+        val policy = ReadingAidPolicy(profile, ReaderAidPreferences(focusRegion = focus,
+            wordDefinition = false, adaptiveStrength = !continuationStrengthProbe,
+            manualStrength = if (continuationStrengthProbe) 0.2 else 0.5,
+            maxStrength = if (continuationStrengthProbe) 0.1 else 1.0))
+        var context = ReadingAidContext(0, geometry.snapshotId, geometry.lines.size, null, null, null, 0.0, null, null, false,
+            geometry, null)
         var latest: ScanpathFixation? = null
         val engine = ScanpathEngine(words.map { it.range }, ScanpathConfig(
             returnSweepStartFraction = 0.25, returnSweepEndFraction = 0.75,
@@ -41,7 +46,7 @@ class ScanpathReplayScenariosTest {
             })
         result.engine = engine
         engine.updateGeometry(geometry, 0.0)
-        ScanpathReplayScenarios.build(id, geometry, words).forEach { point ->
+        (scriptedPoints ?: ScanpathReplayScenarios.build(id, geometry, words)).forEach { point ->
             val x = point.x
             val y = point.y
             val matches = words.filter { x != null && y != null &&
@@ -57,7 +62,8 @@ class ScanpathReplayScenariosTest {
             val capture = 10000 + point.offsetMs
             val delivery = capture + 10
             context = ReadingAidContext(0, geometry.snapshotId, geometry.lines.size, line,
-                word?.range?.startUtf16, word?.range?.endUtf16, delivery, capture, delivery, point.eligible)
+                word?.range?.startUtf16, word?.range?.endUtf16, delivery, capture, delivery, point.eligible,
+                geometry, x)
             if (!point.eligible) result.decisions.addAll(policy.onObservation(null, context))
             val accepted = engine.onSample(ScanpathSample(capture, delivery, x, y, line,
                 word?.range?.startUtf16, word?.range?.endUtf16, geometry.snapshotId, point.eligible))
@@ -81,13 +87,51 @@ class ScanpathReplayScenariosTest {
         }
     }
 
-    @Test fun sweepIsObservedAndCuesItsLandingLine() {
+    @Test fun normalSweepIsObservedWithoutContinuationCue() {
         val result = run("return_sweep")
         val sweep = result.events.single { it.patternId == "P09" }
         assertEquals("observed", sweep.metrics["status"])
-        val cue = result.actions.single { it.aidType == ReadingAidType.NEXT_LINE_START }
-        assertEquals(1, cue.anchor.line)
-        assertTrue(sweep.eventId in cue.eventIds)
+        assertTrue(result.actions.none { it.aidType == ReadingAidType.NEXT_LINE_START })
+    }
+
+    @Test fun unexpectedContinuationDirectionsCueExpectedPhysicalLine() {
+        listOf("continuation_return" to (2 to "P08"), "continuation_skip" to (1 to "P06")).forEach { (id, expected) ->
+            val result = run(id, continuationStrengthProbe = true)
+            val cue = result.actions.single { it.aidType == ReadingAidType.NEXT_LINE_START }
+            assertEquals(expected.first, cue.anchor.line)
+            assertEquals(1.0, cue.strength, 0.0)
+            assertTrue(cue.evidenceIds.size >= 3)
+            assertTrue(cue.firstCaptureMs <= cue.lastCaptureMs)
+            assertTrue(cue.lastCaptureMs <= cue.evidenceAvailableMs)
+            assertTrue(cue.evidenceAvailableMs <= cue.onsetMs)
+            assertEquals("A2_CONTINUATION_MISMATCH_V1", cue.ruleId)
+            assertEquals("CONTINUATION_LINE_START_CUE_V1", cue.aidFormId)
+            assertTrue(result.events.any { it.patternId == expected.second })
+            assertTrue(result.decisions.any { it.status == ReadingAidDecisionStatus.CLEARED &&
+                it.reason == "expected_line_arrival" })
+        }
+    }
+
+    @Test fun missingnessAfterSourceEndPreventsContinuationCue() {
+        val points = ScanpathReplayScenarios.build("continuation_skip", geometry, words).toMutableList()
+        points.add(12, ReplayPoint(points[11].offsetMs + 50, null, null, eligible = false))
+        for (i in 13 until points.size) points[i] = points[i].copy(offsetMs = points[i].offsetMs + 50)
+        assertTrue(run("continuation_skip", scriptedPoints = points, continuationStrengthProbe = true).actions.none {
+            it.aidType == ReadingAidType.NEXT_LINE_START
+        })
+    }
+
+    @Test fun continuedReadingElsewhereClearsMismatchCue() {
+        val points = ScanpathReplayScenarios.build("continuation_skip", geometry, words).take(18).toMutableList()
+        val other = words.first { it.line == 0 }
+        val x = (other.bounds.left + other.bounds.right) / 2
+        val y = (other.bounds.top + other.bounds.bottom) / 2
+        val start = points.last().offsetMs + 50
+        for (dt in 0..250 step 50) points.add(ReplayPoint(start + dt, x, y))
+        val result = run("continuation_skip", scriptedPoints = points, continuationStrengthProbe = true)
+        assertTrue(result.actions.any { it.aidType == ReadingAidType.NEXT_LINE_START })
+        assertTrue(result.decisions.any { it.status == ReadingAidDecisionStatus.CLEARED &&
+            it.reason == "continued_reading_elsewhere" })
     }
 
     @Test fun distinctSameWordFixationsPrecedeIncreasingMagnifierStrength() {

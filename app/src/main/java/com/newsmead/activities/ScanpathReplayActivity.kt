@@ -20,6 +20,7 @@ import com.newsmead.R
 import com.newsmead.data.StudyConfig
 import com.newsmead.databinding.ActivityScanpathReplayBinding
 import com.newsmead.gaze.aid.*
+import com.newsmead.gaze.aid.demo.ArticleReadingAidDemoPresenter
 import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
 import com.newsmead.gaze.scanpath.*
 import com.newsmead.gaze.scanpath.replay.*
@@ -60,6 +61,11 @@ class ScanpathReplayActivity : AppCompatActivity() {
     var lastResult: ScanpathReplayResult? = null
         private set
     val isReplaying get() = running || preparing
+    private lateinit var definitionPopup: ReadingAidDefinitionPopup
+    private var demoPresenter: ArticleReadingAidDemoPresenter? = null
+    val isDemoPresenting get() = demoPresenter?.isPresenting == true
+    val demoStageIndex get() = demoPresenter?.stageIndex ?: 0
+    private var demoPreparing = false
     private val geometryListener = ViewTreeObserver.OnPreDrawListener {
         session?.checkGeometry()
         runtime?.tick()
@@ -73,15 +79,23 @@ class ScanpathReplayActivity : AppCompatActivity() {
         binding.replayBody.text = REPLAY_TEXT
         binding.replayBody.textLocale = Locale.ENGLISH
         binding.replayBody.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, StudyConfig.ARTICLE_FONT_SIZE_DP)
-        overlay = ReadingAidOverlayView(this)
+        overlay = ReadingAidOverlayView(this, lineStartMarkerInGutter = true)
         cursor = ReplayCursor(this)
         binding.replayViewport.addView(overlay, android.widget.FrameLayout.LayoutParams(-1, -1))
         binding.replayViewport.addView(cursor, android.widget.FrameLayout.LayoutParams(-1, -1))
+        // Replay is deterministic/offline: real bundled entries or explicit unavailable state.
+        definitionPopup = ReadingAidDefinitionPopup(this, binding.replayViewport, binding.replayBody,
+            DictionaryDefinitionRepository(this, allowNetwork = false),
+            unavailableMessageRes = R.string.definition_offline_unavailable)
+        binding.replayScroll.setOnScrollChangeListener(
+            androidx.core.widget.NestedScrollView.OnScrollChangeListener { _, _, _, _, _ ->
+                if (isReplaying || isDemoPresenting || demoPreparing) stopReplay("geometry_changed")
+            })
         binding.replayScenario.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
             ScanpathReplayScenarios.scenarios.map { it.label })
         binding.replayScenario.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (isReplaying) stopReplay("scenario_changed")
+                if (isReplaying || isDemoPresenting || demoPreparing) stopReplay("scenario_changed")
                 scenario = ScanpathReplayScenarios.scenarios[position]
                 if (!isReplaying) binding.replayStatus.text = scenario.description
             }
@@ -89,12 +103,55 @@ class ScanpathReplayActivity : AppCompatActivity() {
         }
         binding.replayBack.setOnClickListener { finish() }
         binding.replayRun.setOnClickListener { startReplay() }
+        binding.replayDemo.setOnClickListener { startDemoCycle() }
+        binding.replayDemoPrevious.setOnClickListener { stepDemo(-1) }
+        binding.replayDemoNext.setOnClickListener { stepDemo(1) }
         binding.replayStop.setOnClickListener { stopReplay("reader_stop") }
         binding.replayControls.setOnClickListener { showControls() }
         binding.replaySave.setOnClickListener { showTrace() }
         binding.replayStop.isEnabled = false
         binding.replaySave.isEnabled = false
+        setDemoNavigation(false)
     }
+
+    /** Explicit render-only inspection; never creates a session, runtime, or recorder. */
+    fun startDemoCycle() {
+        stopReplay("replaced_by_demo")
+        val startToken = ++token
+        demoPreparing = true
+        lastResult = null
+        binding.replaySave.isEnabled = false
+        binding.replayStop.isEnabled = true
+        binding.replayWordDock.visibility = View.GONE
+        binding.replayStatus.text = getString(R.string.scanpath_demo_preparing)
+        binding.root.doOnPreDraw {
+            if (startToken != token || !demoPreparing || isFinishing) return@doOnPreDraw
+            try {
+                // Closed runtimes must not receive presentation consultation/render callbacks.
+                definitionPopup.onConsultationChanged = { _, _, _ -> }
+                definitionPopup.onRender = { _, _, _, _ -> }
+                overlay.onRender = { _, _, _, _ -> }
+                demoPresenter = ArticleReadingAidDemoPresenter(binding.replayBody, overlay,
+                    renderWord = { definitionPopup.showAction(it) },
+                    onStatus = { binding.replayStatus.text = it },
+                    onStopped = { stopReplay(it) })
+                demoPresenter!!.start()
+                demoPreparing = false
+                binding.root.keepScreenOn = true
+                setDemoNavigation(true)
+            } catch (e: Exception) {
+                stopReplay("demo_setup_failed")
+                binding.replayStatus.text = getString(R.string.scanpath_demo_unavailable, e.message ?: "Layout unavailable")
+            }
+        }
+    }
+
+    private fun setDemoNavigation(enabled: Boolean) {
+        binding.replayDemoPrevious.isEnabled = enabled
+        binding.replayDemoNext.isEnabled = enabled
+    }
+
+    fun stepDemo(delta: Int) { demoPresenter?.step(delta) }
 
     fun setReaderPreferences(value: ReaderAidPreferences) {
         stopReplay("reader_controls_changed")
@@ -108,7 +165,7 @@ class ScanpathReplayActivity : AppCompatActivity() {
         lastResult = null
         binding.replayStatus.text = getString(R.string.scanpath_replay_preparing)
         binding.replayStop.isEnabled = true
-        binding.replayWordDock.visibility = if (readerPreferences.enabled && readerPreferences.wordMagnifier) View.VISIBLE else View.GONE
+        binding.replayWordDock.visibility = View.GONE
         binding.root.doOnPreDraw {
             if (startToken != token || !preparing || isFinishing) return@doOnPreDraw
             try { prepare(startToken) } catch (e: Exception) {
@@ -147,21 +204,29 @@ class ScanpathReplayActivity : AppCompatActivity() {
         plannedFrame = geometry
         originElapsedMs = ceil(now())
         runtime = ArticleReadingAidRuntime(binding.replayBody, binding.replayWordDock, overlay,
-            ReadingAidPolicyConfig.experimentalPrototype("REPLAY_AIDS_V1"), readerPreferences,
+            ReadingAidPolicyConfig.definitionPrototype().copy(conditionId = "REPLAY_DEFINITION_V2"), readerPreferences,
             ReadingAidInputSource.SYNTHETIC_REPLAY,
             onDecision = { d ->
                 log?.decision(d)
                 if (d.status == ReadingAidDecisionStatus.CHOSEN && d.action != null) {
                     chosenAids.add(d.action.aidType.name)
-                    lastChoice = "${d.action.aidType.name} ${(d.action.strength * 100).toInt()}%"
+                    lastChoice = if (d.action.aidType == com.newsmead.gaze.aid.ReadingAidType.NEXT_LINE_START)
+                        "NEXT_LINE_START fixed visibility" else "${d.action.aidType.name} ${(d.action.strength * 100).toInt()}%"
                 }
                 latestReason = d.reason
             }, onRenderReceipt = { a, drawn, reason, at ->
                 log?.render(a, drawn, reason, at)
                 if (drawn) drawnAids.add(a.aidType.name)
+            }, definitionPopup = definitionPopup,
+            onConsultationChanged = { active, at, reason ->
+                log?.append("definition_consultation", JSONObject().put("active", active)
+                    .put("at_ms", at).put("reason", reason))
+                session?.setConsultation(active, at, reason)
             })
-        log = ScanpathReplayLog(this, scenario, binding.replayBody.text.toString(),
-            runtime!!.configurationSnapshot(), points, originElapsedMs)
+        val expectations = currentExpectations()
+        log = ScanpathReplayLog(this, scenario.copy(expectedPatternIds = expectations.first, expectedAidTypes = expectations.second), binding.replayBody.text.toString(),
+            runtime!!.configurationSnapshot().put("dictionary_mode", "bundled_only")
+                .put("ui_layout_id", "CONTEXT_DEFINITION_GUTTER_V1").put("reserved_word_strip_dp", 0), points, originElapsedMs)
         session = ArticleScanpathSession(binding.replayBody, runtime!!.scanpathConfig,
             onGeometry = { generation, value ->
                 log?.geometry(generation, value)
@@ -187,11 +252,11 @@ class ScanpathReplayActivity : AppCompatActivity() {
         postNext(startToken)
     }
 
-    private fun postNext(startToken: Int) {
+    private fun postNext(startToken: Int, minimumDelayMs: Long = 0) {
         val point = points.getOrNull(ordinal)
         if (point == null) { stopReplay("completed"); return }
         val capture = originElapsedMs + point.offsetMs
-        val delay = ceil((capture - now()).coerceAtLeast(0.0)).toLong()
+        val delay = maxOf(minimumDelayMs, ceil((capture - now()).coerceAtLeast(0.0)).toLong())
         handler.postDelayed({
             if (!running || startToken != token) return@postDelayed
             session?.checkGeometry()
@@ -199,7 +264,14 @@ class ScanpathReplayActivity : AppCompatActivity() {
             if (reason != null) { stopReplay(reason); return@postDelayed }
             val deliveryNs = SystemClock.elapsedRealtimeNanos()
             val lag = deliveryNs / 1e6 - capture
-            if (lag !in 0.0..100.0) {
+            val timing = ReplayDispatchTiming.assess(capture, deliveryNs / 1e6)
+            if (timing.retryDelayMs > 0) {
+                // Handler uses millisecond uptime, whereas this deadline uses elapsed nanoseconds.
+                // An early callback must retry the same point before moving the cursor or engine.
+                postNext(startToken, timing.retryDelayMs)
+                return@postDelayed
+            }
+            if (timing.tooLate) {
                 log?.append("scheduler_interruption", JSONObject().put("lag_ms", lag).put("plan_ordinal", ordinal))
                 stopReplay("scheduler_late"); return@postDelayed
             }
@@ -215,6 +287,10 @@ class ScanpathReplayActivity : AppCompatActivity() {
     }
 
     fun stopReplay(reason: String) {
+        val hadDemo = isDemoPresenting
+        demoPreparing = false
+        demoPresenter?.stop(reason, notify = false)
+        demoPresenter = null
         val hadRun = runtime != null || preparing
         token++
         preparing = false; running = false
@@ -222,20 +298,32 @@ class ScanpathReplayActivity : AppCompatActivity() {
         if (::binding.isInitialized) {
             binding.root.keepScreenOn = false
             binding.root.viewTreeObserver.removeOnPreDrawListener(geometryListener)
+            setDemoNavigation(false)
+            if (hadDemo) {
+                overlay.setActions(binding.replayBody, null, -1, emptyList())
+                binding.replayWordDock.showAction(null, binding.replayBody)
+                binding.replayStatus.text = getString(R.string.scanpath_demo_stopped, reason)
+            }
         }
         runtime?.suspend(reason)
         session?.close(reason)
         runtime?.close(reason)
         session = null; runtime = null
+        if (::definitionPopup.isInitialized) {
+            definitionPopup.clear(reason)
+            definitionPopup.onConsultationChanged = { _, _, _ -> }
+            definitionPopup.onRender = { _, _, _, _ -> }
+        }
         if (::cursor.isInitialized) cursor.point(null, null)
         val recorder = log
         if (recorder != null) {
-            val enabledExpected = scenario.expectedAidTypes.filterTo(linkedSetOf()) { type ->
+            val expectations = currentExpectations()
+            val enabledExpected = expectations.second.filterTo(linkedSetOf()) { type ->
                 readerPreferences.enabled && readerPreferences.maxStrength > 0 &&
                     (readerPreferences.adaptiveStrength || readerPreferences.manualStrength > 0) && when (type) {
                     "CURRENT_LINE" -> readerPreferences.lineGuide
                     "NEXT_LINE_START" -> readerPreferences.lineStartCue
-                    "WORD_MAGNIFIER" -> readerPreferences.wordMagnifier
+                    "WORD_DEFINITION" -> readerPreferences.wordDefinition
                     "FOCUS_REGION" -> readerPreferences.focusRegion
                     else -> false
                 }
@@ -244,10 +332,10 @@ class ScanpathReplayActivity : AppCompatActivity() {
                 .put("observed_patterns", JSONObject().apply { patternCounts.forEach { (id, count) -> put(id, count) } })
                 .put("chosen_aids", JSONArray(chosenAids.toList()))
                 .put("drawn_proxy_aids", JSONArray(drawnAids.toList())).put("enabled_expected_aids", JSONArray(enabledExpected.toList()))
-                .put("software_expectations_met", reason == "completed" && patternCounts.keys.containsAll(scenario.expectedPatternIds) &&
+                .put("software_expectations_met", reason == "completed" && patternCounts.keys.containsAll(expectations.first) &&
                     chosenAids.containsAll(enabledExpected) && drawnAids.containsAll(enabledExpected) && recorder.failure == null))
             lastResult = ScanpathReplayResult(scenario.id, reason, ordinal, patternCounts.keys.toSet(), chosenAids.toSet(),
-                drawnAids.toSet(), scenario.expectedPatternIds, enabledExpected, recorder.file, recorder.failure)
+                drawnAids.toSet(), expectations.first, enabledExpected, recorder.file, recorder.failure)
             binding.replayStatus.text = "${scenario.label}: $reason\nPatterns ${patternCounts.keys.joinToString(" ")}\n" +
                 "Chosen ${chosenAids.joinToString(" ")}\nDraw receipts ${drawnAids.joinToString(" ")}"
         } else if (hadRun) binding.replayStatus.text = getString(R.string.scanpath_replay_stopped)
@@ -255,6 +343,21 @@ class ScanpathReplayActivity : AppCompatActivity() {
         if (::binding.isInitialized) {
             binding.replayStop.isEnabled = false
             binding.replaySave.isEnabled = lastResult?.trace != null
+        }
+    }
+
+    /** Definition consultation is a deliberate sequence boundary, not detector failure. */
+    private fun currentExpectations(): Pair<Set<String>, Set<String>> {
+        val definitionsEnabled = readerPreferences.enabled && readerPreferences.wordDefinition &&
+            readerPreferences.maxStrength > 0 &&
+            (readerPreferences.adaptiveStrength || readerPreferences.manualStrength > 0)
+        if (!definitionsEnabled) return scenario.expectedPatternIds to
+            (scenario.expectedAidTypes - "WORD_MAGNIFIER")
+        return when (scenario.id) {
+            "word_refixations" -> setOf("P04", "P13") to setOf("CURRENT_LINE", "WORD_DEFINITION")
+            // Consultation opens during the long word hold, before final line residence evidence.
+            "line_cycle" -> setOf("P08", "P10", "P11", "P13") to setOf("CURRENT_LINE", "WORD_DEFINITION")
+            else -> scenario.expectedPatternIds to scenario.expectedAidTypes
         }
     }
 
@@ -277,7 +380,7 @@ class ScanpathReplayActivity : AppCompatActivity() {
         val enabled = check(R.string.reading_aids_enabled, p.enabled)
         val line = check(R.string.reading_aids_line, p.lineGuide)
         val start = check(R.string.reading_aids_start, p.lineStartCue)
-        val word = check(R.string.reading_aids_word, p.wordMagnifier)
+        val word = check(R.string.reading_aids_word_definition, p.wordDefinition)
         val focus = check(R.string.reading_aids_focus, p.focusRegion)
         val adaptive = check(R.string.reading_aids_adaptive, p.adaptiveStrength)
         val label = TextView(this).apply { panel.addView(this) }
@@ -292,14 +395,16 @@ class ScanpathReplayActivity : AppCompatActivity() {
         }
         AlertDialog.Builder(this).setTitle(R.string.scanpath_replay_controls).setView(panel)
             .setPositiveButton(R.string.reading_aids_apply) { _, _ ->
-                setReaderPreferences(ReaderAidPreferences(enabled.isChecked, line.isChecked, start.isChecked, word.isChecked,
-                    focus.isChecked, adaptive.isChecked, slider.progress / 100.0, slider.progress / 100.0))
+                setReaderPreferences(ReaderAidPreferences(enabled = enabled.isChecked, lineGuide = line.isChecked,
+                    lineStartCue = start.isChecked, wordDefinition = word.isChecked,
+                    focusRegion = focus.isChecked, adaptiveStrength = adaptive.isChecked,
+                    maxStrength = slider.progress / 100.0, manualStrength = slider.progress / 100.0))
             }.setNegativeButton(android.R.string.cancel, null).show()
     }
 
     override fun onPause() { stopReplay("activity_paused"); super.onPause() }
     override fun onStop() { stopReplay("activity_stopped"); super.onStop() }
-    override fun onDestroy() { stopReplay("activity_destroyed"); super.onDestroy() }
+    override fun onDestroy() { stopReplay("activity_destroyed"); definitionPopup.close(); super.onDestroy() }
 
     private class ReplayCursor(context: Context) : View(context) {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)

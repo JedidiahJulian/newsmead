@@ -1,5 +1,35 @@
 # Interactive scanpath replay screen
 
+**2026-10-04 line-start spacing:** the existing 16 dp body padding is now used
+as a gutter for the article's marker renderer, with a 4 dp text gap. Both synthetic
+Run and the presentation demo use it. Scripted coordinates remain derived from
+the actual rendered text, including padding; a clipped gutter withholds the cue.
+
+**2026-10-04 current article aids:** new Runs use `DEFINITION_PROFILE_V2` /
+`REPLAY_DEFINITION_V2`, the current line/focus views, gutter marker and near-source
+word definition card. The hidden legacy dock reserves **0 dp**; popup host is the
+viewport FrameLayout. Controls name word definitions. Replay uses the shared
+dictionary adapter with network disabled: the 75-entry original glossary returns
+covered definitions immediately and uncovered words honestly show unavailable.
+Trace configuration records `dictionary_mode=bundled_only`,
+`ui_layout_id=CONTEXT_DEFINITION_GUTTER_V1` and `reserved_word_strip_dp=0`.
+Historical magnifier traces and device passes below belong to their earlier
+profile and must not be pooled with current definition runs. Current local checks:
+**64 focused JVM tests pass**, app/test APK assembly, XML parsing and whitespace
+checks pass. Android fixtures compile for detector-only scenarios, current
+definition/line-cycle display, consultation raw exclusions, six-stage offline
+demo and replay-to-demo teardown. Phone execution remains pending. Independent
+source review found no actionable P1/P2 issue; its two coverage limits were
+addressed with compiled regressions. Exact APK hashes and copied JVM XML:
+`output/evaluator-current-aids-check-01/summary.json`.
+
+**Continuation-marker amendment:** [exact current rule](scanpath-continuation-marker.md).
+`continuation_return` and `continuation_skip` establish source beginning/end,
+land on another row, and cue the expected successor with fixed visibility. The
+ordinary `return_sweep` still verifies P05/P09 but expects no marker. New headers
+record policy v3, fixed appearance and `continuation_evidence`; the 64-test/device
+checkpoints above refer to the preceding profile.
+
 **2026-10-02 — branch `measurement/scanpath-pilot`.** First milestone of the
 interactive pilot screen: scripted raw coordinates run through actual Android
 text geometry, the existing scanpath engine, the aid policy and real aid views.
@@ -13,8 +43,8 @@ matched raw reading conditions; its human measurement remains pending.
 2. Select a scenario and press **Run**. The hollow blue dot marks scripted input.
    The status shows detected patterns, chosen aid and current strength.
 3. Use **Controls** to enable individual aids, choose adaptive/fixed strength,
-   and set the strength cap. Focus is off by default; enable it for the cycle
-   scenario to inspect that aid. Settings apply to the next Run and last for
+   and set the strength cap. Focus is off by default; disable word definitions and enable focus for the
+   cycle scenario to inspect that rule without a definition consultation. Settings apply to the next Run and last for
    this activity session.
 4. **Stop**, scrolling, changing the scenario/controls, or leaving the screen
    terminates the run and clears its aids. Run again from the new visible layout.
@@ -24,12 +54,50 @@ matched raw reading conditions; its human measurement remains pending.
 Direct launch from CMD, without opening a camera-enabled article:
 
 ```cmd
-"%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe" -s R5CR60YSJ2X shell am start -n com.newsmead/.activities.ScanpathReplayActivity
+"%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe" -s R5CY40Y2C5W shell am start -n com.newsmead/.activities.ScanpathReplayActivity
 ```
+
+That serial is the checked A56. Use your connected phone's serial for another device.
 
 The replay activity never creates a gaze provider, requests camera permission,
 or reads calibration. Entering it from an article stops the existing provider;
 returning to that article follows the article's existing restart behavior.
+
+## Explicit presentation demo — 2026-10-04
+
+Press **Demo cycle** to inspect the article's six stages without camera input or
+detector evidence: no aid, current-line highlight, destination-line-start marker,
+word definition, focus at 25%, then focus at 100%. Previous/Next step manually;
+stages repeat every four seconds. The shared article presenter chooses a wholly
+visible actual source word, preferring a covered offline entry. It preserves
+UTF-16 offsets and the original body. Two complete visible lines suffice;
+focus explicitly reports unavailable if fewer than five lines fit.
+
+Stop, pause, scroll, changed scenario/controls or changed text geometry clears
+the display. Runtime consultation/render callbacks are detached before entering
+this presentation. No session, provider, policy, calibration, trace or replay
+result is created; manufactured presentation actions contain no detector evidence.
+
+The following checks describe the **earlier magnifier build**, not this revision.
+
+The corrected build passes 56 focused JVM tests and app/test APK assembly.
+Four camera-free demo activity tests and the centered-strip regression pass on
+A56/API 36. App-only word/focus previews were inspected for readable labels/text
+and full-word fit. No camera or human measurement is involved.
+
+**2026-10-03 A56 attempt:** after explicit owner installation/test approval,
+all four demo activity tests failed waiting for ready navigation. Four replay
+tests stopped on tiny negative callback lag incorrectly classified as
+`scheduler_late`; the capped-trace test passed. [Device check 04](scanpath-device-check-04.md)
+retains exact APK hashes, failures and limits. This supersedes the pending
+execution status for the installed build. Local timing/fit fixes passed source
+review, all 56 focused JVM tests and both APK assemblies. The owner-authorized
+corrected retest then passed **all 15 checks in 50.908 s**, including all four
+demo and all five replay tests. All five replay scenarios completed with causal
+trace/aid draw assertions. Earlier S21 passes apply to earlier APKs; this
+corrected build has been checked only on A56.
+The [trigger evidence review](scanpath-trigger-evidence-review.md) contains the
+decision flowchart, primary findings, numeric origins and panel questions.
 
 ## Input-to-display route
 
@@ -39,8 +107,8 @@ visible rendered word rectangles + current physical screen origin
   -> actual callback delivery times
   -> ArticleScanpathSession: raw word/line assignments and geometry guard
   -> ScanpathEngine: provisional prefixes and finalized P01–P13 events
-  -> ArticleReadingAidRuntime: existing experimental policy + reader controls
-  -> ReadingAidOverlayView / ReadingAidWordView
+  -> ArticleReadingAidRuntime: current definition policy + reader controls
+  -> ReadingAidOverlayView / ReadingAidDefinitionPopup
   -> decision and drawing-proxy receipts in a full synthetic trace
 ```
 
@@ -57,9 +125,11 @@ the detector may emit. Terminal closure also produces continuity boundaries.
 | Scenario | Scripted observation | Expected patterns | Expected aids when enabled |
 | --- | --- | --- | --- |
 | Forward/backward navigation | Four consecutive visible words on one line; advances, a jump, backward return and revisits. | P01, P02, P03, P07, P10 | Current-line highlight |
-| Observed return sweep | Right end of one verified LTR line to left start of the next; another word finalizes the landing. | P05, observed P09 | Current-line highlight and reactive destination-line-start cue |
-| Word refixations/residence | Separated positions inside one sufficiently wide word, then ongoing residence. | P04, P12 | Current-line highlight and variable-strength word magnifier |
-| Line cycle/residence | Adjacent A–B–A–B lines, then distinct word positions on B with enough residence and configured slow frontier progression. | P08, P10, P11, P12 | Current-line highlight and optional focus region |
+| Observed return sweep | Right end of one verified LTR line to left start of the next; another word finalizes the landing. | P05, observed P09 | Current-line highlight; no continuation marker |
+| Continuation return | Source beginning → end → earlier row, then expected successor. | P08 and raw ordered line observations | Fixed marker on the expected successor, clears on arrival |
+| Continuation skip | Source beginning → end → a later row beyond the successor, then expected successor. | P06 and raw ordered line observations | Fixed marker on the expected successor, clears on arrival |
+| Word refixations/residence | Separated positions inside one sufficiently wide word, then ongoing residence. | P04, P13 with definitions enabled; P04, P12 in detector-only run | Current-line highlight and word definition |
+| Line cycle/residence | Adjacent A–B–A–B lines, then distinct word positions on B with enough residence and configured slow frontier progression. | P08, P10, P11, P13 with definitions enabled; P12 in detector-only run | Current-line highlight and definition; disable definitions and enable focus to inspect the focus rule |
 | Loss/recovery | Established word/line, eight explicit missing observations, then fresh evidence. | P13 | Clear on loss; current-line highlight after reacquisition |
 
 The live/offline engine still implements P01–P13. This initial screen does not
@@ -79,6 +149,9 @@ do not establish that their paths indicate difficulty or that the aids help.
   camera exposure or measured eye-to-cue latency.
 - A callback more than 100 ms late terminates the run as `scheduler_late`; delayed
   input is not silently presented as a timely successful run.
+- A fractionally early Handler callback retries the same ordinal/capture deadline
+  before moving the cursor or sending engine input. It uses a fresh actual
+  delivery timestamp on retry and checks cancellation/geometry each time.
 - The activity appends 1,000 ms of ordinary observations at the final eligible
   coordinate to allow inspection of the last aid. This tail can add observed
   residence/events. The full plan includes it.
@@ -92,6 +165,12 @@ do not establish that their paths indicate difficulty or that the aids help.
 Files are app-private `noBackupFilesDir/scanpath_replay_<uuid>.jsonl`.
 They contain only the synthetic body/input and software outputs, with no human
 reference, camera images, calibration fingerprint or upload.
+
+`definition_consultation` records preserve active/open versus close, `at_ms`
+and reason. Consultation and late boundary captures retain raw x/y and capture/
+delivery times with `definition_*` exclusions and null article AOIs. The source
+anchor stays fixed until dismissed; stopping closes consultation before session
+and log closure. Popup reading never becomes article fixation evidence.
 
 Records include the complete planned input, settings/hash and source identity,
 actual geometry, assigned raw samples with exclusions, finalized candidates,
@@ -117,10 +196,10 @@ version/configuration identity.
 
 Focused JVM fixtures cover script geometry, translated origins, pattern output,
 refixation finalization, variable magnification, focus gating and loss recovery.
-Real-activity Android tests check all five scenarios, actual drawing receipts,
+Current source Android fixtures check all five detector scenarios with aids disabled, current definition consultation/raw exclusions, line/focus drawing receipts,
 timestamp causality and prior support IDs, zero-strength withholding, scrolling,
 pause without stop, and incomplete capped traces. All **34 focused JVM tests**
-passed; debug and Android-test assembly passed. [Device check 03](scanpath-device-check-03.md)
+passed for the preceding magnifier version; debug and Android-test assembly passed for that version. [Device check 03](scanpath-device-check-03.md)
 records an initial test-ID lookup failure, its correction and owner-authorized
 retest, plus the final layout check: **all five tests passed on SM-G991B/API 35**.
 The synthetic preview was visually inspected and clipped button labels corrected.

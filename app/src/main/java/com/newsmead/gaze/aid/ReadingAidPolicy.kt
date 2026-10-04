@@ -3,6 +3,7 @@ package com.newsmead.gaze.aid
 import com.newsmead.gaze.scanpath.ScanpathCandidateEvidence
 import com.newsmead.gaze.scanpath.ScanpathEvent
 import com.newsmead.gaze.scanpath.ScanpathFixation
+import com.newsmead.gaze.scanpath.ScanpathTextDirection
 import kotlin.math.max
 import kotlin.math.min
 
@@ -22,6 +23,16 @@ class ReadingAidPolicy(
     private var wordVisit: WordVisit? = null
     private var cycle: Cycle? = null
     private var lineResidence: LineResidence? = null
+    private var continuationStart: ContinuationSupport? = null
+    private var continuationEnd: ContinuationSupport? = null
+    private var markerLanding: ContinuationSupport? = null
+    private var lastContinuationCapture = Double.NEGATIVE_INFINITY
+    private var continuationFloor = Double.NEGATIVE_INFINITY
+
+    private data class ContinuationSupport(val evidence: ReadingAidContinuationEvidence,
+        val fraction: Double) {
+        val key get() = evidence.segment to evidence.firstCaptureMs
+    }
 
     private data class WordVisit(
         val segment: Int, val line: Int, val start: Int, val end: Int,
@@ -39,11 +50,14 @@ class ReadingAidPolicy(
     fun updatePreferences(value: ReaderAidPreferences, context: ReadingAidContext): List<ReadingAidDecision> {
         preferences = value
         val out = prepare(context).toMutableList()
+        if (!allowed(ReadingAidType.NEXT_LINE_START) || value.maxStrength == 0.0 ||
+            (!value.adaptiveStrength && value.manualStrength == 0.0)) resetContinuation()
         for ((type, action) in active.toMap()) {
             if (!allowed(type) || value.maxStrength == 0.0 ||
                 (!value.adaptiveStrength && value.manualStrength == 0.0))
                 clear(type, context.nowMs, "reader_disabled_or_zero_strength", out)
-            else if (action.strength > value.maxStrength || !value.adaptiveStrength) {
+            else if (type != ReadingAidType.NEXT_LINE_START &&
+                (action.strength > value.maxStrength || !value.adaptiveStrength)) {
                 clear(type, context.nowMs, "reader_strength_changed", out)
             }
         }
@@ -56,6 +70,7 @@ class ReadingAidPolicy(
         val out = mutableListOf<ReadingAidDecision>()
         clearAll(context.nowMs, "explicit_reset", out)
         resetEvidence()
+        continuationFloor = context.captureMs ?: context.nowMs
         epoch = context.generation to context.geometrySnapshotId
         return out
     }
@@ -73,22 +88,38 @@ class ReadingAidPolicy(
             } else {
                 clearAll(context.nowMs, reason, out)
                 resetEvidence()
+                continuationFloor = context.captureMs ?: context.nowMs
             }
             return out
         }
         if (!valid(context)) return suppress("invalid_live_input", event, context, out)
-        if (!fresh(event.endMs, event.evidenceAvailableMs, event.evidenceTimeBasis, context))
+        if (!fresh(event.endMs, event.evidenceAvailableMs, event.evidenceTimeBasis, context)) {
+            resetContinuation()
             return suppress("late_or_unavailable_evidence", event, context, out)
+        }
         val f = latestFinalizedFixation
         if (f == null || f.geometrySnapshotId != context.geometrySnapshotId ||
             f.index !in event.fixationIndices || f.endMs > context.captureMs!! ||
-            f.evidenceAvailableMs == null || f.evidenceAvailableMs > context.nowMs)
+            f.evidenceAvailableMs == null || f.evidenceAvailableMs > context.nowMs) {
+            resetContinuation()
             return suppress("unsupported_or_stale_fixation", event, context, out)
+        }
         if (segment != null && f.segment != segment) {
             clearAll(context.nowMs, "segment_changed", out)
             resetEvidence()
         }
         segment = f.segment
+        val supportRow = context.geometry?.lines?.getOrNull(f.line ?: -1)
+        if (!f.leftCensored && !f.rightCensored && supportRow != null && f.y.isFinite() &&
+            f.y - context.geometry!!.textOriginY in supportRow.top..supportRow.bottom &&
+            fresh(f.endMs, f.evidenceAvailableMs, f.evidenceTimeBasis, context))
+            continuationSupport("fixation:${f.index}", f.segment, f.line, f.startMs,
+                f.endMs, f.evidenceAvailableMs!!, f.x, context, out)
+        else if (!(f.leftCensored && !f.rightCensored && continuationStart?.let {
+                it.key == (f.segment to f.startMs) && it.evidence.line == f.line &&
+                    f.endMs >= it.evidence.lastCaptureMs &&
+                    context.captureMs!! - f.endMs in 0.0..config.maxEvidenceAgeMs
+            } == true)) resetContinuation()
         if (f.line != null && f.line == context.targetLine && preferences.lineGuide) choose(
             ReadingAidType.CURRENT_LINE, anchor(context, f.line), config.minAdaptiveStrength,
             f.startMs, f.endMs, f.evidenceAvailableMs,
@@ -102,19 +133,6 @@ class ReadingAidPolicy(
                 if (visit != null && visit.segment == f.segment && visit.line == f.line &&
                     visit.start == f.wordStartUtf16 && visit.end == f.wordEndUtf16)
                     wordVisit = visit.copy(refixationEventIds = visit.refixationEventIds + event.eventId)
-            }
-            event.patternId == "P09" && event.resolution == "line" &&
-                event.metrics["status"] == "observed" && config.automaticRulesEnabled &&
-                preferences.lineStartCue -> {
-                val line = f.line
-                if (line != null && line == context.targetLine) choose(
-                    ReadingAidType.NEXT_LINE_START, anchor(context, line), 0.6,
-                    event.startMs ?: f.startMs, f.endMs, event.evidenceAvailableMs!!,
-                    listOf(event.eventId), listOf("fixation:${f.index}"), "P09_REACTIVE_LANDING_V1",
-                    listOf("W24", "S19"),
-                    "W24 reactive line transition; S19 persistent line-start salience; neither validates this phone trigger or strength.",
-                    context, out)
-                else suppress("landing_anchor_unavailable", event, context, out)
             }
             event.patternId == "P12" && event.resolution == "word" &&
                 event.metrics["kind"] == "residence_update" -> {
@@ -168,9 +186,17 @@ class ReadingAidPolicy(
     fun onObservation(candidate: ScanpathCandidateEvidence?, context: ReadingAidContext): List<ReadingAidDecision> {
         val out = prepare(context).toMutableList()
         if (!valid(context)) return out
+        if (candidate != null && segment != null && candidate.segment != segment) {
+            clearAll(context.nowMs, "segment_changed", out)
+            resetEvidence()
+        }
         if (candidate != null && candidate.geometrySnapshotId == context.geometrySnapshotId &&
             candidate.line == context.targetLine && (segment == null || candidate.segment == segment) &&
             fresh(candidate.endMs, candidate.evidenceAvailableMs, candidate.evidenceTimeBasis, context)) {
+            if (segment == null) segment = candidate.segment
+            continuationSupport(candidate.candidateId, candidate.segment, candidate.line,
+                candidate.startMs, candidate.endMs, candidate.evidenceAvailableMs!!,
+                context.targetX, context, out)
             val line = candidate.line
             if (line != null && preferences.lineGuide) choose(
                 ReadingAidType.CURRENT_LINE, anchor(context, line), config.minAdaptiveStrength,
@@ -181,13 +207,124 @@ class ReadingAidPolicy(
                 context, out)
             maybeWord(context, candidate, out)
         } else if (candidate != null) {
+            // A valid majority prefix may disagree with one latest raw row assignment.
+            // Withhold gaze-following aids while retaining supported continuation state.
+            if (candidate.geometrySnapshotId != context.geometrySnapshotId || candidate.line == null ||
+                !fullyVisible(candidate.line, context) ||
+                (segment != null && candidate.segment != segment) ||
+                !fresh(candidate.endMs, candidate.evidenceAvailableMs, candidate.evidenceTimeBasis, context)) {
+                resetContinuation()
+                clear(ReadingAidType.NEXT_LINE_START, context.nowMs, "candidate_anchor_unavailable", out)
+            }
             clear(ReadingAidType.CURRENT_LINE, context.nowMs, "candidate_anchor_unavailable", out)
             clear(ReadingAidType.WORD_MAGNIFIER, context.nowMs, "candidate_anchor_unavailable", out)
         }
         return out
     }
 
+    private fun continuationGeometryValid(c: ReadingAidContext): Boolean {
+        val g = c.geometry ?: return false
+        val v = g.visibleRectScreen
+        return g.snapshotId == c.geometrySnapshotId && g.lines.size == c.lineCount &&
+            g.textDirection == ScanpathTextDirection.LTR &&
+            listOf(g.textOriginX, g.textOriginY, v.left, v.top, v.right, v.bottom).all { it.isFinite() } &&
+            v.right > v.left && v.bottom > v.top
+    }
+
+    private fun fullyVisible(line: Int, c: ReadingAidContext): Boolean {
+        if (!continuationGeometryValid(c)) return false
+        val g = c.geometry!!
+        val row = g.lines.getOrNull(line) ?: return false
+        val v = g.visibleRectScreen
+        return row.endUtf16 > row.startUtf16 &&
+            listOf(row.left, row.right, row.top, row.bottom).all { it.isFinite() } &&
+            row.right > row.left && row.bottom > row.top &&
+            row.left + g.textOriginX >= v.left && row.right + g.textOriginX <= v.right &&
+            row.top + g.textOriginY >= v.top && row.bottom + g.textOriginY <= v.bottom
+    }
+
+    private fun resetContinuation() {
+        continuationStart = null
+        continuationEnd = null
+    }
+
+    /** Geometry supports an expected physical line, without asserting comprehension or difficulty. */
+    private fun continuationSupport(id: String, supportSegment: Int, line: Int?, first: Double,
+        last: Double, available: Double, x: Double?, c: ReadingAidContext,
+        out: MutableList<ReadingAidDecision>) {
+        if (!config.automaticRulesEnabled || !allowed(ReadingAidType.NEXT_LINE_START)) {
+            resetContinuation()
+            return
+        }
+        if (line == null || !fullyVisible(line, c) || x?.isFinite() != true ||
+            !first.isFinite() || !last.isFinite() || first > last || first <= continuationFloor ||
+            c.captureMs!! - last !in 0.0..config.maxEvidenceAgeMs) {
+            resetContinuation()
+            return
+        }
+        val g = c.geometry!!
+        val row = g.lines[line]
+        val localX = x - g.textOriginX
+        if (localX !in row.left..row.right) {
+            resetContinuation()
+            return
+        }
+        // Finalization may describe an older departed row. It cannot consume a current
+        // expectation unless its landing agrees with the latest raw target.
+        if (continuationStart?.let { it.evidence.line != line } == true && line != c.targetLine) return
+        // Ignore older repeats while allowing a growing established candidate prefix.
+        if (last <= lastContinuationCapture) return
+        lastContinuationCapture = last
+        val support = ContinuationSupport(ReadingAidContinuationEvidence(id, supportSegment, line,
+            first, last, available), (localX - row.left) / (row.right - row.left))
+        val marker = active[ReadingAidType.NEXT_LINE_START]
+        if (marker != null && line == c.targetLine) {
+            if (line == marker.anchor.line) {
+                clear(ReadingAidType.NEXT_LINE_START, c.nowMs, "expected_line_arrival", out)
+                markerLanding = null
+            } else if (markerLanding?.let { support.key != it.key &&
+                    first > it.evidence.lastCaptureMs } == true) {
+                clear(ReadingAidType.NEXT_LINE_START, c.nowMs, "continued_reading_elsewhere", out)
+                markerLanding = null
+            }
+        }
+        val start = continuationStart
+        val end = continuationEnd
+        if (start != null && start.evidence.line != line) {
+            // A departure consumes this expectation exactly once, including a normal arrival.
+            resetContinuation()
+            if (end != null && line == c.targetLine && first > end.evidence.lastCaptureMs &&
+                last - end.evidence.lastCaptureMs <= config.continuationWindowMs &&
+                fullyVisible(start.evidence.line + 1, c) && line != start.evidence.line + 1) {
+                val evidence = listOf(start.evidence, end.evidence, support.evidence).distinct()
+                choose(ReadingAidType.NEXT_LINE_START, anchor(c, start.evidence.line + 1), 1.0,
+                    start.evidence.firstCaptureMs, last, evidence.maxOf { it.evidenceAvailableMs },
+                    emptyList(), evidence.map { it.evidenceId }, "A2_CONTINUATION_MISMATCH_V1",
+                    listOf("W24", "S19"),
+                    "Expected-next-line assistance hypothesis; W24/S19 are form/navigation precedents only; this trigger and phone benefit are unvalidated.",
+                    c, out, evidence)
+                if (active[ReadingAidType.NEXT_LINE_START] != null) markerLanding = support
+            }
+        }
+        if (line >= c.lineCount - 1 || !fullyVisible(line + 1, c)) {
+            resetContinuation()
+            return
+        }
+        if (continuationStart == null && support.fraction <= config.continuationStartFraction) {
+            continuationStart = support
+        } else {
+            val source = continuationStart
+            if (source != null && source.evidence.line == line &&
+                last > source.evidence.lastCaptureMs && support.fraction >= config.continuationEndFraction)
+                continuationEnd = support
+        }
+    }
+
     private fun maybeWord(c: ReadingAidContext, candidate: ScanpathCandidateEvidence?, out: MutableList<ReadingAidDecision>) {
+        if (config.wordAidType == ReadingAidType.WORD_DEFINITION) {
+            maybeDefinition(c, candidate, out)
+            return
+        }
         val visit = wordVisit ?: return
         if (!config.automaticRulesEnabled || !preferences.wordMagnifier ||
             visit.line != c.targetLine || visit.start != c.targetWordStartUtf16 ||
@@ -217,6 +354,25 @@ class ReadingAidPolicy(
             c, out)
     }
 
+    private fun maybeDefinition(c: ReadingAidContext, candidate: ScanpathCandidateEvidence?, out: MutableList<ReadingAidDecision>) {
+        if (!config.automaticRulesEnabled || !preferences.wordDefinition) return
+        val visit = wordVisit?.takeIf { it.line == c.targetLine && it.start == c.targetWordStartUtf16 &&
+            it.end == c.targetWordEndUtf16 }
+        val prefix = candidate?.takeIf { it.wordStartUtf16 == c.targetWordStartUtf16 &&
+            it.wordEndUtf16 == c.targetWordEndUtf16 && it.wordStartUtf16 != null &&
+            (visit == null || it.startMs > visit.lastFinalEndMs) }
+        val observed = (visit?.observedMs ?: 0.0) + (prefix?.durationMs ?: 0.0)
+        if (observed < config.definitionMinObservedMs || (visit == null && prefix == null)) return
+        choose(ReadingAidType.WORD_DEFINITION,
+            anchor(c, c.targetLine!!, c.targetWordStartUtf16, c.targetWordEndUtf16), 1.0,
+            visit?.firstMs ?: prefix!!.startMs, prefix?.endMs ?: visit!!.lastFinalEndMs,
+            prefix?.evidenceAvailableMs ?: visit!!.availableMs,
+            listOfNotNull(visit?.lastEventId), listOfNotNull(prefix?.candidateId), "A5_WORD_RESIDENCE_DEFINITION_V1",
+            listOf("H03", "M25"),
+            "H03/M25 gaze-triggered translation precedents; English definitions, the 800 ms setting and phone benefit remain experimental.",
+            c, out)
+    }
+
     private fun maybeFocus(c: ReadingAidContext, out: MutableList<ReadingAidDecision>) {
         if (!config.automaticRulesEnabled || !preferences.focusRegion) return
         val recentCycle = cycle ?: return
@@ -226,7 +382,7 @@ class ReadingAidPolicy(
             recentCycle.endMs > residence.endMs ||
             c.captureMs - residence.endMs !in 0.0..config.maxEvidenceAgeMs ||
             c.captureMs - recentCycle.endMs !in 0.0..config.cycleWindowMs ||
-            active.containsKey(ReadingAidType.WORD_MAGNIFIER)) return
+            (active.containsKey(ReadingAidType.WORD_MAGNIFIER) || active.containsKey(ReadingAidType.WORD_DEFINITION))) return
         // Experimental stimulus modulation from observed line residence, not a difficulty score.
         val target = interpolatedStrength(residence.observedMs, config.lineMinObservedMs,
             config.lineSaturationMs)
@@ -253,23 +409,33 @@ class ReadingAidPolicy(
         if (epoch != null && epoch != next) {
             clearAll(c.nowMs, "generation_or_geometry_changed", out)
             resetEvidence()
+            continuationFloor = c.captureMs ?: c.nowMs
             seenEvents.clear()
         }
         epoch = next
+        continuationEnd?.let {
+            if (c.captureMs == null || c.captureMs - it.evidence.lastCaptureMs > config.continuationWindowMs)
+                resetContinuation()
+        }
+        if (!continuationGeometryValid(c) || active[ReadingAidType.NEXT_LINE_START]?.let {
+                !fullyVisible(it.anchor.line, c) } == true) {
+            resetContinuation()
+            clear(ReadingAidType.NEXT_LINE_START, c.nowMs, "continuation_geometry_unavailable", out)
+        }
         for ((type, action) in active.toMap()) {
             if (c.nowMs >= action.expiresMs) expire(type, c.nowMs, out)
         }
         if (!valid(c)) {
             clearAll(c.nowMs, "invalid_live_input", out)
             resetEvidence()
+            continuationFloor = c.captureMs ?: c.nowMs
         } else {
             val word = active[ReadingAidType.WORD_MAGNIFIER]
             if (word != null && (word.anchor.line != c.targetLine ||
                 word.anchor.wordStartUtf16 != c.targetWordStartUtf16 ||
                 word.anchor.wordEndUtf16 != c.targetWordEndUtf16))
                 clear(ReadingAidType.WORD_MAGNIFIER, c.nowMs, "word_target_moved", out)
-            for (type in listOf(ReadingAidType.CURRENT_LINE, ReadingAidType.NEXT_LINE_START,
-                ReadingAidType.FOCUS_REGION)) {
+            for (type in listOf(ReadingAidType.CURRENT_LINE, ReadingAidType.FOCUS_REGION)) {
                 if (active[type]?.anchor?.line != null && active[type]?.anchor?.line != c.targetLine)
                     clear(type, c.nowMs, "line_target_moved", out)
             }
@@ -298,6 +464,7 @@ class ReadingAidPolicy(
         ReadingAidType.CURRENT_LINE -> preferences.lineGuide
         ReadingAidType.NEXT_LINE_START -> preferences.lineStartCue
         ReadingAidType.WORD_MAGNIFIER -> preferences.wordMagnifier
+        ReadingAidType.WORD_DEFINITION -> preferences.wordDefinition
         ReadingAidType.FOCUS_REGION -> preferences.focusRegion
     }
 
@@ -308,21 +475,24 @@ class ReadingAidPolicy(
                        first: Double, last: Double, available: Double,
                        events: List<String>, evidence: List<String>, rule: String,
                        sources: List<String>, relationship: String,
-                       c: ReadingAidContext, out: MutableList<ReadingAidDecision>) {
-        if (!allowed(type) || preferences.maxStrength == 0.0) return
+                       c: ReadingAidContext, out: MutableList<ReadingAidDecision>,
+                       continuationEvidence: List<ReadingAidContinuationEvidence> = emptyList()) {
+        if (!allowed(type) || preferences.maxStrength == 0.0 ||
+            (!preferences.adaptiveStrength && preferences.manualStrength == 0.0)) return
         if (c.nowMs < (cooldownUntil[type] ?: Double.NEGATIVE_INFINITY)) {
             out.add(ReadingAidDecision(ReadingAidDecisionStatus.SUPPRESSED, null, "cooldown", c.nowMs,
                 events, rule, sources))
             return
         }
-        if (type == ReadingAidType.FOCUS_REGION && active.containsKey(ReadingAidType.WORD_MAGNIFIER)) {
+        if (type == ReadingAidType.FOCUS_REGION && (active.containsKey(ReadingAidType.WORD_MAGNIFIER) || active.containsKey(ReadingAidType.WORD_DEFINITION))) {
             out.add(ReadingAidDecision(ReadingAidDecisionStatus.SUPPRESSED, null,
                 "word_magnifier_priority", c.nowMs, events, rule, sources))
             return
         }
-        if (type == ReadingAidType.WORD_MAGNIFIER && active.containsKey(ReadingAidType.FOCUS_REGION))
+        if (type in listOf(ReadingAidType.WORD_MAGNIFIER, ReadingAidType.WORD_DEFINITION) && active.containsKey(ReadingAidType.FOCUS_REGION))
             clear(ReadingAidType.FOCUS_REGION, c.nowMs, "word_magnifier_priority", out)
-        val strength = if (preferences.adaptiveStrength) min(preferences.maxStrength, targetStrength)
+        val strength = if (type == ReadingAidType.NEXT_LINE_START) 1.0
+            else if (preferences.adaptiveStrength) min(preferences.maxStrength, targetStrength)
             else min(preferences.maxStrength, preferences.manualStrength)
         if (strength <= 0) return
         val old = active[type]
@@ -331,15 +501,16 @@ class ReadingAidPolicy(
         val action = ReadingAidAction("aid:${++serial}", type,
             when (type) {
                 ReadingAidType.CURRENT_LINE -> "CURRENT_LINE_HIGHLIGHT_V1"
-                ReadingAidType.NEXT_LINE_START -> "DESTINATION_LINE_START_CUE_V1"
+                ReadingAidType.NEXT_LINE_START -> "CONTINUATION_LINE_START_CUE_V1"
                 ReadingAidType.WORD_MAGNIFIER -> "CONTEXT_WORD_MAGNIFIER_V1"
+                ReadingAidType.WORD_DEFINITION -> "CONTEXT_WORD_DEFINITION_V1"
                 ReadingAidType.FOCUS_REGION -> "CONTEXT_FOCUS_REGION_V1"
             }, config.conditionId, anchor, strength,
             if (type == ReadingAidType.WORD_MAGNIFIER) 1.0 +
                 (config.maxMagnificationScale - 1.0) * strength else null,
             if (type == ReadingAidType.FOCUS_REGION) config.focusContextRadiusLines else null,
             c.nowMs, c.nowMs + config.aidTtlMs, events, evidence,
-            first, last, available, rule, sources, relationship, true, config.configId)
+            first, last, available, rule, sources, relationship, true, config.configId, continuationEvidence)
         active[type] = action
         out.add(ReadingAidDecision(ReadingAidDecisionStatus.CHOSEN, action, "rule_matched", c.nowMs,
             events, rule, sources))
@@ -375,5 +546,8 @@ class ReadingAidPolicy(
 
     private fun resetEvidence() {
         wordVisit = null; cycle = null; lineResidence = null; segment = null
+        resetContinuation()
+        markerLanding = null
+        lastContinuationCapture = Double.NEGATIVE_INFINITY
     }
 }
