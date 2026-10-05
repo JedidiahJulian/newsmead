@@ -50,7 +50,9 @@ android {
         )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        ndk { abiFilters += "arm64-v8a" }
+        // The study phone runs a 32-bit Android image. Keep the original 64-bit
+        // path while packaging the separately pinned 32-bit native runtime.
+        ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a")) }
     }
 
     buildTypes {
@@ -157,7 +159,10 @@ val verifyVendor by tasks.registering {
             "assets/face_landmarker.task" to "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
             "jniLibs/arm64-v8a/libMNN.so" to "c91fb9e65ef45477406583cf374978c61713318893f6af473aecdafed4c17f60",
             "jniLibs/arm64-v8a/libmnncore.so" to "075cbfac452b1a4b601a5e9d74134b800cf13e34a998aee3d1367571c2007bd9",
-            "jniLibs/arm64-v8a/libc++_shared.so" to "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970"
+            "jniLibs/arm64-v8a/libc++_shared.so" to "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970",
+            "jniLibs/armeabi-v7a/libMNN.so" to "3504fe856a208ead295536ff8398dcdd210e5cd7fc51d7cd34a9e1fcf084c2f7",
+            "jniLibs/armeabi-v7a/libmnncore.so" to "966aa04af136c8c99fe84309bc845e16478cee215a2b717b829635bfc20b1f9c",
+            "jniLibs/armeabi-v7a/libc++_shared.so" to "4df8b2e81690dd1393a94f65c18b41e5b91494b10b21415823a94ab6bb81018a"
         )
         pins.forEach { (path, expected) ->
             val hash = MessageDigest.getInstance("SHA-256").digest(rootProject.file("mgazenet-benchmark/vendor/$path").readBytes())
@@ -205,7 +210,10 @@ tasks.register("verifyMgazeNetDebugApk") {
             "assets/face_landmarker.task" to "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
             "lib/arm64-v8a/libMNN.so" to "c91fb9e65ef45477406583cf374978c61713318893f6af473aecdafed4c17f60",
             "lib/arm64-v8a/libmnncore.so" to "075cbfac452b1a4b601a5e9d74134b800cf13e34a998aee3d1367571c2007bd9",
-            "lib/arm64-v8a/libc++_shared.so" to "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970"
+            "lib/arm64-v8a/libc++_shared.so" to "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970",
+            "lib/armeabi-v7a/libMNN.so" to "3504fe856a208ead295536ff8398dcdd210e5cd7fc51d7cd34a9e1fcf084c2f7",
+            "lib/armeabi-v7a/libmnncore.so" to "966aa04af136c8c99fe84309bc845e16478cee215a2b717b829635bfc20b1f9c",
+            "lib/armeabi-v7a/libc++_shared.so" to "4df8b2e81690dd1393a94f65c18b41e5b91494b10b21415823a94ab6bb81018a"
         )
         ZipFile(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile).use { apk ->
             pins.forEach { (path,expected) ->

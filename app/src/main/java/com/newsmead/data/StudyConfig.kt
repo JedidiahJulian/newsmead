@@ -1,5 +1,8 @@
 package com.newsmead.data
 
+import com.newsmead.gaze.MahalanobisDirectionPolicy
+import com.newsmead.gaze.ScaffoldScoringMethod
+
 /**
  * Central switches for running NewsMead as a thesis-study research instrument
  * (no real users, no backend). Flip these back to false to restore the original
@@ -74,6 +77,12 @@ object StudyConfig {
      * DEMO_CYCLE walks every level in turn for recording; it is not a study mode.
      */
     val SCAFFOLD_MODE = ScaffoldMode.DEMO_CYCLE
+
+    /** Keep the established controller score until the new score is evaluated. */
+    val SCAFFOLD_SCORING_METHOD = ScaffoldScoringMethod.LEGACY_WEIGHTED_AII
+    val MAHALANOBIS_DIRECTION_POLICY = MahalanobisDirectionPolicy.STANDARD_TWO_SIDED
+    const val MAHALANOBIS_OFF_DIAGONAL_SHRINKAGE = 0.10
+    const val MAHALANOBIS_DIRECTION_DEADBAND_Z = 0.50
 
     /** How long DEMO_CYCLE holds each level before moving to the next one. */
     const val SCAFFOLD_DEMO_LEVEL_DURATION_MS = 12_000L

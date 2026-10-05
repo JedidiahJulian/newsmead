@@ -40,12 +40,27 @@ def main():
     model = fetch(model_url, MODEL_SHA)
     archive_url = "https://github.com/alibaba/MNN/releases/download/3.6.1/mnn_3.6.1_android_armv7_armv8_cpu_opencl_vulkan.zip"
     archive = zipfile.ZipFile(io.BytesIO(fetch(archive_url, MNN_ZIP_SHA)))
-    prefix = "mnn_3.6.1_android_armv7_armv8_cpu_opencl_vulkan/arm64-v8a/"
     # CPU Session JNI. Do not bundle GPU, audio, LLM, or MNN's OpenCV substitute.
-    libraries = ["libMNN.so", "libmnncore.so", "libc++_shared.so"]
+    libraries = {
+        "arm64-v8a": {
+            "libMNN.so": "c91fb9e65ef45477406583cf374978c61713318893f6af473aecdafed4c17f60",
+            "libmnncore.so": "075cbfac452b1a4b601a5e9d74134b800cf13e34a998aee3d1367571c2007bd9",
+            "libc++_shared.so": "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970",
+        },
+        "armeabi-v7a": {
+            "libMNN.so": "3504fe856a208ead295536ff8398dcdd210e5cd7fc51d7cd34a9e1fcf084c2f7",
+            "libmnncore.so": "966aa04af136c8c99fe84309bc845e16478cee215a2b717b829635bfc20b1f9c",
+            "libc++_shared.so": "4df8b2e81690dd1393a94f65c18b41e5b91494b10b21415823a94ab6bb81018a",
+        },
+    }
     write("assets/base.mnn", model)
-    for name in libraries:
-        write("jniLibs/arm64-v8a/" + name, archive.read(prefix + name))
+    for abi, pinned_files in libraries.items():
+        prefix = f"mnn_3.6.1_android_armv7_armv8_cpu_opencl_vulkan/{abi}/"
+        for name, expected_sha in pinned_files.items():
+            data = archive.read(prefix + name)
+            if hashlib.sha256(data).hexdigest() != expected_sha:
+                raise ValueError(f"SHA256 mismatch for {abi}/{name}")
+            write(f"jniLibs/{abi}/{name}", data)
     landmark = ROOT / "app/src/main/assets/face_landmarker.task"
     data = landmark.read_bytes()
     if hashlib.sha256(data).hexdigest() != LANDMARK_SHA:

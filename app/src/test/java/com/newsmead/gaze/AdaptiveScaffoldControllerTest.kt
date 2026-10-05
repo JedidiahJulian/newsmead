@@ -101,6 +101,36 @@ class AdaptiveScaffoldControllerTest {
         assertEquals(10, update.state.reentryTargetLine)
     }
 
+    @Test
+    fun twoSidedMahalanobisCanActivateOnLowMetricsWhilePositiveGateCannot() {
+        val lowScore = MahalanobisScorer.Score(
+            md2 = 12.0, md = kotlin.math.sqrt(12.0),
+            band = MahalanobisScorer.PercentileBand.P99_OR_ABOVE,
+            deltaR = -2.0, deltaD = -0.2, deltaF = -20.0,
+            directionR = MahalanobisScorer.Direction.BELOW_BASELINE,
+            directionD = MahalanobisScorer.Direction.BELOW_BASELINE,
+            directionF = MahalanobisScorer.Direction.BELOW_BASELINE,
+        )
+        val snapshot = snapshot(0.0).copy(mahalanobis = lowScore)
+        val target = TextTarget(8, 30)
+        val twoSided = AdaptiveScaffoldController(
+            escalationPersistenceMs = 0,
+            scoringMethod = ScaffoldScoringMethod.MAHALANOBIS,
+        )
+        val positiveGate = AdaptiveScaffoldController(
+            escalationPersistenceMs = 0,
+            scoringMethod = ScaffoldScoringMethod.MAHALANOBIS,
+            mahalanobisDirectionPolicy = MahalanobisDirectionPolicy.POSITIVE_DIRECTION_GATE,
+        )
+
+        twoSided.update(snapshot, target, 0)
+        positiveGate.update(snapshot, target, 0)
+        val activation = twoSided.update(snapshot, target, 1)
+        assertEquals(ScaffoldLevel.WORD, activation.state.level)
+        assertEquals(ScaffoldLevel.NONE, positiveGate.update(snapshot, target, 1).state.level)
+        assertEquals(12.0, activation.transition?.stabilityIndex ?: Double.NaN, 0.0)
+    }
+
     private fun snapshot(
         index: Double,
         confidence: Double = 1.0,

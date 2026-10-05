@@ -21,6 +21,7 @@ data class ScaffoldTransition(
     val currentLine: Int,
     val reentryTargetLine: Int,
     val recoveryLatencyMs: Long?,
+    val scoringMethod: ScaffoldScoringMethod = ScaffoldScoringMethod.LEGACY_WEIGHTED_AII,
 )
 
 data class ScaffoldUpdate(val state: ScaffoldState, val transition: ScaffoldTransition? = null)
@@ -41,6 +42,8 @@ class AdaptiveScaffoldController(
     private val lossOffTextMs: Long = DEFAULT_LOSS_OFF_TEXT_MS,
     private val minimumLossLineJump: Int = DEFAULT_MINIMUM_LOSS_LINE_JUMP,
     private val reentryEvidenceMs: Long = DEFAULT_REENTRY_EVIDENCE_MS,
+    private val scoringMethod: ScaffoldScoringMethod = ScaffoldScoringMethod.LEGACY_WEIGHTED_AII,
+    private val mahalanobisDirectionPolicy: MahalanobisDirectionPolicy = MahalanobisDirectionPolicy.STANDARD_TWO_SIDED,
     /** Non-null pins the level, bypassing the adaptive policy. Settable so a
      *  demo/validation run can move through the levels without a rebuild. */
     var forcedLevel: ScaffoldLevel? = null,
@@ -89,12 +92,20 @@ class AdaptiveScaffoldController(
         if (snapshot.confidence < minimumConfidence) {
             return changeImmediately(ScaffoldLevel.NONE, snapshot, target, timestampMs, "low gaze confidence")
         }
+        val mahalanobis = if (scoringMethod == ScaffoldScoringMethod.MAHALANOBIS) snapshot.mahalanobis else null
+        if (scoringMethod == ScaffoldScoringMethod.MAHALANOBIS && mahalanobis == null) {
+            return changeImmediately(ScaffoldLevel.NONE, snapshot, target, timestampMs, "Mahalanobis baseline unavailable")
+        }
 
-        if (target.isValid && snapshot.smoothedIndex < wordThreshold) {
+        if (target.isValid && (mahalanobis?.band == MahalanobisScorer.PercentileBand.BELOW_P90 ||
+                    (mahalanobis == null && snapshot.smoothedIndex < wordThreshold))) {
             lastStableLine = target.lineIndex
         }
 
-        val desired = desiredLevel(snapshot.smoothedIndex, timestampMs)
+        val desired = if (mahalanobis == null) desiredLevel(snapshot.smoothedIndex, timestampMs)
+        else if (mahalanobisDirectionPolicy == MahalanobisDirectionPolicy.POSITIVE_DIRECTION_GATE &&
+            !mahalanobis.positiveDirectionEligible) ScaffoldLevel.NONE
+        else desiredLevel(mahalanobis.band, timestampMs)
         if (desired == currentLevel) {
             candidateLevel = currentLevel
             candidateSinceMs = timestampMs
@@ -140,6 +151,15 @@ class AdaptiveScaffoldController(
         else -> ScaffoldLevel.FOCUS
     }
 
+    private fun desiredLevel(band: MahalanobisScorer.PercentileBand, timestampMs: Long): ScaffoldLevel = when (band) {
+        MahalanobisScorer.PercentileBand.BELOW_P90 -> ScaffoldLevel.NONE
+        MahalanobisScorer.PercentileBand.P90_TO_P95 -> ScaffoldLevel.WORD
+        MahalanobisScorer.PercentileBand.P95_TO_P99 -> ScaffoldLevel.LINE
+        MahalanobisScorer.PercentileBand.P99_OR_ABOVE ->
+            if (timestampMs <= reentryEvidenceUntilMs && reentryTargetLine >= 0) ScaffoldLevel.REENTRY
+            else ScaffoldLevel.FOCUS
+    }
+
     private fun transitionTo(
         next: ScaffoldLevel,
         snapshot: WindowedStabilityEstimator.StabilitySnapshot,
@@ -164,11 +184,13 @@ class AdaptiveScaffoldController(
                 to = next,
                 timestampMs = timestampMs,
                 reason = reason,
-                stabilityIndex = snapshot.smoothedIndex,
+                stabilityIndex = if (scoringMethod == ScaffoldScoringMethod.MAHALANOBIS)
+                    snapshot.mahalanobis?.md2 ?: 0.0 else snapshot.smoothedIndex,
                 confidence = snapshot.confidence,
                 currentLine = target.lineIndex,
                 reentryTargetLine = state.reentryTargetLine,
                 recoveryLatencyMs = recoveryLatency,
+                scoringMethod = scoringMethod,
             ),
         )
     }

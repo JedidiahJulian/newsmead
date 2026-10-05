@@ -18,6 +18,8 @@ class WindowedStabilityEstimator(
     private val minimumMetricSpanMs: Long = DEFAULT_MINIMUM_METRIC_SPAN_MS,
     private val smoothingTimeConstantMs: Long = DEFAULT_SMOOTHING_TIME_CONSTANT_MS,
     initialBaseline: BaselineProfile? = null,
+    private val mahalanobisOffDiagonalShrinkage: Double = MahalanobisScorer.DEFAULT_OFF_DIAGONAL_SHRINKAGE,
+    private val mahalanobisDirectionDeadbandZ: Double = MahalanobisScorer.DEFAULT_DIRECTION_DEADBAND_Z,
 ) {
     private val suppliedBaseline = initialBaseline
     private val scores = ArrayDeque<CumulativeSample>()
@@ -25,6 +27,8 @@ class WindowedStabilityEstimator(
     private val regressionStats = RunningStats()
     private val dwellStats = RunningStats()
     private val fixationStats = RunningStats()
+    private val baselineVectors = ArrayList<ReadingMetrics>()
+    private var mahalanobisProfile: MahalanobisScorer.Profile? = null
 
     private var baselineStartedAtMs: Long? = null
     private var baseline: BaselineProfile? = initialBaseline
@@ -88,6 +92,7 @@ class WindowedStabilityEstimator(
                 baselineReady = baseline != null,
                 metrics = metrics,
                 timestampMs = sample.timestampMs,
+                isNewMetricWindow = true,
             )
             return lastSnapshot
         }
@@ -124,16 +129,23 @@ class WindowedStabilityEstimator(
             baselineReady = true,
             metrics = metrics,
             timestampMs = sample.timestampMs,
+            mahalanobis = mahalanobisProfile?.let {
+                MahalanobisScorer.score(metrics, it, mahalanobisDirectionDeadbandZ)
+            },
+            isNewMetricWindow = true,
         )
         return lastSnapshot
     }
 
     fun currentSnapshot(timestampMs: Long): StabilitySnapshot {
         trimValidity(timestampMs)
-        return lastSnapshot.copy(confidence = confidence(timestampMs), timestampMs = timestampMs)
+        return lastSnapshot.copy(confidence = confidence(timestampMs), timestampMs = timestampMs,
+            isNewMetricWindow = false)
     }
 
     fun baselineProfile(): BaselineProfile? = baseline
+
+    fun mahalanobisProfile(): MahalanobisScorer.Profile? = mahalanobisProfile
 
     fun reset() {
         scores.clear()
@@ -142,6 +154,8 @@ class WindowedStabilityEstimator(
         regressionStats.reset()
         dwellStats.reset()
         fixationStats.reset()
+        baselineVectors.clear()
+        mahalanobisProfile = null
         baselineStartedAtMs = null
         baseline = suppliedBaseline
         lastMetricAtMs = Long.MIN_VALUE
@@ -155,12 +169,14 @@ class WindowedStabilityEstimator(
         regressionStats.add(metrics.regressionRatePerMinute)
         dwellStats.add(metrics.dwellRatio)
         fixationStats.add(metrics.fixationRatePerMinute)
+        baselineVectors.add(metrics)
         if (timestampMs - startedAt < baselineDurationMs || regressionStats.count < MIN_BASELINE_SAMPLES) return
         baseline = BaselineProfile(
             regressionRatePerMinute = regressionStats.toMetric(MIN_REGRESSION_STD),
             dwellRatio = dwellStats.toMetric(MIN_DWELL_STD),
             fixationRatePerMinute = fixationStats.toMetric(MIN_FIXATION_STD),
         )
+        mahalanobisProfile = MahalanobisScorer.fit(baselineVectors, mahalanobisOffDiagonalShrinkage)
     }
 
     private fun positiveZ(value: Double, baselineMetric: BaselineMetric, floor: Double): Double =
@@ -217,6 +233,8 @@ class WindowedStabilityEstimator(
         val baselineReady: Boolean,
         val metrics: ReadingMetrics,
         val timestampMs: Long,
+        val mahalanobis: MahalanobisScorer.Score? = null,
+        val isNewMetricWindow: Boolean = false,
     ) {
         companion object {
             val EMPTY = StabilitySnapshot(0.0, 0.0, 0.0, false, ReadingMetrics.EMPTY, 0L)

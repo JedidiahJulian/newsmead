@@ -738,6 +738,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         val estimator = WindowedStabilityEstimator(
             windowMs = StudyConfig.SCAFFOLD_WINDOW_MS,
             baselineDurationMs = StudyConfig.SCAFFOLD_BASELINE_DURATION_MS,
+            mahalanobisOffDiagonalShrinkage = StudyConfig.MAHALANOBIS_OFF_DIAGONAL_SHRINKAGE,
+            mahalanobisDirectionDeadbandZ = StudyConfig.MAHALANOBIS_DIRECTION_DEADBAND_Z,
         )
         val controller = AdaptiveScaffoldController(
             wordThreshold = StudyConfig.SCAFFOLD_WORD_THRESHOLD_Z,
@@ -747,6 +749,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             minimumConfidence = StudyConfig.SCAFFOLD_MIN_GAZE_CONFIDENCE,
             escalationPersistenceMs = StudyConfig.SCAFFOLD_ESCALATION_PERSISTENCE_MS,
             recoveryPersistenceMs = StudyConfig.SCAFFOLD_RECOVERY_PERSISTENCE_MS,
+            scoringMethod = StudyConfig.SCAFFOLD_SCORING_METHOD,
+            mahalanobisDirectionPolicy = StudyConfig.MAHALANOBIS_DIRECTION_POLICY,
             forcedLevel = forcedScaffoldLevel(),
         )
         targetStabilizer = stabilizer
@@ -846,6 +850,19 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 val controller = scaffoldController ?: return
                 val snapshot = estimator.onCumulativeScore(score)
                 applyScaffoldUpdate(controller.update(snapshot, currentTextTarget, score.timestampMs))
+                snapshot.mahalanobis?.let { md ->
+                    if (snapshot.isNewMetricWindow &&
+                        md.band != com.newsmead.gaze.MahalanobisScorer.PercentileBand.BELOW_P90) {
+                        val profile = estimator.mahalanobisProfile()
+                        Log.d("GazeMahalanobis", "t=${score.timestampMs} " +
+                            "R=${snapshot.metrics.regressionRatePerMinute} D=${snapshot.metrics.dwellRatio} " +
+                            "F=${snapshot.metrics.fixationRatePerMinute} md2=${md.md2} md=${md.md} " +
+                            "band=${md.band} deltaR=${md.deltaR} deltaD=${md.deltaD} deltaF=${md.deltaF} " +
+                            "directionR=${md.directionR} directionD=${md.directionD} directionF=${md.directionF} " +
+                            "mean=${profile?.mean} covariance=${profile?.covariance} " +
+                            "regularizedCovariance=${profile?.regularizedCovariance} precision=${profile?.precision}")
+                    }
+                }
                 if (score.timestampMs - lastStabilityLogMs >= 2_000L) {
                     lastStabilityLogMs = score.timestampMs
                     Log.d(
@@ -874,11 +891,12 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 "GazeScaffold",
                 String.format(
                     Locale.US,
-                    "transition=%s->%s reason=%s index=%.2f confidence=%.2f " +
+                    "transition=%s->%s reason=%s scoringMethod=%s score=%.2f confidence=%.2f " +
                         "line=%d target=%d recoveryLatencyMs=%d",
                     transition.from,
                     transition.to,
                     transition.reason,
+                    transition.scoringMethod,
                     transition.stabilityIndex,
                     transition.confidence,
                     transition.currentLine,

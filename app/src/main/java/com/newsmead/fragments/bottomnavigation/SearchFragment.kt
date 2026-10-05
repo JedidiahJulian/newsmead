@@ -6,7 +6,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.SearchView
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.chip.Chip
@@ -22,7 +21,6 @@ import com.newsmead.databinding.FragmentSearchBinding
 import com.newsmead.models.Article
 import com.newsmead.recyclerviews.feed.ArticleSimplifiedAdapter
 import com.newsmead.recyclerviews.feed.clickListener
-import kotlinx.coroutines.launch
 
 class SearchFragment : Fragment(), clickListener {
     private lateinit var binding: FragmentSearchBinding
@@ -122,20 +120,26 @@ class SearchFragment : Fragment(), clickListener {
         )
         binding.rvSearchLatestNews.addItemDecoration(customDividerItemDecoration)
 
-        // Load data and update the adapter when available
-        lifecycleScope.launch {
-            DataHelper.loadArticleData(context, pageSize = 5){
-                if (FirebaseHelper.isNetworkAvailable(requireContext())) {
-                    // Stop the shimmer
-                    binding.shimmerSearch.stopShimmer()
-                    binding.shimmerSearch.visibility = View.GONE
-                    // Update the adapter with the retrieved articles
-                    adapter.updateData(it)
-                }
+        return binding.root
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        val searchBinding = binding
+        val searchAdapter = adapter
+        DataHelper.loadArticleData(requireContext(), pageSize = 5) { articles ->
+            // Volley may respond after navigation has destroyed this view. A new
+            // view can also be created before the old response arrives.
+            if (this.view !== view) return@loadArticleData
+            val currentContext = context ?: return@loadArticleData
+
+            if (FirebaseHelper.isNetworkAvailable(currentContext)) {
+                searchBinding.shimmerSearch.stopShimmer()
+                searchBinding.shimmerSearch.visibility = View.GONE
+                searchAdapter.updateData(articles)
             }
         }
-
-        return binding.root
     }
 
     override fun onItemClicked(article: Article) {
