@@ -75,3 +75,4 @@ local.properties
 # kotlin-ide/
 .idea/misc.xml
 .idea/.name
+.venv/

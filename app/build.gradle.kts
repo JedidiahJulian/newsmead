@@ -62,6 +62,15 @@ android {
             )
         }
     }
+
+    // Keep APK installs universal. In particular, 32-bit ARM devices
+    // must receive the base APK rather than an incompatible ABI split.
+    splits {
+        abi {
+            isEnable = false
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
