@@ -1,5 +1,7 @@
 import java.util.Properties
 import java.io.FileInputStream
+import java.security.MessageDigest
+import java.util.zip.ZipFile
 
 plugins {
     id("com.android.application")
@@ -35,6 +37,26 @@ android {
         versionCode = 1
         versionName = "0.2"
 
+        // Frozen estimator baseline identity for the matched comparison harness.
+        // The reference build applies the reviewed comparison patch to its exact
+        // base snapshot and substitutes only these arm-specific constants.
+        buildConfigField("String", "COMPARISON_ESTIMATOR_ID", "\"mgazenet\"")
+        buildConfigField(
+            "String",
+            "COMPARISON_BASE_COMMIT",
+            "\"bea2dacbfa8d95f6519ccd4fad1cb0dfd6028b22\"",
+        )
+        buildConfigField(
+            "String",
+            "COMPARISON_BASE_APK_SHA256",
+            "\"131f8d96f9bdc3f5a5c16855aa6347e119fd07e96609cba9f6792b161c682fd9\"",
+        )
+        buildConfigField(
+            "String",
+            "COMPARISON_PROTOCOL_MANIFEST_SHA256",
+            "\"41a3fbccd4df38c2bb13d4695a052fe15d3ef78423b19a4c1737d3de6944f185\"",
+        )
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
 
@@ -50,6 +72,7 @@ android {
             "NEWSDATA_API_KEY",
             "\"${localProperties.getProperty("NEWSDATA_API_KEY", "")}\""
         )
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     buildTypes {
@@ -69,6 +92,13 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+
+    sourceSets["main"].apply {
+        assets.srcDir(layout.buildDirectory.dir("generated/mgazenetAssets"))
+        jniLibs.srcDir(rootProject.file("mgazenet-benchmark/vendor/jniLibs"))
+    }
+    // Preserve shrinking; extract the pinned native libraries with AGP 8.3.
+    packaging { jniLibs { useLegacyPackaging = true } }
 
     // Enable viewBinding
     buildFeatures {
@@ -125,6 +155,17 @@ dependencies {
     // Import ZoomLayout dependencies
     implementation("com.otaliastudios:zoomlayout:1.9.0")
 
+    implementation("org.opencv:opencv:4.11.0")
+
+    // Local gaze tracking: CameraX front-camera frames + MediaPipe FaceLandmarker.
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-core:1.3.4")
+    implementation("com.google.mediapipe:tasks-vision:0.10.29")
+    // Reversible hybrid-eye shadow: bundle the CPU runtime so testing does not require
+    // Google Play Services. A universal debug APK carries every ABI; release app bundles do not.
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.10.0")
@@ -134,4 +175,78 @@ dependencies {
     testImplementation("org.json:json:20231013")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+}
+
+val verifyVendor by tasks.registering {
+    doLast {
+        check(rootProject.file("mgazenet-benchmark/vendor/assets/base.mnn").isFile) {
+            "Run tools/gaze/mgazenet/fetch_vendor.py explicitly before building NewsMead."
+        }
+        val pins = mapOf(
+            "assets/base.mnn" to "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96",
+            "assets/face_landmarker.task" to "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+            "jniLibs/arm64-v8a/libMNN.so" to "c91fb9e65ef45477406583cf374978c61713318893f6af473aecdafed4c17f60",
+            "jniLibs/arm64-v8a/libmnncore.so" to "075cbfac452b1a4b601a5e9d74134b800cf13e34a998aee3d1367571c2007bd9",
+            "jniLibs/arm64-v8a/libc++_shared.so" to "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970"
+        )
+        pins.forEach { (path, expected) ->
+            val hash = MessageDigest.getInstance("SHA-256").digest(rootProject.file("mgazenet-benchmark/vendor/$path").readBytes())
+                .joinToString("") { "%02x".format(it) }
+            check(hash == expected) { "Vendor hash mismatch: $path" }
+        }
+        check(MessageDigest.getInstance("SHA-256").digest(file("src/main/assets/face_landmarker.task").readBytes())
+            .joinToString("") { "%02x".format(it) } == pins.getValue("assets/face_landmarker.task"))
+        check(rootProject.file("mgazenet-benchmark/vendor/assets/vendor-manifest.json").isFile)
+        check(rootProject.file("mgazenet-benchmark/vendor/assets/notices/GazeFollower-CC-BY-NC-SA-4.0.txt").isFile)
+        check(rootProject.file("mgazenet-benchmark/vendor/assets/notices/MNN-Apache-2.0.txt").isFile)
+    }
+}
+val verifyComparisonProtocolManifest by tasks.registering {
+    val manifest = file("src/main/assets/comparison/newsmead-current-vs-mgazenet-reading-v1.json")
+    inputs.file(manifest)
+    doLast {
+        check(manifest.isFile) { "Missing frozen comparison protocol manifest asset." }
+        val hash = MessageDigest.getInstance("SHA-256").digest(manifest.readBytes())
+            .joinToString("") { "%02x".format(it) }
+        check(hash == "41a3fbccd4df38c2bb13d4695a052fe15d3ef78423b19a4c1737d3de6944f185") {
+            "Frozen comparison protocol manifest changed."
+        }
+    }
+}
+
+val prepareMgazeNetAssets by tasks.registering(Sync::class) {
+    dependsOn(verifyVendor)
+    from(rootProject.file("mgazenet-benchmark/vendor/assets")) {
+        include("base.mnn", "vendor-manifest.json", "notices/**")
+    }
+    into(layout.buildDirectory.dir("generated/mgazenetAssets"))
+}
+tasks.named("preBuild").configure {
+    dependsOn(prepareMgazeNetAssets)
+    dependsOn(verifyComparisonProtocolManifest)
+}
+
+// Verify the artifact, not just input directories (OpenCV also supplies libc++_shared).
+tasks.register("verifyMgazeNetDebugApk") {
+    dependsOn("assembleDebug")
+    doLast {
+        val pins = mapOf(
+            "assets/base.mnn" to "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96",
+            "assets/face_landmarker.task" to "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+            "lib/arm64-v8a/libMNN.so" to "c91fb9e65ef45477406583cf374978c61713318893f6af473aecdafed4c17f60",
+            "lib/arm64-v8a/libmnncore.so" to "075cbfac452b1a4b601a5e9d74134b800cf13e34a998aee3d1367571c2007bd9",
+            "lib/arm64-v8a/libc++_shared.so" to "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970"
+        )
+        ZipFile(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile).use { apk ->
+            pins.forEach { (path,expected) ->
+                val entry = checkNotNull(apk.getEntry(path)) { "Missing pinned APK entry: $path" }
+                val hash = MessageDigest.getInstance("SHA-256").digest(apk.getInputStream(entry).use { it.readBytes() })
+                    .joinToString("") { "%02x".format(it) }
+                check(hash == expected) { "Packaged MGazeNet hash mismatch: $path" }
+            }
+            listOf("GazeFollower-CC-BY-NC-SA-4.0.txt","MNN-Apache-2.0.txt","NewsMead-MGazeNet-attribution.txt").forEach {
+                check(apk.getEntry("assets/notices/$it") != null)
+            }
+        }
+    }
 }

@@ -12,19 +12,25 @@ import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.appcompat.app.AlertDialog
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
 import com.newsmead.R
+import com.newsmead.activities.GazeTestActivity
+import com.newsmead.activities.ReadingValidationActivity
 import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.DatabaseHelper
@@ -33,6 +39,20 @@ import com.newsmead.data.news.NewsDataApi
 import com.newsmead.logging.Analytics
 import com.newsmead.logging.AppLog
 import com.newsmead.research.ResearchSession
+import com.newsmead.data.StudyConfig
+import com.newsmead.gaze.AdaptiveScaffoldController
+import com.newsmead.gaze.GazeOverlayView
+import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
+import com.newsmead.gaze.mgazenet.MgazeNetCalibrationStore
+import com.newsmead.gaze.GazeProvider
+import com.newsmead.gaze.GazeTargetStabilizer
+import com.newsmead.gaze.LineAoiMapper
+import com.newsmead.gaze.ReadingStateInferencer
+import com.newsmead.gaze.ReadingMeasurementLog
+import com.newsmead.gaze.ScaffoldLevel
+import com.newsmead.gaze.ScaffoldUpdate
+import com.newsmead.gaze.TextTarget
+import com.newsmead.gaze.WindowedStabilityEstimator
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.fragments.layouts.BottomSheetDialogSaveFragment
 import com.newsmead.models.Article
@@ -60,6 +80,25 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var deepestScrollPct = 0
     private var lastScrollLogMs = 0L
     private var language = "english"
+    private var gazeProvider: GazeProvider? = null
+    private var articleGazeSink: GazeProvider.OnGaze? = null
+    private var gazeOverlay: GazeOverlayView? = null
+    private var launchedCalibration = false
+    private var resumeGazeAfterStop = false
+    private var rsiInferencer: ReadingStateInferencer? = null
+    private var targetStabilizer: GazeTargetStabilizer? = null
+    private var stabilityEstimator: WindowedStabilityEstimator? = null
+    private var scaffoldController: AdaptiveScaffoldController? = null
+    private var currentTextTarget = TextTarget.INVALID
+    private var lastStabilityLogMs = 0L
+    private var lastAoiLogMs = 0L
+    private var readingMeasurement: ReadingMeasurementLog? = null
+    private val measurementGeometryListener = ViewTreeObserver.OnPreDrawListener {
+        readingMeasurement?.checkGeometry()
+        true
+    }
+    private val scaffoldDemoHandler = Handler(Looper.getMainLooper())
+    private var scaffoldDemoStep = 0
     private enum class ColorMode { LIGHT, DARK, SEPIA }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -179,6 +218,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
         // Read Aloud button
         binding.btnReadAloudArticle.setOnClickListener {
+            if (readingMeasurement != null) return@setOnClickListener
             binding.btnReadAloudArticle.isEnabled = false
             binding.btnReadAloudArticle.isClickable = false
             if (textToSpeech.isSpeaking && binding.btnReadAloudArticle.text == "Stop") {
@@ -295,6 +335,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             requireActivity().onBackPressedDispatcher.onBackPressed()
         }
 
+        binding.btnRunGazeTest.setOnClickListener {
+            showGazeDiagnosticsMenu()
+        }
+
         // Show more button to show more articles from source
         binding.btnArticleRecommendations.setOnClickListener {
             // Navigate to ArticleSourceFragment
@@ -333,6 +377,16 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
         addBottomAppBarListeners()
 
+        // Study mode: lock the body font size and remove the +/- text-size controls
+        // so line bounding boxes stay stable for gaze AOI mapping (Stage 4).
+        // Applied in dp so the OS font-scale setting can't change the pixel size.
+        if (StudyConfig.LOCK_ARTICLE_FONT_SIZE) {
+            binding.tvArticleText.setTextSize(
+                TypedValue.COMPLEX_UNIT_DIP, StudyConfig.ARTICLE_FONT_SIZE_DP
+            )
+            binding.llArticleBottomButtons.visibility = View.GONE
+        }
+
         // Loading article content from url
         lifecycleScope.launch {
             // Check if offline article
@@ -358,6 +412,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                     binding.ivArticleFullImage.visibility = View.GONE
                 }
             }
+
+            // Article text must be final before TextView line/word geometry and
+            // the participant-relative adaptation baseline begin.
+            setupGazeDebug()
 
             // Load Recommended Articles
             DataHelper.loadArticleData(context, pageSize = 7, language = language) { it ->
@@ -533,6 +591,11 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             AppLog.d("ArticleFragment", "article_close id=$articleId dwellMs=$dwellMs")
             loggedArticleId = null
         }
+        finishReadingMeasurement("screen_left", restore = false)
+        scaffoldDemoHandler.removeCallbacksAndMessages(null)
+        resumeGazeAfterStop = gazeProvider != null && !StudyConfig.GAZE_TOUCH_VALIDATION
+        gazeProvider?.stop(); gazeProvider = null
+        gazeOverlay?.clearGaze()
         super.onStop()
     }
 
@@ -542,9 +605,157 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             textToSpeech.stop()
             textToSpeech.shutdown()
         }
+        scaffoldDemoHandler.removeCallbacksAndMessages(null)
+        rsiInferencer?.flush()
+        gazeProvider?.stop()
+        gazeOverlay?.clearScaffold()
+        targetStabilizer?.reset()
+        scaffoldController?.reset()
+        targetStabilizer = null
+        stabilityEstimator = null
+        scaffoldController = null
+        currentTextTarget = TextTarget.INVALID
+        gazeOverlay = null
         super.onDestroy()
     }
 
+
+    override fun onResume() {
+        super.onResume()
+        if (StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE && scaffoldController != null) {
+            startScaffoldDemoCycle()
+        }
+        if (resumeGazeAfterStop && !launchedCalibration) {
+            resumeGazeAfterStop = false
+            binding.root.post {
+                if (isResumed && gazeProvider == null) articleGazeSink?.let { attachLiveGaze(it) }
+            }
+        }
+        if (launchedCalibration) {
+            launchedCalibration = false
+            // Allow the finishing activity's worker to drain its native resources.
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (isResumed) restartLiveGazeAfterCalibration()
+            }, GAZE_RESTART_DELAY_MS)
+        }
+    }
+
+    override fun onPause() {
+        finishReadingMeasurement("screen_paused", restore = false)
+        super.onPause()
+    }
+
+    /** Stop live gaze (frees the camera), open the accuracy test, resume on return. */
+    private fun launchGazeTest() {
+        launchedCalibration = true
+        rsiInferencer?.flush()
+        gazeProvider?.stop()
+        gazeProvider = null
+        startActivity(Intent(requireContext(), GazeTestActivity::class.java))
+    }
+
+    private fun showGazeDiagnosticsMenu() {
+        if (readingMeasurement != null) {
+            finishReadingMeasurement("manual_stop")
+            return
+        }
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.reading_validation_menu)
+            .setItems(
+                arrayOf(
+                    getString(R.string.reading_validation_accuracy_option),
+                    getString(R.string.reading_validation_reading_option),
+                    getString(R.string.reading_measurement_option),
+                ),
+            ) { _, which ->
+                when (which) {
+                    0 -> launchGazeTest()
+                    1 -> launchReadingValidation()
+                    2 -> showReadingMeasurementInstructions()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showReadingMeasurementInstructions() {
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.reading_measurement_option)
+            .setMessage(R.string.reading_measurement_instructions)
+            .setPositiveButton(R.string.reading_measurement_start) { _, _ -> startReadingMeasurement() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun startReadingMeasurement() {
+        if (gazeProvider == null || StudyConfig.GAZE_TOUCH_VALIDATION || binding.tvArticleText.layout == null) {
+            Toast.makeText(context, R.string.reading_measurement_unavailable, Toast.LENGTH_LONG).show()
+            return
+        }
+        val fingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint() ?: return
+        lateinit var session: ReadingMeasurementLog
+        try {
+            session = ReadingMeasurementLog(requireContext(), binding.tvArticleText, fingerprint) { file, complete ->
+                if (readingMeasurement === session) finishReadingMeasurement("writer_closed")
+                Log.i("ReadingMeasurement", "${file.name}: complete=$complete")
+                if (isAdded && isResumed) Toast.makeText(context,
+                    if (complete) R.string.reading_measurement_saved else R.string.reading_measurement_failed,
+                    Toast.LENGTH_LONG).show()
+            }
+        } catch (e: Exception) {
+            Log.e("ReadingMeasurement", "Cannot open recording", e)
+            Toast.makeText(context, R.string.reading_measurement_failed, Toast.LENGTH_LONG).show()
+            return
+        }
+        readingMeasurement = session
+        textToSpeech.stop()
+        binding.btnReadAloudArticle.isEnabled = false
+        scaffoldDemoHandler.removeCallbacksAndMessages(null)
+        gazeOverlay?.setDotOnly(true)
+        binding.root.viewTreeObserver.addOnPreDrawListener(measurementGeometryListener)
+    }
+
+    private fun finishReadingMeasurement(reason: String, restore: Boolean = true) {
+        val session = readingMeasurement ?: return
+        readingMeasurement = null
+        binding.root.viewTreeObserver.removeOnPreDrawListener(measurementGeometryListener)
+        session.finish(reason)
+        binding.btnReadAloudArticle.isEnabled = true
+        resetAdaptiveReadingSession()
+        gazeOverlay?.setDotOnly(false)
+        if (restore && isResumed && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) {
+            startScaffoldDemoCycle()
+        }
+    }
+
+    /** Stop live gaze, run the controlled reading protocol, then rebind on return. */
+    private fun launchReadingValidation() {
+        launchedCalibration = true
+        rsiInferencer?.flush()
+        gazeProvider?.stop()
+        gazeProvider = null
+        startActivity(Intent(requireContext(), ReadingValidationActivity::class.java))
+    }
+
+    private fun restartLiveGazeAfterCalibration() {
+        if (StudyConfig.GAZE_TOUCH_VALIDATION) return
+        val onGaze = articleGazeSink ?: return
+        gazeProvider?.stop()
+        gazeProvider = null
+        resetAdaptiveReadingSession()
+        attachLiveGaze(onGaze)
+    }
+
+    private fun resetAdaptiveReadingSession() {
+        targetStabilizer?.reset()
+        stabilityEstimator?.reset()
+        scaffoldController?.reset()?.let(::applyScaffoldUpdate)
+        currentTextTarget = TextTarget.INVALID
+        lastStabilityLogMs = 0L
+        lastAoiLogMs = 0L
+        rsiInferencer = createRsiInferencer()
+        Log.i("GazeScaffold", "Adaptive reading session reset after calibration/test interruption")
+    }
     // Function to convert text to speech
     private fun speak(text: String) {
         if(!isTranslated && language.lowercase() == "english"){
@@ -614,6 +825,229 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         binding.btnArticleClrLight.setOnClickListener{ updateColors(ColorMode.LIGHT) }
         binding.btnArticleClrDark.setOnClickListener{ updateColors(ColorMode.DARK) }
         binding.btnArticleClrSepia.setOnClickListener{ updateColors(ColorMode.SEPIA) }
+    }
+
+    /**
+     * Stage 4 (touch-validation slice): attach the debug gaze layer to the
+     * article view: the line-AOI mapper + a gaze-dot overlay. All gaze flows
+     * through the single [GazeProvider.OnGaze] entry point below, so the live
+     * local calibrated provider can drive it via `setOnGaze` with no changes here.
+     * Touch validation proves line mapping before trusting gaze accuracy.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupGazeDebug() {
+        if (!StudyConfig.GAZE_ENABLED) return
+
+        val overlay = GazeOverlayView(requireContext())
+        gazeOverlay = overlay
+        (binding.root as ViewGroup).addView(
+            overlay,
+            ConstraintLayout.LayoutParams(0, 0).apply {
+                startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+                endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+                topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+                bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+            }
+        )
+        overlay.bringToFront()
+        overlay.translationZ = 1000f
+        overlay.setDebugVisualsEnabled(StudyConfig.GAZE_DEBUG_VISUALS)
+        val mapper = LineAoiMapper(binding.tvArticleText)
+        val stabilizer = GazeTargetStabilizer()
+        val estimator = WindowedStabilityEstimator(
+            windowMs = StudyConfig.SCAFFOLD_WINDOW_MS,
+            baselineDurationMs = StudyConfig.SCAFFOLD_BASELINE_DURATION_MS,
+        )
+        val controller = AdaptiveScaffoldController(
+            wordThreshold = StudyConfig.SCAFFOLD_WORD_THRESHOLD_Z,
+            lineThreshold = StudyConfig.SCAFFOLD_LINE_THRESHOLD_Z,
+            focusThreshold = StudyConfig.SCAFFOLD_FOCUS_THRESHOLD_Z,
+            reentryThreshold = StudyConfig.SCAFFOLD_REENTRY_THRESHOLD_Z,
+            minimumConfidence = StudyConfig.SCAFFOLD_MIN_GAZE_CONFIDENCE,
+            escalationPersistenceMs = StudyConfig.SCAFFOLD_ESCALATION_PERSISTENCE_MS,
+            recoveryPersistenceMs = StudyConfig.SCAFFOLD_RECOVERY_PERSISTENCE_MS,
+            forcedLevel = forcedScaffoldLevel(),
+        )
+        targetStabilizer = stabilizer
+        stabilityEstimator = estimator
+        scaffoldController = controller
+        rsiInferencer = createRsiInferencer()
+
+        // Single gaze entry point (full-screen px). Both the touch-validation
+        // source and the local calibrated gaze provider feed through here.
+        val onGaze = GazeProvider.OnGaze { x, y ->
+            overlay.setGazeScreen(x, y)
+            if (readingMeasurement != null) return@OnGaze
+            val timestampMs = System.currentTimeMillis()
+            val rawTarget = mapper.targetAt(x, y)
+            val target = stabilizer.update(rawTarget, timestampMs)
+            currentTextTarget = target
+            estimator.recordGazeSample(rawTarget.isValid, timestampMs)
+            controller.onGazeTarget(target, timestampMs)
+
+            if (timestampMs - lastAoiLogMs >= ARTICLE_DIAGNOSTIC_LOG_INTERVAL_MS) {
+                lastAoiLogMs = timestampMs
+                Log.d(
+                    "GazeAOI",
+                    "gaze=(" + x.toInt() + "," + y.toInt() + ") rawLine=" + rawTarget.lineIndex +
+                        " stableLine=" + target.lineIndex + "/" + target.lineCount +
+                        " word=" + target.wordStart + ":" + target.wordEnd
+                )
+            }
+
+            if (target.isValid) {
+                rsiInferencer?.onLine(target.lineIndex, target.lineCount, timestampMs)
+            } else {
+                applyScaffoldUpdate(
+                    controller.update(estimator.currentSnapshot(timestampMs), target, timestampMs)
+                )
+            }
+        }
+
+        articleGazeSink = onGaze
+
+        if (StudyConfig.GAZE_TOUCH_VALIDATION) {
+            attachTouchValidation(onGaze)
+        } else {
+            attachLiveGaze(onGaze)
+        }
+
+        if (StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) startScaffoldDemoCycle()
+    }
+
+    /**
+     * Recording aid, not a study mode: hold each level for
+     * [StudyConfig.SCAFFOLD_DEMO_LEVEL_DURATION_MS] and then move to the next one,
+     * so all four appear in a single continuous take. Real gaze still decides where
+     * each level is drawn - only the adaptive *trigger* is bypassed, so nothing here
+     * demonstrates instability detection.
+     */
+    private fun startScaffoldDemoCycle() {
+        if (readingMeasurement != null) return
+        scaffoldDemoHandler.removeCallbacksAndMessages(null)
+        scaffoldDemoStep = 0
+        val advance = object : Runnable {
+            override fun run() {
+                val controller = scaffoldController ?: return
+                val level = SCAFFOLD_DEMO_SEQUENCE[scaffoldDemoStep % SCAFFOLD_DEMO_SEQUENCE.size]
+                controller.forcedLevel = level
+                if (StudyConfig.SCAFFOLD_DEMO_CAPTION) {
+                    gazeOverlay?.setScaffoldCaption(SCAFFOLD_DEMO_CAPTIONS[level])
+                }
+                Log.i("GazeScaffold", "demo cycle -> $level")
+                scaffoldDemoStep++
+                scaffoldDemoHandler.postDelayed(this, StudyConfig.SCAFFOLD_DEMO_LEVEL_DURATION_MS)
+            }
+        }
+        scaffoldDemoHandler.post(advance)
+    }
+
+    private fun createRsiInferencer(): ReadingStateInferencer =
+        ReadingStateInferencer(object : ReadingStateInferencer.Listener {
+            override fun onLineSample(sample: ReadingStateInferencer.LineSample) {
+                // Per-sample diagnostics are intentionally omitted from the reading hot path.
+            }
+
+            override fun onFixation(event: ReadingStateInferencer.FixationEvent) {
+                Log.d("GazeRSI", "fixation line=${event.lineIndex}/${event.lineCount} duration=${event.durationMs}ms")
+            }
+
+            override fun onDwell(event: ReadingStateInferencer.DwellEvent) {
+                Log.d("GazeRSI", "dwell line=${event.lineIndex}/${event.lineCount} duration=${event.durationMs}ms")
+            }
+
+            override fun onRegression(event: ReadingStateInferencer.RegressionEvent) {
+                Log.d("GazeRSI", "regression ${event.fromLine}->${event.toLine} t=${event.timestampMs}")
+            }
+
+            override fun onScore(score: ReadingStateInferencer.RsiScore) {
+                val estimator = stabilityEstimator ?: return
+                val controller = scaffoldController ?: return
+                val snapshot = estimator.onCumulativeScore(score)
+                applyScaffoldUpdate(controller.update(snapshot, currentTextTarget, score.timestampMs))
+                if (score.timestampMs - lastStabilityLogMs >= 2_000L) {
+                    lastStabilityLogMs = score.timestampMs
+                    Log.d(
+                        "GazeScaffold",
+                        String.format(
+                            Locale.US,
+                            "index=%.2f raw=%.2f confidence=%.2f baselineReady=%s " +
+                                "metrics=reg%.1f/min,dwell%.2f,fix%.1f/min",
+                            snapshot.smoothedIndex,
+                            snapshot.rawIndex,
+                            snapshot.confidence,
+                            snapshot.baselineReady,
+                            snapshot.metrics.regressionRatePerMinute,
+                            snapshot.metrics.dwellRatio,
+                            snapshot.metrics.fixationRatePerMinute,
+                        )
+                    )
+                }
+            }
+        })
+
+    private fun applyScaffoldUpdate(update: ScaffoldUpdate) {
+        gazeOverlay?.setScaffoldState(binding.tvArticleText, update.state)
+        update.transition?.let { transition ->
+            Log.i(
+                "GazeScaffold",
+                String.format(
+                    Locale.US,
+                    "transition=%s->%s reason=%s index=%.2f confidence=%.2f " +
+                        "line=%d target=%d recoveryLatencyMs=%d",
+                    transition.from,
+                    transition.to,
+                    transition.reason,
+                    transition.stabilityIndex,
+                    transition.confidence,
+                    transition.currentLine,
+                    transition.reentryTargetLine,
+                    transition.recoveryLatencyMs ?: -1L,
+                )
+            )
+        }
+    }
+
+    private fun forcedScaffoldLevel(): ScaffoldLevel? = when (StudyConfig.SCAFFOLD_MODE) {
+        StudyConfig.ScaffoldMode.OFF -> ScaffoldLevel.NONE
+        StudyConfig.ScaffoldMode.ADAPTIVE -> null
+        StudyConfig.ScaffoldMode.FORCE_WORD -> ScaffoldLevel.WORD
+        StudyConfig.ScaffoldMode.FORCE_LINE -> ScaffoldLevel.LINE
+        StudyConfig.ScaffoldMode.FORCE_FOCUS -> ScaffoldLevel.FOCUS
+        StudyConfig.ScaffoldMode.FORCE_REENTRY -> ScaffoldLevel.REENTRY
+        StudyConfig.ScaffoldMode.DEMO_CYCLE -> SCAFFOLD_DEMO_SEQUENCE.first()
+    }
+
+    /** Finger substitutes for gaze; returns false so the article still scrolls. */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun attachTouchValidation(onGaze: GazeProvider.OnGaze) {
+        binding.nsvArticleText.setOnTouchListener { _, event ->
+            onGaze.onGaze(event.rawX, event.rawY)
+            false
+        }
+    }
+
+    /**
+     * Live gaze from the local phone tracker, mapped to the phone screen with
+     * the saved 13-point calibration. In live mode, do not silently substitute
+     * touch input; missing/invalid calibration must be fixed before reading.
+     */
+    private fun attachLiveGaze(onGaze: GazeProvider.OnGaze) {
+        val issue = MgazeNetCalibrationStore(requireContext()).compatibilityIssue(binding.root)
+        if (issue != null) {
+            Toast.makeText(context, issue, Toast.LENGTH_LONG).show()
+            return
+        }
+        val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true)
+        provider.onFps = { fps -> gazeOverlay?.setFps(fps) }
+        provider.onFailure = { message -> Toast.makeText(context,message,Toast.LENGTH_LONG).show() }
+        provider.onObservation = { observation ->
+            readingMeasurement?.record(observation)
+            if (observation.reason != "coordinate") gazeOverlay?.clearGaze()
+        }
+        provider.setOnGaze { x,y -> onGaze.onGaze(x,y) }
+        gazeProvider = provider
+        provider.start(viewLifecycleOwner)
     }
 
     /**
@@ -723,7 +1157,32 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         Navigation.findNavController(requireView()).navigate(action)
     }
 
-    private companion object {
-        const val SCROLL_LOG_INTERVAL_MS = 250L
+    companion object {
+        private const val SCROLL_LOG_INTERVAL_MS = 250L
+
+        /**
+         * Delay before restarting live gaze after returning from the gaze
+         * test/calibration activity, giving that activity time to finish its
+         * onDestroy camera release before we rebind the shared CameraX camera.
+         */
+        private const val GAZE_RESTART_DELAY_MS = 800L
+        private const val ARTICLE_DIAGNOSTIC_LOG_INTERVAL_MS = 1_000L
+
+        /** Order DEMO_CYCLE walks through; it loops, so a retake needs no restart. */
+        private val SCAFFOLD_DEMO_SEQUENCE = listOf(
+            ScaffoldLevel.NONE,
+            ScaffoldLevel.WORD,
+            ScaffoldLevel.LINE,
+            ScaffoldLevel.FOCUS,
+            ScaffoldLevel.REENTRY,
+        )
+
+        private val SCAFFOLD_DEMO_CAPTIONS = mapOf(
+            ScaffoldLevel.NONE to "No scaffold (stable reading)",
+            ScaffoldLevel.WORD to "Level 1 - Word highlighting",
+            ScaffoldLevel.LINE to "Level 2 - Line emphasis",
+            ScaffoldLevel.FOCUS to "Level 3 - Focus window",
+            ScaffoldLevel.REENTRY to "Level 4 - Re-entry support",
+        )
     }
 }

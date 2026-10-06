@@ -1,6 +1,7 @@
 package com.newsmead.fragments.bottomnavigation
 
 import android.content.Context.MODE_PRIVATE
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.fragment.app.Fragment
@@ -11,6 +12,7 @@ import android.widget.Toast
 import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.newsmead.R
+import com.newsmead.activities.GazeCalibrationActivity
 import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.news.NewsDataApi
@@ -102,6 +104,11 @@ class HomeFragment : Fragment(), clickListener {
                 sharedPreferences.edit().putString("language", "English").apply()
             }
             loadFeed(language ?: "English")
+        }
+
+        // Gaze calibration button - launches the 16-point calibration screen
+        this.viewBinding.btnGazeCalibration.setOnClickListener {
+            startActivity(Intent(requireContext(), GazeCalibrationActivity::class.java))
         }
     }
 

@@ -13,6 +13,7 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import com.newsmead.R
 import com.newsmead.data.PreloadedData
+import com.newsmead.data.StudyConfig
 import com.newsmead.databinding.ActivitySplashBinding
 
 @SuppressLint("CustomSplashScreen")
@@ -31,6 +32,13 @@ class SplashActivity : AppCompatActivity() {
         setContentView(viewBinding.root)
 
         auth = Firebase.auth
+
+        // Study mode: skip the login gate and treat every session as signed in.
+        if (StudyConfig.BYPASS_LOGIN) {
+            navigateToMainActivity()
+            return
+        }
+
         val user = auth.currentUser
         if (user == null) {
             // Never signed in on this device: go straight to sign-up, as before.

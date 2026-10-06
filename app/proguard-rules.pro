@@ -42,3 +42,5 @@
 
 # Readability4J uses slf4j without a binding (no-op at runtime).
 -dontwarn org.slf4j.impl.StaticLoggerBinder
+# JNI names are the pinned MNN ABI.
+-keep class com.taobao.android.mnn.MNNNetNative { *; }
