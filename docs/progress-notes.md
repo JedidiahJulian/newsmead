@@ -1,5 +1,20 @@
 # NewsMead — Progress Notes
 
+## 2026-10-08 - Recommendation API integration
+
+The owner authorized merging the latest fetched `Recommendation` (`501e9be`,
+11 incoming commits) into the current scanpath branch and configuring NewsData.
+The key lives in ignored `local.properties`; online feed mode is enabled. Ten
+conflicts are resolved while retaining article aids, demo, pilot/replay and
+native/frozen settings. The home screen combines selectors with study entries.
+Focused review led to article readiness, callback, usage-period and calibration
+restart repairs. One computer-side API request returned 10 articles. All 80
+focused JVM checks pass, including current continuation cases; both APKs assemble
+and the generated API key matches the ignored property. Android fixtures compile;
+phone behavior and publisher extraction remain untested.
+[Integration record](recommendation-merge.md) retains configuration, findings and
+evidence paths. No device operation, calibration, private export or push ran.
+
 ## 2026-10-04 - Expected-continuation marker
 
 The owner approved replacing the successful-P09 landing cue. Supported

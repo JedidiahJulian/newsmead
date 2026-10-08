@@ -81,8 +81,32 @@
     <!-- fragment_log_in -->
     <string name="log_in_title">Welcome Back! Log in</string>
     <string name="log_in_remember_me">Remember Me?</string>
+    <string name="log_in_forgot_password">Forgot password?</string>
     <string name="log_in_btn">Log in</string>
     <string name="log_in_create_account_btn">Create an Account</string>
+    <string name="reset_password_title">Reset password</string>
+    <string name="reset_password_message">Enter the email address for your account. We\'ll send you a link to reset your password.</string>
+    <string name="reset_password_send">Send link</string>
+    <string name="reset_password_cancel">Cancel</string>
+    <string name="reset_password_sent">If an account exists for that email, a reset link has been sent.</string>
+    <string name="reset_password_invalid_email">Please provide a valid email</string>
+
+    <!-- email verification -->
+    <string name="verify_email_sent">Account created. We have sent a verification link to your email. Open it, then log in.</string>
+    <string name="verify_email_before_login">Please verify your email before logging in. We have sent a new link to your inbox.</string>
+
+    <!-- auth errors -->
+    <string name="auth_error_network">No internet connection. Check your network and try again.</string>
+    <string name="auth_error_no_account">No account found for that email.</string>
+    <string name="auth_error_disabled">This account has been disabled.</string>
+    <string name="auth_error_bad_credentials">Wrong email or password.</string>
+    <string name="auth_error_sign_in_generic">Could not sign in. Please try again.</string>
+    <string name="auth_error_too_many_attempts">Too many attempts. Please wait a moment and try again.</string>
+    <string name="auth_error_email_taken">That email is already registered. Try logging in instead.</string>
+    <string name="auth_error_weak_password">Please choose a stronger password.</string>
+    <string name="auth_error_invalid_email">Please provide a valid email address.</string>
+    <string name="auth_error_sign_up_generic">Could not create your account. Please try again.</string>
+    <string name="profile_password_updated">Password updated.</string>
 
     <!-- fragment_onboarding -->
     <string name="onboarding_title">Welcome to NewsMead</string>
@@ -340,6 +364,12 @@
     <string name="home_show_english">Show me English news</string>
     <string name="home_show_filipino">Show me Filipino news</string>
     <string name="home_gaze_calibration">Calibrate eye tracker</string>
+    <string name="home_region_local">Philippines</string>
+    <string name="home_region_international">World</string>
+    <string name="article_read_full">Read the full story</string>
+    <string name="article_read_full_on">Read the full story on %1$s</string>
+    <string name="article_view_original_on">View the original on %1$s</string>
+    <string name="article_loading_full">Loading the full article…</string>
 
     <string name="reading_aids_option">Reading aids</string>
     <string name="reading_aids_enabled">Enable reading aids</string>

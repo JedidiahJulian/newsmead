@@ -1,4 +1,4 @@
-# Agent context — updated 2026-10-04
+# Agent context — updated 2026-10-08
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,22 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-10-08 Recommendation integration:** the owner authorized merging fetched
+`origin/Recommendation` at `501e9be` into `measurement/scanpath-pilot`. The NewsData
+key is configured only in ignored `local.properties`; current feed mode is online
+(`OFFLINE_MODE=false`), while the existing login bypass remains enabled. Current
+article aids/demo/pilot/replay and frozen estimator/protocol settings are retained.
+Ten conflicts are resolved. Article readiness awaits extraction; callbacks and
+pending gaze restart respect view/lifecycle/calibration boundaries. Usage periods
+reopen after backgrounding; home callbacks retain the latest selection. A source
+review found no remaining actionable issue after repairs. One computer-side API
+probe returned 10 articles. All 80 focused JVM checks and both APK assemblies
+pass, including current continuation checks; Android fixtures compile but have
+no current device result. The historical compile failure remains retained.
+Exact resolution and limits: [Recommendation integration](recommendation-merge.md).
+Evidence: `output/recommendation-merge-check-01/`. No device capture/install,
+calibration, private-log export or push ran.
 
 **2026-10-04 continuation-marker amendment:** the owner approved replacing the
 post-P09 landing cue with an expected-continuation cue. Supported first-quarter

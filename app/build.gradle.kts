@@ -1,5 +1,6 @@
 import java.security.MessageDigest
 import java.util.zip.ZipFile
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -16,6 +17,12 @@ plugins {
 
     // Room
     id("kotlin-kapt")
+}
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
 
 android {
@@ -51,6 +58,15 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += "arm64-v8a" }
+
+
+
+        // NEWSDATA_API_KEY from the ignored local.properties; empty if missing.
+        buildConfigField(
+            "String",
+            "NEWSDATA_API_KEY",
+            "\"${localProperties.getProperty("NEWSDATA_API_KEY", "")}\""
+        )
     }
 
     buildTypes {
@@ -81,6 +97,8 @@ android {
     // Enable viewBinding
     buildFeatures {
         viewBinding = true
+        // AGP 8 no longer generates BuildConfig by default; AppLog gates its
+        // debug-level output on BuildConfig.DEBUG.
         buildConfig = true
     }
 }
@@ -121,6 +139,10 @@ dependencies {
     // Import Volley dependencies
     implementation("com.android.volley:volley:1.2.1")
 
+    // Full-text extraction. jsoup pinned: Readability4J's 1.11.2 has CVE-2021-37714.
+    implementation("net.dankito.readability4j:readability4j:1.0.8")
+    implementation("org.jsoup:jsoup:1.15.4")
+
     // Import Glide dependencies
     implementation("com.github.bumptech.glide:glide:4.16.0")
 
@@ -143,6 +165,8 @@ dependencies {
     implementation("com.google.android.material:material:1.10.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     testImplementation("junit:junit:4.13.2")
+    // android.jar's org.json is stubbed in unit tests.
+    testImplementation("org.json:json:20231013")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }

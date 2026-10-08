@@ -16,11 +16,11 @@ object StudyConfig {
     const val BYPASS_LOGIN = true
 
     /**
-     * Serve article content from a bundled local asset instead of the (now
-     * decommissioned) newsmead-api. When true, DataHelper.loadArticleData()
+     * Serve article content from a bundled local asset instead of NewsData.io.
+     * When true, DataHelper.loadArticleData()
      * reads from [ARTICLES_ASSET] and the app runs fully offline.
      */
-    const val OFFLINE_MODE = true
+    const val OFFLINE_MODE = false
 
     /** Name of the bundled article dataset in app/src/main/assets/. */
     const val ARTICLES_ASSET = "study_articles.json"

@@ -4,9 +4,11 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -62,6 +64,10 @@ import com.newsmead.gaze.aid.ReaderAidPreferences
 import com.newsmead.gaze.aid.ReadingAidDefinitionPopup
 import com.newsmead.gaze.aid.ReadingAidPolicyConfig
 import com.newsmead.gaze.aid.demo.ArticleReadingAidDemoPresenter
+import com.newsmead.data.news.NewsDataApi
+import com.newsmead.logging.Analytics
+import com.newsmead.logging.AppLog
+import com.newsmead.research.ResearchSession
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.fragments.layouts.BottomSheetDialogSaveFragment
 import com.newsmead.models.Article
@@ -78,11 +84,24 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private lateinit var savedLists: ArrayList<SavedList>
     private lateinit var textToSpeech: TextToSpeech
     private var isTranslated = false
+    // Body currently shown; translate's revert restores it.
+    private var displayedBody = ""
+
+    // Reading-session bookkeeping for the research log. openedAtMs uses the
+    // monotonic clock so a clock change mid-article cannot produce a negative
+    // or wildly inflated dwell time.
+    private var loggedArticleId: String? = null
+    private var articleForUsage: Article? = null
+    private var openedAtElapsedMs = 0L
+    private var deepestScrollPct = 0
+    private var lastScrollLogMs = 0L
     private var language = "english"
     private var gazeProvider: GazeProvider? = null
     private var articleGazeSink: GazeProvider.OnGaze? = null
     private var gazeOverlay: GazeOverlayView? = null
     private var launchedCalibration = false
+    private var gazeRestartNotBeforeMs = 0L
+    private var calibrationRestartPending = false
     private var resumeGazeAfterStop = false
     private var rsiInferencer: ReadingStateInferencer? = null
     private var targetStabilizer: GazeTargetStabilizer? = null
@@ -125,6 +144,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     ): View {
         Log.d("ArticleFragment", "onCreateView: ArticleFragment started")
         binding = FragmentArticleBinding.inflate(inflater, container, false)
+        articleBodyReady = false
+        isTranslated = false
         definitionPopup = ReadingAidDefinitionPopup(requireContext(), binding.root as ViewGroup, binding.tvArticleText)
         binding.articleAidDemoPrevious.setOnClickListener { articleDemo?.step(-1) }
         binding.articleAidDemoNext.setOnClickListener { articleDemo?.step(1) }
@@ -185,6 +206,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         // Add to history
         FirebaseHelper.addArticleToHistory(requireContext(), article)
 
+
+        articleForUsage = article
+
         // Set article title
         binding.tvArticleHeadline.text = article.title
 
@@ -195,12 +219,24 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         binding.tvSource.text = article.source
         binding.btnArticleRecommendations.text = "Show more from " + article.source
         val context = binding.root.context
-        val resourceId = context.resources.getIdentifier(article.sourceImage, "drawable", context.packageName)
-        binding.ivSourceImage.setImageResource(if (resourceId != 0) resourceId else R.drawable.sample_source_image)
+        DataHelper.loadSourceImage(binding.ivSourceImage, article.sourceImage)
 
         // Set article read time
         val readTime = article.readTime //+ " min read"
         binding.tvArticleMinRead.text = readTime
+
+        // Label updates once loadFullText() finishes.
+        if (article.url.startsWith("http")) {
+            setOriginalLinkLabel(article, fullTextShown = false)
+            binding.btnReadFullArticle.visibility = View.VISIBLE
+            binding.btnReadFullArticle.setOnClickListener {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(article.url)))
+                } catch (e: ActivityNotFoundException) {
+                    Toast.makeText(context, "No browser available", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
 
         // Set language
         language = article.language
@@ -220,9 +256,11 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             if (textToSpeech.isSpeaking && binding.btnReadAloudArticle.text == "Stop") {
                 binding.btnReadAloudArticle.text = "Read Aloud"
                 textToSpeech.stop()
+                logReadAloud(started = false)
             } else {
+                logReadAloud(started = true)
                 var body = binding.tvArticleText.text.toString()
-                Log.d("ArticleFragment", "tts-body: ${body.substring(0, 100)}")
+                Log.d("ArticleFragment", "tts-body: ${body.take(100)}")
                 if (body.isNotEmpty()) speak(body)
                 else Toast.makeText(context, "No article to read", Toast.LENGTH_SHORT).show()
             }
@@ -250,6 +288,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             binding.btnTranslateArticle.isClickable = false
             binding.btnTranslateArticle.text = "Translating..."
             if (!isTranslated) {
+                logTranslate(toFilipino = true, useGoogle = binding.switchUseGoogle.isChecked)
                 // Translate article
                 DataHelper.translateArticle(article.newsId, binding.switchUseGoogle.isChecked, requireContext()) { title, body ->
                     if(title.isNotEmpty() && body.isNotEmpty()) {
@@ -268,16 +307,34 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                     binding.btnTranslateArticle.isClickable = true
                 }
             } else {
+                logTranslate(toFilipino = false, useGoogle = binding.switchUseGoogle.isChecked)
                 // Revert to original language
                 stopArticleDemo("article_translation_changed")
                 binding.tvArticleHeadline.text = article.title
-                binding.tvArticleText.text = article.body
+                binding.tvArticleText.text = displayedBody
                 binding.btnTranslateArticle.text = "Filipino"
                 isTranslated = false
                 updateDefinitionLanguage()
                 binding.btnTranslateArticle.isEnabled = true
                 binding.btnTranslateArticle.isClickable = true
             }
+        }
+
+        // Scroll depth, throttled: this is the highest-volume record type and
+        // SessionLog's queue is bounded.
+        binding.nsvArticleText.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            val articleId = loggedArticleId ?: return@setOnScrollChangeListener
+            val scroller = binding.nsvArticleText
+            val content = scroller.getChildAt(0)?.height ?: 0
+            val viewport = scroller.height
+            val scrollable = (content - viewport).coerceAtLeast(1)
+            val pct = ((scrollY * 100L) / scrollable).toInt().coerceIn(0, 100)
+            if (pct > deepestScrollPct) deepestScrollPct = pct
+
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastScrollLogMs < SCROLL_LOG_INTERVAL_MS) return@setOnScrollChangeListener
+            lastScrollLogMs = now
+            ResearchSession.articleScroll(articleId, scrollY, viewport, content)
         }
 
         // When the user zooms in on the ZoomImageView, disable the NestedScrollView scrolling
@@ -367,76 +424,87 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
 
         // Loading article content from url
-        lifecycleScope.launch {
-            // Check if offline article
-            val articleId = article.newsId
-            val offlineArticle = DatabaseHelper.getNewsArticleDao().getNewsArticle(articleId)
+        val articleView = binding
+        articleView.root.post {
+            if (view !== articleView.root) return@post
+            viewLifecycleOwner.lifecycleScope.launch {
+                // Check if offline article
+                val articleId = article.newsId
+                val offlineArticle = DatabaseHelper.getNewsArticleDao().getNewsArticle(articleId)
+                if (view !== articleView.root) return@launch
 
-            Log.d("ArticleFragment", "onCreateView: offlineArticle: $offlineArticle")
+                Log.d("ArticleFragment", "onCreateView: offlineArticle: $offlineArticle")
 
-            if (offlineArticle?.articleBody?.isNotEmpty() == true) {
-                // Offline article
-                binding.tvArticleText.text = offlineArticle.articleBody
-            } else {
-                // Online article
-                binding.tvArticleText.text = article.body
-
-                // Set article image from link
-                if (article.imageURL != "") {
-                    Glide.with(this@ArticleFragment).load(article.imageURL).error(R.drawable.sample_article_image).into(binding.ivArticleFullImage)
+                if (offlineArticle?.articleBody?.isNotEmpty() == true) {
+                    // Offline article
+                    displayedBody = offlineArticle.articleBody
+                    binding.tvArticleText.text = displayedBody
                 } else {
-                    binding.ivSourceImage.setImageResource(R.drawable.sample_source_image)
+                    // Keep the summary visible while awaiting a stable final body.
+                    displayedBody = article.body
+                    binding.tvArticleText.text = displayedBody
+                    if (!StudyConfig.OFFLINE_MODE) loadFullText(article, articleView)
+                    if (view !== articleView.root) return@launch
+
+                    // Set article image from link
+                    if (article.imageURL != "") {
+                        Glide.with(this@ArticleFragment).load(article.imageURL).error(R.drawable.sample_article_image).into(binding.ivArticleFullImage)
+                    } else {
+                        binding.ivArticleFullImage.visibility = View.GONE
+                    }
                 }
-            }
 
-            // Article text must be final before TextView line/word geometry and
-            // the participant-relative adaptation baseline begin.
-            articleBodyReady = true
-            setupGazeDebug()
+                // Article text must be final before TextView line/word geometry and
+                // the participant-relative adaptation baseline begin.
+                articleBodyReady = true
+                resumeArticleGazeWhenReady()
 
-            // Load Recommended Articles
-            DataHelper.loadArticleData(context, pageSize = 7, language = language) { it ->
-                // Check if the fragment is still attached to a context
-                val ctx = context ?: return@loadArticleData
+                // Load Recommended Articles
+                DataHelper.loadArticleData(context, pageSize = 7, language = language) { it ->
+                    // Check if the fragment is still attached to a context
+                    val ctx = context ?: return@loadArticleData
+                    if (view !== articleView.root) return@loadArticleData
 
-                if (FirebaseHelper.isNetworkAvailable(ctx)) {
-                    // remove article with the same newsId
-                    val recommendedArticles = it.filter { it.newsId != article.newsId }
-                    adapter.updateData(recommendedArticles)
+                    if (FirebaseHelper.isNetworkAvailable(ctx)) {
+                        // remove article with the same newsId
+                        val recommendedArticles = it.filter { it.newsId != article.newsId }
+                        adapter.updateData(recommendedArticles)
 
-                    // If no articles, hide recommendations
-                    if (it.isEmpty()) {
+                        // If no articles, hide recommendations
+                        if (it.isEmpty()) {
+                            binding.divider.visibility = View.GONE
+                            binding.btnArticleRecommendations.visibility = View.GONE
+                            binding.tvArticleRecommended.visibility = View.GONE
+                        }
+
+                    } else {
                         binding.divider.visibility = View.GONE
                         binding.btnArticleRecommendations.visibility = View.GONE
                         binding.tvArticleRecommended.visibility = View.GONE
                     }
-
-                } else {
-                    binding.divider.visibility = View.GONE
-                    binding.btnArticleRecommendations.visibility = View.GONE
-                    binding.tvArticleRecommended.visibility = View.GONE
                 }
-            }
 
-            // Load Saved Lists
-            savedLists = ArrayList()
+                // Load Saved Lists
+                savedLists = ArrayList()
 
-            val checkedLists = FirebaseHelper.checkIfArticleSavedInLists(requireContext(), article.newsId)
-            for (listId in checkedLists) {
-                val savedList = SavedList(listId, "List Name")
-                savedLists.add(savedList)
-            }
+                val checkedLists = FirebaseHelper.checkIfArticleSavedInLists(requireContext(), article.newsId)
+                if (view !== articleView.root) return@launch
+                for (listId in checkedLists) {
+                    val savedList = SavedList(listId, "List Name")
+                    savedLists.add(savedList)
+                }
 
-            Log.d("ArticleFragment", "onCreateView: savedLists: $savedLists")
+                Log.d("ArticleFragment", "onCreateView: savedLists: $savedLists")
 
-            if (savedLists.isNotEmpty()) {
-                Log.d("ArticleFragment", "onCreateView: savedLists is not empty")
-                // Change save button icon to filled
-                binding.btnSaveList.icon = ContextCompat.getDrawable(requireContext(), R.drawable.bookmark_filled_weight400)
+                if (savedLists.isNotEmpty()) {
+                    Log.d("ArticleFragment", "onCreateView: savedLists is not empty")
+                    // Change save button icon to filled
+                    binding.btnSaveList.icon = ContextCompat.getDrawable(requireContext(), R.drawable.bookmark_filled_weight400)
 
-                // Change text to "Saved to list"
-                val savedText = "Saved to list"
-                binding.btnSaveList.text = savedText
+                    // Change text to "Saved to list"
+                    val savedText = "Saved to list"
+                    binding.btnSaveList.text = savedText
+                }
             }
         }
 
@@ -497,6 +565,35 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
     }
 
+    /** Await extraction before marking article geometry ready for gaze or measurement. */
+    private suspend fun loadFullText(article: Article, articleView: FragmentArticleBinding) {
+        if (!article.url.startsWith("http")) return
+        articleView.btnReadFullArticle.isEnabled = false
+        articleView.btnReadFullArticle.text = getString(R.string.article_loading_full)
+
+        val fullText = DataHelper.loadFullText(article)
+        if (view !== articleView.root) return
+
+        articleView.btnReadFullArticle.isEnabled = true
+        if (fullText != null) {
+            // Preserve the extracted original even if translation finished first.
+            displayedBody = fullText
+            if (!isTranslated) {
+                articleView.tvArticleText.text = displayedBody
+                articleView.tvArticleMinRead.text = NewsDataApi.readTime(displayedBody)
+            }
+        }
+        setOriginalLinkLabel(article, fullText != null && !isTranslated)
+    }
+
+    private fun setOriginalLinkLabel(article: Article, fullTextShown: Boolean) {
+        binding.btnReadFullArticle.text = when {
+            article.source.isEmpty() -> getString(R.string.article_read_full)
+            fullTextShown -> getString(R.string.article_view_original_on, article.source)
+            else -> getString(R.string.article_read_full_on, article.source)
+        }
+    }
+
     /**
      * Ask the current default engine to launch the matching INSTALL_TTS_DATA activity
      * so the required TTS files are properly installed.
@@ -510,6 +607,34 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             startActivity(intent)
         } catch (ex: ActivityNotFoundException) {
             Log.e("TTS", "Failed to install TTS data, no activity found for $intent)")
+        }
+    }
+
+    private fun logReadAloud(started: Boolean) {
+        val articleId = loggedArticleId ?: return
+        Analytics.readAloud(started)
+        ResearchSession.readAloud(articleId, started)
+    }
+
+    private fun logTranslate(toFilipino: Boolean, useGoogle: Boolean) {
+        val articleId = loggedArticleId ?: return
+        Analytics.translate(toFilipino, useGoogle)
+        ResearchSession.translate(articleId, toFilipino, useGoogle)
+    }
+
+    /**
+     * Closes the reading record. Fires from onStop rather than onDestroy so a
+     * user who backgrounds the app without closing the article still produces
+     * a dwell time instead of an open-ended record.
+     */
+    private fun closeArticleUsage() {
+        val articleId = loggedArticleId
+        if (articleId != null) {
+            val dwellMs = SystemClock.elapsedRealtime() - openedAtElapsedMs
+            Analytics.articleClose(articleId, dwellMs, deepestScrollPct)
+            ResearchSession.articleClose(articleId, dwellMs, deepestScrollPct)
+            AppLog.d("ArticleFragment", "article_close id=$articleId dwellMs=$dwellMs")
+            loggedArticleId = null
         }
     }
 
@@ -538,6 +663,19 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
 
+    override fun onStart() {
+        super.onStart()
+        val article = articleForUsage ?: return
+        if (loggedArticleId != null) return
+        loggedArticleId = article.newsId
+        openedAtElapsedMs = SystemClock.elapsedRealtime()
+        deepestScrollPct = 0
+        lastScrollLogMs = 0L
+        val openedFrom = ResearchSession.lastScreen() ?: "direct"
+        Analytics.articleOpen(article.newsId, article.source, article.category, article.language, openedFrom)
+        ResearchSession.articleOpen(article.newsId, article.source, article.category, article.language, openedFrom)
+    }
+
     override fun onResume() {
         super.onResume()
         scanpathSession?.resume()
@@ -545,18 +683,36 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         if (!demoCameraSuppressed && !scanpathAidsEnabled && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE && scaffoldController != null) {
             startScaffoldDemoCycle()
         }
-        if (resumeGazeAfterStop && !launchedCalibration && !demoCameraSuppressed) {
-            resumeGazeAfterStop = false
-            binding.root.post {
-                if (isResumed && gazeProvider == null && !demoCameraSuppressed) articleGazeSink?.let { attachLiveGaze(it) }
-            }
-        }
         if (launchedCalibration) {
             launchedCalibration = false
-            // Allow the finishing activity's worker to drain its native resources.
+            calibrationRestartPending = true
+            gazeRestartNotBeforeMs = SystemClock.elapsedRealtime() + GAZE_RESTART_DELAY_MS
+        }
+        resumeArticleGazeWhenReady()
+    }
+
+    /** Retain pending work across backgrounding; only dispatch against the current visible view. */
+    private fun resumeArticleGazeWhenReady() {
+        if (!StudyConfig.GAZE_ENABLED || !articleBodyReady || !isResumed ||
+            launchedCalibration || demoCameraSuppressed || gazeProvider != null) return
+        val remainingDelay = (gazeRestartNotBeforeMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+        if (remainingDelay > 0L) {
+            val resumeView = binding.root
+            // Keep the existing calibration camera-release delay on the monotonic clock.
             Handler(Looper.getMainLooper()).postDelayed({
-                if (isResumed && !demoCameraSuppressed) restartLiveGazeAfterCalibration()
-            }, GAZE_RESTART_DELAY_MS)
+                if (view === resumeView) resumeArticleGazeWhenReady()
+            }, remainingDelay)
+            return
+        }
+        val sink = articleGazeSink
+        when {
+            sink == null -> setupGazeDebug()
+            calibrationRestartPending -> restartLiveGazeAfterCalibration()
+            resumeGazeAfterStop -> attachLiveGaze(sink)
+        }
+        if (gazeProvider != null || StudyConfig.GAZE_TOUCH_VALIDATION) {
+            calibrationRestartPending = false
+            resumeGazeAfterStop = false
         }
     }
 
@@ -574,18 +730,24 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         stopScanpathSession("article_view_destroyed")
         gazeProvider?.stop()
         gazeProvider = null
+        articleGazeSink = null
+        gazeOverlay = null
+        resumeGazeAfterStop = false
         definitionPopup?.close()
         definitionPopup = null
         articleDemo = null
         readingAidOverlay = null
         articleBodyReady = false
+        articleForUsage = null
         super.onDestroyView()
     }
 
     override fun onStop() {
+        closeArticleUsage()
         finishReadingMeasurement("screen_left", restore = false)
         scaffoldDemoHandler.removeCallbacksAndMessages(null)
-        resumeGazeAfterStop = gazeProvider != null && !StudyConfig.GAZE_TOUCH_VALIDATION
+        resumeGazeAfterStop = resumeGazeAfterStop ||
+            (gazeProvider != null && !StudyConfig.GAZE_TOUCH_VALIDATION)
         stopScanpathSession("screen_left")
         gazeProvider?.stop(); gazeProvider = null
         gazeOverlay?.clearGaze()
@@ -647,6 +809,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     private fun startReadingMeasurement() {
+        if (!articleBodyReady) {
+            Toast.makeText(context, getString(R.string.article_loading_full), Toast.LENGTH_SHORT).show()
+            return
+        }
         if (gazeProvider == null || StudyConfig.GAZE_TOUCH_VALIDATION || binding.tvArticleText.layout == null) {
             Toast.makeText(context, R.string.reading_measurement_unavailable, Toast.LENGTH_LONG).show()
             return
@@ -803,7 +969,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun setupGazeDebug() {
-        if (!StudyConfig.GAZE_ENABLED || demoCameraSuppressed) return
+        if (!StudyConfig.GAZE_ENABLED || demoCameraSuppressed || !articleBodyReady ||
+            !isResumed || launchedCalibration || articleGazeSink != null ||
+            SystemClock.elapsedRealtime() < gazeRestartNotBeforeMs) return
 
         val overlay = GazeOverlayView(requireContext())
         gazeOverlay = overlay
@@ -1348,6 +1516,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     companion object {
+        private const val SCROLL_LOG_INTERVAL_MS = 250L
         /**
          * Delay before restarting live gaze after returning from the gaze
          * test/calibration activity, giving that activity time to finish its
