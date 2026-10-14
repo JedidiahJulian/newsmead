@@ -1,0 +1,241 @@
+package com.newsmead.gaze.aid
+
+import com.newsmead.gaze.scanpath.ScanpathConfig
+
+/** Presence, supported line visits and display anchors have separate lifetimes. No attention diagnosis. */
+internal class ReadingFocusPolicy(
+    private val config: ReadingAidPolicyConfig,
+    private val detector: ScanpathConfig,
+    private val onEpisode: (ReadingAidFocusEpisode) -> Unit
+) {
+    private data class Loss(val source: ReadingAidContinuationEvidence?, val firstDelivery: Double,
+        var lastDelivery: Double, val firstCapture: Double?, var lastCapture: Double?,
+        val reasons: MutableSet<String>, var count: Int, var firstRecoveryDelivery: Double? = null)
+    private data class Presence(val firstCapture: Double, var lastCapture: Double,
+        val firstDelivery: Double, var lastDelivery: Double, var count: Int)
+    private data class Demand(val initialStrength: Double, var recoveryMs: Double, val activatedMs: Double,
+        val episodes: List<ReadingAidFocusEpisode> = emptyList(),
+        val alternations: List<ReadingAidFocusAlternation> = emptyList())
+    private val episodes = mutableListOf<ReadingAidFocusEpisode>()
+    private val alternations = mutableListOf<ReadingAidFocusAlternation>()
+    private val visits = mutableListOf<ReadingAidContinuationEvidence>()
+    private var lastVisit: ReadingAidContinuationEvidence? = null
+    private var source: ReadingAidContinuationEvidence? = null
+    private var sourceEpoch: Pair<Long, String>? = null
+    private var loss: Loss? = null
+    private var presence: Presence? = null
+    private var armed = false
+    private var lastNow = Double.NEGATIVE_INFINITY
+    private var lastDelivery = Double.NEGATIVE_INFINITY
+    private var lastInputCapture = Double.NEGATIVE_INFINITY
+    private var lastCapture: Double? = null
+    private var lastSupportedCapture = Double.NEGATIVE_INFINITY
+    private var lastSupportedDelivery = Double.NEGATIVE_INFINITY
+    private var lastPresenceDelivery = Double.NEGATIVE_INFINITY
+    private var interruptionDemand: Demand? = null
+    private var alternationDemand: Demand? = null
+    private var serial = 0L
+    var witnessesExpired: Boolean = false
+        private set
+
+    fun reset() {
+        episodes.clear(); alternations.clear(); interruptionDemand = null; alternationDemand = null
+        pause()
+        lastNow = Double.NEGATIVE_INFINITY; lastDelivery = Double.NEGATIVE_INFINITY
+        lastInputCapture = Double.NEGATIVE_INFINITY; witnessesExpired = false
+    }
+
+    /** Same-article operational pause: retain completed summaries, discard pending evidence and anchors. */
+    fun pause() {
+        source = null; sourceEpoch = null; loss = null; presence = null; armed = false
+        lastCapture = null; lastSupportedCapture = Double.NEGATIVE_INFINITY
+        lastSupportedDelivery = Double.NEGATIVE_INFINITY; lastPresenceDelivery = Double.NEGATIVE_INFINITY
+        breakLineSequence()
+    }
+
+    fun breakLineSequence() { visits.clear(); lastVisit = null }
+    fun interruptReading() { lastCapture = null }
+
+    val hasDemand: Boolean get() = listOfNotNull(interruptionDemand, alternationDemand).any {
+        it.initialStrength > 0 && it.recoveryMs < config.focusRecoveryHoldMs + config.focusRecoveryFadeMs
+    }
+
+    /** Fresh presence can retain a known anchor while the reader searches among lines. Ticks cannot renew it. */
+    fun displaySupported(nowMs: Double): Boolean = nowMs.isFinite() &&
+        nowMs - maxOf(lastSupportedDelivery, lastPresenceDelivery) in 0.0..config.focusTrackingGraceMs
+
+    fun input(c: ReadingAidContext) {
+        witnessesExpired = false
+        if (!c.nowMs.isFinite() || c.nowMs < 0 || c.nowMs < lastNow) { reset(); return }
+        lastNow = c.nowMs
+        episodes.removeAll { c.nowMs - it.completedDeliveryMs > config.focusInterruptionWindowMs }
+        alternations.removeAll { c.nowMs - it.confirmedDeliveryMs > config.focusInterruptionWindowMs }
+        // Once activated, the response owns its witnesses until recovery or its own bounded expiry.
+        if (interruptionDemand?.let { c.nowMs - it.activatedMs > config.focusInterruptionWindowMs } == true) {
+            interruptionDemand = null; witnessesExpired = true
+        }
+        if (alternationDemand?.let { c.nowMs - it.activatedMs > config.focusInterruptionWindowMs } == true) {
+            alternationDemand = null; witnessesExpired = true
+        }
+        val s = c.rawSample ?: run { presence = null; interruptReading(); breakLineSequence(); return }
+        val d = s.deliveryMs; val t = s.captureMs
+        val clocks = d?.isFinite() == true && d >= 0 && d <= c.nowMs && d >= lastDelivery &&
+            (t == null || (t.isFinite() && t >= 0 && t <= d))
+        if (!clocks || s.exclusion == "invalid_clock") { reset(); return }
+        if (c.nowMs - d!! > config.maxEvidenceAgeMs) { interruptReading(); return }
+        val freshDelivery = d > lastDelivery
+        lastDelivery = d
+        if (s.geometrySnapshotId != c.geometrySnapshotId) { pause(); return }
+        val missing = s.exclusion in setOf("no_face", "invalid_crops", "eye_area", "stale",
+            "invalid_prediction", "coordinate_unavailable")
+        if (missing) {
+            interruptReading(); presence = null; breakLineSequence()
+            if (!freshDelivery) return
+            val pending = loss
+            if (pending == null && armed) {
+                if (source != null && d < source!!.evidenceAvailableMs) return
+                loss = Loss(source, d, d, t, t, mutableSetOf(s.exclusion!!), 1)
+                armed = false
+            } else if (pending != null && d > pending.lastDelivery) {
+                pending.lastDelivery = d; pending.lastCapture = t
+                pending.reasons.add(s.exclusion!!); pending.count++
+            }
+            return
+        }
+        val selected = s.processingX?.isFinite() == true && s.processingY?.isFinite() == true
+        // Repeated timer/context callbacks are neutral; they cannot add samples or break a live visit.
+        if (!freshDelivery || t == lastInputCapture) return
+        if (t != null && t < lastInputCapture) {
+            presence = null; interruptReading(); breakLineSequence(); return
+        }
+        val tracked = selected && t != null && t > lastInputCapture &&
+            c.nowMs - t in 0.0..config.maxEvidenceAgeMs &&
+            (s.exclusion == null || s.exclusion == "outside_visible_text")
+        val pending = loss
+        if (pending != null && pending.firstRecoveryDelivery == null && tracked && freshDelivery &&
+            t!! > maxOf(pending.source?.lastCaptureMs ?: Double.NEGATIVE_INFINITY,
+                pending.lastCapture ?: Double.NEGATIVE_INFINITY)) {
+            if (d - pending.firstDelivery < config.focusLossMinMs) loss = null
+            else pending.firstRecoveryDelivery = d
+        }
+        val g = c.geometry
+        val article = g?.visibleRectScreen
+        // Deliberately independent of sample.eligible, mapped line/word, dispersion and fixation establishment.
+        val inside = tracked && g?.snapshotId == c.geometrySnapshotId && article != null &&
+            s.processingX!! in article.left..article.right && s.processingY!! in article.top..article.bottom
+        if (!inside) { presence = null; interruptReading(); breakLineSequence(); return }
+        if (!freshDelivery || t!! <= lastInputCapture) return
+        if (lastInputCapture.isFinite() && t - lastInputCapture > detector.maxSampleGapMs) {
+            presence = null; interruptReading(); breakLineSequence()
+        }
+        lastInputCapture = t
+        lastPresenceDelivery = d
+        val prior = presence
+        if (prior == null) presence = Presence(t, t, d, d, 1)
+        else { prior.lastCapture = t; prior.lastDelivery = d; prior.count++ }
+        val observed = presence!!
+        if (observed.lastCapture - observed.firstCapture >= config.focusReturnPresenceMs &&
+            observed.count >= config.focusReturnMinSamples) {
+            armed = true
+            val qualified = loss
+            if (qualified?.firstRecoveryDelivery != null) {
+                val recovery = ReadingAidArticlePresence("focus_presence:" + (++serial), c.generation,
+                    c.geometrySnapshotId, observed.firstCapture, t, observed.firstDelivery, d,
+                    observed.count, s.coordinateStream.id)
+                val episode = ReadingAidFocusEpisode("focus_episode:" + (++serial), qualified.source, null,
+                    qualified.firstDelivery, qualified.lastDelivery, qualified.firstCapture, qualified.lastCapture,
+                    qualified.reasons.toList(), qualified.count, generation = c.generation,
+                    geometrySnapshotId = c.geometrySnapshotId, firstRecoveryDeliveryMs = qualified.firstRecoveryDelivery!!,
+                    presenceRecovery = recovery, completedDeliveryMs = d)
+                episodes.add(episode); if (episodes.size > 512) episodes.removeAt(0)
+                onEpisode(episode)
+                if (episodes.size >= config.focusInterruptionMinEpisodes)
+                    interruptionDemand = Demand(strength(episodes.size - config.focusInterruptionMinEpisodes + 1),
+                        0.0, d, episodes = episodes.toList())
+                loss = null
+                lastCapture = t
+                return
+            }
+        }
+        val previous = lastCapture
+        if (previous != null && t > previous && t - previous <= detector.maxSampleGapMs && loss == null &&
+            s.eligible && c.validLiveInput) {
+            interruptionDemand?.let { it.recoveryMs += t - previous }
+            alternationDemand?.let { it.recoveryMs += t - previous }
+        }
+        lastCapture = if (s.eligible && c.validLiveInput && loss == null) t else null
+    }
+
+    fun support(value: ReadingAidContinuationEvidence, c: ReadingAidContext,
+                preferences: ReaderAidPreferences = ReaderAidPreferences()): ReadingAidFocusEvidence? {
+        if (value.lastCaptureMs < lastSupportedCapture ||
+            (value.lastCaptureMs == lastSupportedCapture && value.line != source?.line)) return null
+        if (value.lastCaptureMs > lastSupportedCapture && value.evidenceAvailableMs > lastSupportedDelivery) {
+            lastSupportedCapture = value.lastCaptureMs; lastSupportedDelivery = value.evidenceAvailableMs
+            source = value; sourceEpoch = c.generation to c.geometrySnapshotId
+            // Established source support can arm a future loss, but never completes a pending return.
+            if (loss == null) armed = true
+            observeVisit(value, c)
+        }
+        return currentEvidence(c, preferences)
+    }
+
+    private fun observeVisit(value: ReadingAidContinuationEvidence, c: ReadingAidContext) {
+        val previous = lastVisit
+        if (previous != null && previous.segment != value.segment) breakLineSequence()
+        val prior = lastVisit
+        if (prior != null && (prior.line == value.line || prior.firstCaptureMs == value.firstCaptureMs)) return
+        lastVisit = value
+        visits.add(value)
+        if (visits.size > 4) visits.removeAt(0)
+        if (visits.size != 4) return
+        val v = visits.toList()
+        if (v[0].line != v[2].line || v[1].line != v[3].line || v[0].line == v[1].line ||
+            value.lastCaptureMs - v[0].firstCaptureMs > config.focusAlternationWindowMs) return
+        val alternation = ReadingAidFocusAlternation("focus_alternation:" + (++serial), v,
+            c.geometrySnapshotId, c.generation, value.evidenceAvailableMs)
+        alternations.add(alternation); if (alternations.size > 512) alternations.removeAt(0)
+        alternationDemand = Demand(strength(alternations.size), 0.0, value.evidenceAvailableMs,
+            alternations = alternations.toList())
+        // Each strength-increasing sequence needs four new, nonoverlapping visits.
+        visits.clear()
+    }
+
+    private fun strength(count: Int) = (count * ReadingAidPolicyConfig.FOCUS_STRENGTH_STEP).coerceIn(0.0, 1.0)
+
+    fun currentEvidence(c: ReadingAidContext,
+                        preferences: ReaderAidPreferences = ReaderAidPreferences()): ReadingAidFocusEvidence? {
+        val value = source ?: return null
+        if (sourceEpoch != (c.generation to c.geometrySnapshotId) ||
+            c.nowMs - value.evidenceAvailableMs !in 0.0..config.focusInterruptionWindowMs) return null
+        fun effective(demand: Demand?) = demand?.let {
+            minOf(preferences.maxStrength, if (preferences.adaptiveStrength) it.initialStrength else preferences.manualStrength) *
+                focusRecoveryFactor(it.recoveryMs, config.focusRecoveryHoldMs, config.focusRecoveryFadeMs)
+        } ?: 0.0
+        val a = effective(interruptionDemand); val b = effective(alternationDemand)
+        if (maxOf(a, b) <= 0) return null
+        val interruption = a > b || (a == b &&
+            (interruptionDemand?.recoveryMs ?: Double.POSITIVE_INFINITY) <=
+            (alternationDemand?.recoveryMs ?: Double.POSITIVE_INFINITY))
+        val demand = (if (interruption) interruptionDemand else alternationDemand)!!
+        return ReadingAidFocusEvidence(demand.episodes, initialStrength = demand.initialStrength,
+            observedRecoveryMs = demand.recoveryMs, recoveryFadeMs = config.focusRecoveryFadeMs,
+            windowMs = config.focusInterruptionWindowMs, support = value,
+            ruleId = if (interruption) "A4_RETURN_PRESENCE_FOCUS_V2" else "A4_LINE_VISIT_ALTERNATION_FOCUS_V2",
+            recoveryHoldMs = config.focusRecoveryHoldMs, alternations = demand.alternations)
+    }
+
+    fun diagnostics(now: Double): Map<String, Any> = mapOf(
+        "reason" to when {
+            hasDemand && (source == null || now - source!!.evidenceAvailableMs !in 0.0..config.focusInterruptionWindowMs) -> "waiting_for_supported_anchor"
+            hasDemand && !displaySupported(now) -> "waiting_for_fresh_article_presence"
+            hasDemand -> "response_active"
+            loss?.firstRecoveryDelivery != null -> "confirming_article_return"
+            loss != null -> "unavailable_episode_pending"
+            else -> "collecting_recent_episodes_or_visits"
+        },
+        "recent_episode_count" to episodes.size, "recent_alternation_count" to alternations.size,
+        "return_sample_count" to (presence?.count?.coerceAtMost(config.focusReturnMinSamples) ?: 0),
+        "has_demand" to hasDemand,
+        "has_anchor" to (source != null && now - source!!.evidenceAvailableMs in 0.0..config.focusInterruptionWindowMs))
+}

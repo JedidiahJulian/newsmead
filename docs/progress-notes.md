@@ -1,5 +1,331 @@
 # NewsMead — Progress Notes
 
+## 2026-10-15 - Softer Dark surroundings onset
+
+Owner corrects the rationale: avoid an overly strong immediate appearance change.
+Dark opacity reduced90%/98%→40%/60% at50%/100% initial action strength, with a
+400ms smooth onset. Fade style, triggers, action strength, opening and scroll
+position remain unchanged. Selector metadata V3 records per-style opacities and
+onset; policy14/conditionV9 retained. Opacity-only13 JVM checks/builds pass. Final
+build caught a removed still-required flag; restored/source-reviewed. Owner-approved
+retry passes15 JVM checks, both APK builds/data-preserving A56 installs and2 native
+checks in9.957s. Covers alpha0/51/102 at0/200/400ms, continuity/reset/hold and actual
+Dark/Fade Replay rendering with display awake. Evidence:
+`output/focus-dark-opacity-check-03/summary.json`; failed02 build retained.
+No camera/calibration/staging/commit or research-validity claim.
+
+## 2026-10-14 - Selectable focus appearance
+
+Owner requests a dark surround option in the aids menu. Add exclusive Fade
+surrounding text (default, background color) and Dark surroundings (black), with
+the same90%/98% opacity, clear area, motion and activation behavior. Session-only
+choice follows existing settings scope. It is explicit on focus actions and
+preferences/export records, including held scrolling style. Article/Pilot/Replay
+and article/Replay demo are wired. Policy14/conditionV9; form remains V4.
+18 focused JVM checks and both APK builds/installs pass.5/7 native initially pass;
+the existing dismiss test asserted before its posted callback, and Replay had no
+draws with the device found dozing afterward. Reviewed test-only callback wait,
+owner-approved rebuild/install and awake/unlocked-display retry pass both checks
+in10.728s. All7 distinct native checks pass across both runs. App APK unchanged
+on retry; data/calibration preserved. Evidence:
+`output/focus-style-menu-check-02/summary.json`; initial failure/logs/XML retained.
+No camera, frozen measurement protocol, staging or commit change.
+
+## 2026-10-14 - Focus contrast, smooth motion and scroll continuity
+
+Owner requests faint competing text, smoother movement and persistence while
+scrolling. V4 paints the article background at90%/98% coverage at50%/100% initial
+strength, with180ms presentation motion and a viewport-pinned scroll window
+that expires<=1500ms after the last actual translation unless fresh support
+takes over. Preserve5/4-row/full-width geometry. Detector resets/settling stay;
+held display logs original source/current geometry separately, never new gaze.
+Policy13/conditionV8 distinguish this revision in article/Pilot/Replay/demo.
+Independent review caught and corrected row snapping and repeated-disable
+invalidation. Correction review reports no actionable finding.50 focused JVM
+checks pass; both APKs build/install on A56 preserving data/calibration.5/6 native
+initially pass; a detached-parent fixture did not translate reported text origin.
+Reviewed test-only correction, owner-approved test rebuild/install and one retry
+pass in0.707s. All6 distinct native checks now pass across both runs. No camera,
+staging/commit. Evidence: `output/focus-display-scroll-check-02/summary.json`;
+initial failure/logs/XML retained. Live attached scrolling/benefit still need use.
+
+## 2026-10-14 - Four/five-line focus and full-width shade
+
+Owner requests a wider clear area and removal of side gutters. V3 prefers5 rows,
+uses4 only when5 leaves no surrounding shade, and never shrinks to3 for contrast.
+The band slides near visible/article edges; veil x bounds use the full visible
+overlay while gaze/text geometry retains its original bounds. Article/demo,
+Pilot and Replay select radius2; policy12/conditionV7. Demo availability uses the
+same resolver after source review caught a false short-viewport preview.
+14 focused JVM checks and app/test builds pass. Data-preserving A56 installs
+succeed;3/4 native checks initially pass (actual edge pixels/five clear rows and
+both demo cases). Failed Replay trace proves the test ran default navigation,
+not requested focus input. Selector waits for initial layout and visible target
+selection; returned scenario IDs are asserted. Correction review passes. Owner
+approved test APK rebuild/reinstall and one native retry; it passes in10.002s.
+All4 distinct checks pass across the two runs, with failed evidence retained.
+No activation threshold, filter/calibration, dictionary timing, frozen protocol,
+natural gaze/camera, staging or commit change. Evidence/APK/source hashes:
+`output/focus-window-width-check-02/summary.json` (initial gate/failure in folder01).
+
+## 2026-10-14 - Focus return presence, ongoing visits and visible context
+
+Owner authorizes the activation redesign after both live routes remain unreliable.
+Returns now count after100ms/3 fresh selected-coordinate article-presence samples,
+even during moving place search.3/30s/500ms and50/100% remain. Completed summaries
+survive same-article geometry/definition/control pauses while pending sequences
+and anchors clear. Four supported ABAB visits, including the ongoing fourth,
+use a separate8s aid window; finalized P11 retains2s and descriptive identity.
+V2 focus prefers3 clear lines, removes neighbors above60% of viewport height,
+and withholds zero-area/zero-alpha success. Shared policy11/conditionV6; article,
+pilot, replay, demo, diagnostics and contract synchronized. Independent review
+caught expired anchors remaining visible during fresh unmapped search; corrected
+with integration regression and passing correction review. All219 focused JVM
+tests pass, zero failures/errors/skips; both APKs build. Both data-preserving A56
+updates succeed;5 camera-free Android tests pass in31.501s, including real bitmap
+shade, moving returns, ongoing fourth visits, count strengths, consultation
+exclusion and geometry/fresh-anchor behavior. No natural camera/gaze collection,
+staging or commit. Trial settings are not validated attention thresholds or
+benefit. Evidence/XML/APK/source hashes: `output/focus-return-activation-check-01/summary.json`.
+
+## 2026-10-14 - Focus visibility hold and longer definition trigger
+
+Owner reports successful live focus activation followed by immediate removal,
+then authorizes brief-gap/line-transition stability and a stricter definition
+trigger. Focus now holds its initial50/100% for3s of usable captured reading and
+fades over7s; its last confirmed line/action can remain through<=1s delivery-age
+grace. Tick/duplicate callbacks cannot refresh support. Operational invalidation,
+longer unsupported intervals, off/zero and definition priority still clear it.
+Grace display does not create samples/fixations, interruption counts or reading
+time. Default definitions require1500ms observed current-word residence, versus
+the former800ms. Shared article/pilot/replay, phase provenance and fixtures use
+policy10/conditionV5. Source review reports no actionable finding. All **207
+focused JVM tests pass** and both APKs build. First gate passed205/207; the longer
+Replay dwell was shortened to1750ms so it exceeds the1500ms definition setting
+without exceeding the legacy comparison's2s cycle window. The owner approved
+the passing retry. Existing A56 aid-update/camera-free authorization covers this
+continuing correction; both data-preserving APK updates succeeded and **3
+camera-free Android tests pass** in 23.743 s. They verify brief-gap focus
+retention, the delayed dictionary card, line-cycle priority and excluded
+consultation samples. Evidence/XML/APK/source hashes:
+`output/focus-stability-definition-delay-check-02/summary.json`.
+No camera/staging/commit. Timings are prototype settings; human benefit unvalidated.
+
+## 2026-10-14 - Live focus history/line-support fixes and two strengths
+
+Owner reports normal article guides/bookmark and Replay work, but intentional
+live focus triggering does not. For short articles owner requests two or three
+strengths. Current focus now starts at50% after3 completed losses within30s and
+100% at4+; independent cycles1/2+ use50/100%. Fade remains gradual. Fixed P13
+unclassified-fixation gaps clearing completed focus witnesses; detector continuity
+still breaks and no cycle is joined through a gap. Focus accepts coarse line-only
+support across article width while retaining matching-row/freshness/geometry
+guards. Article/pilot/replay/demo are synchronized; policy9/conditionV4.
+
+All **200 focused JVM tests pass**, both APKs build and focused source review has
+no actionable finding. One new regression needed three assertion corrections
+before its approved passing run; app source stayed unchanged through those
+retries. Owner approved data-preserving A56 app/test installs. Both succeed and
+**2 camera-free Android tests pass** in50.631s (15 scripted scenario runs),
+including third-return50%, fourth-return100%, line-cycle focus and drawing
+receipts. Human benefit and the exact cause of the earlier live phone report
+remain unverified; no natural gaze was collected. Evidence/XML/APK/source hashes:
+`output/focus-live-two-strength-check-04/summary.json`; failed gates retained in
+folders01–03. [Contract](repeated-interruption-focus-window.md).
+No camera capture, staging or commit.
+
+## 2026-10-14 - Repeated-focus implementation completed after usage interruption
+
+The selected 3-episodes/30-second focus rule, independent supported line-cycle
+route, shared article/pilot/replay integration and episode provenance are saved.
+The approved second gate built both APKs and passed 188/189 focused JVM tests.
+Its failed replay assertion has been corrected to check short word-residence
+duration instead of absence of descriptive records. Review fixes also cover
+cycle anchoring, expired evidence, reader-capped/manual dose selection and
+tracked outside-text time inflating a short unavailable interval. Four new
+timing regressions are saved; final source review reports no actionable P1/P2
+finding. Owner-approved final retry passes **194 focused JVM tests**, with zero
+failures/errors/skips, and both APK assemblies. Focused tracked-file whitespace
+checks pass; new focus sources/tests have no trailing whitespace. Native replay
+and pilot fixtures compile; phone execution is pending for this build.
+Evidence: `output/repeated-focus-check-01/`,
+`output/repeated-focus-check-02/` (earlier failed gates),
+`output/repeated-focus-check-03/summary.json` (XML and APK/source hashes).
+[Current contract](repeated-interruption-focus-window.md).
+No install, camera, collection, staging or commit. Human benefit remains untested.
+
+## 2026-10-13 - Bookmark when looking away loses tracking
+
+Owner expects looking away to show the last-line bookmark even when no gaze
+coordinates remain. Added a 500 ms delivery-time timer for explicit provider
+unavailability. Recovery before the delay cancels pending loss; source-less,
+invalid-clock, old/future and operationally excluded input cannot create a cue.
+Single stale callbacks with repeated captures can mature through runtime ticks.
+Gap departure capture bounds are null; distinct delivery bounds and the actual
+saved source capture are retained. No distraction or difficulty label is inferred.
+Policy 7, bookmark rule V2, smoothed condition suffix V2; visuals, calibration,
+filter and original jump/outside rules stay intact. Replay adds
+`bookmark_tracking_loss` and native timer/trace regressions compile in the gate.
+Focused independent source review has no actionable P1/P2 finding. All **173
+focused JVM tests pass**, app/test APKs build and whitespace passes. Native
+runtime-timer/replay fixtures compile but phone execution remains pending.
+Evidence/XML/APK hashes: `output/bookmark-tracking-loss-check-01/summary.json`.
+[Contract](scanpath-reading-bookmark.md). No device install/camera/collection,
+staging or commit.
+
+## 2026-10-13 - One calibrated-smoothed reading path
+
+Owner authorized the dot, live scanpaths and aid decisions to share the exact
+existing filtered provider point. Article/pilot now select `article_smoothed_v1`
+for mapping, candidate grouping/centroids, policy anchors, bookmark departures
+and pilot scoring. True calibrated raw coordinates remain separate; no raw
+fallback or second filter. Calibration, One Euro 0.7/0.002, detector settings and
+aid timings are retained. New condition IDs, policy 6 and schema-2 provenance
+separate this route from earlier raw results. Replay supplies explicitly
+post-filter synthetic points with absent raw originals; frozen accuracy and raw
+diagnostic protocols retain their identities.
+
+Independent source review found an obsolete replay version assertion and an
+incomplete provider-point audit check; both corrected with regression coverage.
+All **166 focused JVM tests and 10 host checks pass**; app/test APKs build.
+The first host invocation failed before tests on its sibling import path; the
+owner approved the successful retry. Native fixtures compile but phone execution
+remains unperformed for this build. Evidence/XML/APK hashes:
+`output/smoothed-scanpath-check-01/summary.json`.
+[Stream contract](calibrated-smoothed-scanpath-path.md). No install, camera,
+participant collection, staging or commit. These checks establish software
+consistency, not new accuracy or reading-benefit evidence.
+
+## 2026-10-13 - Exact online dictionary fallback; gaze dot clarified
+
+Owner says popups open without definitions and questions whether the dot's size
+limits matching. Source confirms dot radius 18 screen px is visual; scanpath
+mapping uses raw point/layout, without padded word radius. Dot smoothing and
+I-DT dispersion are separate. No matching radius/detector/protocol changed.
+Added one exact-word Datamuse fallback after primary dictionary failure; results
+must match original normalized spelling, retain attribution and two-sense bounds.
+Reader controls, trigger timing, raw data and bundled-only synthetic conditions
+remain. Provider/adapter identities are recorded. Source review has no finding;
+125 focused JVM checks and APK assemblies pass. Data-preserving A56 updates
+installed. Nine phone checks pass, plus one targeted analyst native-popup check:
+live Datamuse lookup filled meaning/source and Close worked. Ten distinct cases
+across two runs, with analyst latency 794 ms and 3,467 ms. Evidence/hashes:
+`output/dictionary-article-check-03/summary.json`. Exact natural article state
+was not inspected successfully. No camera/gaze, participant data, staging or
+commit. Datamuse's announced February 2027 key requirement is documented in
+[dictionary contract](article-definition-aid.md).
+
+## 2026-10-13 - Fresh dictionary requests verified on A56
+
+Owner authorized the ADB retry, data-preserving installs and camera-free check.
+Added an optional HTTP-cache bypass and public-vocabulary fixture so the check
+cannot pass on memory/HTTP cache alone. A56/API 36 Internet permission is granted;
+installed app hash matches the build. Keyboard live definition arrived in 408 ms,
+populated the native popup and closed; unbundled hello live in 83 ms; analyst
+glossary fallback in 79 ms. All nine phone checks pass in 0.792 s, plus 19 focused
+JVM checks and both APK assemblies. Default reading cache remains enabled.
+Evidence/hashes: `output/dictionary-connection-check-02/summary.json`. Connectivity
+is verified for these requests; full dictionary coverage and natural gaze-triggered
+article behavior are not. No camera, gaze, participant data, staging or commit.
+
+## 2026-10-13 - Fixed Aids entry and dictionary failure feedback
+
+Owner reports running the menu build successfully, then requests fixed bottom
+access. Removed article-tap/scroll visibility transitions; menu capture gates
+and screen-coordinate exclusion remain. Raw diagnostics disable the entry and
+retain the frozen recording route. Owner's normal-article **analyst** lookup
+showed the blanket connection message. One host request returned HTTP 404 in
+406 ms; phone cause and response payload are not verified. Added precise failure
+feedback and an original analyst glossary entry while preserving live-first
+lookup, retryability, cache and consultation safeguards. Sources/limits:
+[dictionary amendment](article-definition-aid.md). Review's diagnostic-dot finding
+is corrected and source-confirmed. Initial test-only nullable-property compile
+error was fixed; owner-approved retry passes 119 focused JVM checks, both APK
+assemblies and whitespace check. Evidence:
+`output/fixed-aids-dictionary-check-01/summary.json`. No device install, camera,
+participant validation, staging or commit; actual phone behavior remains untested.
+
+## 2026-10-13 - Reading aids menu and sentence-context prototype
+
+Owner approved menu plus sentence guidance and selected tap-to-reveal bottom
+access. Shared controls support independent aid switches and exclusive line or
+sentence context. Coarse supported lines select text units; same-line ambiguity
+uses containing paragraph or abstains, without exact-word dependence. Gray guides
+draw behind letters at 7.843% default opacity; no entry pulse. Current definition
+profile V4 / policy 5 records separate guide ranges and reader choices. Pilot and
+replay reuse controls while preserving prompted/shadow/no-aid behavior. Source
+review findings about options suspension and screen coordinates were resolved.
+Initial sandbox cache denial and stale demo-strength assertion were retained;
+owner approved both retries. Corrected gate passes all 114 focused JVM checks,
+both APK assemblies and whitespace check. [Contract](reading-aid-menu-and-sentence-guide.md)
+and `output/guide-menu-check-01/summary.json` retain logs, failed/corrected XML and
+hashes. Android fixtures compile; actual article gestures/insets/lifecycle remain
+untested on phone. No install, camera, human validation, staging or commit ran.
+
+## 2026-10-13 - Last recorded reading-line bookmark
+
+Owner selected both outside-article departure and non-normal line-jump triggers
+for a bookmark at the line left behind. Current article, demo, pilot and replay
+use definition V3 / policy 4. The fixed gutter cue does not predict a successor
+or diagnose lost attention. Usable outside coordinates are required for the
+look-away route; tracking loss alone preserves memory silently. Separate source
+and comparison memory prevents jumps/clearing across unknown gaps. Both action
+writers retain source and departure evidence; legacy V2 identities remain intact.
+[Contract and primary evidence](scanpath-reading-bookmark.md) record EB15/CW12's
+known-interruption resumption findings and the unvalidated phone trigger/form.
+
+Focused review findings were corrected. Initial nullable-geometry compilation
+failure was repaired; owner-approved retry passes 94 JVM checks and both APK
+assemblies. Data-preserving app/test updates installed on SM-A566B/API 36.
+Camera-free phone checks passed 30/32 initially; two new assertions used the
+wrong action JSON field. Corrected, owner-approved two-test retry passes in
+28.861 s. All 32 distinct cases are covered across the runs. Evidence, initial
+failures and hashes: `output/reading-bookmark-check-01/summary.json`.
+No camera/live gaze, calibration, private recording, human reading validation,
+staging or commit ran.
+
+## 2026-10-08 - A56 live dictionary check 06
+
+Owner authorized a quick camera-free device check. Added an explicitly opt-in
+public-word API/native-popup smoke fixture. Its initial test-only cleanup
+compilation error was corrected; owner approved rebuild/retry. App/test APKs
+installed preserving data on SM-A566B/API 36; all 15 focused checks pass in
+0.835 s. Real dictionary `keyboard` result arrived in 443 ms with live-source
+attribution, populated the card and closed correctly. Offline, popup lifecycle,
+synthetic consultation and article-presenter checks also pass. Evidence/hashes
+and retained initial error: `output/dictionary-device-check-06/summary.json`.
+No camera/live gaze, human reading, private-recording access, staging or commit
+ran; the visible live-article gaze trigger still needs a manual reading check.
+
+## 2026-10-08 - Online word definitions
+
+Owner requested live dictionary help. Changed lookup to successful online cache
+→ Free Dictionary API → bundled fallback; synthetic replay/pilot stay offline.
+Live pilot records `online_then_bundled`. Only live successes enter memory, and
+cancelled/duplicate responses cannot deliver or populate it. One public host
+probe returned HTTP 200 and keyboard definitions/attribution in 395 ms. All 26
+focused JVM checks pass; both APKs assemble fresh, and source review has no
+finding. No phone install/tests or live gaze ran. Evidence and phone limits:
+`output/dictionary-online-check-01/summary.json`, [article aid](article-definition-aid.md).
+
+## 2026-10-08 - A56 merged-build check and replay correction
+
+Owner-authorized data-preserving installation succeeded on SM-A566B/API 36.
+One camera-free 38-test gate passed 33 and failed 5 in 89.668 s. Three popup
+fixtures have compiled constructor ABI mismatch; two continuation replay checks
+reject a short destination row unnecessarily. Locally corrected generator
+landing/arrival selection with source progress/visibility/timing retained and
+three JVM regressions. Source review found no issue. The first fresh-build
+invocation stopped before compilation on PowerShell argument parsing. After
+owner authorization, a fresh nonincremental build passes 83 JVM checks, both
+APKs reinstall preserving data, and all 38 A56 checks pass in 94.573 s. Rebuilt
+popup bytecode matches the current constructor. Home launch returned success
+but its captured hierarchy showed the launcher and no app nodes, leaving actual
+feed display/publisher extraction unverified; no retained app crash was found.
+[Device check 05](scanpath-device-check-05.md) retains initial failures, corrected
+hashes, scope and evidence. No live camera/gaze, calibration, private export,
+staging or commit ran.
+
 ## 2026-10-08 - Recommendation API integration
 
 The owner authorized merging the latest fetched `Recommendation` (`501e9be`,

@@ -1,5 +1,13 @@
 # Scanpath-based reading aids: design and evidence contract
 
+**2026-10-13 current marker amendment:** article/pilot/replay use definition V3 /
+policy 4 and the [last recorded-line bookmark](scanpath-reading-bookmark.md).
+EB15/CW12 support cues at known reading-interruption locations; the autonomous
+outside/jump trigger and fixed phone gutter bar remain experimental. The V2
+expected-successor route remains a historical comparison, not the current rule.
+Current word help is the near-word definition card; focus is default on at the
+owner's request, with its original trigger/strength validation limits retained.
+
 **2026-10-03 ordinary-article amendment:** the owner's top-magnifier correction
 adds a separate [definition aid and article demo](article-definition-aid.md).
 H03/M25 support gaze-triggered lexical-assistance precedents, with explicit
@@ -34,13 +42,14 @@ architecture has itself been experimentally validated.
 
 | Family | Display | Adjustable parameters | Implementation priority |
 | --- | --- | --- | --- |
-| Line guidance | Ongoing current-line emphasis and a separate expected-continuation marker after supported line-end progress and a mismatched landing. | Highlight prominence; fixed marker visibility, expected-line anchor and temporary duration. | W24/S19 provide form/navigation precedents; the continuation mismatch rule remains an experimental adaptation. See [current marker contract](scanpath-continuation-marker.md). |
-| Local word support | Magnified word beside the source word, retaining the article context. | Magnification, placement and duration. | Primary experimental module, using W24's implemented trigger/aid precedent; benefit remains uncertain. |
+| Line guidance | Ongoing current-line emphasis and a separate bookmark at the last supported line after outside departure or a supported non-normal jump. | Highlight prominence; fixed bookmark visibility, saved-line anchor and lifecycle hold. | W24/S19 provide line-form precedents; EB15/CW12 provide reading-resumption evidence. Exact bookmark rule/form remain experimental. See [current marker contract](scanpath-reading-bookmark.md). |
+| Local word support | Current near-word definition card with persistent source highlight; magnifier retained only in legacy comparison conditions. | Placement, lookup and consultation lifecycle; legacy magnification. | H03/M25 lexical-assistance precedents are appraised in [article definitions](article-definition-aid.md); W24 remains a magnifier method precedent. Exact phone benefit remains uncertain. |
 | Placekeeping ruler | Line bar or underline that follows a reliable anchor; compare with an optional context-preserving focus variant. | Style, prominence and span; reader-selected preferences. | Candidate module using N23. Prioritize the bar as the stronger no-ruler comparison precedent; do not assume Lightbox/masking is stronger help. |
 | Word-progress coloring | Optional persistent coloring of visited words. | Color and activation condition. | Optional alternative from R26; different from a difficulty-triggered magnifier. |
 
 Existing A0–A4 identifiers remain lookup IDs for study records, not ranks. A1/A2
-are line guidance, A3 is localized magnification, and A4 retains the defined
+are line guidance, A3 is a definition in the current profile and magnification
+in the legacy comparison, and A4 retains the defined
 context-preserving focus region. A0 records no new aid or suspension. Ruler
 variants use distinct `RULER_GREY_BAR_V1` / `RULER_UNDERLINE_V1` form IDs;
 progress coloring uses `WORD_PROGRESS_COLOR_V1`. Preserve the exact condition
@@ -56,12 +65,12 @@ experimental status.
 | Implemented observation | Role or candidate action | Evidence and boundary |
 | --- | --- | --- |
 | P01/P02 word forward movement; P05/P06 line forward movement | Update the target of an enabled line guide; optionally update word-progress coloring. | W24/R26 provide gaze-following forms. Forward jumps do not establish unread text or difficulty. No strength escalation from jump distance alone. |
-| Supported source first-quarter → last-quarter progress, followed by a different-line landing | Remember the next physical line and offer its fixed start marker only when the observed landing differs. Normal adjacent continuation consumes the expectation without a cue. | W24/S19 support navigation/salience forms, not this mismatch trigger. The cue offers continuation without classifying a deliberate jump as harmful or erroneous. |
+| Supported visible source line, followed by sustained usable outside-article coordinates or uninterrupted supported non-normal line jump | Offer the fixed bookmark at the line left behind. Same-line/normal adjacent progression updates memory without a cue. | EB15/CW12 support known-interruption location cues, not the autonomous departure/jump rule or blue gutter form. Intentional rereading/skipping is not labeled harmful. |
 | P09 geometric return-sweep candidate | Retain the observed movement in detector records; it no longer chooses a marker. | A P09 match occurs after the adjacent landing. It cannot establish prediction of an initial landing or detect a skipped/backward destination by itself. |
-| P04 same-word refixation candidate + P12 word residence | Candidate localized word support based on within-visit repeated inspection/observed time. | W24 uses within-one-pass duration and refixation counts. One P04 event is not its count threshold, and P12's observed span is not automatically its first-fixation measure. Preserve these differences; do not copy desktop thresholds. |
+| Supported current-word residence, with no required refixation count in the current definition profile | Near-word definition at 800 ms observed current-word time. Historical magnifier uses refixations plus residence. | H03/M25 provide lexical-assistance precedents, not validation of the exact flat threshold or phone benefit. W24's refixation criteria remain relevant to the historical magnifier comparison. |
 | P03/P07/P08 backward returns + P10 revisit/resumption | Follow the returned location; preserve access to earlier text. A ruler/anchor response can be explicitly experimental or reader-requested. | S14 supports preserving rereading. N23 supports a ruler form, not a return-triggered benefit. P10 is not proof of a known interruption or lost place. |
 | P11 A–B–A–B cycles + P12 line residence/progression | Retain observations for an experimental ruler/region or strength rule; no forced aid solely because a cycle occurred. | N23 supplies an aid-form comparison. No matched trial in this targeted review validates these exact events as need for a ruler/focus window. Keep the missing trigger evidence explicit. |
-| P13 unknown/break | Suppress new gaze-anchored actions and clear stale targets according to a specified lifecycle. | Measurement safeguard, not an intervention finding or evidence of greater difficulty. |
+| P13 unknown/break | Suppress new transient gaze aids and break jump comparison. The bookmark may retain saved memory/static cue in unchanged geometry, but tracking loss cannot activate it. | Measurement safeguard, not an intervention finding or evidence of greater difficulty. Geometry/lifecycle/consultation invalidation clears the bookmark. |
 
 ## Primary evidence and source locations
 

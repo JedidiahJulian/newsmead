@@ -128,9 +128,8 @@ class ReadingAidPolicyTest {
         assertTrue(p.activeActions().isEmpty())
     }
 
-    @Test fun focusRequiresReaderOptInObservedResidenceAndConfiguredSlowProgression() {
-        val p = ReadingAidPolicy(ReadingAidPolicyConfig.experimentalPrototype(),
-            ReaderAidPreferences(focusRegion = true))
+    @Test fun focusEnabledByDefaultStillRequiresObservedResidenceAndConfiguredSlowProgression() {
+        val p = ReadingAidPolicy(ReadingAidPolicyConfig.experimentalPrototype())
         val f0 = fixation(0, 210.0)
         p.onEvent(event("cycle", "P11", "line", f0), f0, context(210.0))
         val f1 = fixation(1, 1210.0)

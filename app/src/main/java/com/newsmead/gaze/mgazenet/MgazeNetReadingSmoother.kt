@@ -16,8 +16,8 @@ internal class MgazeNetReadingSmoother {
     }
 
     companion object {
-        // Frozen article-output parameters. Calibration and accuracy instruments stay raw.
-        private const val MIN_CUTOFF = 0.7
-        private const val BETA = 0.002
+        // Frozen article-output parameters; independent instruments keep their own declared stream.
+        const val MIN_CUTOFF = 0.7
+        const val BETA = 0.002
     }
 }

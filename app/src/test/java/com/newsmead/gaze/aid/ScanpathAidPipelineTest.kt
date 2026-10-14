@@ -6,13 +6,13 @@ import org.junit.Test
 
 /** The real extractor/classifier feeds the policy; samples are synthetic assignments. */
 class ScanpathAidPipelineTest {
-    private class Pipeline {
+    private class Pipeline(config: ReadingAidPolicyConfig = ReadingAidPolicyConfig.experimentalPrototype()) {
         private val geometry = ScanpathGeometry("g1", 0.0, 0.0, ScanpathRect(0.0, 0.0, 100.0, 60.0),
             20.0, listOf(ScanpathLine(0, 20, 0.0, 100.0, 0.0, 20.0),
                 ScanpathLine(20, 40, 0.0, 100.0, 20.0, 40.0),
                 ScanpathLine(40, 60, 0.0, 100.0, 40.0, 60.0)), ScanpathTextDirection.LTR)
         var context = ReadingAidContext(0, "g1", 3, null, null, null, 0.0, null, null, false, geometry, null)
-        val policy = ReadingAidPolicy(ReadingAidPolicyConfig.experimentalPrototype(),
+        val policy = ReadingAidPolicy(config,
             ReaderAidPreferences(wordDefinition = false))
         val decisions = mutableListOf<ReadingAidDecision>()
         val patterns = mutableListOf<ScanpathEvent>()
@@ -30,11 +30,12 @@ class ScanpathAidPipelineTest {
         fun sample(capture: Double, x: Double, word: Int, line: Int = 0, valid: Boolean = true,
                     rawY: Double = line * 20.0 + 10) {
             val range = words[word]
+            val sample = ScanpathSample(capture, capture + 10, x, rawY,
+                line, range.startUtf16, range.endUtf16, "g1", valid)
             context = ReadingAidContext(0, "g1", geometry.lines.size, line, range.startUtf16, range.endUtf16,
-                capture + 10, capture, capture + 10, valid, geometry, x)
+                capture + 10, capture, capture + 10, valid, geometry, x, rawSample = sample)
             if (!valid) decisions.addAll(policy.onObservation(null, context))
-            val accepted = engine.onSample(ScanpathSample(capture, capture + 10, x, rawY,
-                line, range.startUtf16, range.endUtf16, "g1", valid))
+            val accepted = engine.onSample(sample)
             decisions.addAll(policy.onObservation(if (accepted) engine.currentCandidateEvidence() else null, context))
         }
         fun hold(start: Double, x: Double, word: Int, line: Int = 0, span: Int = 250,
@@ -105,4 +106,31 @@ class ScanpathAidPipelineTest {
         assertFalse(p.decisions.any { it.status == ReadingAidDecisionStatus.CLEARED &&
             it.action?.aidType == ReadingAidType.NEXT_LINE_START })
     }
+    @Test fun definitionProfileAssistsOnOngoingFourthVisitBeforeFinalizedFastPattern() {
+        val p = Pipeline(ReadingAidPolicyConfig.definitionPrototype())
+        p.hold(200.0, 10.0, 0, line = 0)
+        p.hold(500.0, 10.0, 4, line = 1)
+        p.hold(800.0, 10.0, 0, line = 0)
+        p.hold(1100.0, 10.0, 4, line = 1)
+        assertFalse(p.patterns.any { it.patternId == "P11" && it.resolution == "line" })
+        val early = p.policy.activeActions().single { it.aidType == ReadingAidType.FOCUS_REGION }
+        assertEquals(1, early.anchor.line)
+        assertEquals(1, early.focusEvidence!!.alternations.size)
+        assertTrue(early.eventIds.isEmpty())
+        p.sample(1400.0, 10.0, 0, line = 0)
+        val cycle = p.patterns.single { it.patternId == "P11" && it.resolution == "line" }
+        assertEquals(1, p.latest!!.line)
+        assertEquals(0, p.context.targetLine)
+        assertTrue(p.policy.activeActions().any { it.aidType == ReadingAidType.FOCUS_REGION })
+        p.sample(1450.0, 10.0, 0, line = 0)
+        p.sample(1500.0, 10.0, 0, line = 0)
+        val focus = p.policy.activeActions().single { it.aidType == ReadingAidType.FOCUS_REGION }
+        assertEquals(0, focus.anchor.line)
+        assertTrue(focus.eventIds.isEmpty())
+        assertEquals("A4_LINE_VISIT_ALTERNATION_FOCUS_V2", focus.ruleId)
+        assertEquals(0.5, focus.strength, 0.0)
+        assertEquals(1, focus.focusEvidence!!.cycleCount)
+        assertFalse(p.patterns.any { it.patternId == "P12" && it.metrics["slow_flag"] == true })
+    }
+
 }

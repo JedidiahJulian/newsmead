@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from summarize_scanpath_pilot import INSTRUMENT, read_trace, summarize
+from summarize_scanpath_pilot import INSTRUMENT, SMOOTHED_INSTRUMENT, read_trace, summarize
 
 
 def fixture():
@@ -35,6 +35,45 @@ class PilotSummaryTests(unittest.TestCase):
         for private_field in ("body_text", "bounds_screen", "raw_x"):
             self.assertNotIn(private_field, text)
         self.assertIsNone(result["score"]["targets"][0]["exact_word_given_eligible"])
+
+    def test_legacy_schema_is_explicitly_raw(self):
+        result = summarize(fixture())
+        self.assertEqual("legacy_raw", result["interpretation_mode"])
+        self.assertEqual("calibrated_raw_v1", result["coordinate_stream"])
+        self.assertTrue(result["raw_scoring"])
+
+    def test_new_schema_declares_selected_stream_and_rejects_mixed_metadata(self):
+        rows = fixture()
+        rows[0]["detail"].update(instrument=SMOOTHED_INSTRUMENT, schema_version=2,
+                                  coordinate_stream="article_smoothed_v1", raw_scoring=False,
+                                  processed_scoring=True, smoothing=False,
+                                  input_phase="post_filter_synthetic_trajectory",
+                                  smoothing_applied_to_synthetic_input=False,
+                                  smoother_min_cutoff=0.7, smoother_beta=0.002)
+        rows[2]["detail"].update(provider_x=25, provider_y=None)
+        rows[3]["detail"].update(coordinate_stream="article_smoothed_v1", raw_x=20, raw_y=None,
+                                  x=25, y=None, display_x=25, display_y=None)
+        result = summarize(rows)
+        self.assertTrue(result["integrity_ok"])
+        self.assertEqual("selected_smoothed_stream", result["interpretation_mode"])
+        self.assertFalse(result["raw_scoring"])
+        # A mutually consistent replacement must still fail against the original provider output.
+        rows[3]["detail"].update(x=20, display_x=20)
+        issues = summarize(rows)["issues"]
+        self.assertIn("provider_coordinate_retention", issues)
+        self.assertNotIn("selected_display_pairing", issues)
+        rows[3]["detail"].update(x=25, display_x=25)
+        # Explicit nulls are valid; absent coordinate keys are not.
+        del rows[2]["detail"]["provider_y"]
+        self.assertIn("missing_provider_coordinates", summarize(rows)["issues"])
+        rows[2]["detail"]["provider_y"] = None
+        del rows[3]["detail"]["display_y"]
+        self.assertIn("missing_selected_display_coordinates", summarize(rows)["issues"])
+        rows[3]["detail"]["display_y"] = None
+        rows[3]["detail"]["x"] = 20
+        self.assertIn("selected_display_pairing", summarize(rows)["issues"])
+        rows[0]["detail"]["raw_scoring"] = True
+        self.assertIn("unexpected_raw_scoring", summarize(rows)["issues"])
 
     def test_partial_name_cannot_be_complete_even_with_complete_footer(self):
         self.assertIn("partial_filename", summarize(fixture(), final_filename=False)["issues"])

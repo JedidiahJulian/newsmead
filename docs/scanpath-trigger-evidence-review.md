@@ -1,6 +1,19 @@
 # Scanpath triggers and visual aids: implementation evidence review
 
-**2026-10-04 navigation amendment:** the [continuation marker](scanpath-continuation-marker.md)
+**2026-10-13 bookmark amendment:** current article/pilot/replay use definition
+V3 / policy 4 and the [last recorded-line bookmark](scanpath-reading-bookmark.md).
+EB15/CW12 support cues at known interruption locations, not the autonomous
+outside/jump trigger or phone gutter bar. The current trigger dictionary/diagram
+below reflect that amendment; the original October 3 audit and historical results
+retain their dates. Updated software checks cover 94 JVM cases and 32 distinct
+camera-free A56 cases across initial/corrected runs; human benefit remains untested.
+
+**2026-10-08 owner-selected default:** focus is now enabled by default in the
+article, pilot and replay preferences for prototype inspection. The historical
+default-off/opt-in recommendation below describes the reviewed October 3 build;
+the trigger, strength rule and human-validation limits remain unchanged.
+
+**Historical 2026-10-04 navigation amendment:** the [continuation marker](scanpath-continuation-marker.md)
 supersedes the old P09 landing cue. Article/pilot/replay use definition profile V2
 and policy v3. The magnifier rows and earlier audit results below remain historical;
 the current word route is documented in [article definitions](article-definition-aid.md).
@@ -37,14 +50,17 @@ figure or diagnostic model. Branches are independent; they are not scaffold leve
 
 ```mermaid
 flowchart TD
+    R{"Matching visible layout,<br/>no invalidating boundary?"}
     G{"Usable current target, fresh evidence,<br/>matching layout and aids enabled?"}
-    G -- No --> X["Clear stale aids / withhold new aids"]
+    R -- No --> C["Clear aids and bookmark memory"]
+    R -- Yes --> G
+    R -- Yes --> S{"Saved supported source line, bookmark enabled,<br/>AND confirmed usable outside-article coordinates<br/>OR uninterrupted supported non-normal jump?"}
+    G -- No --> X["Clear transient gaze aids / withhold new ones;<br/>unchanged-layout bookmark may hold"]
     G -- Yes --> L{"Supported current line<br/>and line guide enabled?"}
-    G -- Yes --> S{"Supported first-quarter → last-quarter progress<br/>then landing away from expected next line<br/>within 2 s of latest end evidence; marker enabled?"}
     G -- Yes --> W{"Supported current-word residence<br/>at least 800 ms; definition enabled?"}
     G -- Yes --> F{"Focus enabled AND recent line cycle<br/>AND at least 1000 ms line residence<br/>AND slow frontier progression<br/>AND no active word support?"}
     L -- Yes --> LH["Current-line highlight"]
-    S -- Yes --> LS["Fixed blue marker at EXPECTED next-line start"]
+    S -- Yes --> LS["Fixed blue bookmark at LAST SUPPORTED SOURCE LINE;<br/>clear on supported return or distinct continuation"]
     W -- Yes --> WM["Near-word definition and source highlight;<br/>consultation breaks article sequence continuity"]
     F -- Yes --> FW["Focus region:<br/>25% to 100% strength over 1000–2000 ms"]
     W -- No --> NW["No word definition"]
@@ -52,19 +68,20 @@ flowchart TD
     WM --> P["Word support takes priority over focus;<br/>line guidance may accompany it"]
 ```
 
-All positive branches also require that specific aid to be enabled and its
-support to remain current. Failed branches do not remove unrelated qualifying
-aid forms. Layout changes, input loss, target movement and expiry clear actions
-under their respective conditions.
+The bookmark's enable/source checks apply to either departure route. Failed
+branches do not remove unrelated qualifying aid forms. Transient aids require
+current support; the bookmark retains its saved location/static cue through
+ordinary tracking loss in unchanged geometry. Layout/lifecycle/consultation
+invalidation clears it. This diagram is a software rule, not an attention diagnosis.
 
 ## Exact current trigger dictionary
 
 | Aid | Trigger and limits | Display and strength | Evidence status |
 | --- | --- | --- | --- |
 | A1 current-line highlight | Supported finalized candidate or established ongoing candidate; assigned line matches latest eligible raw target. Line guide enabled. | Yellow line emphasis. Adaptive baseline strength 0.25, or reader-selected fixed value/cap. | Related gaze-following line form; the independent phone cue and exact support rule have not been evaluated. |
-| A2 expected-continuation cue | Established first-quarter then last-quarter source progress, fully visible LTR source/successor, fresh supported landing on a different line within 2 s of latest source-end evidence. Normal successor landing consumes the expectation without a cue. | Fixed 6 dp / alpha 240 blue marker at the **expected** line's beginning, with the existing 4 dp gutter gap. Clears on supported arrival, distinct continued reading, TTL or boundaries. | W24/S19 are form/navigation precedents. Exact progress/mismatch rule, visibility and phone benefit remain experimental; deliberate rereading/skipping must remain possible. |
+| A2 last recorded-line bookmark | Remembered supported fully visible LTR source; sustained usable outside-article coordinates for 100 ms / 3 samples, or a supported non-normal jump within the same segment and 125 ms transition gap. Same-line/normal-next-line progression produces no cue; missing input breaks comparison, not saved memory. | Fixed 6 dp / alpha 240 blue marker at the **source** line's beginning, with a 4 dp gutter gap. Holds until supported return, distinct continuation or explicit invalidation. Off/zero disables; positive strength does not attenuate. | EB15/CW12 support known-interruption resumption cues. Exact autonomous trigger, gutter form, timing and phone benefit remain experimental; deliberate rereading/skipping must remain possible. |
 | A3 current word definition | Current matching word/line and at least 800 ms observed current-word time from supported finalized visit time plus a nonoverlapping established prefix, or the prefix alone. Definition enabled; no mandatory refixation count. | Near-word definition card with persistent source highlight. Consultation excludes its interval and resets article sequence continuity. | H03/M25 support lexical assistance; [current source review](article-definition-aid.md) records population, hardware and transfer limits. The exact automatic cutoff and phone benefit are unvalidated. |
-| A4 context focus region | Reader opts in (default off). Recent line-level A–B–A–B cycle within the configured two-second window; current-line observed residence ≥1000 ms; slow-frontier flag; current matching target; no active word support. | Current line plus two physical lines on either side remain unveiled. Strength interpolates 0.25→1 over 1000→2000 ms; outside-text veil alpha = 40 × strength out of 255. Span never narrows as strength increases. | Original experimental mapping. Reviewed ruler studies do not validate this exact trigger or this focus treatment. |
+| A4 context focus region | Focus enabled (default on since owner request on October 8). Recent line-level A–B–A–B cycle within the configured two-second window; current-line observed residence ≥1000 ms; slow-frontier flag; current matching target; no active word support. | Current line plus two physical lines on either side remain unveiled. Strength interpolates 0.25→1 over 1000→2000 ms; outside-text veil alpha = 40 × strength out of 255. Span never narrows as strength increases. | Original experimental mapping. Reviewed ruler studies do not validate this exact trigger or this focus treatment. |
 
 Slow-frontier flag: at least a 1000 ms analysis window, observed candidate spans
 covering at least 50% of window elapsed time, and frontier gain ≤0.5 physical
@@ -73,10 +90,13 @@ The cycle is recent line-history evidence; residence and the displayed anchor
 refer to the current line. The policy does not infer the semantic reason for
 returning between lines.
 
-Global timing safeguards require coherent capture/delivery times and evidence
-no older than 250 ms. Action lifetime is 1500 ms; non-guide clearing/expiry
-introduces a 2000 ms cooldown. These are implementation settings, not study
-confidence measures or validated response-time standards.
+Transient aid timing safeguards require coherent capture/delivery times and
+evidence no older than 250 ms. Their action lifetime is 1500 ms; non-guide
+clearing/expiry introduces a 2000 ms cooldown. The current bookmark instead holds
+saved memory/static display through ordinary missing input in unchanged geometry,
+with separate fresh departure evidence and explicit resumption/invalidation rules.
+These are implementation settings, not study confidence measures or validated
+response-time standards.
 
 Code: [policy](../app/src/main/java/com/newsmead/gaze/aid/ReadingAidPolicy.kt),
 [profile](../app/src/main/java/com/newsmead/gaze/aid/ReadingAidModels.kt),

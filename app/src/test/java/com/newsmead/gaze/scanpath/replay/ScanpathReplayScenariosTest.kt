@@ -21,13 +21,23 @@ class ScanpathReplayScenariosTest {
         val events = mutableListOf<ScanpathEvent>()
         val decisions = mutableListOf<ReadingAidDecision>()
         val active = mutableListOf<List<ReadingAidAction>>()
+        val candidates = mutableListOf<ScanpathCandidateEvidence?>()
+        val samples = mutableListOf<ScanpathSample>()
         lateinit var engine: ScanpathEngine
         val actions get() = decisions.filter { it.status == ReadingAidDecisionStatus.CHOSEN }.mapNotNull { it.action }
     }
     private fun run(id: String, focus: Boolean = true, scriptedPoints: List<ReplayPoint>? = null,
-                    continuationStrengthProbe: Boolean = false): Result {
+                    continuationStrengthProbe: Boolean = false,
+                    fixtureGeometry: ScanpathGeometry = geometry,
+                    fixtureWords: List<ReplayWord> = words,
+                    currentBookmarkProfile: Boolean = id.startsWith("bookmark_") ||
+                        id in setOf("repeated_interruptions", "brief_interruptions",
+                            "interruption_place_search", "line_alternation")): Result {
+        val geometry = fixtureGeometry
+        val words = fixtureWords
         val result = Result()
-        val profile = ReadingAidPolicyConfig.experimentalPrototype()
+        val profile = if (currentBookmarkProfile) ReadingAidPolicyConfig.definitionPrototype()
+            else ReadingAidPolicyConfig.experimentalPrototype()
         val policy = ReadingAidPolicy(profile, ReaderAidPreferences(focusRegion = focus,
             wordDefinition = false, adaptiveStrength = !continuationStrengthProbe,
             manualStrength = if (continuationStrengthProbe) 0.2 else 0.5,
@@ -61,19 +71,28 @@ class ScanpathReplayScenariosTest {
             assertTrue(!point.eligible || word != null)
             val capture = 10000 + point.offsetMs
             val delivery = capture + 10
+            val selectedReplay = id in setOf("interruption_place_search", "line_alternation")
+            val sample = ScanpathSample(capture, delivery,
+                if (selectedReplay) null else x, if (selectedReplay) null else y, line,
+                word?.range?.startUtf16, word?.range?.endUtf16, geometry.snapshotId, point.eligible,
+                if (point.eligible) null else point.sourceReason ?: if (x != null && y != null) "outside_visible_text" else "synthetic_loss",
+                displayX = if (selectedReplay) x else null, displayY = if (selectedReplay) y else null,
+                coordinateStream = if (selectedReplay) ScanpathCoordinateStream.ARTICLE_SMOOTHED else ScanpathCoordinateStream.CALIBRATED_RAW)
+            result.samples.add(sample)
             context = ReadingAidContext(0, geometry.snapshotId, geometry.lines.size, line,
                 word?.range?.startUtf16, word?.range?.endUtf16, delivery, capture, delivery, point.eligible,
-                geometry, x)
+                geometry, x, rawSample = sample)
             if (!point.eligible) result.decisions.addAll(policy.onObservation(null, context))
-            val accepted = engine.onSample(ScanpathSample(capture, delivery, x, y, line,
-                word?.range?.startUtf16, word?.range?.endUtf16, geometry.snapshotId, point.eligible))
-            result.decisions.addAll(policy.onObservation(if (accepted) engine.currentCandidateEvidence() else null, context))
+            val accepted = engine.onSample(sample)
+            val candidate = if (accepted) engine.currentCandidateEvidence() else null
+            result.candidates.add(candidate)
+            result.decisions.addAll(policy.onObservation(candidate, context))
             result.active.add(policy.activeActions())
         }
         return result
     }
 
-    @Test fun everyScenarioProducesItsDeclaredPatternsAndAidsFromRawCoordinates() {
+    @Test fun everyScenarioProducesItsDeclaredPatternsAndAidsFromSelectedCoordinates() {
         ScanpathReplayScenarios.scenarios.forEach { scenario ->
             val points = ScanpathReplayScenarios.build(scenario.id, geometry, words)
             assertTrue(points.first().offsetMs >= 200)
@@ -94,6 +113,195 @@ class ScanpathReplayScenariosTest {
         assertTrue(result.actions.none { it.aidType == ReadingAidType.NEXT_LINE_START })
     }
 
+    @Test fun currentBookmarkScenariosRememberObservedSourceAndClearOnReturn() {
+        listOf("bookmark_return" to 1, "bookmark_skip" to 0, "bookmark_lookaway" to 0,
+            "bookmark_tracking_loss" to 0).forEach { (id, source) ->
+            val result = run(id, continuationStrengthProbe = true)
+            val bookmark = result.actions.single { it.aidType == ReadingAidType.READING_BOOKMARK }
+            assertEquals(source, bookmark.anchor.line)
+            assertEquals("LAST_READ_LINE_BOOKMARK_V1", bookmark.aidFormId)
+            assertEquals(1.0, bookmark.strength, 0.0)
+            assertTrue(bookmark.evidenceIds.isNotEmpty())
+            assertTrue(bookmark.lastCaptureMs <= bookmark.evidenceAvailableMs)
+            assertTrue(bookmark.evidenceAvailableMs <= bookmark.onsetMs)
+            assertTrue(result.decisions.any { it.status == ReadingAidDecisionStatus.CLEARED &&
+                it.action?.id == bookmark.id })
+            assertTrue(result.active.last().none { it.aidType == ReadingAidType.READING_BOOKMARK })
+            assertTrue(result.actions.none { it.aidType == ReadingAidType.NEXT_LINE_START })
+        }
+    }
+
+    @Test fun currentNormalSweepAndBriefUnclassifiedLossNeedNoBookmark() {
+        for (id in listOf("return_sweep", "loss_recovery")) {
+            val result = run(id, currentBookmarkProfile = true)
+            assertTrue(result.actions.none { it.aidType == ReadingAidType.READING_BOOKMARK })
+        }
+    }
+
+    @Test fun missingCoordinateReplayMarksSavedLineWithDeliveryEvidenceThenClearsOnReturn() {
+        val points = ScanpathReplayScenarios.build("bookmark_tracking_loss", geometry, words)
+        val result = run("bookmark_tracking_loss")
+        val bookmark = result.actions.single { it.aidType == ReadingAidType.READING_BOOKMARK }
+        val e = bookmark.bookmarkEvidence!!
+        assertEquals("sustained_gaze_unavailable", e.departureReason)
+        assertEquals("delivery_elapsed_time", e.departureTimeBasis)
+        assertNull(e.departureFirstCaptureMs)
+        assertNull(e.departureLastCaptureMs)
+        assertEquals(e.source.lastCaptureMs, bookmark.lastCaptureMs, 0.0)
+        assertTrue(bookmark.evidenceAvailableMs - e.departureFirstDeliveryMs!! >= 500.0)
+        assertTrue(points.filter { it.sourceReason == "no_face" }.all { it.x == null && it.y == null })
+        assertTrue(result.active.last().none { it.aidType == ReadingAidType.READING_BOOKMARK })
+        assertTrue(result.actions.none { it.aidType == ReadingAidType.FOCUS_REGION })
+    }
+
+    @Test fun repeatedInterruptionFixtureContainsDistinctNullCoordinateGapsAndShortSupportedReturns() {
+        for (id in listOf("repeated_interruptions", "brief_interruptions")) {
+            val points = ScanpathReplayScenarios.build(id, geometry, words)
+            val starts = points.indices.filter { !points[it].eligible && (it == 0 || points[it - 1].eligible) }
+            assertEquals(if (id == "repeated_interruptions") 4 else 3, starts.size)
+            starts.forEach { start ->
+                val end = points.indices.first { it >= start && points[it].eligible }
+                val gap = points.subList(start, end)
+                assertTrue(gap.all { it.sourceReason == "no_face" && it.x == null && it.y == null })
+                val span = gap.last().offsetMs - gap.first().offsetMs
+                if (id == "repeated_interruptions") assertTrue(span >= 500) else assertTrue(span < 500)
+                val returnEnd = points.indices.firstOrNull { it > end && !points[it].eligible } ?: points.size
+                assertEquals(350.0, points[returnEnd - 1].offsetMs - points[end].offsetMs, 0.0)
+            }
+            assertTrue(points.last().offsetMs - points.first().offsetMs < 30000)
+            val wordResidence = run(id).events.filter { it.patternId == "P12" && it.resolution == "word" &&
+                it.metrics["kind"] == "residence_update" }
+            assertTrue(wordResidence.all { (it.metrics["observed_span_ms"] as Number).toDouble() <
+                ReadingAidPolicyConfig.definitionPrototype().wordMinObservedMs })
+        }
+        val brief = run("brief_interruptions")
+        assertTrue(brief.actions.none { it.aidType == ReadingAidType.FOCUS_REGION ||
+            it.aidType == ReadingAidType.READING_BOOKMARK })
+    }
+
+    @Test fun repeatedInterruptionsCountCompletedEpisodesAndStartFocusOnThirdReturn() {
+        val result = run("repeated_interruptions")
+        val focus = result.actions.filter { it.aidType == ReadingAidType.FOCUS_REGION }
+        val first = focus.first()
+        val initial = checkNotNull(first.focusEvidence)
+        assertEquals(3, initial.episodes.size)
+        assertEquals(0.5, first.strength, 0.0)
+        val fourth = focus.first { it.focusEvidence!!.episodes.size == 4 }
+        assertEquals(1.0, fourth.strength, 0.0)
+        assertEquals(4, fourth.focusEvidence!!.episodes.map { it.episodeId }.distinct().size)
+        val points = ScanpathReplayScenarios.build("repeated_interruptions", geometry, words)
+        val thirdReturn = points.indices.filter { points[it].eligible && it > 0 && !points[it - 1].eligible }[2]
+        assertTrue(first.onsetMs >= 10000 + points[thirdReturn].offsetMs)
+        focus.forEach { action ->
+            val evidence = checkNotNull(action.focusEvidence)
+            assertTrue(evidence.episodes.size >= 3)
+            evidence.episodes.forEach { episode ->
+                assertEquals("delivery_elapsed_time", episode.timeBasis)
+                assertEquals(episode.missingFirstDeliveryMs - 10.0, episode.missingFirstCaptureMs!!, 0.0)
+                assertEquals(episode.missingLastDeliveryMs - 10.0, episode.missingLastCaptureMs!!, 0.0)
+                assertEquals(listOf("no_face"), episode.missingReasons)
+                assertTrue(episode.missingSampleCount > 1)
+                assertTrue(episode.missingLastDeliveryMs - episode.missingFirstDeliveryMs >= 500)
+                assertTrue(checkNotNull(episode.source).evidenceAvailableMs <= episode.missingFirstDeliveryMs)
+                val presence = checkNotNull(episode.presenceRecovery)
+                assertNull(episode.recovery)
+                assertTrue(episode.missingLastDeliveryMs < presence.firstCaptureMs)
+                assertTrue(presence.lastCaptureMs <= presence.confirmedDeliveryMs)
+                assertTrue(presence.sampleCount >= 3)
+                assertTrue(presence.lastCaptureMs - presence.firstCaptureMs >= 100)
+                assertEquals(presence.confirmedDeliveryMs, episode.completedDeliveryMs, 0.0)
+                assertTrue(episode.completedDeliveryMs <= action.onsetMs)
+            }
+        }
+        assertTrue(run("repeated_interruptions", focus = false).actions.none {
+            it.aidType == ReadingAidType.FOCUS_REGION
+        })
+    }
+
+    @Test fun articleSearchCompletesThirdReturnBeforeAnyStableRecoveryAndUsesKnownVisibleAnchor() {
+        val id = "interruption_place_search"
+        val points = ScanpathReplayScenarios.build(id, geometry, words)
+        val starts = points.indices.filter { !points[it].eligible && (it == 0 || points[it - 1].eligible) }
+        val returns = points.indices.filter { it > 0 && points[it].eligible && !points[it - 1].eligible }
+        assertEquals(3, starts.size)
+        assertEquals(3, returns.size)
+        val result = run(id)
+        starts.zip(returns).forEach { (start, end) ->
+            val gap = points.subList(start, end)
+            assertTrue(gap.all { !it.eligible && it.x == null && it.y == null && it.sourceReason == "no_face" })
+            assertEquals(650.0, gap.last().offsetMs - gap.first().offsetMs, 0.0)
+            val search = points.subList(end, end + 7)
+            assertEquals(300.0, search.last().offsetMs - search.first().offsetMs, 0.0)
+            assertTrue(search.zipWithNext().all { (a, b) ->
+                b.offsetMs - a.offsetMs == 50.0 &&
+                    kotlin.math.abs(a.x!! - b.x!!) + kotlin.math.abs(a.y!! - b.y!!) > geometry.lineHeightPx * 0.5
+            })
+            assertTrue(result.candidates.subList(end, end + 7).all { it == null })
+        }
+        val third = returns[2]
+        val finalHold = third + 7
+        val first = result.actions.first { it.aidType == ReadingAidType.FOCUS_REGION }
+        val evidence = checkNotNull(first.focusEvidence)
+        assertEquals(3, evidence.episodeCount)
+        assertEquals(0.5, first.strength, 0.0)
+        assertEquals(10000 + points[third + 2].offsetMs + 10, first.onsetMs, 0.0)
+        assertTrue(first.onsetMs < 10000 + points[finalHold].offsetMs)
+        assertTrue(result.active.take(third + 2).all { actions -> actions.none { it.aidType == ReadingAidType.FOCUS_REGION } })
+        assertEquals(0, first.anchor.line)
+        assertEquals(geometry.snapshotId, first.anchor.geometrySnapshotId)
+        assertTrue(evidence.support.lastCaptureMs < 10000 + points[starts.first()].offsetMs)
+        assertTrue(result.candidates[finalHold + 2] != null)
+        evidence.episodes.forEach { episode ->
+            assertNull(episode.recovery)
+            val presence = checkNotNull(episode.presenceRecovery)
+            assertEquals(3, presence.sampleCount)
+            assertEquals(100.0, presence.lastCaptureMs - presence.firstCaptureMs, 0.0)
+            assertEquals(ScanpathCoordinateStream.ARTICLE_SMOOTHED.id, presence.coordinateStream)
+        }
+        assertTrue(result.events.none { it.patternId == "P11" })
+    }
+
+    @Test fun ongoingFourthSupportedVisitActivatesWithoutFinalizedFastP11() {
+        val id = "line_alternation"
+        val points = ScanpathReplayScenarios.build(id, geometry, words)
+        val result = run(id)
+        val first = result.actions.first { it.aidType == ReadingAidType.FOCUS_REGION }
+        val e = checkNotNull(first.focusEvidence)
+        assertEquals(0.5, first.strength, 0.0)
+        assertEquals("A4_LINE_VISIT_ALTERNATION_FOCUS_V2", e.ruleId)
+        assertTrue(e.episodes.isEmpty())
+        assertTrue(e.cycleEventIds.isEmpty())
+        val alternation = e.alternations.single()
+        assertEquals(listOf(0, 1, 0, 1), alternation.visits.map { it.line })
+        val span = alternation.visits.last().lastCaptureMs - alternation.visits.first().firstCaptureMs
+        assertTrue(span > 2000 && span < 8000)
+        assertTrue(alternation.visits.last().evidenceId.startsWith("candidate:"))
+        assertEquals(3, result.engine.fixationCount)
+        val ongoing = checkNotNull(result.engine.currentCandidateEvidence())
+        assertEquals(ongoing.startMs, alternation.visits.last().firstCaptureMs, 0.0)
+        assertEquals(10000 + points.last().offsetMs, ongoing.endMs, 0.0)
+        assertTrue(first.onsetMs <= ongoing.endMs + 10)
+        assertTrue(result.events.none { it.patternId == "P11" })
+        assertTrue(run(id, focus = false).actions.none { it.aidType == ReadingAidType.FOCUS_REGION })
+    }
+
+    @Test fun newFocusFixturesProduceIdenticalCameraFreeSelectedCoordinateTraces() {
+        for (id in listOf("interruption_place_search", "line_alternation")) {
+            assertEquals(ScanpathReplayScenarios.build(id, geometry, words),
+                ScanpathReplayScenarios.build(id, geometry, words))
+            val a = run(id)
+            val b = run(id)
+            assertEquals(a.events, b.events)
+            assertEquals(a.decisions, b.decisions)
+            assertEquals(a.active, b.active)
+            assertEquals(a.candidates, b.candidates)
+            assertEquals(a.samples, b.samples)
+            assertTrue(a.samples.all { it.coordinateStream == ScanpathCoordinateStream.ARTICLE_SMOOTHED &&
+                it.rawX == null && it.rawY == null })
+            assertTrue(a.samples.filter { it.eligible }.all { it.displayX != null && it.displayY != null })
+        }
+    }
+
     @Test fun unexpectedContinuationDirectionsCueExpectedPhysicalLine() {
         listOf("continuation_return" to (2 to "P08"), "continuation_skip" to (1 to "P06")).forEach { (id, expected) ->
             val result = run(id, continuationStrengthProbe = true)
@@ -109,6 +317,75 @@ class ScanpathReplayScenariosTest {
             assertTrue(result.events.any { it.patternId == expected.second })
             assertTrue(result.decisions.any { it.status == ReadingAidDecisionStatus.CLEARED &&
                 it.reason == "expected_line_arrival" })
+        }
+    }
+
+    /** Paragraph-final rows have one word; only the progress source spans the column. */
+    private fun continuationFixture(sourceLine: Int, lineCount: Int = 3): Pair<ScanpathGeometry, List<ReplayWord>> {
+        val rows = (0 until lineCount).map { line ->
+            ScanpathLine(line * 20, line * 20 + 19, 0.0,
+                if (line == sourceLine) 400.0 else 80.0, line * 40.0, line * 40.0 + 20)
+        }
+        val g = geometry.copy(lines = rows,
+            visibleRectScreen = geometry.visibleRectScreen.copy(bottom = 120.0 + lineCount * 40))
+        val w = rows.indices.flatMap { line ->
+            if (line == sourceLine) listOf(
+                ReplayWord(WordRange(line * 20, line * 20 + 4), line,
+                    ScanpathRect(90.0, 120.0 + line * 40, 170.0, 140.0 + line * 40)),
+                ReplayWord(WordRange(line * 20 + 5, line * 20 + 9), line,
+                    ScanpathRect(390.0, 120.0 + line * 40, 470.0, 140.0 + line * 40)))
+            else listOf(ReplayWord(WordRange(line * 20, line * 20 + 4), line,
+                ScanpathRect(90.0, 120.0 + line * 40, 150.0, 140.0 + line * 40)))
+        }
+        return g to w
+    }
+
+    private fun assertContinuation(id: String, g: ScanpathGeometry, w: List<ReplayWord>, source: Int) {
+        val points = ScanpathReplayScenarios.build(id, g, w)
+        // Endpoint selection must not change capture intervals or extend holds to manufacture support.
+        assertEquals(ScanpathReplayScenarios.build(id, geometry, words).map { it.offsetMs }, points.map { it.offsetMs })
+        val result = run(id, continuationStrengthProbe = true, fixtureGeometry = g, fixtureWords = w)
+        val cue = result.actions.single { it.aidType == ReadingAidType.NEXT_LINE_START }
+        assertEquals(source + 1, cue.anchor.line)
+        assertTrue(result.events.any { it.patternId == if (id == "continuation_return") "P08" else "P06" })
+        assertTrue(result.decisions.any { it.status == ReadingAidDecisionStatus.CLEARED &&
+            it.reason == "expected_line_arrival" })
+        assertTrue(cue.evidenceIds.size >= 3)
+        assertTrue(cue.firstCaptureMs <= cue.lastCaptureMs && cue.lastCaptureMs <= cue.evidenceAvailableMs &&
+            cue.evidenceAvailableMs <= cue.onsetMs)
+        val row = g.lines[source]
+        fun fraction(p: ReplayPoint) = (p.x!! - g.textOriginX - row.left) / (row.right - row.left)
+        assertTrue(fraction(points[0]) <= 0.25)
+        assertTrue(fraction(points[6]) >= 0.75)
+        // Both non-source rows have a single real center at 50%, outside the first quarter.
+        assertEquals(120.0, points[12].x!!, 0.0)
+        assertEquals(120.0, points[18].x!!, 0.0)
+    }
+
+    @Test fun continuationSupportsOneWordLandingAndExpectedRowsThroughEngineAndPolicy() {
+        listOf("continuation_return" to 1, "continuation_skip" to 0).forEach { (id, source) ->
+            val (g, w) = continuationFixture(source)
+            assertContinuation(id, g, w, source)
+        }
+    }
+
+    @Test fun continuationSelectsLaterContiguousRowsWhenFirstSourceLacksProgressEndpoints() {
+        listOf("continuation_return" to 2, "continuation_skip" to 1).forEach { (id, source) ->
+            val (g, w) = continuationFixture(source, lineCount = 4)
+            assertContinuation(id, g, w, source)
+        }
+    }
+
+    @Test fun continuationAbstainsWithoutSourceEndpointsOrFullyVisibleSuccessor() {
+        listOf("continuation_return" to 1, "continuation_skip" to 0).forEach { (id, source) ->
+            val (g, w) = continuationFixture(source)
+            val (shortRows, shortWords) = continuationFixture(sourceLine = -1)
+            listOf(Triple(shortRows, shortWords, "source word centers"),
+                Triple(g.copy(visibleRectScreen = g.visibleRectScreen.copy(bottom = 210.0)), w,
+                    "fully visible physical lines")).forEach { (invalid, fixture, reason) ->
+                try { ScanpathReplayScenarios.build(id, invalid, fixture); fail("Expected geometry rejection") }
+                catch (e: IllegalArgumentException) { assertTrue(e.message.orEmpty().contains(reason)) }
+            }
         }
     }
 
@@ -179,6 +456,10 @@ class ScanpathReplayScenariosTest {
         rejects("return_sweep", geometry.copy(textDirection = ScanpathTextDirection.RTL), detail = "LTR")
         rejects("navigation", w = words.take(2), detail = "four consecutive")
         rejects("line_cycle", w = words.take(4), detail = "adjacent")
+        rejects("line_alternation", w = words.take(4), detail = "adjacent fully visible")
+        rejects("interruption_place_search", w = words.take(8), detail = "two separated physical search lines")
+        rejects("line_alternation", geometry.copy(visibleRectScreen = geometry.visibleRectScreen.copy(bottom = 170.0)),
+            detail = "fully visible")
         rejects("loss_recovery", geometry.copy(visibleRectScreen = ScanpathRect(0.0, 0.0, 10.0, 10.0)), detail = "visible word")
         rejects("loss_recovery", w = words.mapIndexed { i, w -> if (i == 1) w.copy(bounds = words[0].bounds) else w }, detail = "ambiguous")
         rejects("unknown", detail = "Unknown replay scenario")

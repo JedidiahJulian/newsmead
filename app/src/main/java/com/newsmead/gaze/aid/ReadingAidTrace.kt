@@ -27,6 +27,12 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
             .put("capture_ms", value.captureMs ?: JSONObject.NULL)
             .put("delivery_ms", value.evidenceAvailableMs ?: JSONObject.NULL)
             .put("valid_live_input", value.validLiveInput)
+            .put("focus_input_allowed", value.focusInputAllowed)
+            .put("coordinate_stream", value.rawSample?.coordinateStream?.id ?: JSONObject.NULL)
+            .put("processing_x_px", value.rawSample?.processingX?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+            .put("processing_y_px", value.rawSample?.processingY?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+            .put("raw_x_px", value.rawSample?.rawX?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+            .put("raw_y_px", value.rawSample?.rawY?.takeIf { it.isFinite() } ?: JSONObject.NULL)
     }
     fun event(generation: Int, e: ScanpathEvent) {
         remember(generation, e.eventId, JSONObject().put("kind", "finalized_pattern")
@@ -57,6 +63,12 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
             .put("evidence_available_ms", c.evidenceAvailableMs ?: JSONObject.NULL)
             .put("evidence_time_basis", c.evidenceTimeBasis))
     }
+    fun focusEpisode(episode: ReadingAidFocusEpisode) {
+        val detail = episode.focusEpisodeJson()
+        remember(episode.generation.toInt(), episode.episodeId,
+            JSONObject(detail.toString()).put("kind", "focus_interruption_episode"))
+        record("focus_interruption_episode", episode.completedDeliveryMs, detail)
+    }
     private fun remember(generation: Int, id: String, fact: JSONObject) {
         val key = "$generation/$id"
         facts.remove(key)
@@ -79,10 +91,10 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
         record("render", nowMs, JSONObject().put("action_id", value.id).put("drawn_proxy", drawn)
             .put("reason", reason).put("verified_visibility", false))
 
-    /** App-private export; no raw coordinates, word text, camera frames or upload. */
+    /** App-private numeric export includes gaze coordinates; no word text, camera frames or upload. */
     fun export(context: Context, configuration: JSONObject): File {
         val file = File(context.noBackupFilesDir, "scanpath_aids_${UUID.randomUUID()}.json")
-        file.writeText(JSONObject().put("schema_version", 1).put("kind", "scanpath_aid_trace")
+        file.writeText(JSONObject().put("schema_version", 2).put("kind", "scanpath_aid_trace")
             .put("configuration", configuration).put("retained_records", records.size)
             .put("dropped_records", dropped).put("complete_trace", dropped == 0L && incompleteSupportRecords == 0L)
             .put("source_facts_evicted", evictedFacts)
@@ -99,11 +111,15 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
         .put("word_end_utf16", a.anchor.wordEndUtf16 ?: JSONObject.NULL)
         .put("strength", a.strength).put("magnification_scale", a.magnificationScale ?: JSONObject.NULL)
         .put("context_radius_lines", a.contextRadiusLines ?: JSONObject.NULL)
+        .put("focus_style", a.focusStyle?.name ?: JSONObject.NULL)
         .put("onset_ms", a.onsetMs).put("expires_ms", a.expiresMs)
         .put("first_capture_ms", a.firstCaptureMs).put("last_capture_ms", a.lastCaptureMs)
         .put("evidence_available_ms", a.evidenceAvailableMs)
         .put("event_ids", JSONArray(a.eventIds)).put("evidence_ids", JSONArray(a.evidenceIds))
         .put("continuation_evidence", a.continuationEvidenceJson())
+        .put("bookmark_evidence", a.bookmarkEvidenceJson())
+        .put("focus_evidence", a.focusEvidenceJson())
+        .put("guide_range", a.guideRangeJson())
         .put("rule_id", a.ruleId).put("sources", JSONArray(a.sourceIds))
         .put("evidence_relationship", a.evidenceRelationship).put("experimental", a.experimental)
 

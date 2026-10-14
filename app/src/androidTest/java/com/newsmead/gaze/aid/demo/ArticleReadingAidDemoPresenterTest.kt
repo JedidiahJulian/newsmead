@@ -1,6 +1,7 @@
 package com.newsmead.gaze.aid.demo
 
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -8,6 +9,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.newsmead.gaze.aid.ReadingAidAction
 import com.newsmead.gaze.aid.ReadingAidOverlayView
 import com.newsmead.gaze.aid.ReadingAidType
+import com.newsmead.gaze.aid.ReadingGuideStyle
+import com.newsmead.gaze.aid.ReadingFocusStyle
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,8 +18,41 @@ import org.junit.runner.RunWith
 /** Loaded-text geometry fixtures only: no article navigation, camera, engine, or journal. */
 @RunWith(AndroidJUnit4::class)
 class ArticleReadingAidDemoPresenterTest {
+    @Test fun contentHeightViewportReportsUnavailableFocusWithoutAFalsePreview() {
+        val statuses = mutableListOf<String>()
+        fixture(text = "Article source words\nSecond actual article line\nThird complete line",
+            wrapBody = true, onStatus = statuses::add) { body, presenter, _ ->
+            val original = body.text.toString()
+            presenter.start(); presenter.step(4)
+            assertNull(presenter.activeAction)
+            assertTrue(statuses.last().contains("Focus needs"))
+            assertEquals(original, body.text.toString())
+        }
+    }
+
+    @Test fun focusPreviewUsesTheFiveLineFullWidthForm() = fixture { body, presenter, _ ->
+        val original = body.text.toString()
+        presenter.start(); presenter.step(4)
+        val focus = presenter.activeAction!!
+        assertEquals(ReadingAidType.FOCUS_REGION, focus.aidType)
+        assertEquals("CONTEXT_FOCUS_REGION_V4", focus.aidFormId)
+        assertEquals(2, focus.contextRadiusLines)
+        assertEquals(ReadingFocusStyle.FADE_TEXT, focus.focusStyle)
+        assertEquals(original, body.text.toString())
+    }
+
+    @Test fun focusPreviewUsesTheSelectedDarkStyle() = fixture(
+        focusStyle = ReadingFocusStyle.DARK_SURROUNDINGS) { _, presenter, _ ->
+        presenter.start(); presenter.step(4)
+        assertEquals(ReadingFocusStyle.DARK_SURROUNDINGS, presenter.activeAction!!.focusStyle)
+    }
+
     private fun fixture(
         text: String = "😀 Article source words\nSecond actual article line\nThird complete line\nFourth complete line\nFifth complete line\nSixth complete line\nSeventh complete line",
+        guideStyle: ReadingGuideStyle = ReadingGuideStyle.LINE,
+        wrapBody: Boolean = false,
+        onStatus: (String) -> Unit = {},
+        focusStyle: ReadingFocusStyle = ReadingFocusStyle.FADE_TEXT,
         check: (TextView, ArticleReadingAidDemoPresenter, () -> ReadingAidAction?) -> Unit,
     ) {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
@@ -25,7 +61,8 @@ class ArticleReadingAidDemoPresenterTest {
             val body = TextView(context).apply {
                 this.text = text
                 textSize = 16f
-                layoutParams = FrameLayout.LayoutParams(1000, 1000)
+                layoutParams = FrameLayout.LayoutParams(1000,
+                    if (wrapBody) ViewGroup.LayoutParams.WRAP_CONTENT else 1000)
             }
             val overlay = ReadingAidOverlayView(context)
             root.addView(body); root.addView(overlay, FrameLayout.LayoutParams(1000, 1000))
@@ -34,7 +71,7 @@ class ArticleReadingAidDemoPresenterTest {
             root.layout(0, 0, 1000, 1000)
             var wordAction: ReadingAidAction? = null
             val presenter = ArticleReadingAidDemoPresenter(body, overlay,
-                { wordAction = it }, {}, {})
+                { wordAction = it }, onStatus, {}, guideStyle, focusStyle)
             try { check(body, presenter) { wordAction } }
             finally { presenter.stop("fixture_closed") }
         }
@@ -69,17 +106,30 @@ class ArticleReadingAidDemoPresenterTest {
         assertNull(word())
     }
 
-    @Test fun markerPreviewUsesExpectedSuccessorWithFixedAppearance() = fixture { _, presenter, _ ->
+    @Test fun bookmarkPreviewUsesLastReadingLineWithFixedAppearance() = fixture { _, presenter, _ ->
         presenter.start(); presenter.step(1)
         val source = presenter.activeAction!!.anchor.line
         presenter.step(1)
         val marker = presenter.activeAction!!
-        assertEquals(ReadingAidType.NEXT_LINE_START, marker.aidType)
-        assertEquals(source + 1, marker.anchor.line)
-        assertEquals("CONTINUATION_LINE_START_CUE_V1", marker.aidFormId)
+        assertEquals(ReadingAidType.READING_BOOKMARK, marker.aidType)
+        assertEquals(source, marker.anchor.line)
+        assertEquals("LAST_READ_LINE_BOOKMARK_V1", marker.aidFormId)
         assertEquals(1.0, marker.strength, 0.0)
         assertTrue(marker.eventIds.isEmpty())
         assertTrue(marker.evidenceIds.isEmpty())
+    }
+
+    @Test fun sentencePreviewUsesContextRangeWithoutWordAnchor() = fixture(guideStyle = ReadingGuideStyle.SENTENCE) { body, presenter, _ ->
+        val original = body.text.toString()
+        presenter.start(); presenter.step(1)
+        val action = presenter.activeAction!!
+        assertEquals(ReadingAidType.CURRENT_SENTENCE, action.aidType)
+        assertEquals("CURRENT_SENTENCE_CONTEXT_HIGHLIGHT_V1", action.aidFormId)
+        assertNotNull(action.guideRange)
+        assertNull(action.anchor.wordStartUtf16); assertNull(action.anchor.wordEndUtf16)
+        assertEquals(.25, action.strength, 0.0)
+        assertEquals(original, body.text.toString())
+        assertTrue(action.eventIds.isEmpty()); assertTrue(action.evidenceIds.isEmpty())
     }
 
     @Test fun offlinePreviewSelectsCoveredSourceWordAfterUnknownWord() = fixture(

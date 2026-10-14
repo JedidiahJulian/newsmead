@@ -142,10 +142,19 @@ class ReadingAidDefinitionPopup(
             meaning.text = context.getString(R.string.definition_language_unavailable)
             return
         }
-        pending = repository.lookup(sourceText.substring(start, end)) { definition ->
-            if (requestToken != token || card !== panel || closed) return@lookup
-            if (body.text.toString() != sourceText || reader.read(body) != frame) { clear("stale_dictionary_response"); return@lookup }
-            meaning.text = definition?.meanings ?: context.getString(unavailableMessageRes)
+        pending = repository.lookupResult(sourceText.substring(start, end)) { result ->
+            if (requestToken != token || card !== panel || closed) return@lookupResult
+            if (body.text.toString() != sourceText || reader.read(body) != frame) { clear("stale_dictionary_response"); return@lookupResult }
+            val definition = result.definition
+            val messageRes = when (result.failure) {
+                DefinitionFailure.INVALID_TOKEN -> R.string.definition_token_unavailable
+                DefinitionFailure.ENTRY_NOT_FOUND -> R.string.definition_entry_not_found
+                DefinitionFailure.SERVICE_UNAVAILABLE -> R.string.definition_service_unavailable
+                DefinitionFailure.OFFLINE_UNAVAILABLE -> R.string.definition_offline_unavailable
+                else -> if (unavailableMessageRes == R.string.definition_unavailable)
+                    R.string.definition_unknown_unavailable else unavailableMessageRes
+            }
+            meaning.text = definition?.meanings ?: context.getString(messageRes)
             sourceLabel.text = definition?.let { context.getString(R.string.definition_common_meanings, it.attribution) } ?: ""
             sourceLabel.visibility = if (definition == null) View.GONE else View.VISIBLE
         }

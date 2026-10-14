@@ -11,7 +11,7 @@ import java.util.Locale
 
 /**
  * Main-thread, in-memory article adapter. No camera images, files or aid decisions.
- * Raw observations are assigned against the current rendered article geometry.
+ * The declared coordinate stream is assigned against current rendered article geometry.
  */
 class ArticleScanpathSession(
     private val textView: TextView,
@@ -22,6 +22,7 @@ class ArticleScanpathSession(
     private val onCandidate: (generation: Int, candidate: ScanpathCandidateEvidence?) -> Unit = { _, _ -> },
     private val onFixation: (generation: Int, fixation: ScanpathFixation) -> Unit = { _, _ -> },
     private val onAcceptance: (generation: Int, sample: ScanpathSample, accepted: Boolean) -> Unit = { _, _, _ -> },
+    val coordinateStream: ScanpathCoordinateStream = ScanpathCoordinateStream.CALIBRATED_RAW,
 ) {
     var generation: Int = 0
         private set
@@ -102,8 +103,12 @@ class ArticleScanpathSession(
         checkMainThread()
         if (closed || !active) return
         checkGeometry()
-        val x = observation.rawX?.toDouble()
-        val y = observation.rawY?.toDouble()
+        val rawX = observation.rawX?.toDouble()
+        val rawY = observation.rawY?.toDouble()
+        val displayX = observation.x?.toDouble()
+        val displayY = observation.y?.toDouble()
+        val x = if (coordinateStream == ScanpathCoordinateStream.CALIBRATED_RAW) rawX else displayX
+        val y = if (coordinateStream == ScanpathCoordinateStream.CALIBRATED_RAW) rawY else displayY
         val capture = observation.captureMs
         val current = geometry
         val valid = observation.reason == "coordinate" && x != null && y != null &&
@@ -114,18 +119,21 @@ class ArticleScanpathSession(
             words.targetAt(textView, current, x!!, y!!) else TextTarget.INVALID
         val eligible = valid && settled && target.isValid
         val sample = ScanpathSample(
-            capture, observation.outputMs, x, y,
+            capture, observation.outputMs, rawX, rawY,
             target.lineIndex.takeIf { target.isValid },
             target.wordStart.takeIf { target.hasWord }, target.wordEnd.takeIf { target.hasWord },
             snapshotId, eligible,
             when {
                 consultationReason != null -> consultationReason
-                !valid -> observation.reason
+                !valid -> if (observation.reason != "coordinate" ||
+                    coordinateStream == ScanpathCoordinateStream.CALIBRATED_RAW)
+                    observation.reason else "coordinate_unavailable"
                 current == null -> "layout_unavailable"
                 !settled -> "geometry_unsettled"
                 !target.isValid -> "outside_visible_text"
                 else -> null
             },
+            displayX, displayY, coordinateStream,
         )
         onInput(generation, sample)
         val accepted = if (consultationReason == null) dispatchEngine { engine.onSample(sample) } else false

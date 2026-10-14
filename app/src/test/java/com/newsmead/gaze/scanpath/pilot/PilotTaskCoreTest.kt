@@ -21,6 +21,24 @@ class PilotTaskCoreTest {
         try { action(); fail("Expected IllegalArgumentException") } catch (_: IllegalArgumentException) { }
     }
 
+    @Test fun selectedSmoothedCoordinatesScoreWithoutRawAndDoNotFallbackAcrossMissingDisplay() {
+        val score = PilotScore(plan(words[0]), "g", 0.0)
+        score.showStep(0, 100.0)
+        val filtered = sample(110.0).copy(rawX = null, rawY = null,
+            displayX = 100.0, displayY = 130.0, coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED)
+        score.record(filtered)
+        // Valid raw values cannot rescue the missing selected stream.
+        score.record(sample(120.0).copy(displayX = null, displayY = null,
+            coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED))
+        score.record(sample(130.0).copy(displayX = Double.NaN, displayY = 130.0,
+            coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED))
+        val result = score.finish(200.0)
+        assertEquals(1, result.targets[0].eligibleSamples)
+        assertEquals(1, result.targets[0].exactWord)
+        assertEquals(2, result.invalidCoordinates)
+        assertNull(filtered.rawX); assertNull(filtered.rawY)
+    }
+
     @Test fun everyCatalogPlanUsesExistingWordsOrFullPhysicalRows() {
         PilotTasks.tasks.forEach { task ->
             val plan = PilotTasks.build(task.id, geometry, words)

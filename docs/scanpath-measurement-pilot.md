@@ -1,5 +1,14 @@
 # NewsMead scanpath-to-visual-aid implementation pilot
 
+**Current stream amendment — 2026-10-13:** owner authorized consistent
+calibrated-smoothed coordinates for the dot, live scanpaths and aid decisions.
+The live pilot now uses schema 2 / `newsmead_scanpath_pilot_v2` with selected
+scoring; replay uses explicitly synthetic post-filter trajectories. Earlier
+raw-stream checkpoints and results below are historical. Prototype-first work
+continues; this route change is not new participant validation. See
+[stream contract](calibrated-smoothed-scanpath-path.md),
+[live pilot](scanpath-live-pilot.md) and [replay](scanpath-replay-screen.md).
+
 **Revision 6 — 2026-09-30.** Branch: `measurement/scanpath-pilot`. Development and evaluation plan for the [current feature proposal](adaptive-visual-aid-proposal.md). Preserve revision 5's build-before-participant-evaluation order. The owner permits replacing the old scaffold design; use independent study-linked aid types and within-type strength parameters, not mandatory levels. The [aid design and evidence contract](scanpath-adaptive-aid-design.md) records mappings, source locations and limits.
 
 **Implementation checkpoint — 2026-10-01:** the [P01–P13 detector layer](scanpath-detectors.md)

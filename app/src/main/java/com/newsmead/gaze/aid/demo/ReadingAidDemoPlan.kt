@@ -17,10 +17,10 @@ object ReadingAidDemoPlan {
     )
     val stages = listOf(
         Stage(null, 0.0),
-        Stage(ReadingAidType.CURRENT_LINE, 0.6),
-        Stage(ReadingAidType.NEXT_LINE_START, 1.0),
+        Stage(ReadingAidType.CURRENT_LINE, 0.25),
+        Stage(ReadingAidType.READING_BOOKMARK, 1.0),
         Stage(ReadingAidType.WORD_DEFINITION, 1.0),
-        Stage(ReadingAidType.FOCUS_REGION, 0.25),
+        Stage(ReadingAidType.FOCUS_REGION, 0.5),
         Stage(ReadingAidType.FOCUS_REGION, 1.0),
     )
     fun move(index: Int, delta: Int, count: Int = stages.size): Int = Math.floorMod(index + delta, count)

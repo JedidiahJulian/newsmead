@@ -13,15 +13,39 @@ import com.newsmead.R
 import com.newsmead.activities.ScanpathReplayActivity
 import com.newsmead.activities.ScanpathReplayResult
 import com.newsmead.gaze.aid.ReaderAidPreferences
+import com.newsmead.gaze.aid.ReadingGuideStyle
+import com.newsmead.gaze.aid.ReadingFocusStyle
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 
-/** Real laid-out activity, raw scripted input and normal engine/policy/views; no camera. */
+/** Real laid-out activity, post-filter scripted input and normal engine/policy/views; no camera. */
 @RunWith(AndroidJUnit4::class)
 class ScanpathReplayActivityTest {
+    @Test fun sentenceSelectionProducesSeparateRangeAndNoLineGuide() {
+        ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
+            select(activity, ScanpathReplayScenarios.scenarios.first().id,
+                ReaderAidPreferences(guideStyle = ReadingGuideStyle.SENTENCE, wordDefinition = false, focusRegion = false))
+            val result = await(activity)
+            assertEquals("completed", result.termination)
+            assertTrue(result.chosenAids.contains("CURRENT_SENTENCE"))
+            assertTrue(result.drawnAids.contains("CURRENT_SENTENCE"))
+            assertFalse(result.chosenAids.contains("CURRENT_LINE"))
+            val choices = result.trace!!.readLines().map(::JSONObject).filter { it.optString("kind") == "decision" }
+                .mapNotNull { it.getJSONObject("detail").optJSONObject("action") }
+                .filter { it.optString("aid_type") == "CURRENT_SENTENCE" }
+            assertTrue(choices.isNotEmpty())
+            choices.forEach {
+                assertTrue(it.isNull("word_start_utf16")); assertTrue(it.isNull("word_end_utf16"))
+                val range = it.getJSONObject("guide_range")
+                assertTrue(range.getInt("end_utf16") > range.getInt("start_utf16"))
+                assertTrue(range.getString("unit") in setOf("SENTENCE", "PARAGRAPH"))
+            }
+        }
+    }
+
     @Test fun cappedTraceRetainsAnIncompleteFooterAndPartialFile() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val recorder = ScanpathReplayLog(context, ScanpathReplayScenarios.scenarios.first(), "synthetic",
@@ -39,11 +63,35 @@ class ScanpathReplayActivityTest {
     }
 
     private fun select(activity: ActivityScenario<ScanpathReplayActivity>, id: String, preferences: ReaderAidPreferences) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        // Initial Spinner state restoration can follow ActivityScenario's RESUMED callback.
+        var laidOut = false
+        val layoutDeadline = SystemClock.elapsedRealtime() + 3000
+        while (!laidOut && SystemClock.elapsedRealtime() < layoutDeadline) {
+            activity.onActivity { laidOut = it.findViewById<android.view.View>(R.id.replayRoot).isLaidOut }
+            if (!laidOut) Thread.sleep(25)
+        }
+        check(laidOut) { "Replay layout did not become ready before scenario selection." }
+        instrumentation.waitForIdleSync()
+        val index = ScanpathReplayScenarios.scenarios.indexOfFirst { it.id == id }
+        check(index >= 0) { "Unknown replay scenario: $id" }
+        val label = ScanpathReplayScenarios.scenarios[index].label
         activity.onActivity {
             it.setReaderPreferences(preferences)
-            it.findViewById<Spinner>(R.id.replayScenario).setSelection(ScanpathReplayScenarios.scenarios.indexOfFirst { s -> s.id == id })
+            it.findViewById<Spinner>(R.id.replayScenario).setSelection(index, false)
         }
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        var selectionLaidOut = false
+        val selectionDeadline = SystemClock.elapsedRealtime() + 3000
+        while (!selectionLaidOut && SystemClock.elapsedRealtime() < selectionDeadline) {
+            activity.onActivity {
+                val spinner = it.findViewById<Spinner>(R.id.replayScenario)
+                selectionLaidOut = spinner.selectedItemPosition == index &&
+                    (spinner.selectedView as? TextView)?.text?.toString() == label
+            }
+            if (!selectionLaidOut) Thread.sleep(25)
+        }
+        check(selectionLaidOut) { "Replay selector did not display requested scenario: $id" }
+        instrumentation.waitForIdleSync()
         activity.onActivity { it.startReplay() }
     }
     private fun await(activity: ActivityScenario<ScanpathReplayActivity>, capturePreview: Boolean = false): ScanpathReplayResult {
@@ -90,6 +138,10 @@ class ScanpathReplayActivityTest {
                 val header = records.first().getJSONObject("detail")
                 assertEquals("synthetic_replay", header.getString("input_kind"))
                 assertEquals("synthetic_coordinates", header.getJSONObject("configuration").getString("model"))
+                assertEquals(2, header.getInt("schema_version"))
+                assertEquals("article_smoothed_v1", header.getString("coordinate_stream"))
+                assertEquals("post_filter_synthetic_trajectory", header.getString("input_phase"))
+                assertFalse(header.getBoolean("smoothing_applied_to_synthetic_input"))
                 assertTrue(header.getJSONObject("configuration").isNull("calibration_sha256"))
                 assertFalse(header.getBoolean("human_reference"))
                 assertEquals(result.samples, records.count { it.getString("kind") == "sample" })
@@ -114,9 +166,10 @@ class ScanpathReplayActivityTest {
             assertFalse(result.chosenAids.contains("WORD_MAGNIFIER"))
             val records = result.trace!!.readLines().map(::JSONObject)
             val config = records.first().getJSONObject("detail").getJSONObject("configuration")
-            assertEquals("DEFINITION_PROFILE_V2", config.getJSONObject("settings").getString("config_id"))
-            assertEquals("REPLAY_DEFINITION_V2", config.getJSONObject("settings").getString("condition_id"))
-            assertEquals(3, config.getInt("policy_version"))
+            assertEquals("DEFINITION_PROFILE_V4", config.getJSONObject("settings").getString("config_id"))
+            assertEquals("SMOOTHED_REPLAY_DEFINITION_V9", config.getJSONObject("settings").getString("condition_id"))
+            assertEquals(14, config.getInt("policy_version"))
+            assertEquals(1500.0, config.getJSONObject("settings").getDouble("definition_min_observed_ms"), 0.0)
             assertEquals("fixed", config.getJSONObject("settings").getString("line_start_marker_strength_mode"))
             assertEquals("bundled_only", config.getString("dictionary_mode"))
             assertEquals(0, config.getInt("reserved_word_strip_dp"))
@@ -156,16 +209,15 @@ class ScanpathReplayActivityTest {
             val result = await(activity)
             assertEquals("completed", result.termination)
             assertNull(result.traceFailure)
-            // Explicit current outcomes: consultation preempts later residence/focus evidence.
+            // The independent line-cycle route may precede consultation; consultation suspends new choices.
             assertTrue(result.patterns.containsAll(setOf("P08", "P10", "P11", "P13")))
             assertTrue(result.chosenAids.containsAll(setOf("CURRENT_LINE", "WORD_DEFINITION")))
             assertTrue(result.drawnAids.containsAll(setOf("CURRENT_LINE", "WORD_DEFINITION")))
             assertFalse(result.chosenAids.contains("WORD_MAGNIFIER"))
-            assertFalse(result.chosenAids.contains("FOCUS_REGION"))
             val records = result.trace!!.readLines().map(::JSONObject)
             val settings = records.first().getJSONObject("detail").getJSONObject("configuration").getJSONObject("settings")
-            assertEquals("DEFINITION_PROFILE_V2", settings.getString("config_id"))
-            assertEquals("REPLAY_DEFINITION_V2", settings.getString("condition_id"))
+            assertEquals("DEFINITION_PROFILE_V4", settings.getString("config_id"))
+            assertEquals("SMOOTHED_REPLAY_DEFINITION_V9", settings.getString("condition_id"))
             val boundaries = records.filter { it.getString("kind") == "definition_consultation" }
                 .map { it.getJSONObject("detail") }
             assertEquals("one fixed-source consultation", 2, boundaries.size)
@@ -173,6 +225,11 @@ class ScanpathReplayActivityTest {
             assertFalse(boundaries.last().getBoolean("active"))
             assertEquals("completed", boundaries.last().getString("reason"))
             val opened = boundaries.first().getDouble("at_ms")
+            val closed = boundaries.last().getDouble("at_ms")
+            val focusChoices = records.filter { it.getString("kind") == "decision" }
+                .map { it.getJSONObject("detail") }.filter { it.optString("status") == "CHOSEN" &&
+                    it.optJSONObject("action")?.optString("aid_type") == "FOCUS_REGION" }
+            assertTrue(focusChoices.none { it.getDouble("decision_ms") in opened..closed })
             val excluded = records.filter { it.getString("kind") == "sample" }
                 .map { it.getJSONObject("detail") }
                 .filter { it.optString("exclusion").startsWith("definition_") }
@@ -222,14 +279,19 @@ class ScanpathReplayActivityTest {
 
     @Test fun currentLineStartAndOptInFocusRenderWithDefinitionsDisabled() {
         ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
-            listOf("navigation", "return_sweep", "continuation_return", "continuation_skip", "line_cycle", "loss_recovery").forEach { id ->
+            listOf("navigation", "return_sweep", "continuation_return", "continuation_skip", "bookmark_return",
+                "bookmark_skip", "bookmark_lookaway", "bookmark_tracking_loss", "repeated_interruptions",
+                "brief_interruptions", "line_cycle", "loss_recovery").forEach { id ->
                 select(activity, id, ReaderAidPreferences(wordDefinition = false, focusRegion = true))
                 val result = await(activity)
                 val fixture = ScanpathReplayScenarios.scenarios.single { it.id == id }
                 assertEquals("completed", result.termination)
                 assertTrue(result.patterns.containsAll(fixture.expectedPatternIds))
-                assertTrue(result.chosenAids.containsAll(fixture.expectedAidTypes))
-                assertTrue(result.drawnAids.containsAll(fixture.expectedAidTypes))
+                val currentAids = fixture.expectedAidTypes.map {
+                    if (it == "NEXT_LINE_START") "READING_BOOKMARK" else it
+                }.toSet()
+                assertTrue(result.chosenAids.containsAll(currentAids))
+                assertTrue(result.drawnAids.containsAll(currentAids))
                 assertFalse(result.chosenAids.contains("WORD_DEFINITION"))
                 assertCausalTrace(result.trace!!.readLines().map(::JSONObject))
             }
@@ -244,15 +306,18 @@ class ScanpathReplayActivityTest {
             val d = record.getJSONObject("detail")
             when (record.getString("kind")) {
                 "sample" -> {
-                    val capture = d.getDouble("capture_ms")
                     val delivery = d.getDouble("delivery_ms")
-                    assertTrue("capture precedes actual delivery", capture <= delivery)
-                    assertTrue("scheduler lag remains bounded", delivery - capture <= 100.0)
+                    if (!d.isNull("capture_ms")) {
+                        val capture = d.getDouble("capture_ms")
+                        assertTrue("capture precedes actual delivery", capture <= delivery)
+                        assertTrue("scheduler lag remains bounded", delivery - capture <= 100.0)
+                    }
                     assertTrue("delivery precedes recording", delivery <= record.getDouble("record_elapsed_ms"))
                 }
                 "pattern" -> events.add(d.getString("id"))
                 "candidate_prefix" -> evidence.add(d.getString("id"))
                 "fixation" -> evidence.add("fixation:${d.getInt("index")}")
+                "focus_interruption_episode" -> evidence.add(d.getString("episode_id"))
                 "decision" -> if (d.getString("status") == "CHOSEN") {
                     val action = d.getJSONObject("action")
                     val eventIds = action.getJSONArray("event_ids")
@@ -281,6 +346,29 @@ class ScanpathReplayActivityTest {
                             assertTrue(support.getDouble("evidence_available_ms") <= d.getDouble("decision_ms"))
                         }
                     }
+                    if (action.getString("aid_type") == "READING_BOOKMARK") {
+                        assertEquals("A2_LAST_READ_LINE_BOOKMARK_V2", action.getString("rule_id"))
+                        assertEquals("LAST_READ_LINE_BOOKMARK_V1", action.getString("form_id"))
+                        assertEquals(1.0, action.getDouble("strength"), 0.0)
+                        val bookmark = action.getJSONObject("bookmark_evidence")
+                        val source = bookmark.getJSONObject("source")
+                        assertEquals(source.getInt("line"), action.getInt("line"))
+                        assertTrue(source.getString("evidence_id") in evidence)
+                        if (bookmark.getString("departure_time_basis") == "delivery_elapsed_time") {
+                            assertTrue(bookmark.isNull("departure_first_capture_ms"))
+                            assertTrue(bookmark.isNull("departure_last_capture_ms"))
+                            val firstMissing = bookmark.getDouble("departure_first_delivery_ms")
+                            assertTrue(source.getDouble("evidence_available_ms") <= firstMissing)
+                            assertTrue(bookmark.getDouble("departure_last_delivery_ms") >= firstMissing)
+                            assertTrue(bookmark.getDouble("departure_evidence_available_ms") - firstMissing >= 500.0)
+                            assertEquals("sustained_gaze_unavailable", bookmark.getString("departure_reason"))
+                            assertEquals(source.getDouble("last_capture_ms"), action.getDouble("last_capture_ms"), 0.0)
+                        } else {
+                            assertTrue(source.getDouble("last_capture_ms") <= bookmark.getDouble("departure_first_capture_ms"))
+                            assertTrue(bookmark.getDouble("departure_last_capture_ms") <= bookmark.getDouble("departure_evidence_available_ms"))
+                        }
+                        assertTrue(bookmark.getDouble("departure_evidence_available_ms") <= d.getDouble("decision_ms"))
+                    }
                     actions[action.getString("id")] = action
                 }
                 "render" -> if (d.getBoolean("drawn_proxy")) {
@@ -289,6 +377,141 @@ class ScanpathReplayActivityTest {
                     assertTrue("draw follows onset", at >= action.getDouble("onset_ms"))
                     assertTrue("draw precedes expiry", at < action.getDouble("expires_ms"))
                 }
+            }
+        }
+    }
+
+    @Test fun movingSearchReturnsAndOngoingFourthVisitDrawCurrentFocus() {
+        ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
+            for (id in listOf("interruption_place_search", "line_alternation")) {
+                val style = if (id == "interruption_place_search") ReadingFocusStyle.DARK_SURROUNDINGS else ReadingFocusStyle.FADE_TEXT
+                select(activity, id, ReaderAidPreferences(wordDefinition = false, focusRegion = true, focusStyle = style))
+                val result = await(activity)
+                assertEquals("Run must use the selected scenario", id, result.scenarioId)
+                assertEquals("completed", result.termination)
+                assertNull(result.traceFailure)
+                val records = result.trace!!.readLines().map(::JSONObject)
+                assertCausalTrace(records)
+                assertTrue(result.drawnAids.contains("FOCUS_REGION"))
+                val chosen = records.filter { it.getString("kind") == "decision" }
+                    .map { it.getJSONObject("detail") }.first { it.optString("status") == "CHOSEN" &&
+                        it.optJSONObject("action")?.optString("aid_type") == "FOCUS_REGION" }
+                val action = chosen.getJSONObject("action")
+                val focus = action.getJSONObject("focus_evidence")
+                assertEquals("CONTEXT_FOCUS_REGION_V4", action.getString("form_id"))
+                assertEquals(style.name, action.getString("focus_style"))
+                assertEquals(0.5, action.getDouble("strength"), 0.0)
+                if (id == "interruption_place_search") {
+                    assertEquals(3, focus.getInt("episode_count"))
+                    val episodes = focus.getJSONArray("episodes")
+                    repeat(episodes.length()) { index ->
+                        val episode = episodes.getJSONObject(index)
+                        assertTrue(episode.isNull("recovery"))
+                        val presence = episode.getJSONObject("presence_recovery")
+                        assertFalse(presence.getBoolean("requires_line_or_word_assignment"))
+                        assertTrue(presence.getInt("sample_count") >= 3)
+                        assertTrue(presence.getDouble("last_capture_ms") - presence.getDouble("first_capture_ms") >= 100.0)
+                        assertEquals("article_smoothed_v1", presence.getString("coordinate_stream"))
+                        assertTrue(episode.getDouble("completed_delivery_ms") <= chosen.getDouble("decision_ms"))
+                    }
+                    val third = episodes.getJSONObject(2).getJSONObject("presence_recovery")
+                    assertTrue("Initial focus uses known reading area during moving search",
+                        focus.getJSONObject("support").getDouble("last_capture_ms") < third.getDouble("first_capture_ms"))
+                } else {
+                    val sequence = focus.getJSONArray("line_visit_alternations").getJSONObject(0)
+                    assertEquals("aid_supported_line_visits_not_finalized_p11", sequence.getString("kind"))
+                    assertEquals(4, sequence.getJSONArray("visits").length())
+                    assertEquals(0, action.getJSONArray("event_ids").length())
+                    assertFalse(records.any { it.getString("kind") == "pattern" &&
+                        it.getJSONObject("detail").optString("pattern_id") == "P11" })
+                }
+            }
+        }
+    }
+
+    @Test fun distinctCompletedInterruptionsDrawFocusOnThirdReturnAndIncreaseOnFourth() {
+        ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
+            for (id in listOf("bookmark_tracking_loss", "brief_interruptions", "repeated_interruptions")) {
+                select(activity, id, ReaderAidPreferences(wordDefinition = false, focusRegion = true))
+                val result = await(activity)
+                assertEquals("completed", result.termination)
+                assertNull(result.traceFailure)
+                val records = result.trace!!.readLines().map(::JSONObject)
+                assertCausalTrace(records)
+                val episodes = records.filter { it.getString("kind") == "focus_interruption_episode" }
+                    .map { it.getJSONObject("detail") }
+                assertEquals(when (id) { "repeated_interruptions" -> 4; "bookmark_tracking_loss" -> 1; else -> 0 },
+                    episodes.size)
+                assertEquals(episodes.size, episodes.map { it.getString("episode_id") }.distinct().size)
+                val missingSamples = records.filter { it.getString("kind") == "sample" }
+                    .map { it.getJSONObject("detail") }.filter { it.optString("exclusion") == "no_face" }
+                episodes.forEach { episode ->
+                    for (bound in listOf("first", "last")) {
+                        val capture = episode.getDouble("missing_${bound}_capture_ms")
+                        val delivery = episode.getDouble("missing_${bound}_delivery_ms")
+                        assertTrue("Missing observation clocks retain supplied sample provenance", missingSamples.any {
+                            it.getDouble("capture_ms") == capture && it.getDouble("delivery_ms") == delivery
+                        })
+                    }
+                }
+                val choices = records.filter { it.getString("kind") == "decision" }
+                    .map { it.getJSONObject("detail") }.filter { it.optString("status") == "CHOSEN" &&
+                        it.optJSONObject("action")?.optString("aid_type") == "FOCUS_REGION" }
+                if (id != "repeated_interruptions") {
+                    assertTrue(choices.isEmpty()); assertFalse(result.drawnAids.contains("FOCUS_REGION"))
+                    continue
+                }
+                assertTrue(result.drawnAids.contains("FOCUS_REGION"))
+                val first = choices.first().getJSONObject("action")
+                assertEquals(3, first.getJSONObject("focus_evidence").getInt("episode_count"))
+                assertEquals(0.5, first.getDouble("strength"), 0.0)
+                val fourth = choices.first { it.getJSONObject("action").getJSONObject("focus_evidence")
+                    .getInt("episode_count") == 4 }.getJSONObject("action")
+                assertEquals(1.0, fourth.getDouble("strength"), 0.0)
+                val fourthGapStart = episodes[3].getDouble("missing_first_delivery_ms")
+                val fourthTrackedReturn = episodes[3].getDouble("first_recovery_delivery_ms")
+                val clearsDuringBriefGap = records.filter { it.getString("kind") == "decision" }
+                    .map { it.getJSONObject("detail") }.filter { it.optString("status") == "CLEARED" &&
+                        it.optJSONObject("action")?.optString("aid_type") == "FOCUS_REGION" &&
+                        it.getDouble("decision_ms") >= fourthGapStart &&
+                        it.getDouble("decision_ms") < fourthTrackedReturn }
+                assertTrue("A brief fourth gap must retain the already displayed focus", clearsDuringBriefGap.isEmpty())
+                assertTrue(choices.none { it.getDouble("decision_ms") < episodes[2]
+                    .getDouble("completed_delivery_ms") })
+                choices.forEach { decision ->
+                    val focus = decision.getJSONObject("action").getJSONObject("focus_evidence")
+                    assertEquals("eligible_ordered_selected_capture_deltas", focus.getString("recovery_time_basis"))
+                    assertEquals(30000.0, focus.getDouble("window_ms"), 0.0)
+                    assertEquals(3000.0, focus.getDouble("recovery_hold_ms"), 0.0)
+                    assertEquals(7000.0, focus.getDouble("recovery_fade_ms"), 0.0)
+                    val support = focus.getJSONArray("episodes")
+                    assertTrue(support.length() >= 3)
+                    repeat(support.length()) { index ->
+                        val episode = support.getJSONObject(index)
+                        assertTrue(episode.getString("episode_id") in episodes.map { it.getString("episode_id") })
+                        assertEquals("delivery_elapsed_time", episode.getString("time_basis"))
+                        // Missing coordinates still retain the supplied observation capture clocks.
+                        assertTrue(episode.getDouble("missing_first_capture_ms") <=
+                            episode.getDouble("missing_first_delivery_ms"))
+                        assertTrue(episode.getDouble("missing_last_capture_ms") <=
+                            episode.getDouble("missing_last_delivery_ms"))
+                        assertTrue(episode.getInt("missing_sample_count") > 1)
+                        assertEquals("no_face", episode.getJSONArray("missing_reasons").getString(0))
+                        val source = episode.getJSONObject("source")
+                        assertTrue(episode.isNull("recovery"))
+                        val recovery = episode.getJSONObject("presence_recovery")
+                        assertTrue(source.getDouble("evidence_available_ms") <= episode.getDouble("missing_first_delivery_ms"))
+                        assertTrue(episode.getDouble("missing_last_delivery_ms") -
+                            episode.getDouble("missing_first_delivery_ms") >= 500.0)
+                        assertTrue(recovery.getDouble("last_capture_ms") <= recovery.getDouble("confirmed_delivery_ms"))
+                        assertTrue(episode.getDouble("completed_delivery_ms") <= decision.getDouble("decision_ms"))
+                    }
+                }
+                missingSamples.forEach {
+                        assertFalse(it.isNull("capture_ms"))
+                        assertTrue(it.isNull("x")); assertTrue(it.isNull("y"))
+                        assertTrue(it.isNull("raw_x")); assertTrue(it.isNull("raw_y"))
+                    }
             }
         }
     }

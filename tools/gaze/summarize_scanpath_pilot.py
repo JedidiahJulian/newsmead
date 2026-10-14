@@ -12,6 +12,7 @@ from pathlib import Path
 
 
 INSTRUMENT = "newsmead_scanpath_pilot_v1"
+SMOOTHED_INSTRUMENT = "newsmead_scanpath_pilot_v2"
 
 
 def _reject_constant(value):
@@ -39,8 +40,14 @@ def summarize(records, final_filename=True):
     if not records or records[0].get("kind") != "header":
         raise ValueError("First record must be the pilot header")
     header = records[0]["detail"]
-    if header.get("instrument") != INSTRUMENT or header.get("schema_version") != 1:
+    version = header.get("schema_version")
+    expected_instrument = {1: INSTRUMENT, 2: SMOOTHED_INSTRUMENT}.get(version)
+    if expected_instrument is None or header.get("instrument") != expected_instrument:
         raise ValueError("Unsupported instrument/schema; replay and frozen validation logs are separate")
+    if version == 2:
+        for key, expected in (("coordinate_stream", "article_smoothed_v1"), ("raw_scoring", False), ("processed_scoring", True)):
+            if header.get(key) != expected:
+                issues.append(f"unexpected_{key}")
     kinds = Counter(row.get("kind") for row in records)
     if kinds["header"] != 1:
         issues.append("header_count")
@@ -64,6 +71,24 @@ def summarize(records, final_filename=True):
             issues.append(f"unexpected_{key}")
     raw = [row["detail"] for row in records if row.get("kind") == "raw_observation"]
     samples = [row["detail"] for row in records if row.get("kind") == "sample"]
+    if version == 2:
+        sources = {row.get("input_ordinal"): row for row in raw}
+        for sample in samples:
+            source = sources.get(sample.get("input_ordinal"), {})
+            if any(key not in source for key in ("provider_x", "provider_y")):
+                issues.append("missing_provider_coordinates")
+            if any(key not in sample for key in ("x", "y", "display_x", "display_y")):
+                issues.append("missing_selected_display_coordinates")
+            if any(sample.get(key) != source.get(provider) for key, provider in (
+                    ("x", "provider_x"), ("display_x", "provider_x"),
+                    ("y", "provider_y"), ("display_y", "provider_y"))):
+                issues.append("provider_coordinate_retention")
+            if sample.get("coordinate_stream") != "article_smoothed_v1":
+                issues.append("sample_coordinate_stream")
+            if any(sample.get(selected) != sample.get(display) for selected, display in (("x", "display_x"), ("y", "display_y"))):
+                issues.append("selected_display_pairing")
+            if any(sample.get(key) != source.get(key) for key in ("raw_x", "raw_y")):
+                issues.append("raw_coordinate_retention")
     acceptance = [row["detail"] for row in records if row.get("kind") == "input_acceptance"]
     ordinals = [row.get("input_ordinal") for row in raw]
     sample_ordinals = [row.get("input_ordinal") for row in samples]
@@ -102,7 +127,17 @@ def summarize(records, final_filename=True):
         score["targets"] = [dict({k: v for k, v in t.items() if k != "target"}, target_id=t.get("target", {}).get("id")) for t in targets]
     synthetic = header.get("input_kind") == "synthetic_pilot_check"
     return {
-        "instrument": INSTRUMENT,
+        "instrument": expected_instrument,
+        "schema_version": version,
+        "coordinate_stream": header.get("coordinate_stream") if version == 2 else "calibrated_raw_v1",
+        "interpretation_mode": "selected_smoothed_stream" if version == 2 else "legacy_raw",
+        "raw_scoring": header.get("raw_scoring") if version == 2 else True,
+        "processed_scoring": header.get("processed_scoring") if version == 2 else False,
+        "input_phase": header.get("input_phase"),
+        "smoothing": header.get("smoothing"),
+        "smoothing_applied_to_synthetic_input": header.get("smoothing_applied_to_synthetic_input"),
+        "smoother_min_cutoff": header.get("smoother_min_cutoff"),
+        "smoother_beta": header.get("smoother_beta"),
         "integrity_ok": not issues,
         "issues": issues,
         "synthetic": synthetic,

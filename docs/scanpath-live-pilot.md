@@ -1,5 +1,77 @@
 # Live scanpath pilot instrument
 
+**Current appearance selector — 2026-10-14:** policy14,
+`SMOOTHED_PILOT_DEFINITION_<condition>_V9`. Settings → Reading aids includes
+Fade surrounding text / Dark surroundings; parent Apply retains the existing
+settings workflow. Shared action exports record `focus_style`. Same triggers,
+measurement/scoring and SHADOW/DISPLAY boundaries.18 shared JVM checks/builds
+pass; device verification is recorded in the current focus contract.
+
+**Previous display amendment — 2026-10-14:** policy13,
+`SMOOTHED_PILOT_DEFINITION_<condition>_V8`. Shared V4 uses90%/98% background
+coverage at50%/100% initial strength,180ms motion and<=1500ms scroll handover.
+Held display is separately logged, not new gaze support. SHADOW still draws
+nothing. No detector/scoring/protocol change.50 shared JVM and6 distinct native
+checks pass across initial/retry; both APKs build/install. No pilot collection.
+[Current contract](repeated-interruption-focus-window.md).
+
+**Previous appearance amendment — 2026-10-14:** policy12,
+`SMOOTHED_PILOT_DEFINITION_<condition>_V7`. Shared V3 focus uses5 clear rows,
+4 if needed to retain surrounding shade, and full viewport width through the
+side margins. No trigger, coordinate or scoring change. Shared14 JVM/4 native
+checks pass across initial/retry runs; pilot fixtures compile, no collection ran.
+[Current contract](repeated-interruption-focus-window.md).
+
+**Previous return/visit amendment — 2026-10-14:** policy11,
+`SMOOTHED_PILOT_DEFINITION_<condition>_V6`. Shared100ms/3-sample article-presence
+returns and ongoing-fourth8s line-visit assistance replace stable-recovery/P11
+gates.3/30s/500ms and50/100% remain. V2 viewport-aware focus and completed-summary
+retention match the article. SHADOW still records without drawing; DISPLAY draws;
+prompted/no-aid conditions stay disabled. Shared219 JVM/5 camera-free A56 checks
+pass and pilot fixtures compile; no natural-reading pilot collection ran.
+[Current contract](repeated-interruption-focus-window.md).
+
+**Previous repeated-focus amendment — 2026-10-14:** policy **10**,
+`SMOOTHED_PILOT_DEFINITION_<condition>_V5`. Ordinary-reading SHADOW records
+completed interruption episodes and choices without drawing; DISPLAY uses the
+shared count/cycle focus rule with two activation strengths (50/100%), completed
+witness retention across ordinary detector gaps and coarse line-only support.
+Focus holds3s then fades7s of usable captures, with<=1s supported-delivery grace;
+definitions require1500ms observed current-word residence.
+Prompted/no-aid conditions remain disabled.
+[Settings, evidence and checks](repeated-interruption-focus-window.md).
+
+**Current bookmark correction — 2026-10-13:** policy **7**,
+`SMOOTHED_PILOT_DEFINITION_<condition>_V2`, bookmark rule V2. Reported missing gaze
+for **500 ms** can show the saved-line marker in DISPLAY; SHADOW records choices
+without rendering; prompted/no-aid conditions stay off. The delivery-time timer
+is not a scanpath or attention label. Schema-2 coordinate provenance and scoring
+are retained. [Contract](scanpath-reading-bookmark.md).
+
+**Current 2026-10-13 stream implementation:** live pilot enables the article's
+existing One Euro filter and selects `article_smoothed_v1` for mapping, engine,
+aid decisions and scoring. Conditions are now
+`SMOOTHED_PILOT_DEFINITION_<condition>_V1`, policy **6**, instrument
+`newsmead_scanpath_pilot_v2`, schema **2**. Raw originals and selected/display
+points remain separate. Prompted/no-aid/shadow/display rules and the hidden dot
+are retained. Synthetic checks explicitly provide post-filter trajectories.
+The analyzer supports old schema-1 raw logs and validates new provider/display
+pairing. [Contract and checks](calibrated-smoothed-scanpath-path.md).
+
+**Historical 2026-10-13 guide/menu amendment:** conditions ended in `_V4` and selected
+`DEFINITION_PROFILE_V4` / policy 5, layout `CONTEXT_GUIDE_MENU_GUTTER_V1`.
+**Settings → Reading aids** opens shared switches and Line/Sentence context;
+parent **Apply** applies preferences. Prompted tasks remain aids-off; shadow and
+display retain their rules. Guide selection, fallback and current verification:
+[contract](reading-aid-menu-and-sentence-guide.md). V3 phone results below are historical.
+
+**Historical 2026-10-13 bookmark amendment:** conditions used
+`PILOT_DEFINITION_NO_AIDS_V3`, `PILOT_DEFINITION_SHADOW_V3` and
+`PILOT_DEFINITION_DISPLAY_V3`, `DEFINITION_PROFILE_V3` / policy 4 and the
+[last recorded-line bookmark](scanpath-reading-bookmark.md). Prompted tasks stay
+aids-off; shadow/display keep their visibility rules. Older V2 continuation
+records remain historical; dictionary online/bundled modes are retained.
+
 **2026-10-04 line-start spacing:** the existing 16 dp body padding is now used
 as a gutter for the same marker renderer selected in the article. The cue ends
 4 dp before the first letter in ordinary-reading display conditions. No padding
@@ -7,28 +79,30 @@ changes occur between conditions; word/line targets still come from the actual
 rendered TextView geometry. A clipped gutter withholds the marker. Prompted
 placement tasks keep assistance off as specified below.
 
-**2026-10-04 current article aid profile:** new runs use `DEFINITION_PROFILE_V2`
-and `PILOT_DEFINITION_NO_AIDS_V2`, `PILOT_DEFINITION_SHADOW_V2` or
-`PILOT_DEFINITION_DISPLAY_V2`. The current near-word card, highlight, close control
+**Current article aid profile:** new runs use `DEFINITION_PROFILE_V3`
+and `PILOT_DEFINITION_NO_AIDS_V3`, `PILOT_DEFINITION_SHADOW_V3` or
+`PILOT_DEFINITION_DISPLAY_V3`. The current near-word card, highlight, close control
 and consultation gate replace the word magnifier. Its 800 ms trigger remains
 exploratory. All conditions reserve **0 dp** for a word strip and keep the same
-viewport. Settings control word definitions. Live runs use the 75-entry original
-glossary and online fallback; explicitly synthetic checks use the same adapter
-with networking disabled. Header/configuration record `dictionary_mode`,
+viewport. Settings control word definitions. As of 2026-10-08, live runs use
+successful online cache → Free Dictionary API → the 75-entry original glossary
+on failure (`dictionary_mode=online_then_bundled`). Explicitly synthetic checks
+use the same adapter with networking disabled (`bundled_only`). Earlier
+`bundled_then_online` traces retain their recorded mode. Header/configuration record `dictionary_mode`,
 `ui_layout_id=CONTEXT_DEFINITION_GUTTER_V1` and `reserved_word_strip_dp=0`.
 Historical magnifier runs/device checks retain their earlier meaning; do not pool
 them with the new profile.
 
-The [continuation marker](scanpath-continuation-marker.md) replaces the old
-post-P09 cue. In ordinary-reading shadow/display runs, supported first-quarter
-then last-quarter progress remembers the next visible line; a supported landing
-elsewhere offers a fixed marker at that expected line. Normal next-line arrival
-does not choose it. Definition consultation, layout/input boundaries and expiry
-clear it. Prompted tasks remain aids-off. Configuration is policy v3; source/end/
-landing times and observed lines are saved in `continuation_evidence`. V1 runs
-and the 64-test checkpoint below describe the preceding build.
+The [reading bookmark](scanpath-reading-bookmark.md) replaces the V2
+expected-successor cue. In ordinary-reading shadow/display runs, sustained usable
+outside-article coordinates or a supported non-normal jump offer a fixed cue at
+the last supported source line. Normal progression and tracking loss alone do
+not choose it. Supported resumption/continuation or explicit layout/lifecycle/
+consultation invalidation clears it. Prompted tasks remain aids-off. Configuration
+is policy 4; separate source/departure bounds are saved in `bookmark_evidence`.
+V1/V2 runs and the 64-test checkpoint below describe preceding builds.
 
-Current local checks: **64 focused JVM tests pass**; app/test APK assembly, XML
+Historical 2026-10-04 checks: **64 focused JVM tests pass**; app/test APK assembly, XML
 parsing and whitespace checks pass. Updated camera-free activity fixtures compile
 for all prompted tasks, matched no-aid/shadow/display geometry, current definition
 choices and offline consultation/raw exclusion/resumption. Their phone execution
@@ -113,11 +187,11 @@ reference/design. The existing replay route exercises algorithm behavior.
 | Prompt interval | Actual first canvas-draw proxy until next proxy or task stop, `[onset, end)`, using capture time. Requested time is also retained. |
 | Interval samples | Samples with usable strictly increasing nonnegative capture clocks in that interval. |
 | Scorable samples | Interval samples after that target's configured settling period. |
-| Eligible samples | Scorable samples with finite raw XY, raw eligibility and the original geometry snapshot. This does not imply engine acceptance or accurate placement. |
+| Eligible samples | Scorable samples with finite selected XY, sample eligibility and the original geometry snapshot. This does not imply engine acceptance or accurate placement. |
 | Exact word/line agreement | Exact assigned target among eligible samples, calculated independently by resolution. Empty denominators and unavailable word references have null rates. |
 | Unavailable among scorable | Ineligible scorable samples plus eligible-but-unassigned samples at that resolution. Retain this beside conditional agreement. |
 | Prompted opportunities | All planned targets, actual drawn targets, targets with scorable input and targets with at least one exact sample. Unshown targets remain in the table. |
-| Ordered raw runs | Collapse adjacent identical AOIs after only the first settling period. Later settling is excluded for agreement but does not hide movement from descriptive paths. Unknown input and >125 ms capture gaps break the affected resolution independently. |
+| Ordered selected-stream runs | Collapse adjacent identical AOIs after only the first settling period. Later settling is excluded for agreement but does not hide movement from descriptive paths. Unknown input and >125 ms capture gaps break the affected resolution independently. |
 | Descriptive alignment | Global insertion/deletion alignment of intended and observed runs. It ignores prompt windows and continuity breaks. Segment paths and maximum matches in one segment are retained. It is not temporally matched event recovery, event recall or event precision. |
 | Engine acceptance | Exact `ScanpathEngine.onSample` acceptance callback, retained separately from raw eligibility and scoring. Terminal deliveries are not processed after stop. |
 
@@ -189,7 +263,7 @@ the 100,000-record cap leaves a partial file; no truncated trace is treated as a
 complete audit. Completed traces may still describe interrupted/failed trials.
 
 Records retain body/text identity, settings, geometry, raw provider coordinates,
-raw-derived assignments, exact engine acceptance, candidate/finalized evidence,
+selected-stream assignments, exact engine acceptance, candidate/finalized evidence,
 patterns, decisions, anchors, strengths, prompt/draw proxies, adherence category
 and terminal counters. There are no camera images or uploads. Free-text notes
 may contain private information; participant copies belong in approved private

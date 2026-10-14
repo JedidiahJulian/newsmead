@@ -112,7 +112,7 @@ object PilotTasks {
 
 /**
  * intervalSamples: usable capture clocks in [onset,end); scorableSamples: after settling.
- * eligibleSamples additionally requires raw eligible flag, finite XY and the initial snapshot.
+ * eligibleSamples additionally requires the sample eligible flag, finite selected processing XY and the initial snapshot.
  * Assignment/match/unknown counts use eligibleSamples; nullable rates retain empty denominators.
  * unknownWord/unknownLine mean eligible but unassigned at that resolution, not ineligible samples.
  * Clock-invalid samples cannot enter a target denominator and remain in the global exclusions.
@@ -151,12 +151,12 @@ data class PilotScoreResult(val targets: List<PilotTargetScore>, val totalSample
 }
 
 /**
- * Uses raw sample eligibility, never engine acceptance. Onsets and captures share elapsed ms.
+ * Uses sample eligibility and the selected processing stream, never engine acceptance. Onsets and captures share elapsed ms.
  * Retains at most maxSamples observations; capacity losses remain explicit and break runs.
  * Call record for all callbacks, including delayed ones, before finish. The onset log is causal,
  * but assignment is deferred so a delayed callback still belongs to its earlier half-open window.
  * Sequence references collapse adjacent identical targets: this instrument cannot count refixations.
- * Ordered raw runs start after the first settling period only. Later per-target settling periods
+ * Ordered selected-stream runs start after the first settling period only. Later per-target settling periods
  * exclude agreement samples but retain observed transitions descriptively. Global order alignment
  * has no temporal matching; only target rows represent actual drawn capture-time opportunities.
  * maxSequenceGapMs is an explicit engineering continuity setting, not a validated cutoff.
@@ -204,7 +204,7 @@ class PilotScore(private val plan: PilotTaskPlan, private val geometrySnapshotId
             t < 0 || lastCapture?.let { t <= it } == true -> { outOfOrder++; false }
             else -> { lastCapture = t; true }
         }
-        if (sample.rawX?.isFinite() != true || sample.rawY?.isFinite() != true) invalidCoordinates++
+        if (sample.processingX?.isFinite() != true || sample.processingY?.isFinite() != true) invalidCoordinates++
         if (!sample.eligible) ineligible++
         if (sample.geometrySnapshotId != geometrySnapshotId) geometryMismatch++
         if (observations.size < maxSamples) observations.add(Observation(sample, usableClock)) else dropped++
@@ -245,8 +245,8 @@ class PilotScore(private val plan: PilotTaskPlan, private val geometrySnapshotId
             val c = counts[index]
             c[0]++ // all clock-usable samples in the displayed interval
             val agreementScorable = capture!! - onset >= settlingMs
-            if (agreementScorable) c[1]++ // capture-time scorable, before raw eligibility exclusions
-            if (!s.eligible || s.rawX?.isFinite() != true || s.rawY?.isFinite() != true ||
+            if (agreementScorable) c[1]++ // capture-time scorable, before selected-stream eligibility exclusions
+            if (!s.eligible || s.processingX?.isFinite() != true || s.processingY?.isFinite() != true ||
                 s.geometrySnapshotId != geometrySnapshotId) {
                 previousWord = null; previousLine = null
                 return@forEach
@@ -265,7 +265,7 @@ class PilotScore(private val plan: PilotTaskPlan, private val geometrySnapshotId
                     if (s.line == target.line) c[6]++
                 }
             }
-            // Only the initial settling period excludes ordered raw samples.
+            // Only the initial settling period excludes ordered samples from the selected processing stream.
             if (capture - onsets.first().second < settlingMs) return@forEach
             if (word != null) {
                 if (word != previousWord) {

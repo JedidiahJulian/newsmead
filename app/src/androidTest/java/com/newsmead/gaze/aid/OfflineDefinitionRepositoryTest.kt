@@ -23,7 +23,7 @@ class OfflineDefinitionRepositoryTest {
     @Test fun bundledLookupReturnsBeforeLookupCallCompletes() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             val repository = DictionaryDefinitionRepository(
-                InstrumentationRegistry.getInstrumentation().targetContext,
+                InstrumentationRegistry.getInstrumentation().targetContext, allowNetwork = false,
             )
             var result: WordDefinition? = null
             val request = repository.lookup("Keyboard") { result = it }

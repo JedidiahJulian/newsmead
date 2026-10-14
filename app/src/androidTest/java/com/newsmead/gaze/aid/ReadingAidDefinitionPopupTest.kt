@@ -3,6 +3,7 @@ package com.newsmead.gaze.aid
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
+import com.newsmead.R
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
@@ -14,11 +15,16 @@ import org.junit.runner.RunWith
 class ReadingAidDefinitionPopupTest {
     private class Repository : WordDefinitionRepository {
         var callback: ((WordDefinition?) -> Unit)? = null
+        var resultCallback: ((DefinitionLookupResult) -> Unit)? = null
         var requests = 0
         var cancelled = false
         override fun lookup(word: String, callback: (WordDefinition?) -> Unit): DefinitionRequest {
             requests++; this.callback = callback
             return DefinitionRequest { cancelled = true }
+        }
+        override fun lookupResult(word: String, callback: (DefinitionLookupResult) -> Unit): DefinitionRequest {
+            resultCallback = callback
+            return lookup(word) { callback(DefinitionLookupResult(it, if (it == null) DefinitionFailure.UNKNOWN else null)) }
         }
     }
     private fun fixture(check: (ReadingAidDefinitionPopup, Repository, TextView, MutableList<Boolean>, ReadingAidAction) -> Unit) {
@@ -72,6 +78,27 @@ class ReadingAidDefinitionPopupTest {
         popup.showAction(action)
         assertTrue(popup.isShowing)
         assertEquals(0, repo.requests)
+    }
+
+    @Test fun unavailableFeedbackDistinguishesReasonsAndKeepsConsultationOpen() = fixture { popup, repo, body, boundaries, action ->
+        val messages = mapOf(
+            DefinitionFailure.INVALID_TOKEN to R.string.definition_token_unavailable,
+            DefinitionFailure.ENTRY_NOT_FOUND to R.string.definition_entry_not_found,
+            DefinitionFailure.SERVICE_UNAVAILABLE to R.string.definition_service_unavailable,
+            DefinitionFailure.OFFLINE_UNAVAILABLE to R.string.definition_offline_unavailable,
+            DefinitionFailure.UNKNOWN to R.string.definition_unknown_unavailable,
+        )
+        val host = body.parent as FrameLayout
+        for ((failure, message) in messages) {
+            popup.showAction(action)
+            repo.resultCallback!!(DefinitionLookupResult(null, failure))
+            assertEquals(body.context.getString(message),
+                host.findViewById<TextView>(R.id.definitionMeaning).text.toString())
+            assertEquals(View.GONE, host.findViewById<TextView>(R.id.definitionSource).visibility)
+            assertTrue(popup.isShowing)
+            assertTrue(boundaries.last())
+            popup.clear("fixture_next_reason")
+        }
     }
 
     @Test fun dictionaryParserRetainsSourceAndHandlesMissingSenses() {

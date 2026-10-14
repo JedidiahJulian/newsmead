@@ -1,5 +1,11 @@
 # Expected-continuation line marker
 
+**2026-10-13 current-profile replacement:** the owner selected a
+[last recorded reading-line bookmark](scanpath-reading-bookmark.md) for both
+usable outside-article departure and supported non-normal line jumps. The V2
+expected-successor rule below remains historical; legacy experimental tests
+retain this behavior and its original IDs.
+
 Updated 2026-10-04 · approved by the project owner · experimental implementation.
 
 ## What the marker means

@@ -299,8 +299,9 @@ class ReadingAidContinuationPolicyTest {
 
     @Test fun defaultsAndProfileVersionsAreExplicit() {
         val c = ReadingAidPolicyConfig.definitionPrototype()
-        assertEquals("DEFINITION_PROFILE_V2", c.configId)
-        assertEquals("EXPERIMENTAL_DEFINITION_V2", c.conditionId)
+        assertEquals("DEFINITION_PROFILE_V4", c.configId)
+        assertEquals("EXPERIMENTAL_DEFINITION_V4", c.conditionId)
+        assertEquals(ReadingAidType.READING_BOOKMARK, c.lineStartAidType)
         assertEquals("EXPERIMENTAL_PROFILE_V2", ReadingAidPolicyConfig.experimentalPrototype().configId)
         assertEquals(0.25, c.continuationStartFraction, 0.0)
         assertEquals(0.75, c.continuationEndFraction, 0.0)

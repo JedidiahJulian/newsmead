@@ -20,6 +20,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.doOnPreDraw
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import androidx.lifecycle.Lifecycle
 import com.newsmead.BuildConfig
 import com.newsmead.R
@@ -29,6 +30,7 @@ import com.newsmead.gaze.aid.*
 import com.newsmead.gaze.mgazenet.CalibrationIdentity
 import com.newsmead.gaze.mgazenet.MgazeNetCalibrationStore
 import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
+import com.newsmead.gaze.mgazenet.MgazeNetReadingSmoother
 import com.newsmead.gaze.scanpath.*
 import com.newsmead.gaze.scanpath.audit.ScanpathTraceWriter
 import com.newsmead.gaze.scanpath.pilot.*
@@ -91,6 +93,7 @@ class ScanpathPilotActivity : AppCompatActivity() {
     private var pendingScore: PilotScoreResult? = null
     private var reportPending = false
     private var reportDialog: AlertDialog? = null
+    private var aidControls: BottomSheetDialog? = null
     private val patternCounts = linkedMapOf<String, Int>()
     private val chosen = linkedSetOf<String>()
     private val drawn = linkedSetOf<String>()
@@ -214,7 +217,7 @@ class ScanpathPilotActivity : AppCompatActivity() {
         val condition = if (reading) settings.readingCondition else PilotReadingCondition.NO_AIDS
         val prefs = if (condition == PilotReadingCondition.NO_AIDS) settings.preferences.copy(enabled = false) else settings.preferences
         runtime = ArticleReadingAidRuntime(binding.pilotBody, binding.pilotWordDock, overlay,
-            ReadingAidPolicyConfig.definitionPrototype().copy(conditionId = "PILOT_DEFINITION_${condition.name}_V2"), prefs,
+            ReadingAidPolicyConfig.definitionPrototype().copy(conditionId = "SMOOTHED_PILOT_DEFINITION_${condition.name}_V9"), prefs,
             if (synthetic) ReadingAidInputSource.SYNTHETIC_REPLAY else ReadingAidInputSource.LIVE_MGAZENET,
             onDecision = { d -> log?.decision(d); if (d.status == ReadingAidDecisionStatus.CHOSEN) d.action?.let { chosen.add(it.aidType.name) } },
             onRenderReceipt = { a, visible, reason, at -> log?.render(a, visible, reason, at); if (visible) drawn.add(a.aidType.name) },
@@ -228,10 +231,12 @@ class ScanpathPilotActivity : AppCompatActivity() {
                     .put("word_end_utf16", consultationAnchor?.wordEndUtf16 ?: JSONObject.NULL))
                 session?.setConsultation(active, at, reason)
                 if (!active) consultationAnchor = null
-            })
+            }, coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED,
+            onFocusEpisode = { episode -> log?.focusEpisode(episode) })
         log = ScanpathTraceWriter(this, "scanpath_pilot", header(plan, runtime!!.configurationSnapshot()
-            .put("dictionary_mode", if (synthetic) "bundled_only" else "bundled_then_online")
-            .put("ui_layout_id", "CONTEXT_DEFINITION_GUTTER_V1").put("reserved_word_strip_dp", 0)), 100000)
+            .put("dictionary_mode", if (synthetic) "bundled_only" else "online_then_bundled")
+            .put("dictionary_online_route_version", if (synthetic) "none" else DictionaryDefinitionRepository.ONLINE_ROUTE_VERSION)
+            .put("ui_layout_id", "CONTEXT_GUIDE_MENU_GUTTER_V1").put("reserved_word_strip_dp", 0)), 100000)
         session = ArticleScanpathSession(binding.pilotBody, runtime!!.scanpathConfig,
             onGeometry = { generation, g ->
                 log?.geometry(generation, g); runtime?.geometry(generation, g); geometry = g; lastGeneration = generation
@@ -250,17 +255,17 @@ class ScanpathPilotActivity : AppCompatActivity() {
             }, onAcceptance = { generation, _, ok ->
                 if (ok) accepted++
                 log?.append("input_acceptance", JSONObject().put("generation", generation).put("input_ordinal", observations).put("engine_accepted", ok))
-            })
+            }, coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED)
         session!!.checkGeometry()
         plan?.let { scorer = PilotScore(it, checkNotNull(geometry).snapshotId, settings.settlingMs,
             maxSequenceGapMs = runtime!!.scanpathConfig.maxSampleGapMs) }
         binding.root.viewTreeObserver.addOnPreDrawListener(preDraw)
         preparing = false; running = true; waitingForInput = true; binding.root.keepScreenOn = true
-        binding.pilotStatus.text = "Waiting for raw gaze…\n${if (plan == null) condition.name else "Prompted targets; aids off"}"
+        binding.pilotStatus.text = "Waiting for calibrated, smoothed gaze…\n${if (plan == null) condition.name else "Prompted targets; aids off"}"
         handler.postDelayed({ if (token == mine && running && waitingForInput) stopRun("no_coordinate_input") }, 20000)
         handler.postDelayed({ if (token == mine && running) stopRun("resource_time_limit") }, 600000)
         if (synthetic) beginTimeline() else {
-            provider = MgazeNetGazeProvider(this, binding.pilotBody, smoothForReading = false).also { p ->
+            provider = MgazeNetGazeProvider(this, binding.pilotBody, smoothForReading = true).also { p ->
                 p.onObservation = ::receive
                 p.onFailure = { reason -> log?.append("provider_failure", JSONObject().put("reason", reason)); stopRun("provider_failed") }
                 p.start(this)
@@ -281,7 +286,8 @@ class ScanpathPilotActivity : AppCompatActivity() {
             // Retain trailing callbacks as unknown, rather than remapping a paused/reflowed view.
             terminalDeliveries++
             val s = ScanpathSample(o.captureMs, o.outputMs, o.rawX?.toDouble(), o.rawY?.toDouble(), null, null, null,
-                geometry?.snapshotId, false, "terminal_delivery")
+                geometry?.snapshotId, false, "terminal_delivery",
+                displayX = o.x?.toDouble(), displayY = o.y?.toDouble(), coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED)
             log?.sample(lastGeneration, observations, s); scorer?.record(s)
         } else {
             session?.record(o)
@@ -377,22 +383,27 @@ class ScanpathPilotActivity : AppCompatActivity() {
             chosen.toSet(), drawn.toSet(), recorder.file, recorder.failure)
         log = null; plan = null; pendingScore = null
         controls(false)
-        binding.pilotStatus.text = "$selectedTask: $stopReason\nRaw callbacks $observations · engine accepted $accepted\n${patternCounts.keys.joinToString(" ")}\nTrace ${recorder.failure ?: "saved privately"}"
+        binding.pilotStatus.text = "$selectedTask: $stopReason\nProvider callbacks $observations · engine accepted $accepted\n${patternCounts.keys.joinToString(" ")}\nTrace ${recorder.failure ?: "saved privately"}"
     }
 
     private fun header(task: PilotTaskPlan?, configuration: JSONObject): JSONObject {
         val passage = passages[binding.pilotPassage.selectedItemPosition.coerceAtLeast(0)]
         val values = JSONObject().put("linked_set", settings.linkedSet).put("protocol", settings.protocol).put("allocation", settings.allocation.name)
             .put("step_duration_ms", settings.stepMs).put("scoring_settling_ms", settings.settlingMs).put("reading_condition", settings.readingCondition.name)
-        return JSONObject().put("schema_version", 1).put("instrument", "newsmead_scanpath_pilot_v1")
+        return JSONObject().put("schema_version", 2).put("instrument", "newsmead_scanpath_pilot_v2")
             .put("input_kind", if (synthetic) "synthetic_pilot_check" else if (selectedTask == "ordinary_reading") "live_reading" else "live_prompted")
             .put("camera_frames_retained", false).put("human_reference", false).put("reference_kind", "intended_targets_conditional_on_compliance")
             .put("capture_time_basis", if (synthetic) "synthetic_elapsed_realtime_test" else "camera_timestamp_ns_div_1e6_elapsed_realtime")
             .put("delivery_time_basis", "actual_elapsed_realtime_callback").put("prompt_time_basis", "canvas_draw_proxy_elapsed_realtime")
-            .put("raw_scoring", true).put("smoothing", false).put("alignment_correction", false).put("gaze_dot_visible", false)
+            .put("raw_scoring", false).put("processed_scoring", true)
+            .put("coordinate_stream", ScanpathCoordinateStream.ARTICLE_SMOOTHED.id)
+            .put("smoothing", !synthetic).put("smoothing_applied_to_synthetic_input", false)
+            .put("input_phase", if (synthetic) "post_filter_synthetic_trajectory" else "live_provider_output")
+            .put("smoother_min_cutoff", MgazeNetReadingSmoother.MIN_CUTOFF).put("smoother_beta", MgazeNetReadingSmoother.BETA).put("alignment_correction", false).put("gaze_dot_visible", false)
             .put("terminal_delivery_rule", "retained_unknown_no_post_stop_mapping").put("reserved_word_strip_dp", 0)
-            .put("ui_layout_id", "CONTEXT_DEFINITION_GUTTER_V1")
-            .put("dictionary_mode", if (synthetic) "bundled_only" else "bundled_then_online")
+            .put("ui_layout_id", "CONTEXT_GUIDE_MENU_GUTTER_V1")
+            .put("dictionary_mode", if (synthetic) "bundled_only" else "online_then_bundled")
+            .put("dictionary_online_route_version", if (synthetic) "none" else DictionaryDefinitionRepository.ONLINE_ROUTE_VERSION)
             .put("task_id", selectedTask).put("plan", task?.let(PilotRecordJson::plan) ?: JSONObject.NULL)
             .put("run_settings", values).put("run_settings_sha256", hash(values.toString()))
             .put("configuration", configuration).put("passage_id", passage.id).put("passage_origin", passage.origin)
@@ -427,31 +438,27 @@ class ScanpathPilotActivity : AppCompatActivity() {
         val condition = choice(PilotReadingCondition.values(), settings.readingCondition)
         val duration = field("Target duration, ms", settings.stepMs.toString())
         val settle = field("Excluded settling after cue, ms", settings.settlingMs.toString())
-        fun check(label: Int, selected: Boolean) = CheckBox(this).apply { setText(label); isChecked = selected; panel.addView(this) }
-        val p = settings.preferences
-        val enabled = check(R.string.reading_aids_enabled, p.enabled)
-        val line = check(R.string.reading_aids_line, p.lineGuide)
-        val start = check(R.string.reading_aids_start, p.lineStartCue)
-        val word = check(R.string.reading_aids_word_definition, p.wordDefinition)
-        val focus = check(R.string.reading_aids_focus, p.focusRegion)
-        val adaptive = check(R.string.reading_aids_adaptive, p.adaptiveStrength)
-        val strength = field("Aid strength, 0–100% (continuation marker stays fixed)", (p.maxStrength * 100).toInt().toString())
+        var aidPreferences = settings.preferences.copy(wordMagnifier = false)
+        panel.addView(Button(this).apply {
+            setText(R.string.reading_aids_option)
+            setOnClickListener {
+                if (aidControls == null) aidControls = ReadingAidControlsSheet.show(this@ScanpathPilotActivity,
+                    aidPreferences, onChanged = { aidPreferences = it }, onDismiss = { aidControls = null })
+            }
+        })
         val scroll = ScrollView(this).apply { addView(panel) }
         val dialog = AlertDialog.Builder(this).setTitle("Pilot settings").setView(scroll).setPositiveButton("Apply", null).setNegativeButton(android.R.string.cancel, null).create()
+        dialog.setOnDismissListener { aidControls?.dismiss(); aidControls = null }
         dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             try {
-                val amount = strength.text.toString().toDouble() / 100
-                require(amount.isFinite() && amount in 0.0..1.0)
                 settings = PilotRunSettings(linked.text.toString(), protocol.text.toString(), PilotAllocation.values()[allocation.selectedItemPosition],
                     duration.text.toString().toLong(), settle.text.toString().toDouble(), PilotReadingCondition.values()[condition.selectedItemPosition],
-                    ReaderAidPreferences(enabled = enabled.isChecked, lineGuide = line.isChecked, lineStartCue = start.isChecked,
-                        wordMagnifier = false, wordDefinition = word.isChecked, focusRegion = focus.isChecked,
-                        adaptiveStrength = adaptive.isChecked, maxStrength = amount, manualStrength = amount))
+                    aidPreferences)
                 dialog.dismiss()
             } catch (_: Exception) { Toast.makeText(this, "Use valid codes, a named plan outside practice, and a settling interval shorter than the target duration.", Toast.LENGTH_LONG).show() }
         } }; dialog.show()
     }
-    override fun onPause() { stopRun("activity_paused"); saveReport("not_assessed", ""); super.onPause() }
+    override fun onPause() { aidControls?.dismiss(); aidControls = null; stopRun("activity_paused"); saveReport("not_assessed", ""); super.onPause() }
     override fun onDestroy() {
         stopRun("activity_destroyed"); saveReport("not_assessed", "")
         if (::definitionPopup.isInitialized) definitionPopup.close()

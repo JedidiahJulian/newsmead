@@ -7,10 +7,10 @@ import org.junit.Test
 class ReadingAidDemoPlanTest {
     @Test fun cycleContainsEachDisplayAndPairedStrengthsInOrder() {
         val stages = ReadingAidDemoPlan.stages
-        assertEquals(listOf(null, ReadingAidType.CURRENT_LINE, ReadingAidType.NEXT_LINE_START,
+        assertEquals(listOf(null, ReadingAidType.CURRENT_LINE, ReadingAidType.READING_BOOKMARK,
             ReadingAidType.WORD_DEFINITION,
             ReadingAidType.FOCUS_REGION, ReadingAidType.FOCUS_REGION), stages.map { it.type })
-        assertEquals(listOf(0.0, 0.6, 1.0, 1.0, 0.25, 1.0), stages.map { it.strength })
+        assertEquals(listOf(0.0, 0.25, 1.0, 1.0, 0.5, 1.0), stages.map { it.strength })
         assertEquals(4000L, ReadingAidDemoPlan.STAGE_MS)
     }
 

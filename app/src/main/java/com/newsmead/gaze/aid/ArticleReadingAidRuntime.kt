@@ -8,12 +8,14 @@ import android.view.View
 import android.widget.TextView
 import com.newsmead.gaze.scanpath.ScanpathCandidateEvidence
 import com.newsmead.gaze.scanpath.ScanpathConfig
+import com.newsmead.gaze.scanpath.ScanpathCoordinateStream
 import com.newsmead.gaze.scanpath.ScanpathEngine
 import com.newsmead.gaze.scanpath.ScanpathEvent
 import com.newsmead.gaze.scanpath.ScanpathFixation
 import com.newsmead.gaze.scanpath.ScanpathGeometry
 import com.newsmead.gaze.scanpath.ScanpathSample
 import com.newsmead.gaze.mgazenet.MgazeNetCalibrationStore
+import com.newsmead.gaze.mgazenet.MgazeNetReadingSmoother
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
@@ -31,14 +33,17 @@ class ArticleReadingAidRuntime(
     private val renderAids: Boolean = true,
     private val definitionPopup: ReadingAidDefinitionPopup? = null,
     private val onConsultationChanged: (Boolean, Double, String) -> Unit = { _, _, _ -> },
+    val coordinateStream: ScanpathCoordinateStream = ScanpathCoordinateStream.CALIBRATED_RAW,
+    private val onFocusEpisode: (ReadingAidFocusEpisode) -> Unit = {},
 ) {
-    private val policy = ReadingAidPolicy(config, preferences)
-    val preferences get() = policy.preferences
     val scanpathConfig = ScanpathConfig(returnSweepStartFraction = 0.25, returnSweepEndFraction = 0.75,
         wordResidenceMs = config.wordMinObservedMs, lineResidenceMs = config.lineMinObservedMs,
         cycleWindowMs = config.cycleWindowMs, progressionWindowMs = 1000.0,
         lineProgressionMaxUnitsPerS = 0.5, progressionMinObservedFraction = 0.5)
     private val trace = ReadingAidTrace()
+    private val policy = ReadingAidPolicy(config, preferences, scanpathConfig,
+        onFocusEpisode = { episode -> trace.focusEpisode(episode); onFocusEpisode(episode) })
+    val preferences get() = policy.preferences
     private val calibrationFingerprint = if (inputSource == ReadingAidInputSource.LIVE_MGAZENET)
         MgazeNetCalibrationStore(body.context).fingerprint() else null
     private val handler = Handler(Looper.getMainLooper())
@@ -48,11 +53,14 @@ class ArticleReadingAidRuntime(
     private var suspended = false
     private var closed = false
     private var consulting = false
+    private var preserveFocusOnResume = false
+    private var lastFocusStatus: String? = null
     private var consultationAnchor: ReadingAidAnchor? = null
     private var dismissedDefinitionAnchor: ReadingAidAnchor? = null
     private var unsupportedDefinitionActionId: String? = null
     private var context = ReadingAidContext(0, "", 0, null, null, null,
         elapsedMs(), null, null, false)
+    private val guideResolver = ReadingGuideResolver()
     private val pulse = object : Runnable {
         override fun run() {
             if (closed) return
@@ -62,6 +70,17 @@ class ArticleReadingAidRuntime(
     }
 
     init {
+        overlay.onFocusScrollRender = { source, displayedSnapshot, top, bottom, at ->
+            // Presentation continuity is not new gaze support or a detector decision.
+            trace.record("focus_scroll_presentation", at, JSONObject()
+                .put("source_action_id", source.id)
+                .put("source_geometry_snapshot_id", source.anchor.geometrySnapshotId)
+                .put("presentation_geometry_snapshot_id", displayedSnapshot)
+                .put("focus_style", source.focusStyle?.name ?: JSONObject.NULL)
+                .put("clear_top_screen_px", top).put("clear_bottom_screen_px", bottom)
+                .put("position_basis", "viewport_hold_during_translation")
+                .put("new_gaze_evidence", false))
+        }
         overlay.onRender = { action, drawn, reason, at ->
             trace.render(action, drawn, reason, at)
             onRenderReceipt(action, drawn, reason, at)
@@ -69,18 +88,21 @@ class ArticleReadingAidRuntime(
         wordDock.onRender = overlay.onRender
         definitionPopup?.onRender = overlay.onRender
         definitionPopup?.onConsultationChanged = { active, at, reason ->
+            overlay.clearFocusScrollHold()
             consulting = active
             if (active) consultationAnchor = definitionPopup?.action?.anchor
             else { dismissedDefinitionAnchor = consultationAnchor; consultationAnchor = null }
-            context = context.copy(nowMs = at, validLiveInput = false)
+            context = context.copy(nowMs = at, validLiveInput = false, rawSample = null,
+                focusInputAllowed = false, bookmarkInputAllowed = false)
             latestFixation = null
             trace.record("definition_consultation", at, JSONObject().put("active", active).put("reason", reason)
                 .put("anchor_start_utf16", (consultationAnchor ?: dismissedDefinitionAnchor)?.wordStartUtf16 ?: JSONObject.NULL)
                 .put("anchor_end_utf16", (consultationAnchor ?: dismissedDefinitionAnchor)?.wordEndUtf16 ?: JSONObject.NULL))
             // Clear article interpretation without dismissing the consultation itself.
-            val resets = policy.reset(context)
+            val resets = policy.reset(context, preserveCompletedFocus = true)
             trace.context(context)
             resets.forEach { trace.decision(it); onDecision(it) }
+            recordFocusStatus()
             overlay.setActions(body, snapshot, context.generation, emptyList())
             wordDock.showAction(null, body)
             onConsultationChanged(active, at, reason)
@@ -100,11 +122,11 @@ class ArticleReadingAidRuntime(
         context = context.copy(generation = generation.toLong(), geometrySnapshotId = value?.snapshotId ?: "",
             lineCount = value?.lines?.size ?: 0, targetLine = null, targetWordStartUtf16 = null,
             targetWordEndUtf16 = null, nowMs = elapsedMs(), validLiveInput = false,
-            geometry = value, targetX = null)
+            geometry = value, targetX = null, guideRange = null)
         trace.record("geometry", context.nowMs, JSONObject().put("generation", generation)
             .put("geometry_snapshot_id", value?.snapshotId ?: JSONObject.NULL)
             .put("body_sha256", sha256(body.text.toString())).put("line_count", value?.lines?.size ?: 0))
-        decisions(policy.reset(context))
+        decisions(policy.reset(context, preserveCompletedFocus = true))
     }
 
     fun input(generation: Int, sample: ScanpathSample) {
@@ -115,11 +137,32 @@ class ArticleReadingAidRuntime(
         val delivery = sample.deliveryMs
         val ordered = capture != null && capture.isFinite() && capture > latestCapture
         if (capture != null && capture.isFinite()) latestCapture = maxOf(latestCapture, capture)
-        val valid = !suspended && !consulting && sample.eligible && ordered && delivery != null && delivery.isFinite() &&
+        val matchingStream = sample.coordinateStream == coordinateStream
+        val selectedPointValid = sample.processingX?.isFinite() == true && sample.processingY?.isFinite() == true
+        val valid = !suspended && !consulting && matchingStream && selectedPointValid &&
+            sample.eligible && ordered && delivery != null && delivery.isFinite() &&
             delivery >= capture!! && delivery <= now && sample.geometrySnapshotId == snapshot?.snapshotId
+        val interpretationAllowed = !suspended && !consulting && matchingStream &&
+            sample.geometrySnapshotId == snapshot?.snapshotId &&
+            (sample.exclusion == null || sample.exclusion == "outside_visible_text" ||
+                sample.exclusion !in listOf("layout_unavailable", "geometry_unsettled") &&
+                !sample.exclusion.startsWith("definition_") &&
+                listOf("scroll", "calibration", "control", "pause", "restart", "stop", "camera", "provider_failed", "geometry", "text_change")
+                    .none { sample.exclusion.contains(it) })
+        // Only translation/unsettled geometry may retain the focus presentation.
+        // Menus, consultation, calibration and provider/screen stops must remove it.
+        if (!matchingStream || sample.exclusion?.let { reason ->
+                reason != "geometry_unsettled" && reason != "scroll" &&
+                    (reason == "layout_unavailable" || reason.startsWith("definition_") ||
+                        listOf("calibration", "control", "pause", "restart", "stop", "camera", "provider_failed", "text_change")
+                            .any { reason.contains(it) })
+            } == true) overlay.clearFocusScrollHold()
         context = ReadingAidContext(generation.toLong(), snapshot?.snapshotId ?: "",
             snapshot?.lines?.size ?: 0, sample.line, sample.wordStartUtf16, sample.wordEndUtf16,
-            now, capture, delivery, valid, geometry = snapshot, targetX = sample.rawX)
+            now, capture, delivery, valid, geometry = snapshot, targetX = sample.processingX,
+            rawSample = sample, bookmarkInputAllowed = interpretationAllowed,
+            guideRange = if (valid) guideResolver.resolve(body.text.toString(), snapshot, sample.line) else null,
+            focusInputAllowed = interpretationAllowed)
         val dismissed = dismissedDefinitionAnchor
         if (valid && dismissed != null && (dismissed.generation != generation.toLong() ||
             dismissed.wordStartUtf16 != sample.wordStartUtf16 || dismissed.wordEndUtf16 != sample.wordEndUtf16))
@@ -128,6 +171,9 @@ class ArticleReadingAidRuntime(
             JSONObject().put("capture_ms", capture ?: JSONObject.NULL).put("delivery_ms", delivery ?: JSONObject.NULL)
                 .put("raw_x_px", sample.rawX?.takeIf { it.isFinite() } ?: JSONObject.NULL)
                 .put("raw_y_px", sample.rawY?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+                .put("coordinate_stream", sample.coordinateStream.id)
+                .put("processing_x_px", sample.processingX?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+                .put("processing_y_px", sample.processingY?.takeIf { it.isFinite() } ?: JSONObject.NULL)
                 .put("exclusion", sample.exclusion).put("article_eligible", false))
         // Clear before an invalid observation can flush the earlier candidate and its events.
         if (!valid) decisions(policy.onObservation(null, context))
@@ -156,6 +202,7 @@ class ArticleReadingAidRuntime(
 
     fun updatePreferences(value: ReaderAidPreferences) {
         checkMain()
+        overlay.clearFocusScrollHold()
         if (!value.enabled || !value.wordDefinition || value.maxStrength == 0.0 ||
             (!value.adaptiveStrength && value.manualStrength == 0.0)) definitionPopup?.clear("reader_controls_changed")
         context = context.copy(nowMs = elapsedMs())
@@ -168,9 +215,12 @@ class ArticleReadingAidRuntime(
         checkMain()
         if (closed) return
         suspended = true
+        overlay.clearFocusScrollHold()
+        preserveFocusOnResume = reason == "reader_controls"
         definitionPopup?.clear(reason)
-        context = context.copy(nowMs = elapsedMs(), validLiveInput = false)
-        decisions(policy.reset(context))
+        context = context.copy(nowMs = elapsedMs(), validLiveInput = false, rawSample = null,
+            focusInputAllowed = false, bookmarkInputAllowed = false)
+        decisions(policy.reset(context, preserveCompletedFocus = preserveFocusOnResume))
         trace.record("suspended", context.nowMs, JSONObject().put("reason", reason))
         updateDockVisibility()
     }
@@ -180,7 +230,8 @@ class ArticleReadingAidRuntime(
         if (closed) return
         suspended = false
         context = context.copy(nowMs = elapsedMs(), validLiveInput = false)
-        decisions(policy.reset(context))
+        decisions(policy.reset(context, preserveCompletedFocus = preserveFocusOnResume))
+        preserveFocusOnResume = false
         updateDockVisibility()
     }
 
@@ -205,7 +256,11 @@ class ArticleReadingAidRuntime(
     private fun decisions(values: List<ReadingAidDecision>) {
         trace.context(context)
         values.forEach { trace.decision(it); onDecision(it) }
+        recordFocusStatus()
         val actions = if (closed || suspended || consulting || !renderAids) emptyList() else policy.activeActions()
+        overlay.allowFocusScrollHold = config.configId == "DEFINITION_PROFILE_V4" && renderAids &&
+            !closed && !suspended && !consulting && preferences.enabled && preferences.focusRegion &&
+            preferences.maxStrength > 0.0 && (preferences.adaptiveStrength || preferences.manualStrength > 0.0)
         overlay.setActions(body, snapshot, context.generation, actions)
         wordDock.showAction(actions.firstOrNull { it.aidType == ReadingAidType.WORD_MAGNIFIER }, body)
         if (!consulting) {
@@ -221,6 +276,15 @@ class ArticleReadingAidRuntime(
         }
     }
 
+    private fun recordFocusStatus() {
+        val detail = JSONObject(policy.focusDiagnostics(context.nowMs))
+        val signature = detail.toString()
+        if (signature != lastFocusStatus) {
+            lastFocusStatus = signature
+            trace.record("focus_activation_state", context.nowMs, detail)
+        }
+    }
+
     private fun updateDockVisibility() {
         wordDock.visibility = if (config.wordAidType == ReadingAidType.WORD_MAGNIFIER && renderAids && !closed && !suspended && preferences.enabled && preferences.wordMagnifier)
             View.VISIBLE else View.GONE
@@ -228,26 +292,101 @@ class ArticleReadingAidRuntime(
 
     private fun preferenceJson() = JSONObject().put("enabled", preferences.enabled)
         .put("line_guide", preferences.lineGuide).put("line_start_cue", preferences.lineStartCue)
+        .put("guide_style", preferences.guideStyle.name)
         .put("word_magnifier", preferences.wordMagnifier).put("focus_region", preferences.focusRegion)
+        .put("focus_style", preferences.focusStyle.name)
         .put("word_definition", preferences.wordDefinition)
         .put("adaptive_strength", preferences.adaptiveStrength).put("max_strength", preferences.maxStrength)
         .put("manual_strength", preferences.manualStrength)
 
     private fun configuration(): JSONObject {
         val values = JSONObject().put("config_id", config.configId).put("condition_id", config.conditionId)
+            .put("coordinate_stream", coordinateStream.id)
+            .put("processing_pipeline_version", "SELECTED_PROVIDER_COORDINATES_V1")
+            .put("smoothing", coordinateStream == ScanpathCoordinateStream.ARTICLE_SMOOTHED)
+            .put("smoothing_filter", if (coordinateStream == ScanpathCoordinateStream.ARTICLE_SMOOTHED) "one_euro" else JSONObject.NULL)
+            .put("smoothing_min_cutoff", if (coordinateStream == ScanpathCoordinateStream.ARTICLE_SMOOTHED) MgazeNetReadingSmoother.MIN_CUTOFF else JSONObject.NULL)
+            .put("smoothing_beta", if (coordinateStream == ScanpathCoordinateStream.ARTICLE_SMOOTHED) MgazeNetReadingSmoother.BETA else JSONObject.NULL)
             .put("automatic_rules_enabled", config.automaticRulesEnabled).put("word_min_refixations", config.wordMinRefixations)
             .put("word_aid_type", config.wordAidType.name).put("definition_min_observed_ms", config.definitionMinObservedMs)
+            .put("dictionary_adapter_version", DictionaryDefinitionRepository.ONLINE_ROUTE_VERSION)
             .put("word_min_observed_ms", config.wordMinObservedMs).put("word_saturation_ms", config.wordSaturationMs)
             .put("line_min_observed_ms", config.lineMinObservedMs).put("line_saturation_ms", config.lineSaturationMs)
             .put("cycle_window_ms", config.cycleWindowMs)
             .put("aid_ttl_ms", config.aidTtlMs).put("cooldown_ms", config.cooldownMs)
             .put("max_evidence_age_ms", config.maxEvidenceAgeMs).put("min_adaptive_strength", config.minAdaptiveStrength)
+            .put("guide_selector_version", "TEXT_LINE_CONTEXT_V1")
+            .put("guide_ambiguity_fallback", "containing_paragraph_or_abstain")
+            .put("guide_color_rgb", if (config.configId == "DEFINITION_PROFILE_V4") "#808080" else "#F4D35E")
+            .put("guide_alpha_scale", 80)
+            .put("guide_layer", if (config.configId == "DEFINITION_PROFILE_V4") "text_background_span" else "canvas_overlay")
             .put("max_magnification_scale", config.maxMagnificationScale).put("focus_context_radius_lines", config.focusContextRadiusLines)
             .put("continuation_start_fraction", config.continuationStartFraction)
             .put("continuation_end_fraction", config.continuationEndFraction)
             .put("continuation_window_ms", config.continuationWindowMs)
-            .put("line_start_marker_rule", "A2_CONTINUATION_MISMATCH_V1")
-            .put("line_start_marker_form", LineStartMarkerAppearance.FORM_ID)
+            .put("line_start_aid_type", config.lineStartAidType.name)
+            .put("line_start_marker_rule", if (config.lineStartAidType == ReadingAidType.READING_BOOKMARK)
+                "A2_LAST_READ_LINE_BOOKMARK_V2" else "A2_CONTINUATION_MISMATCH_V1")
+            .put("line_start_marker_form", if (config.lineStartAidType == ReadingAidType.READING_BOOKMARK)
+                "LAST_READ_LINE_BOOKMARK_V1" else LineStartMarkerAppearance.FORM_ID)
+            .put("bookmark_outside_min_ms", scanpathConfig.minFixationMs)
+            .put("bookmark_outside_min_samples", scanpathConfig.minFixationSamples)
+            .put("bookmark_outside_max_gap_ms", scanpathConfig.maxSampleGapMs)
+            .put("bookmark_expiry_mode", "until_supported_reading_or_invalidation")
+            .put("bookmark_outside_geometry", "outside_visible_article_rect")
+            .put("bookmark_tracking_loss_ms", config.bookmarkTrackingLossMs)
+            .put("bookmark_tracking_loss_time_basis", "delivery_elapsed_time")
+            .put("bookmark_tracking_loss_interpretation", "unavailable_gaze_not_attention_diagnosis")
+            .put("focus_rule_version", "RETURN_PRESENCE_AND_LINE_VISITS_V4")
+            .put("focus_interruption_min_episodes", config.focusInterruptionMinEpisodes)
+            .put("focus_interruption_window_ms", config.focusInterruptionWindowMs)
+            .put("focus_loss_min_ms", config.focusLossMinMs)
+            .put("focus_recovery_fade_ms", config.focusRecoveryFadeMs)
+            .put("focus_recovery_hold_ms", config.focusRecoveryHoldMs)
+            .put("focus_tracking_grace_ms", config.focusTrackingGraceMs)
+            .put("focus_grace_time_basis", "last_supported_or_article_presence_delivery_elapsed_time")
+            .put("focus_interruption_count_unit", "qualified_loss_and_confirmed_article_presence_return")
+            .put("focus_return_presence_ms", config.focusReturnPresenceMs)
+            .put("focus_return_min_samples", config.focusReturnMinSamples)
+            .put("focus_return_max_gap_ms", scanpathConfig.maxSampleGapMs)
+            .put("focus_return_requires_line_or_word", false)
+            .put("focus_base_strength", ReadingAidPolicyConfig.FOCUS_STRENGTH_STEP)
+            .put("focus_strength_per_extra_episode", ReadingAidPolicyConfig.FOCUS_STRENGTH_STEP)
+            .put("focus_activation_strengths", org.json.JSONArray(listOf(ReadingAidPolicyConfig.FOCUS_STRENGTH_STEP, 1.0)))
+            .put("focus_strength_schedule", "two_activation_strengths_with_reading_time_hold_then_fade")
+            .put("focus_history_break_policy", "same_article_geometry_consultation_preserves_completed_summaries_clears_pending_and_anchors")
+            .put("focus_support_geometry", "visible_article_x_and_supported_line_y_without_word_assignment")
+            .put("focus_alternation_window_ms", config.focusAlternationWindowMs)
+            .put("focus_alternation_count_unit", "four_nonoverlapping_supported_line_visits_including_ongoing_fourth")
+            .put("focus_clear_window_max_viewport_fraction", JSONObject.NULL)
+            .put("focus_clear_window_lines", 2 * config.focusContextRadiusLines + 1)
+            .put("focus_clear_window_min_lines", if (config.configId == "DEFINITION_PROFILE_V4") 4 else JSONObject.NULL)
+            .put("focus_clear_window_mode", if (config.configId == "DEFINITION_PROFILE_V4")
+                "five_preferred_four_if_five_leaves_no_surroundings" else "legacy_centered_radius")
+            .put("focus_veil_horizontal_bounds", if (config.configId == "DEFINITION_PROFILE_V4")
+                "full_visible_overlay_width" else "visible_text_bounds")
+            .put("focus_form", if (config.configId == "DEFINITION_PROFILE_V4") "CONTEXT_FOCUS_REGION_V4" else "CONTEXT_FOCUS_REGION_V1")
+            .put("focus_mask_color", if (config.configId == "DEFINITION_PROFILE_V4") "per_action_focus_style" else "#000000")
+            .put("focus_appearance_selector_version", "FOCUS_MASK_STYLE_V3")
+            .put("focus_dark_onset_ms", ReadingFocusOnset.ONSET_MS)
+            .put("focus_dark_onset_curve", "smoothstep_presentation_only")
+            .put("focus_default_style", ReadingFocusStyle.FADE_TEXT.name)
+            .put("focus_mask_opacity_at_half_strength", if (preferences.focusStyle == ReadingFocusStyle.DARK_SURROUNDINGS)
+                ReadingFocusAppearance.BASE_DARK_OPACITY else ReadingFocusAppearance.BASE_BACKGROUND_OPACITY)
+            .put("focus_mask_opacity_at_full_strength", if (preferences.focusStyle == ReadingFocusStyle.DARK_SURROUNDINGS)
+                ReadingFocusAppearance.MAX_DARK_OPACITY else ReadingFocusAppearance.MAX_BACKGROUND_OPACITY)
+            .put("focus_mask_opacities_by_style", JSONObject()
+                .put(ReadingFocusStyle.FADE_TEXT.name, JSONObject()
+                    .put("half_strength", ReadingFocusAppearance.BASE_BACKGROUND_OPACITY)
+                    .put("full_strength", ReadingFocusAppearance.MAX_BACKGROUND_OPACITY))
+                .put(ReadingFocusStyle.DARK_SURROUNDINGS.name, JSONObject()
+                    .put("half_strength", ReadingFocusAppearance.BASE_DARK_OPACITY)
+                    .put("full_strength", ReadingFocusAppearance.MAX_DARK_OPACITY)))
+            .put("focus_motion_ms", ReadingFocusMotion.TRANSITION_MS)
+            .put("focus_scroll_presentation_grace_ms", ReadingFocusMotion.SCROLL_HOLD_MS)
+            .put("focus_scroll_position_basis", "viewport_hold_during_translation_not_new_gaze_evidence")
+            .put("focus_steady_reading_time_basis", "eligible_ordered_capture_deltas_within_max_sample_gap")
+            .put("focus_interpretation", "experimental_support_rule_not_distraction_probability")
             .put("line_start_marker_width_dp", LineStartMarkerAppearance.WIDTH_DP.toDouble())
             .put("line_start_marker_alpha", LineStartMarkerAppearance.ALPHA)
             .put("line_start_marker_strength_mode", "fixed")
@@ -262,7 +401,7 @@ class ArticleReadingAidRuntime(
             .put("assignment_agreement", scanpathConfig.assignmentAgreement)
         val digest = MessageDigest.getInstance("SHA-256").digest(values.toString().toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
-        return JSONObject().put("policy_version", 3).put("extractor_version", ScanpathEngine.EXTRACTOR_VERSION)
+        return JSONObject().put("policy_version", 14).put("extractor_version", ScanpathEngine.EXTRACTOR_VERSION)
             .put("classifier_version", ScanpathEngine.CLASSIFIER_VERSION)
             .put("provisional_evidence_version", ScanpathEngine.PROVISIONAL_EVIDENCE_VERSION)
             .put("input_source", inputSource.name)

@@ -12,6 +12,10 @@ import com.newsmead.gaze.aid.ReadingAidAction
 import com.newsmead.gaze.aid.ReadingAidAnchor
 import com.newsmead.gaze.aid.ReadingAidOverlayView
 import com.newsmead.gaze.aid.ReadingAidType
+import com.newsmead.gaze.aid.ReadingGuideResolver
+import com.newsmead.gaze.aid.ReadingGuideStyle
+import com.newsmead.gaze.aid.ReadingFocusAppearance
+import com.newsmead.gaze.aid.ReadingFocusStyle
 import com.newsmead.gaze.scanpath.ScanpathGeometry
 import com.newsmead.gaze.scanpath.ScanpathTextDirection
 import com.newsmead.gaze.scanpath.ScanpathTextGeometryReader
@@ -24,6 +28,8 @@ internal class ArticleReadingAidDemoPresenter(
     private val renderWord: (ReadingAidAction?) -> Unit,
     private val onStatus: (String) -> Unit,
     private val onStopped: (String) -> Unit,
+    private val guideStyle: ReadingGuideStyle = ReadingGuideStyle.LINE,
+    private val focusStyle: ReadingFocusStyle = ReadingFocusStyle.FADE_TEXT,
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private val reader = ScanpathTextGeometryReader()
@@ -60,7 +66,7 @@ internal class ArticleReadingAidDemoPresenter(
         val words = ScanpathWordMapper(originalBody, body).ranges
         val eligibleWords = words.filter { word ->
             val row = body.layout.getLineForOffset(word.startUtf16)
-            row in visibleLines && row + 1 in visibleLines &&
+            row in visibleLines &&
                 body.layout.getLineForOffset(word.endUtf16 - 1) == row
         }
         // Prefer a real article word with a bundled entry so the preview also works offline.
@@ -73,9 +79,11 @@ internal class ArticleReadingAidDemoPresenter(
             ?: error("No complete word is visible.")
         line = body.layout.getLineForOffset(word.startUtf16)
         wordStart = word.startUtf16; wordEnd = word.endUtf16
-        focusAvailable = visibleLines.size >= 5
         generation++
         geometry = frame.forEngine("ARTICLE_DEMO:$generation")
+        focusAvailable = ReadingFocusAppearance.resolve(geometry!!, geometry!!.visibleRectScreen,
+            line, 2, 1.0, limitContextHeight = false, keepLineCount = true,
+            occludeSurroundings = true).appearance != null
         stageIndex = 0; isPresenting = true
         body.viewTreeObserver.addOnPreDrawListener(geometryListener)
         render()
@@ -95,33 +103,50 @@ internal class ArticleReadingAidDemoPresenter(
     private fun render() {
         val stage = ReadingAidDemoPlan.stages[stageIndex]
         val at = SystemClock.elapsedRealtimeNanos() / 1e6
-        val type = stage.type?.takeUnless { it == ReadingAidType.FOCUS_REGION && !focusAvailable }
+        val selectedType = if (stage.type == ReadingAidType.CURRENT_LINE && guideStyle == ReadingGuideStyle.SENTENCE)
+            ReadingAidType.CURRENT_SENTENCE else stage.type
+        val guideRange = if (selectedType == ReadingAidType.CURRENT_SENTENCE)
+            ReadingGuideResolver().resolve(originalBody, geometry, line) else null
+        val type = selectedType?.takeUnless {
+            (it == ReadingAidType.FOCUS_REGION && !focusAvailable) ||
+                (it == ReadingAidType.CURRENT_SENTENCE && guideRange == null)
+        }
         val targetLine = if (type == ReadingAidType.NEXT_LINE_START) line + 1 else line
         activeAction = type?.let {
             ReadingAidAction("ARTICLE_DEMO:${++serial}", it, when (it) {
-                ReadingAidType.CURRENT_LINE -> "CURRENT_LINE_HIGHLIGHT_V1"
+                ReadingAidType.CURRENT_LINE -> "CURRENT_LINE_HIGHLIGHT_GRAY_V1"
+                ReadingAidType.CURRENT_SENTENCE -> "CURRENT_SENTENCE_CONTEXT_HIGHLIGHT_V1"
                 ReadingAidType.NEXT_LINE_START -> LineStartMarkerAppearance.FORM_ID
+                ReadingAidType.READING_BOOKMARK -> LineStartMarkerAppearance.BOOKMARK_FORM_ID
                 ReadingAidType.WORD_DEFINITION -> "CONTEXT_WORD_DEFINITION_V1"
-                ReadingAidType.FOCUS_REGION -> "CONTEXT_FOCUS_REGION_V1"
+                ReadingAidType.FOCUS_REGION -> "CONTEXT_FOCUS_REGION_V4"
                 ReadingAidType.WORD_MAGNIFIER -> "CONTEXT_WORD_MAGNIFIER_V1"
             }, "DEMO_PRESENTATION_ONLY", ReadingAidAnchor(generation, geometry!!.snapshotId,
-                targetLine, wordStart, wordEnd), stage.strength, null,
+                targetLine,
+                wordStart.takeIf { it >= 0 && (type == ReadingAidType.WORD_DEFINITION || type == ReadingAidType.WORD_MAGNIFIER) },
+                wordEnd.takeIf { it >= 0 && (type == ReadingAidType.WORD_DEFINITION || type == ReadingAidType.WORD_MAGNIFIER) }), stage.strength, null,
                 if (it == ReadingAidType.FOCUS_REGION) 2 else null,
                 at, at + ReadingAidDemoPlan.STAGE_MS, emptyList(), emptyList(), at, at, at,
-                "DEMO_BUTTON_OR_TIMER", emptyList(), "Manufactured presentation; no detector evidence", true, "DEMO_V1")
+                "DEMO_BUTTON_OR_TIMER", emptyList(), "Manufactured presentation; no detector evidence", true, "DEMO_GUIDE_V2",
+                guideRange = guideRange,
+                focusStyle = focusStyle.takeIf { type == ReadingAidType.FOCUS_REGION })
         }
         overlay.setActions(body, geometry, generation, listOfNotNull(activeAction))
         renderWord(activeAction?.takeIf { it.aidType == ReadingAidType.WORD_DEFINITION })
-        val label = body.context.getString(when (stage.type) {
+        val label = body.context.getString(when (selectedType) {
             null -> R.string.scanpath_demo_baseline
             ReadingAidType.CURRENT_LINE -> R.string.scanpath_demo_line
+            ReadingAidType.CURRENT_SENTENCE -> R.string.reading_aid_menu_sentence
             ReadingAidType.NEXT_LINE_START -> R.string.scanpath_demo_start
+            ReadingAidType.READING_BOOKMARK -> R.string.scanpath_demo_start
             ReadingAidType.WORD_DEFINITION -> R.string.article_aid_demo_definition
             ReadingAidType.WORD_MAGNIFIER -> R.string.scanpath_demo_word
             ReadingAidType.FOCUS_REGION -> R.string.scanpath_demo_focus
         })
         onStatus(if (stage.type == ReadingAidType.FOCUS_REGION && !focusAvailable)
-            body.context.getString(R.string.article_aid_demo_unavailable, "Focus needs five complete visible lines.")
+            body.context.getString(R.string.article_aid_demo_unavailable, "Focus needs a visible reading line and surrounding text.")
+        else if (selectedType == ReadingAidType.CURRENT_SENTENCE && guideRange == null)
+            body.context.getString(R.string.article_aid_demo_unavailable, "Sentence context is unavailable for this line.")
         else body.context.getString(R.string.article_aid_demo_status, stageIndex + 1, ReadingAidDemoPlan.stages.size, label))
         handler.postDelayed(advance, ReadingAidDemoPlan.STAGE_MS)
     }

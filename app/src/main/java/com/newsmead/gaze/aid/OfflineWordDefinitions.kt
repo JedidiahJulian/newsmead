@@ -26,6 +26,7 @@ internal object OfflineWordDefinitions {
         "were" to "verb: A past form of 'be', used with 'you' or with more than one person or thing.",
         "with" to "preposition: Together with, having, or using something.",
         "aid" to "noun: Help, or something used to make a task easier.",
+        "analyst" to "noun: A specialist who interprets facts or data to explain a subject and offer assessments or forecasts.",
         "article" to "noun: A piece of writing published in a newspaper, magazine, or website.",
         "budget" to "noun: A plan for how money will be received and spent.",
         "business" to "noun: Work involving the sale of goods or services; also an organization doing that work.",

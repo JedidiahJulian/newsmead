@@ -4,7 +4,12 @@ import android.content.Context
 import android.os.SystemClock
 import com.newsmead.BuildConfig
 import com.newsmead.gaze.aid.ReadingAidAction
+import com.newsmead.gaze.aid.guideRangeJson
 import com.newsmead.gaze.aid.continuationEvidenceJson
+import com.newsmead.gaze.aid.bookmarkEvidenceJson
+import com.newsmead.gaze.aid.focusEvidenceJson
+import com.newsmead.gaze.aid.focusEpisodeJson
+import com.newsmead.gaze.aid.ReadingAidFocusEpisode
 import com.newsmead.gaze.aid.ReadingAidDecision
 import com.newsmead.gaze.scanpath.*
 import org.json.JSONArray
@@ -60,9 +65,14 @@ open class ScanpathTraceWriter(context: Context, prefix: String, header: JSONObj
 
     fun sample(generation: Int, ordinal: Int, s: ScanpathSample) = append("sample", JSONObject()
         .put("generation", generation).put(ordinalKey, ordinal).put("capture_ms", finite(s.captureMs))
-        .put("delivery_ms", finite(s.deliveryMs)).put("x", finite(s.rawX)).put("y", finite(s.rawY))
+        .put("delivery_ms", finite(s.deliveryMs)).put("x", finite(s.processingX)).put("y", finite(s.processingY))
+        .put("raw_x", finite(s.rawX)).put("raw_y", finite(s.rawY))
+        .put("display_x", finite(s.displayX)).put("display_y", finite(s.displayY))
+        .put("coordinate_stream", s.coordinateStream.id)
         .put("nonfinite_fields", JSONArray(listOf("capture_ms" to s.captureMs, "delivery_ms" to s.deliveryMs,
-            "x" to s.rawX, "y" to s.rawY).filter { it.second != null && !it.second!!.isFinite() }.map { it.first }))
+            "x" to s.processingX, "y" to s.processingY, "raw_x" to s.rawX, "raw_y" to s.rawY,
+            "display_x" to s.displayX, "display_y" to s.displayY)
+            .filter { it.second != null && !it.second!!.isFinite() }.map { it.first }))
         .put("line", s.line ?: JSONObject.NULL).put("word_start_utf16", s.wordStartUtf16 ?: JSONObject.NULL)
         .put("word_end_utf16", s.wordEndUtf16 ?: JSONObject.NULL).put("geometry_snapshot_id", s.geometrySnapshotId ?: JSONObject.NULL)
         .put("eligible", s.eligible).put("exclusion", s.exclusion ?: JSONObject.NULL))
@@ -100,6 +110,8 @@ open class ScanpathTraceWriter(context: Context, prefix: String, header: JSONObj
         .put("event_ids", JSONArray(d.eventIds)).put("source_ids", JSONArray(d.sourceIds))
         .put("action", d.action?.let(::action) ?: JSONObject.NULL))
 
+    fun focusEpisode(episode: ReadingAidFocusEpisode) = append("focus_interruption_episode", episode.focusEpisodeJson())
+
     fun render(a: ReadingAidAction, drawn: Boolean, reason: String, atMs: Double) = append("render", JSONObject()
         .put("action_id", a.id).put("drawn_proxy", drawn).put("reason", reason).put("render_ms", atMs)
         .put("verified_visibility", false))
@@ -124,10 +136,14 @@ open class ScanpathTraceWriter(context: Context, prefix: String, header: JSONObj
         .put("line", a.anchor.line).put("word_start_utf16", a.anchor.wordStartUtf16 ?: JSONObject.NULL)
         .put("word_end_utf16", a.anchor.wordEndUtf16 ?: JSONObject.NULL).put("strength", a.strength)
         .put("magnification_scale", a.magnificationScale ?: JSONObject.NULL).put("context_radius_lines", a.contextRadiusLines ?: JSONObject.NULL)
+        .put("focus_style", a.focusStyle?.name ?: JSONObject.NULL)
         .put("onset_ms", a.onsetMs).put("expires_ms", a.expiresMs).put("first_capture_ms", a.firstCaptureMs)
         .put("last_capture_ms", a.lastCaptureMs).put("evidence_available_ms", a.evidenceAvailableMs)
         .put("event_ids", JSONArray(a.eventIds)).put("evidence_ids", JSONArray(a.evidenceIds))
         .put("continuation_evidence", a.continuationEvidenceJson())
+        .put("bookmark_evidence", a.bookmarkEvidenceJson())
+        .put("focus_evidence", a.focusEvidenceJson())
+        .put("guide_range", a.guideRangeJson())
         .put("rule_id", a.ruleId).put("source_ids", JSONArray(a.sourceIds)).put("experimental", a.experimental)
         .put("evidence_relationship", a.evidenceRelationship)
 

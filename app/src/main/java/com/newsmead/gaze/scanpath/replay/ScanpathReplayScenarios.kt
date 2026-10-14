@@ -6,7 +6,8 @@ import kotlin.math.min
 
 /** UTF-16 range and physical line index; bounds are in screen pixels. */
 data class ReplayWord(val range: WordRange, val line: Int, val bounds: ScanpathRect)
-data class ReplayPoint(val offsetMs: Double, val x: Double?, val y: Double?, val eligible: Boolean = true)
+data class ReplayPoint(val offsetMs: Double, val x: Double?, val y: Double?, val eligible: Boolean = true,
+    val sourceReason: String? = null)
 data class ReplayScenario(val id: String, val label: String, val description: String,
     val expectedPatternIds: Set<String>, val expectedAidTypes: Set<String>)
 
@@ -17,13 +18,29 @@ object ScanpathReplayScenarios {
             setOf("P01", "P02", "P03", "P07", "P10"), setOf("CURRENT_LINE")),
         ReplayScenario("return_sweep", "Observed return sweep", "Right end of one LTR line to the left start of the next visible line.",
             setOf("P05", "P09"), setOf("CURRENT_LINE")),
-        ReplayScenario("continuation_return", "Unexpected return", "Source line begins and ends at its right edge, then lands on an earlier line instead of the expected next line.",
+        ReplayScenario("continuation_return", "Unexpected return", "Beginning-to-end source progress, followed by an earlier-line landing.",
             setOf("P08"), setOf("CURRENT_LINE", "NEXT_LINE_START")),
-        ReplayScenario("continuation_skip", "Unexpected skip", "Source line begins and ends at its right edge, then lands beyond the expected next line.",
+        ReplayScenario("continuation_skip", "Unexpected skip", "Beginning-to-end source progress, followed by a nonadjacent later-line landing.",
             setOf("P06"), setOf("CURRENT_LINE", "NEXT_LINE_START")),
+        ReplayScenario("bookmark_return", "Bookmark after a backward jump", "Stable source line, earlier-line landing, then return to the saved source line.",
+            setOf("P08"), setOf("CURRENT_LINE", "READING_BOOKMARK")),
+        ReplayScenario("bookmark_skip", "Bookmark after a forward jump", "Stable source line, nonadjacent later-line landing, then return to the saved source line.",
+            setOf("P06"), setOf("CURRENT_LINE", "READING_BOOKMARK")),
+        ReplayScenario("bookmark_lookaway", "Bookmark after looking away", "Stable reading line, sustained coordinates outside the article, then return to the saved line.",
+            setOf("P13"), setOf("CURRENT_LINE", "READING_BOOKMARK")),
+        ReplayScenario("bookmark_tracking_loss", "Bookmark when tracking disappears", "Stable reading line, no-face callbacks with missing coordinates for 900 ms, then return to the saved line.",
+            setOf("P13"), setOf("CURRENT_LINE", "READING_BOOKMARK")),
+        ReplayScenario("repeated_interruptions", "Repeated tracking interruptions", "Four distinct no-face gaps with missing coordinates, each followed by supported reading on the saved line; Controls select focus.",
+            setOf("P13"), setOf("CURRENT_LINE", "READING_BOOKMARK", "FOCUS_REGION")),
+        ReplayScenario("brief_interruptions", "Brief tracking interruptions", "Three no-face gaps shorter than 500 ms, each followed by fresh supported reading on the same line.",
+            setOf("P13"), setOf("CURRENT_LINE")),
+        ReplayScenario("interruption_place_search", "Return while searching for place", "Three no-face gaps followed by moving coordinates across visible lines; article presence activates focus before a final stable hold.",
+            setOf("P13"), setOf("CURRENT_LINE", "FOCUS_REGION")),
+        ReplayScenario("line_alternation", "Supported line alternation", "Four supported A–B–A–B visits over more than two seconds, ending during the ongoing fourth visit; Controls select focus.",
+            setOf("P08"), setOf("CURRENT_LINE", "FOCUS_REGION")),
         ReplayScenario("word_refixations", "Word refixations and residence", "Separated positions inside one wide word, followed by ongoing observed residence.",
             setOf("P04", "P12"), setOf("CURRENT_LINE", "WORD_MAGNIFIER")),
-        ReplayScenario("line_cycle", "Line cycle and residence", "A–B–A–B lines, then word advances on B with recent residence and slow frontier progression; focus requires opt-in.",
+        ReplayScenario("line_cycle", "Line cycle and residence", "A–B–A–B lines, then word advances on B with recent residence and slow frontier progression; Controls select focus.",
             setOf("P08", "P10", "P11", "P12"), setOf("CURRENT_LINE", "FOCUS_REGION")),
         ReplayScenario("loss_recovery", "Tracking loss and recovery", "An established line, explicit missing observations, then fresh line evidence.",
             setOf("P13"), setOf("CURRENT_LINE"))
@@ -93,33 +110,132 @@ object ScanpathReplayScenarios {
                 if (visibleLines.size < 3) impossible("need three fully visible physical lines")
                 fun fullyVisible(line: Int): Boolean {
                     val row = geometry.lines.getOrNull(line) ?: return false
-                    return valid(ScanpathRect(geometry.textOriginX + row.left, geometry.textOriginY + row.top,
+                    return row.endUtf16 > row.startUtf16 &&
+                        valid(ScanpathRect(geometry.textOriginX + row.left, geometry.textOriginY + row.top,
                         geometry.textOriginX + row.right, geometry.textOriginY + row.bottom)) &&
                         geometry.textOriginX + row.left >= v.left && geometry.textOriginX + row.right <= v.right &&
                         geometry.textOriginY + row.top >= v.top && geometry.textOriginY + row.bottom <= v.bottom
                 }
-                val trio = visibleLines.windowed(3).firstOrNull {
+                val trios = visibleLines.windowed(3).filter {
                     it[1] == it[0] + 1 && it[2] == it[1] + 1 && it.all(::fullyVisible)
                 }
-                    ?: impossible("need three fully visible physical lines")
-                val (first, middle, last) = trio
-                fun edge(line: Int, start: Boolean): ReplayWord? = usable.filter { it.line == line }
-                    .firstOrNull { w ->
-                        val row = geometry.lines[w.line]
-                        val f = (center(w).first - geometry.textOriginX - row.left) / (row.right - row.left)
-                        if (start) f <= 0.25 else f >= 0.75
+                if (trios.isEmpty()) impossible("need three fully visible physical lines")
+                fun fraction(w: ReplayWord): Double {
+                    val row = geometry.lines[w.line]
+                    return (center(w).first - geometry.textOriginX - row.left) / (row.right - row.left)
+                }
+                // Only source progress needs quarter-line endpoints. Stable landing and
+                // expected-line arrival may use any real word center, including a one-word row.
+                val trace = trios.firstNotNullOfOrNull { (first, middle, last) ->
+                    val source = if (id == "continuation_return") middle else first
+                    val destination = if (id == "continuation_return") first else last
+                    val expected = if (id == "continuation_return") last else middle
+                    val sourceWords = usable.filter { it.line == source }
+                    sourceWords.filter { fraction(it) <= 0.25 }.firstNotNullOfOrNull { start ->
+                        sourceWords.filter { fraction(it) >= 0.75 && separated(center(start), center(it)) }
+                            .firstNotNullOfOrNull { end ->
+                                usable.filter { it.line == destination && separated(center(end), center(it)) }
+                                    .firstNotNullOfOrNull { landing ->
+                                        usable.firstOrNull { it.line == expected && separated(center(landing), center(it)) }
+                                            ?.let { arrival -> listOf(start, end, landing, arrival) }
+                                    }
+                            }
                     }
-                val sourceStart = edge(if (id == "continuation_return") middle else first, true)
-                    ?: impossible("source line needs a visible word center at <=25%")
-                val sourceEnd = edge(sourceStart.line, false)
-                    ?: impossible("source line needs a visible word center at >=75%")
-                val destinationLine = if (id == "continuation_return") first else last
-                val destination = edge(destinationLine, true)
-                    ?: impossible("destination line needs a visible word center at <=25%")
-                val expected = if (id == "continuation_return") last else middle
-                val expectedStart = edge(expected, true)
-                    ?: impossible("expected line needs a visible word center at <=25%")
-                hold(center(sourceStart)); hold(center(sourceEnd)); hold(center(destination)); hold(center(expectedStart), 100)
+                } ?: impossible("need contiguous visible lines with separated source word centers at <=25% and >=75% and supported landing/arrival centers")
+                trace.forEachIndexed { index, word -> hold(center(word), if (index == 3) 100 else 250) }
+            }
+            "bookmark_return", "bookmark_skip", "bookmark_lookaway", "bookmark_tracking_loss",
+            "repeated_interruptions", "brief_interruptions" -> {
+                if (geometry.textDirection != ScanpathTextDirection.LTR)
+                    impossible("reading bookmark requires verified LTR geometry")
+                val visibleRows = usable.groupBy { it.line }.filter { (line, _) ->
+                    val row = geometry.lines[line]
+                    geometry.textOriginX + row.left >= v.left && geometry.textOriginX + row.right <= v.right &&
+                        geometry.textOriginY + row.top >= v.top && geometry.textOriginY + row.bottom <= v.bottom
+                }.toSortedMap()
+                if (id == "repeated_interruptions" || id == "brief_interruptions") {
+                    val source = visibleRows.values.firstOrNull()?.firstOrNull()
+                        ?: impossible("need one fully visible source line")
+                    hold(center(source))
+                    val gaps = if (id == "repeated_interruptions") listOf(650, 750, 850, 650)
+                        else listOf(300, 300, 300)
+                    gaps.forEach { span ->
+                        for (dt in 0..span step 50)
+                            out.add(ReplayPoint(time + dt, null, null, false, "no_face"))
+                        time += span + 50
+                        hold(center(source), 350)
+                    }
+                } else if (id == "bookmark_tracking_loss") {
+                    val source = visibleRows.values.firstOrNull()?.firstOrNull()
+                        ?: impossible("need one fully visible source line")
+                    hold(center(source))
+                    for (dt in 0..900 step 50)
+                        out.add(ReplayPoint(time + dt, null, null, false, "no_face"))
+                    time += 950
+                    hold(center(source), 350)
+                } else if (id == "bookmark_lookaway") {
+                    val source = visibleRows.values.firstOrNull()?.firstOrNull()
+                        ?: impossible("need one fully visible source line")
+                    hold(center(source))
+                    val outside = (v.left + v.right) / 2 to v.top - max(2.0, geometry.lineHeightPx)
+                    for (dt in 0..300 step 50)
+                        out.add(ReplayPoint(time + dt, outside.first, outside.second, false))
+                    time += 350
+                    hold(center(source), 350)
+                } else {
+                    val pair = visibleRows.keys.firstNotNullOfOrNull { source ->
+                        val destination = visibleRows.keys.firstOrNull {
+                            if (id == "bookmark_return") it < source else it > source + 1
+                        }
+                        destination?.let { visibleRows.getValue(source).first() to visibleRows.getValue(it).first() }
+                    } ?: impossible("need fully visible source and non-normal destination lines")
+                    hold(center(pair.first)); hold(center(pair.second)); hold(center(pair.first), 350)
+                }
+            }
+            "interruption_place_search" -> {
+                val visibleRows = usable.groupBy { it.line }.filter { (line, _) ->
+                    val row = geometry.lines[line]
+                    geometry.textOriginX + row.left >= v.left && geometry.textOriginX + row.right <= v.right &&
+                        geometry.textOriginY + row.top >= v.top && geometry.textOriginY + row.bottom <= v.bottom
+                }.toSortedMap()
+                val path = visibleRows.values.firstNotNullOfOrNull { source ->
+                    val search = visibleRows.values.filter { it.first().line != source.first().line }
+                        .flatMap { it }.firstNotNullOfOrNull { a ->
+                            visibleRows.values.flatMap { it }.firstOrNull { b ->
+                                b.line != source.first().line && b.line != a.line && separated(center(a), center(b))
+                            }?.let { a to it }
+                        }
+                    search?.let { Triple(source.first(), it.first, it.second) }
+                } ?: impossible("need a fully visible source line and two separated physical search lines")
+                hold(center(path.first))
+                repeat(3) {
+                    for (dt in 0..650 step 50)
+                        out.add(ReplayPoint(time + dt, null, null, false, "no_face"))
+                    time += 700
+                    // Every adjacent point exceeds detector dispersion: no stable recovery prefix.
+                    for (dt in 0..300 step 50) {
+                        val p = center(if ((dt / 50) % 2 == 0) path.second else path.third)
+                        out.add(ReplayPoint(time + dt, p.first, p.second))
+                    }
+                    time += 350
+                }
+                hold(center(path.first), 350)
+            }
+            "line_alternation" -> {
+                val visible = usable.filter { w ->
+                    val row = geometry.lines[w.line]
+                    geometry.textOriginX + row.left >= v.left && geometry.textOriginX + row.right <= v.right &&
+                        geometry.textOriginY + row.top >= v.top && geometry.textOriginY + row.bottom <= v.bottom
+                }
+                val pair = visible.firstNotNullOfOrNull { a ->
+                    visible.firstOrNull { b -> b.line == a.line + 1 && separated(center(a), center(b)) }
+                        ?.let { a to it }
+                } ?: impossible("need adjacent fully visible physical lines with separated word centers")
+                hold(center(pair.first), 750)
+                hold(center(pair.second), 750)
+                hold(center(pair.first), 750)
+                // Establish the fourth visit without finalizing it or flushing the engine.
+                hold(center(pair.second), 200)
             }
             "word_refixations" -> {
                 val w = usable.filter { it.bounds.right - it.bounds.left >= 3 * threshold }
@@ -129,7 +245,7 @@ object ScanpathReplayScenarios {
                 val a = w.bounds.left + threshold * 0.1 to y
                 val b = (w.bounds.left + w.bounds.right) / 2 to y
                 val c = w.bounds.right - threshold * 0.1 to y
-                hold(a); hold(b); hold(c); hold(a, 650)
+                hold(a); hold(b); hold(c); hold(a, 1450)
             }
             "line_cycle" -> {
                 val pair = usable.firstNotNullOfOrNull { a ->
@@ -139,7 +255,9 @@ object ScanpathReplayScenarios {
                     }?.let { listOf(a, b, it) } }
                 } ?: impossible("need adjacent visible lines and two separated words on the second line")
                 val (a, b, c) = pair.map(::center)
-                hold(a); hold(b); hold(a); hold(b); hold(c, 1250); hold(b); hold(c, 100)
+                // Exceed the 1500 ms definition setting while the legacy comparison's
+                // finalized line residence remains inside its separate 2000 ms cycle window.
+                hold(a); hold(b); hold(a); hold(b); hold(c, 1750); hold(b); hold(c, 100)
             }
             "loss_recovery" -> {
                 val p = center(usable.firstOrNull() ?: impossible("need a visible word"))

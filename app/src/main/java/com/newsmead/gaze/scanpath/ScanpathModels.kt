@@ -16,13 +16,30 @@ data class ScanpathGeometry(
     val lines: List<ScanpathLine>,
     val textDirection: ScanpathTextDirection? = null
 )
+/** Versioned coordinate source; neither selection performs calibration or filtering. */
+enum class ScanpathCoordinateStream(val id: String) {
+    CALIBRATED_RAW("calibrated_raw_v1"),
+    ARTICLE_SMOOTHED("article_smoothed_v1")
+}
+
 data class ScanpathSample(
     val captureMs: Double?, val deliveryMs: Double?,
     val rawX: Double?, val rawY: Double?,
     val line: Int?, val wordStartUtf16: Int?, val wordEndUtf16: Int?,
     val geometrySnapshotId: String?,
-    val eligible: Boolean = true, val exclusion: String? = null
-)
+    val eligible: Boolean = true, val exclusion: String? = null,
+    val displayX: Double? = null, val displayY: Double? = null,
+    val coordinateStream: ScanpathCoordinateStream = ScanpathCoordinateStream.CALIBRATED_RAW
+) {
+    val processingX: Double? get() = when (coordinateStream) {
+        ScanpathCoordinateStream.CALIBRATED_RAW -> rawX
+        ScanpathCoordinateStream.ARTICLE_SMOOTHED -> displayX
+    }
+    val processingY: Double? get() = when (coordinateStream) {
+        ScanpathCoordinateStream.CALIBRATED_RAW -> rawY
+        ScanpathCoordinateStream.ARTICLE_SMOOTHED -> displayY
+    }
+}
 
 /** Optional values are study settings, never inferred difficulty thresholds. */
 data class ScanpathConfig(

@@ -33,7 +33,7 @@
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
             android:background="@null"
-            android:contentDescription="@string/article_gaze_test"
+            android:contentDescription="@string/article_options"
             android:padding="12dp"
             android:src="@drawable/ic_dots"
             app:layout_constraintBottom_toBottomOf="@+id/btnArticleBack"
@@ -534,6 +534,19 @@
                     app:iconSize="32dp"
                     app:iconTint="?secondaryButtonIconColor" />
             </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnArticleReadingAids"
+                style="@style/ButtonSmall_LowEmphasis"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="8dp"
+                android:minHeight="48dp"
+                android:minWidth="64dp"
+                android:text="@string/reading_aid_entry_short"
+                android:contentDescription="@string/reading_aids_option"
+                android:visibility="visible" />
 
         </com.google.android.material.bottomappbar.BottomAppBar>
 

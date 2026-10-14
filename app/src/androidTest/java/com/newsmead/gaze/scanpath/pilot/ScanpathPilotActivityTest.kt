@@ -12,6 +12,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.newsmead.R
 import com.newsmead.activities.*
 import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
+import com.newsmead.gaze.mgazenet.MgazeNetReadingSmoother
 import com.newsmead.gaze.scanpath.*
 import com.newsmead.gaze.scanpath.replay.*
 import org.json.JSONObject
@@ -26,9 +27,9 @@ class ScanpathPilotActivityTest {
     private fun now() = SystemClock.elapsedRealtimeNanos() / 1e6
     private fun observe(activity: ScanpathPilotActivity, x: Double, y: Double, id: Long) {
         val at = SystemClock.elapsedRealtimeNanos()
-        // Deliberately wrong provider/display coordinates: only raw coordinates may be scored.
+        // Deliberately different calibrated raw coordinates: selected provider output is scored.
         activity.deliverSyntheticObservation(MgazeNetGazeProvider.Observation(at / 1e6, at, id, "coordinate",
-            0f, 0f, x.toFloat(), y.toFloat()))
+            x.toFloat(), y.toFloat(), 0f, 0f))
     }
     private fun completeTargets(activity: ActivityScenario<ScanpathPilotActivity>, timeoutMs: Long = 10000): PilotRunResult {
         val deadline = SystemClock.elapsedRealtime() + timeoutMs
@@ -62,7 +63,7 @@ class ScanpathPilotActivityTest {
             assertEquals(before, folder.listFiles()?.count { it.name.startsWith("scanpath_pilot_") } ?: 0)
         }
     }
-    @Test fun allPromptedTasksScoreRawCoordinatesAndPreserveReferenceAndInputProvenance() {
+    @Test fun allPromptedTasksScoreSelectedCoordinatesAndPreserveReferenceAndInputProvenance() {
         ActivityScenario.launch(ScanpathPilotActivity::class.java).use { activity ->
             PilotTasks.tasks.forEach { descriptor ->
                 activity.onActivity { it.startSyntheticCheck(descriptor.id) }
@@ -79,6 +80,12 @@ class ScanpathPilotActivityTest {
                 assertEquals("synthetic_pilot_check", header.getString("input_kind"))
                 assertTrue(header.getJSONObject("configuration").isNull("calibration_sha256"))
                 assertFalse(header.getBoolean("smoothing")); assertFalse(header.getBoolean("human_reference"))
+                assertEquals(2, header.getInt("schema_version"))
+                assertFalse(header.getBoolean("raw_scoring")); assertTrue(header.getBoolean("processed_scoring"))
+                assertEquals("article_smoothed_v1", header.getString("coordinate_stream"))
+                val samples = records.filter { it.getString("kind") == "sample" }.map { it.getJSONObject("detail") }
+                assertTrue(samples.all { it.getDouble("raw_x") == 0.0 && it.getDouble("raw_y") == 0.0 })
+                assertTrue(samples.any { it.getDouble("x") != it.getDouble("raw_x") })
                 assertEquals(r.observations, records.count { it.getString("kind") == "raw_observation" })
                 assertEquals(r.observations, records.count { it.getString("kind") == "sample" })
                 assertEquals(r.engineAccepted, records.count { it.getString("kind") == "input_acceptance" && it.getJSONObject("detail").getBoolean("engine_accepted") })
@@ -90,6 +97,43 @@ class ScanpathPilotActivityTest {
             }
         }
     }
+    @Test fun actualOneEuroOutputMapsAndScoresWhileOriginalRawIsRetained() {
+        ActivityScenario.launch(ScanpathPilotActivity::class.java).use { activity ->
+            activity.onActivity { it.startSyntheticCheck("word_hold", PilotRunSettings(stepMs = 1500, settlingMs = 0.0)) }
+            Thread.sleep(300)
+            var filteredX = 0f
+            var filteredY = 0f
+            var rawX = 0f
+            var rawY = 0f
+            activity.onActivity { a ->
+                val target = checkNotNull(a.activeTarget)
+                val at = SystemClock.elapsedRealtimeNanos()
+                val captureMs = (at / 1e6).toLong()
+                val smoother = MgazeNetReadingSmoother()
+                smoother.filterX(((target.bounds.left + target.bounds.right) / 2).toFloat(), captureMs - 1)
+                smoother.filterY(((target.bounds.top + target.bounds.bottom) / 2).toFloat(), captureMs - 1)
+                rawX = (target.bounds.right + 20).toFloat()
+                rawY = (target.bounds.bottom + 20).toFloat()
+                filteredX = smoother.filterX(rawX, captureMs)
+                filteredY = smoother.filterY(rawY, captureMs)
+                assertTrue(filteredX.toDouble() in target.bounds.left..target.bounds.right)
+                assertTrue(filteredY.toDouble() in target.bounds.top..target.bounds.bottom)
+                a.deliverSyntheticObservation(MgazeNetGazeProvider.Observation(at / 1e6, at, 1, "coordinate",
+                    filteredX, filteredY, rawX, rawY))
+                a.stopRun("reader_stop")
+            }
+            val result = completeTargets(activity)
+            val scored = checkNotNull(result.score).targets.first()
+            assertEquals(1, scored.eligibleSamples); assertEquals(1, scored.exactWord)
+            val sample = result.trace.readLines().map(::JSONObject).first { it.getString("kind") == "sample" }.getJSONObject("detail")
+            assertEquals(rawX.toDouble(), sample.getDouble("raw_x"), 0.0)
+            assertEquals(rawY.toDouble(), sample.getDouble("raw_y"), 0.0)
+            assertEquals(filteredX.toDouble(), sample.getDouble("x"), 0.0)
+            assertEquals(filteredY.toDouble(), sample.getDouble("y"), 0.0)
+            assertEquals(sample.getDouble("x"), sample.getDouble("display_x"), 0.0)
+        }
+    }
+
     @Test fun subsequentSetupFailureCannotInheritSuccessfulRunCounters() {
         ActivityScenario.launch(ScanpathPilotActivity::class.java).use { activity ->
             activity.onActivity { it.startSyntheticCheck("word_hold") }
@@ -165,9 +209,9 @@ class ScanpathPilotActivityTest {
                 assertEquals(0, header.getInt("reserved_word_strip_dp"))
                 assertEquals("bundled_only", header.getString("dictionary_mode"))
                 val policy = header.getJSONObject("configuration").getJSONObject("settings")
-                assertEquals("DEFINITION_PROFILE_V2", policy.getString("config_id"))
-                assertEquals("PILOT_DEFINITION_${condition.name}_V2", policy.getString("condition_id"))
-                assertEquals("A2_CONTINUATION_MISMATCH_V1", policy.getString("line_start_marker_rule"))
+                assertEquals("DEFINITION_PROFILE_V4", policy.getString("config_id"))
+                assertEquals("SMOOTHED_PILOT_DEFINITION_${condition.name}_V9", policy.getString("condition_id"))
+                assertEquals("A2_LAST_READ_LINE_BOOKMARK_V2", policy.getString("line_start_marker_rule"))
                 assertNull(r.score)
             }
         }

@@ -1,12 +1,91 @@
 # Interactive scanpath replay screen
 
+**Current appearance selector — 2026-10-14:** policy14,
+`SMOOTHED_REPLAY_DEFINITION_V9`. Controls → Focus window appearance offers
+Fade surrounding text (default) and Dark surroundings. Run and demo honor it;
+actions record the selected style. Same detector/coordinate settings.18 shared
+JVM checks/builds pass; current native verification includes a retained complete
+trace with chosen focus but zero render receipts. The phone was dozing when
+checked afterward; this is a plausible explanation, not proof of the run's state.
+See the current focus contract for retry status.
+Owner-approved retry with display confirmed awake/unlocked passes both pending
+checks in10.728s. All7 distinct native checks pass across initial/retry runs.
+Evidence: `output/focus-style-menu-check-02/summary.json`; no camera/data clearing.
+
+**Previous display amendment — 2026-10-14:** policy13,
+`SMOOTHED_REPLAY_DEFINITION_V8`. Run/demo use V4's90%/98% background coverage
+and180ms motion, retaining5/4 clear rows and full width. Manual scrolling still
+terminates the synthetic run, preventing use of obsolete planned coordinates.
+Live article/Pilot may retain a separately logged scroll presentation; the
+preview still stops on layout changes.50 shared JVM and6 distinct camera-free
+native checks pass across initial/retry, including Replay focus rendering and
+manual-scroll termination. Both APKs build/install; no natural gaze was collected.
+[Current contract](repeated-interruption-focus-window.md).
+
+**Previous appearance amendment — 2026-10-14:** policy12,
+`SMOOTHED_REPLAY_DEFINITION_V7`. Run and article-style demo share V3's5 clear
+rows (4 if5 leaves no surrounding shade) and full-width veil. No shrinking to3.
+Scenario coordinates and activation rules are unchanged.14 focused JVM and4
+distinct native checks pass across initial/retry runs. The approved Replay retry
+waits for visible scenario selection and asserts both requested scenario IDs.
+[Current contract](repeated-interruption-focus-window.md).
+
+**Previous return/visit amendment — 2026-10-14:** policy11,
+`SMOOTHED_REPLAY_DEFINITION_V6`. New **Return while searching for place**
+(`interruption_place_search`) supplies three no-face gaps and continuously moving
+returns, without stable recovery candidates, then a final supported line.
+**Supported line alternation** (`line_alternation`) supplies ABAB over>2s, ending
+while B is still ongoing. Shared presence/visit rules and V2 focus match article
+and pilot. Camera/live dictionary remain off.219 JVM/5 camera-free A56 checks
+pass, including both new Replay cases. Both APKs are built and installed.
+[Current contract](repeated-interruption-focus-window.md).
+
+**Previous repeated-focus amendment — 2026-10-14:** policy **10**,
+`SMOOTHED_REPLAY_DEFINITION_V5`. **Repeated tracking interruptions** demonstrates distinct
+no-face gaps, third-return 50% focus and fourth-return 100%; **Brief tracking interruptions**
+demonstrates gaps that do not qualify. Focus retains its confirmed line during
+brief gaps within1s of actual support delivery, holds3s then fades7s of usable
+reading. Definition scenarios have longer supplied residence for the1500ms
+threshold. Camera and live dictionary stay off.
+`focus_interruption_episode` / `focus_evidence` retain timing and count provenance.
+[Exact rules and verification](repeated-interruption-focus-window.md).
+
+**Current bookmark correction — 2026-10-13:** policy **7** and
+`SMOOTHED_REPLAY_DEFINITION_V2`. **Bookmark when tracking disappears** simulates
+no-face callbacks with missing coordinates for 900 ms. It should mark the saved
+line after 500 ms and clear on supported return. Outside-coordinate and brief-loss
+examples remain. Gap evidence has delivery bounds and null departure capture
+bounds; timer confirmation cannot fabricate eye samples. [Contract](scanpath-reading-bookmark.md).
+
+**Current 2026-10-13 stream implementation:** new Runs select
+`SMOOTHED_REPLAY_DEFINITION_V1`, `DEFINITION_PROFILE_V4`, policy **6** and schema
+**2**. The cursor, mapping, detector and aid policy use the same prescribed
+post-filter point as `article_smoothed_v1`. No model/filter is run during replay;
+raw originals are null. Trace explicitly declares its synthetic input phase and
+filter omission. [Contract and verification](calibrated-smoothed-scanpath-path.md).
+
+**Historical 2026-10-13 guide/menu amendment:** Runs selected `DEFINITION_PROFILE_V4`,
+`REPLAY_DEFINITION_V4` / policy 5, layout `CONTEXT_GUIDE_MENU_GUTTER_V1`.
+**Controls** stops playback and opens shared aid switches and Line/Sentence context.
+The next Run and demo use that choice. Dictionary remains bundled-only and camera
+off. [Current guide contract and verification](reading-aid-menu-and-sentence-guide.md)
+supersede older descriptions below; V3 phone results are historical.
+
+**Historical 2026-10-13 bookmark amendment:** replay used `DEFINITION_PROFILE_V3`,
+`REPLAY_DEFINITION_V3` / policy 4. The demo marks its source line; new
+`bookmark_return`, `bookmark_skip` and `bookmark_lookaway` coordinate scripts
+exercise the [last recorded-line bookmark](scanpath-reading-bookmark.md).
+Older expected-successor traces retain V2 identities; current expectations map
+that legacy type to `READING_BOOKMARK`. Dictionary remains `bundled_only`; no
+camera or implicit HTTP request is added.
+
 **2026-10-04 line-start spacing:** the existing 16 dp body padding is now used
 as a gutter for the article's marker renderer, with a 4 dp text gap. Both synthetic
 Run and the presentation demo use it. Scripted coordinates remain derived from
 the actual rendered text, including padding; a clipped gutter withholds the cue.
 
-**2026-10-04 current article aids:** new Runs use `DEFINITION_PROFILE_V2` /
-`REPLAY_DEFINITION_V2`, the current line/focus views, gutter marker and near-source
+**Current article aids:** new Runs use `DEFINITION_PROFILE_V3` /
+`REPLAY_DEFINITION_V3`, the current line/focus views, gutter bookmark and near-source
 word definition card. The hidden legacy dock reserves **0 dp**; popup host is the
 viewport FrameLayout. Controls name word definitions. Replay uses the shared
 dictionary adapter with network disabled: the 75-entry original glossary returns
@@ -23,7 +102,7 @@ source review found no actionable P1/P2 issue; its two coverage limits were
 addressed with compiled regressions. Exact APK hashes and copied JVM XML:
 `output/evaluator-current-aids-check-01/summary.json`.
 
-**Continuation-marker amendment:** [exact current rule](scanpath-continuation-marker.md).
+**Historical V2 continuation-marker amendment:** [former rule](scanpath-continuation-marker.md).
 `continuation_return` and `continuation_skip` establish source beginning/end,
 land on another row, and cue the expected successor with fixed visibility. The
 ordinary `return_sweep` still verifies P05/P09 but expects no marker. New headers
@@ -43,7 +122,7 @@ matched raw reading conditions; its human measurement remains pending.
 2. Select a scenario and press **Run**. The hollow blue dot marks scripted input.
    The status shows detected patterns, chosen aid and current strength.
 3. Use **Controls** to enable individual aids, choose adaptive/fixed strength,
-   and set the strength cap. Focus is off by default; disable word definitions and enable focus for the
+   and set the strength cap. Focus is enabled by default as of 2026-10-08; disable word definitions for the
    cycle scenario to inspect that rule without a definition consultation. Settings apply to the next Run and last for
    this activity session.
 4. **Stop**, scrolling, changing the scenario/controls, or leaving the screen
@@ -67,7 +146,7 @@ returning to that article follows the article's existing restart behavior.
 
 Press **Demo cycle** to inspect the article's six stages without camera input or
 detector evidence: no aid, current-line highlight, destination-line-start marker,
-word definition, focus at 25%, then focus at 100%. Previous/Next step manually;
+word definition, focus at 50%, then focus at 100%. Previous/Next step manually;
 stages repeat every four seconds. The shared article presenter chooses a wholly
 visible actual source word, preferring a covered offline entry. It preserves
 UTF-16 offsets and the original body. Two complete visible lines suffice;
@@ -103,9 +182,9 @@ decision flowchart, primary findings, numeric origins and panel questions.
 
 ```text
 visible rendered word rectangles + current physical screen origin
-  -> scripted raw x/y and scheduled synthetic capture times
+  -> prescribed post-filter x/y and scheduled synthetic capture times
   -> actual callback delivery times
-  -> ArticleScanpathSession: raw word/line assignments and geometry guard
+  -> ArticleScanpathSession: selected-stream word/line assignments and geometry guard
   -> ScanpathEngine: provisional prefixes and finalized P01–P13 events
   -> ArticleReadingAidRuntime: current definition policy + reader controls
   -> ReadingAidOverlayView / ReadingAidDefinitionPopup
@@ -125,11 +204,15 @@ the detector may emit. Terminal closure also produces continuity boundaries.
 | Scenario | Scripted observation | Expected patterns | Expected aids when enabled |
 | --- | --- | --- | --- |
 | Forward/backward navigation | Four consecutive visible words on one line; advances, a jump, backward return and revisits. | P01, P02, P03, P07, P10 | Current-line highlight |
-| Observed return sweep | Right end of one verified LTR line to left start of the next; another word finalizes the landing. | P05, observed P09 | Current-line highlight; no continuation marker |
-| Continuation return | Source beginning → end → earlier row, then expected successor. | P08 and raw ordered line observations | Fixed marker on the expected successor, clears on arrival |
-| Continuation skip | Source beginning → end → a later row beyond the successor, then expected successor. | P06 and raw ordered line observations | Fixed marker on the expected successor, clears on arrival |
+| Observed return sweep | Right end of one verified LTR line to left start of the next; another word finalizes the landing. | P05, observed P09 | Current-line highlight; no bookmark |
+| Bookmark return (`bookmark_return`) | Supported source → earlier row → source. | P08 and raw ordered line observations | Fixed bookmark on source; clears on supported return |
+| Bookmark skip (`bookmark_skip`) | Supported source → later row beyond successor → source. | P06 and raw ordered line observations | Fixed bookmark on source; clears on supported return |
+| Bookmark look-away (`bookmark_lookaway`) | Supported source → usable coordinates above article → source. | Outside-visible-text exclusions / continuity break | Fixed source-line bookmark after confirmed departure; clears on supported return |
+| Repeated interruptions (`repeated_interruptions`) | Four distinct no-face gaps, each followed by supported reading; each gap exceeds 500 ms. | P13 continuity boundaries, plus separate focus episode records | Bookmark during each qualified gap; focus starts on the third supported return at 50%, then 100% on the fourth |
+| Brief interruptions (`brief_interruptions`) | Three no-face gaps below 500 ms, with supported returns. | P13 continuity boundaries | Current guide on supported reading; no interruption-triggered focus or missing-gaze bookmark |
+| Historical continuation scripts (`continuation_return`, `continuation_skip`) | Source beginning → end → different row → successor. | P08/P06 and raw ordered line observations | V2 retains predicted-successor cue; the current V3 profile uses the source-line bookmark |
 | Word refixations/residence | Separated positions inside one sufficiently wide word, then ongoing residence. | P04, P13 with definitions enabled; P04, P12 in detector-only run | Current-line highlight and word definition |
-| Line cycle/residence | Adjacent A–B–A–B lines, then distinct word positions on B with enough residence and configured slow frontier progression. | P08, P10, P11, P13 with definitions enabled; P12 in detector-only run | Current-line highlight and definition; disable definitions and enable focus to inspect the focus rule |
+| Line cycle/residence | Adjacent A–B–A–B lines, followed by word residence. | P08, P10, P11, P13 with definitions enabled; P12 in detector-only run | Current guide, independent P11 focus before consultation, then definition priority; disable definitions to inspect continued focus |
 | Loss/recovery | Established word/line, eight explicit missing observations, then fresh evidence. | P13 | Clear on loss; current-line highlight after reacquisition |
 
 The live/offline engine still implements P01–P13. This initial screen does not
