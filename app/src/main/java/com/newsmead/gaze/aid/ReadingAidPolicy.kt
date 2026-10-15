@@ -659,12 +659,15 @@ class ReadingAidPolicy(
                 events, rule, sources))
             return
         }
-        if (type == ReadingAidType.FOCUS_REGION && (active.containsKey(ReadingAidType.WORD_MAGNIFIER) || active.containsKey(ReadingAidType.WORD_DEFINITION))) {
+        val intrusiveWordActive = active.containsKey(ReadingAidType.WORD_MAGNIFIER) ||
+            (!currentGuideProfile() && active.containsKey(ReadingAidType.WORD_DEFINITION))
+        if (type == ReadingAidType.FOCUS_REGION && intrusiveWordActive) {
             out.add(ReadingAidDecision(ReadingAidDecisionStatus.SUPPRESSED, null,
                 "word_magnifier_priority", c.nowMs, events, rule, sources))
             return
         }
-        if (type in listOf(ReadingAidType.WORD_MAGNIFIER, ReadingAidType.WORD_DEFINITION) && active.containsKey(ReadingAidType.FOCUS_REGION))
+        if ((type == ReadingAidType.WORD_MAGNIFIER ||
+                (type == ReadingAidType.WORD_DEFINITION && !currentGuideProfile())) && active.containsKey(ReadingAidType.FOCUS_REGION))
             clear(ReadingAidType.FOCUS_REGION, c.nowMs, "word_magnifier_priority", out)
         val strength = if (type in listOf(ReadingAidType.NEXT_LINE_START, ReadingAidType.READING_BOOKMARK)) 1.0
             else if (focusEvidence != null) min(preferences.maxStrength,
@@ -689,7 +692,7 @@ class ReadingAidPolicy(
                 ReadingAidType.NEXT_LINE_START -> "CONTINUATION_LINE_START_CUE_V1"
                 ReadingAidType.READING_BOOKMARK -> "LAST_READ_LINE_BOOKMARK_V1"
                 ReadingAidType.WORD_MAGNIFIER -> "CONTEXT_WORD_MAGNIFIER_V1"
-                ReadingAidType.WORD_DEFINITION -> "CONTEXT_WORD_DEFINITION_V1"
+                ReadingAidType.WORD_DEFINITION -> if (currentGuideProfile()) "CONTEXT_WORD_LOOKUP_OFFER_V1" else "CONTEXT_WORD_DEFINITION_V1"
                 ReadingAidType.FOCUS_REGION -> if (currentGuideProfile()) "CONTEXT_FOCUS_REGION_V4" else "CONTEXT_FOCUS_REGION_V1"
             }, config.conditionId, anchor, strength,
             if (type == ReadingAidType.WORD_MAGNIFIER) 1.0 +

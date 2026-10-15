@@ -1,5 +1,95 @@
 # Article demo and word-definition aid
 
+**2026-10-15 closer word attachment (verified software checkpoint):** owner finds the icon-word
+gap excessive. `WORD_LOOKUP_INFO_BUBBLE_INK_CORNER_V4` positions the actual vector
+tip3dp above the current word's painted letter top, measured from the Layout
+baseline and word ink bounds. It no longer adds distance from line-top/font
+leading. Right-edge alignment/mirroring and all trigger/timeout rules remain.
+The transparent48dp target may extend into unused leading, but must end above the
+source letters and remain wholly inside the viewport. Empty word ink withholds.
+No text reflow or font/spacing changes. The supported article path uses plain
+English strings; this is an appearance setting, not a study-derived threshold.
+Native checks include rendered-pixel spacing with the actualArial22dp/1.6 article
+settings, normal/mirrored positions and consultation/expiry regressions.
+Build/device checks are complete: both APKs and data-preserving A56 installs
+pass, as do all15 focused native checks in9.384s. Source review found no actionable
+issue. Normal and article-spacing previews visually inspected; actual pixel checks
+verify spacing independently of the word-bound calculation. No camera/calibration
+changes, staging or commit. Evidence: `output/lookup-bubble-gap-check-01/summary.json`.
+Earlier spacing descriptions below are historical. These checks establish software
+behavior, not human benefit or natural gaze accuracy.
+
+
+**2026-10-15 blue information-bubble revision (verified software checkpoint):** after reviewing
+the bubble placement, owner supplies a blue speech bubble with a white lowercase
+information symbol. The28dp native vector now follows that reference: blue fill,
+dark-blue outline, upright white “i”, transparent exterior and no enclosing tile.
+It retains the48dp touch area and word-upper-right tail alignment; at the right
+edge, only the bubble outline mirrors while the “i” stays upright. The earlier
+monochrome search-bubble build and all15 focused native checks passed, but that
+appearance is superseded. Blue app/test builds and3 selected A56 native checks
+pass in4.657s. Visual inspection found a missing dark border; filled outer
+silhouette plus inset gradient corrects it. Final app build/install and both native
+placement/render checks pass in0.169s. Normal/mirrored synthetic widget previews
+are visually inspected; no screen/camera capture or private article data.
+Evidence: `output/lookup-bubble-corner-check-03/summary.json` and its PNG previews.
+Phone data/calibration stay preserved; no staging/commit.
+Style ID `WORD_LOOKUP_INFO_BUBBLE_CORNER_V3` identifies the revision. The1,500ms
+trigger,5s lifetime and tap-only dictionary/consultation rules stay the same.
+Shared Article/Pilot/Replay/demo uses this appearance. No source text reflow or
+gaze/calibration changes. These dimensions are UI choices, not paper doses.
+
+**Current 2026-10-15 lookup offer (verified software checkpoint):** long word
+residence no longer automatically opens the panel. The existing1,500ms supported
+observed-residence rule first offers an outlined speech-bubble/search icon above
+the source line:20dp glyph,48dp touch target,4dp gap. It stays on the original word
+for5 seconds after its first successful layout receipt; refreshing actions,
+null actions and movement to another word do not renew or shuffle it. A tap
+revalidates text/geometry/visibility, removes the icon, and requests the existing
+panel and dictionary route. The panel highlights the source word as before.
+No dictionary lookup, source-word highlight or whole-reading consultation begins
+for the icon alone. Looking at the icon is excluded as `reader_controls` while
+provider/raw coordinates remain preserved. Focus demand may coexist with an offer;
+actual panel consultation still pauses article interpretation.
+
+An ignored icon expires without a query. Same-word offers remain suppressed until
+a valid different source word is observed or an operational boundary clears the
+state. Scroll/reflow/text/menu/lifecycle changes clear the icon and its timer.
+Placement uses the nearest visible article scroll viewport, including headline
+headroom; with no room above, it withholds rather than appearing below or covering
+the source word. Above-icon placement can overlap earlier article text, so its
+actual control bounds are excluded from article reading. No layout/reflow occurs.
+
+Article, Pilot, Replay and the article demo share this interaction. Demo stages
+still advance every4s and clear their offer on stage change; native offer lifetime
+is5s in normal reading. Current form `CONTEXT_WORD_LOOKUP_OFFER_V1`, policy15,
+smoothed conditionV10; the `WORD_DEFINITION` enum identifies the family, while
+render `presentation_phase` distinguishes `lookup_offer` and `definition_panel`.
+Offer shown/accepted/expired/cleared records retain original action/evidence IDs;
+acceptance time is user interaction time and never rewrites detector evidence.
+Replay family draw counts can include an offer; use phase records to count panels.
+
+The5s lifetime and glyph/target sizes are interaction choices requested for this
+prototype, not study-established difficulty or distraction thresholds. The1,500ms
+rule remains a trial threshold and is not font-normalized. Human benefit, visibility,
+and gaze targeting require later evaluation. Older automatic-panel descriptions
+below are historical.
+
+Verification:199 focused JVM tests and both APK builds pass. Independent source
+review's offer-phase labeling finding is fixed; follow-up has no actionable
+findings. Owner-approved data-preserving A56 app/test installs succeed.20/21
+camera-free native checks initially pass in21.148s; the remaining detached-view
+hit-area test used untransformed window coordinates. Reviewed test-only correction
+retains48dp and inside/outside edge assertions. Approved test APK rebuild/install
+and one-check retry pass in0.030s. All21 distinct native cases now pass across the
+two invocations. Cases cover no lookup before tap, fixed deadline/no renewal,
+stale callbacks/clicks, suppression/rearming, geometry changes, above-only placement
+including scroll headline headroom, consultation/raw exclusion, ignored offers,
+Replay and actual-source demo anchors. They do not validate natural gaze targeting
+or human reading benefit. Evidence: `output/definition-lookup-offer-check-04/summary.json`;
+03 retains the full native run and199 JVM XML results,01/02 earlier failed gates.
+No camera, calibration changes, staging or commit.
+
 **Current 2026-10-14 stricter trigger:** owner considers the
 definition card more interruptive and requests a longer gaze requirement. The
 default increases from800ms to **1,500 ms of supported observed residence on the

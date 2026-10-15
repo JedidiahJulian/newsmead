@@ -37,7 +37,8 @@
     <FrameLayout android:id="@+id/replayViewport" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
         <androidx.core.widget.NestedScrollView android:id="@+id/replayScroll" android:layout_width="match_parent" android:layout_height="match_parent">
             <TextView android:id="@+id/replayBody" android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:padding="16dp" android:fontFamily="@font/arial_regular" android:textColor="?primaryTextColor" android:lineSpacingExtra="2dp" />
+                android:paddingHorizontal="16dp" android:paddingTop="56dp" android:paddingBottom="16dp"
+                android:fontFamily="@font/arial_regular" android:textColor="?primaryTextColor" android:lineSpacingExtra="2dp" />
         </androidx.core.widget.NestedScrollView>
     </FrameLayout>
 </LinearLayout>

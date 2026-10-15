@@ -12,6 +12,73 @@ protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
 
+**2026-10-15 closer lookup bubble (verified software checkpoint):** owner screenshot shows the
+V3 bubble too far above the source word. V4 anchors its vector tail to the word's
+painted top (layout baseline plus current word ink bounds), with3dp gap, replacing
+line-top/font-leading placement. Blue28dp glyph,48dp hit target, right-corner
+alignment/mirroring,1,500ms rule and5s lifetime remain. Target must fit viewport
+and end above painted source letters; it may occupy unused font leading. No text,
+font size/spacing, detector or calibration changes. Plain-string English article
+text uses Arial22dp and1.6 spacing; native regression uses those settings on a
+third-line target plus actual rendered letter pixels. Source review has no
+actionable findings; both APK builds and data-preserving A56 installs pass. All15
+focused native checks pass in9.384s (13 offer fixtures plus accepted/ignored Replay),
+including 3dp painted-letter gap, normal/mirrored alignment, no hit-area overlap,
+geometry cleanup, expiry and tap-only consultation. Normal and article-spacing
+synthetic previews visually inspected. Evidence:
+`output/lookup-bubble-gap-check-01/summary.json`. No camera, calibration changes,
+staging or commit. UI spacing choice; no human benefit/accuracy validation.
+[Contract](article-definition-aid.md).
+
+
+**2026-10-15 blue information bubble (verified software checkpoint):** owner rejects the box,
+asks for a more noticeable bubble and a tail aimed at the word's upper-right, then
+supplies a blue speech bubble with white lowercase “i”. Native28dp vector uses
+blue fill/dark-blue outline/white “i”, transparent exterior, no outer tile/shadow.
+The48dp target remains wholly above the source line; bottom-aligned glyph leaves
+its tail about6dp above the word. Tail aligns to wordright and mirrors near the
+right edge; “i” stays upright. Missing room withholds rather than shifting tail.
+Runtime style `WORD_LOOKUP_INFO_BUBBLE_CORNER_V3`; policy15/conditionV10/trigger/
+timer unchanged. Prior monochrome placement build and15 camera-free A56 checks
+passed; that appearance is superseded. Layout delta review found no actionable
+findings. Blue app/test builds and3 selected native checks pass in4.657s.
+Synthetic bitmap inspection exposed missing native stroke; filled outer silhouette
+with inset blue gradient corrects the border. Final app rebuild/install and both
+normal/mirrored native checks pass in0.169s; previews visually inspected. Existing
+test APK reused (only app vector assets changed). A56 data/calibration preserved.
+Evidence: `output/lookup-bubble-corner-check-03/summary.json`; prior15-case layout
+gate in01, initial blue3-case gate/previews in02.
+No camera, calibration changes, staging or commit. [Contract](article-definition-aid.md).
+
+**2026-10-15 opt-in word lookup (verified software checkpoint):** owner asks
+for an above-word icon before the distracting automatic card, suggesting an outlined
+speech-bubble/search glyph. Existing1,500ms word-residence rule now creates an
+above-only20dp icon/48dp target with5s fixed lifetime, tap confirmation and no
+query/consultation until accepted. Ignore expires; same-word repeats suppressed
+until observed departure to another valid word. Geometry/control/lifecycle clears
+state. Icon hit bounds exclude article interpretation; rest of reading continues.
+Offer may coexist with focus; actual panel consultation keeps prior gating.
+Article/Pilot/Replay/demo use `CONTEXT_WORD_LOOKUP_OFFER_V1`, policy15/conditionV10;
+trace phase/event records distinguish offer and panel, preserve evidence times.
+Replay reserves56dp above its body for fixture icons; real article layout unchanged.
+Five seconds is trial interaction tuning, not a published validated dose.
+
+Source review's pre-tap phase labeling finding and first build's ancestor type
+ambiguity are fixed. A new JVM assertion wrongly forbade normal focus refresh;
+reviewed correction preserves demand/strength/episode assertions. Approved retry
+passes199/199 JVM tests and both APK builds. Approved data-preserving A56 installs
+succeed;20/21 camera-free native checks pass in21.148s, including expiry, tap-only
+query, headline headroom, invalidation, Replay consultation and demo. Remaining
+hit-area fixture used untransformed detached getLocationOnScreen coordinates;
+reviewed test-only correction now uses visible bounds, retains48dp/edge assertions.
+App unchanged. Owner-approved test APK rebuild/install and corrected native
+check pass in0.030s. All21 distinct native cases pass across the two invocations;
+199 JVM checks and both APK builds pass. Attached Replay rendering and consultation
+are covered; natural gaze accuracy and human benefit remain unverified.
+Evidence: `output/definition-lookup-offer-check-04/summary.json`,03 build/native logs;
+failed software gates retained in01/02 and failed native fixture in03. No camera, calibration changes, staging or
+commit. [Contract](article-definition-aid.md).
+
 **2026-10-15 softer dark focus appearance (verified software checkpoint):** owner finds
 Dark surroundings too strong, clarifying that the issue is abrupt visual change,
 not outside-text readability. Reduce only DARK shading from90%/98% to40%/60%

@@ -34,6 +34,25 @@ class FocusActivationIntegrationTest {
         assertEquals(original.focusEvidence, f.focus()!!.focusEvidence)
     }
 
+    @Test fun lookupOfferDoesNotSuppressOrConsumeExistingFocusDemand() {
+        val f = Fixture()
+        f.support(100.0)
+        f.episode(200.0); f.episode(1000.0); f.episode(1800.0)
+        f.policy.updatePreferences(f.policy.preferences.copy(wordDefinition = true), f.context(2400.0))
+        val before = f.focus()!!
+        val c = f.context(2500.0, line = 0).copy(targetWordStartUtf16 = 0, targetWordEndUtf16 = 5)
+        val candidate = ScanpathCandidateEvidence("definition-prefix", 1, 1000.0, 2500.0,
+            1500.0, 31, 0, 5, 0, 1.0, 1.0, f.geometry.snapshotId, 2500.0, "trigger_observation_delivery")
+        val decisions = f.policy.onObservation(candidate, c)
+        assertTrue(decisions.any { it.status == ReadingAidDecisionStatus.CHOSEN &&
+            it.action?.aidType == ReadingAidType.WORD_DEFINITION && it.action?.aidFormId == "CONTEXT_WORD_LOOKUP_OFFER_V1" })
+        val after = f.focus()!!
+        assertEquals(before.strength, after.strength, 0.0)
+        assertEquals(before.focusEvidence!!.episodes, after.focusEvidence!!.episodes)
+        // Fresh line support may replace the focus action while preserving its demand.
+        assertFalse(decisions.any { it.reason == "word_magnifier_priority" })
+    }
+
     private class Fixture {
         var geometry = ScanpathGeometry("g1", 10.0, 100.0,
             ScanpathRect(10.0, 100.0, 210.0, 180.0), 20.0,

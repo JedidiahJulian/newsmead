@@ -18,7 +18,7 @@ class ReadingAidDefinitionPolicyTest {
         for (duration in listOf(799.0, 800.0, 1499.0))
             assertNull(definition(p.onObservation(candidate(duration), context())))
         val action = definition(p.onObservation(candidate(1500.0), context()))!!
-        assertEquals("CONTEXT_WORD_DEFINITION_V1", action.aidFormId)
+        assertEquals("CONTEXT_WORD_LOOKUP_OFFER_V1", action.aidFormId)
         assertEquals("A5_WORD_RESIDENCE_DEFINITION_V1", action.ruleId)
         assertTrue(action.eventIds.isEmpty())
         assertEquals(listOf("prefix"), action.evidenceIds)

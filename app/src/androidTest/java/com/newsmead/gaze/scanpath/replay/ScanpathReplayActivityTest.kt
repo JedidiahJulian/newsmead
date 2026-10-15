@@ -94,7 +94,7 @@ class ScanpathReplayActivityTest {
         instrumentation.waitForIdleSync()
         activity.onActivity { it.startReplay() }
     }
-    private fun await(activity: ActivityScenario<ScanpathReplayActivity>, capturePreview: Boolean = false): ScanpathReplayResult {
+    private fun await(activity: ActivityScenario<ScanpathReplayActivity>, capturePreview: Boolean = false, tapOffer: Boolean = false): ScanpathReplayResult {
         val deadline = SystemClock.elapsedRealtime() + 10000
         var result: ScanpathReplayResult? = null
         var bitmap: Bitmap? = null
@@ -102,6 +102,7 @@ class ScanpathReplayActivityTest {
         while (result == null && SystemClock.elapsedRealtime() < deadline) {
             activity.onActivity { a ->
                 result = a.lastResult
+                if (tapOffer) a.findViewById<android.view.View>(R.id.readingAidLookupOffer)?.performClick()
                 val root = a.findViewById<android.view.View>(R.id.replayRoot)
                 val body = a.findViewById<TextView>(R.id.replayBody)
                 diagnostic = "replaying=${a.isReplaying} termination=${result?.termination} samples=${result?.samples} trace=${result?.trace?.name}\n" +
@@ -154,10 +155,10 @@ class ScanpathReplayActivityTest {
         }
     }
 
-    @Test fun currentDefinitionProfileDrawsPopupAndRetainsExcludedRawCallbacks() {
+    @Test fun acceptedDefinitionOfferDrawsPopupAndRetainsExcludedRawCallbacks() {
         ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
             select(activity, "word_refixations", ReaderAidPreferences())
-            val result = await(activity, capturePreview = true)
+            val result = await(activity, capturePreview = true, tapOffer = true)
             assertEquals("completed", result.termination)
             assertNull(result.traceFailure)
             assertTrue(result.patterns.containsAll(setOf("P04", "P13")))
@@ -167,12 +168,16 @@ class ScanpathReplayActivityTest {
             val records = result.trace!!.readLines().map(::JSONObject)
             val config = records.first().getJSONObject("detail").getJSONObject("configuration")
             assertEquals("DEFINITION_PROFILE_V4", config.getJSONObject("settings").getString("config_id"))
-            assertEquals("SMOOTHED_REPLAY_DEFINITION_V9", config.getJSONObject("settings").getString("condition_id"))
-            assertEquals(14, config.getInt("policy_version"))
+            assertEquals("SMOOTHED_REPLAY_DEFINITION_V10", config.getJSONObject("settings").getString("condition_id"))
+            assertEquals(15, config.getInt("policy_version"))
             assertEquals(1500.0, config.getJSONObject("settings").getDouble("definition_min_observed_ms"), 0.0)
             assertEquals("fixed", config.getJSONObject("settings").getString("line_start_marker_strength_mode"))
             assertEquals("bundled_only", config.getString("dictionary_mode"))
             assertEquals(0, config.getInt("reserved_word_strip_dp"))
+            assertTrue(records.any { it.optString("kind") == "definition_offer" &&
+                it.getJSONObject("detail").optString("event") == "accepted" })
+            assertTrue(records.any { it.optString("kind") == "render" &&
+                it.getJSONObject("detail").optString("presentation_phase") == "definition_panel" })
             val boundaries = records.filter { it.getString("kind") == "definition_consultation" }
                 .map { it.getJSONObject("detail") }
             assertEquals("one open and one close; no consultation retarget", 2, boundaries.size)
@@ -206,7 +211,7 @@ class ScanpathReplayActivityTest {
     @Test fun definitionEnabledLineCycleKeepsCurrentProfileOutcomesAndConsultationExclusions() {
         ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
             select(activity, "line_cycle", ReaderAidPreferences(wordDefinition = true, focusRegion = true))
-            val result = await(activity)
+            val result = await(activity, tapOffer = true)
             assertEquals("completed", result.termination)
             assertNull(result.traceFailure)
             // The independent line-cycle route may precede consultation; consultation suspends new choices.
@@ -217,7 +222,11 @@ class ScanpathReplayActivityTest {
             val records = result.trace!!.readLines().map(::JSONObject)
             val settings = records.first().getJSONObject("detail").getJSONObject("configuration").getJSONObject("settings")
             assertEquals("DEFINITION_PROFILE_V4", settings.getString("config_id"))
-            assertEquals("SMOOTHED_REPLAY_DEFINITION_V9", settings.getString("condition_id"))
+            assertEquals("SMOOTHED_REPLAY_DEFINITION_V10", settings.getString("condition_id"))
+            assertTrue(records.any { it.optString("kind") == "definition_offer" &&
+                it.getJSONObject("detail").optString("event") == "accepted" })
+            assertTrue(records.any { it.optString("kind") == "render" &&
+                it.getJSONObject("detail").optString("presentation_phase") == "definition_panel" })
             val boundaries = records.filter { it.getString("kind") == "definition_consultation" }
                 .map { it.getJSONObject("detail") }
             assertEquals("one fixed-source consultation", 2, boundaries.size)
@@ -246,13 +255,38 @@ class ScanpathReplayActivityTest {
         }
     }
 
+    @Test fun ignoredDefinitionOfferDoesNotStartConsultationOrSuspendReading() {
+        ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
+            select(activity, "word_refixations", ReaderAidPreferences())
+            val result = await(activity)
+            assertEquals("completed", result.termination)
+            val records = result.trace!!.readLines().map(::JSONObject)
+            val offers = records.filter { it.optString("kind") == "definition_offer" }
+                .map { it.getJSONObject("detail") }
+            assertTrue(offers.any { it.getString("event") == "shown" })
+            assertFalse(offers.any { it.getBoolean("user_requested_panel") })
+            assertFalse(records.any { it.optString("kind") == "definition_consultation" })
+            val renders = records.filter { it.optString("kind") == "render" }
+                .map { it.getJSONObject("detail") }
+            assertTrue(renders.any { it.optString("presentation_phase") == "lookup_offer" && it.getBoolean("drawn_proxy") })
+            assertFalse(renders.any { it.optString("presentation_phase") == "definition_panel" })
+            val samples = records.filter { it.optString("kind") == "sample" }.map { it.getJSONObject("detail") }
+            assertFalse(samples.any { it.optString("exclusion").startsWith("definition_") })
+            assertTrue(result.drawnAids.contains("WORD_DEFINITION"))
+            assertCausalTrace(records)
+        }
+    }
+
     @Test fun changingControlsClosesConsultationAndFreshRunDoesNotReusePopup() {
         ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
             select(activity, "word_refixations", ReaderAidPreferences())
             val deadline = SystemClock.elapsedRealtime() + 4000
             var showing = false
             while (!showing && SystemClock.elapsedRealtime() < deadline) {
-                activity.onActivity { showing = it.findViewById<android.view.View>(R.id.definitionWord) != null }
+                activity.onActivity {
+                    it.findViewById<android.view.View>(R.id.readingAidLookupOffer)?.performClick()
+                    showing = it.findViewById<android.view.View>(R.id.definitionWord) != null
+                }
                 if (!showing) Thread.sleep(25)
             }
             assertTrue("Current replay did not open its definition", showing)
@@ -302,9 +336,12 @@ class ScanpathReplayActivityTest {
         val events = mutableSetOf<String>()
         val evidence = mutableSetOf<String>()
         val actions = mutableMapOf<String, JSONObject>()
+        val accepted = mutableMapOf<String, Double>()
         records.forEach { record ->
             val d = record.getJSONObject("detail")
             when (record.getString("kind")) {
+                "definition_offer" -> if (d.optString("event") == "accepted")
+                    accepted[d.getString("action_id")] = d.getDouble("at_ms")
                 "sample" -> {
                     val delivery = d.getDouble("delivery_ms")
                     if (!d.isNull("capture_ms")) {
@@ -375,7 +412,10 @@ class ScanpathReplayActivityTest {
                     val action = checkNotNull(actions[d.getString("action_id")]) { "Draw receipt has no prior choice." }
                     val at = d.getDouble("render_ms")
                     assertTrue("draw follows onset", at >= action.getDouble("onset_ms"))
-                    assertTrue("draw precedes expiry", at < action.getDouble("expires_ms"))
+                    if (d.optString("presentation_phase") == "definition_panel") {
+                        val confirmation = checkNotNull(accepted[d.getString("action_id")]) { "Panel has no reader acceptance." }
+                        assertTrue("panel follows reader acceptance", at >= confirmation)
+                    } else assertTrue("initial draw precedes action expiry", at < action.getDouble("expires_ms"))
                 }
             }
         }

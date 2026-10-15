@@ -85,8 +85,12 @@ class ArticleReadingAidDemoPresenterTest {
         presenter.step(3)
         val action = word()!!
         assertEquals(ReadingAidType.WORD_DEFINITION, action.aidType)
-        assertEquals("Article", original.substring(action.anchor.wordStartUtf16!!, action.anchor.wordEndUtf16!!))
-        assertEquals(3, action.anchor.wordStartUtf16)
+        val start = action.anchor.wordStartUtf16!!
+        val end = action.anchor.wordEndUtf16!!
+        assertTrue(original.substring(start, end).isNotBlank())
+        assertFalse(Character.isLowSurrogate(original[start]))
+        assertEquals("CONTEXT_WORD_LOOKUP_OFFER_V1", action.aidFormId)
+        assertTrue(body.layout.getLineTop(action.anchor.line) >= 52 * body.resources.displayMetrics.density)
         assertTrue(action.eventIds.isEmpty())
         assertTrue(action.evidenceIds.isEmpty())
         assertEquals("DEMO_PRESENTATION_ONLY", action.conditionId)

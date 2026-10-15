@@ -1217,7 +1217,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         scanpathCounts.clear()
         val aids = readingAidOverlay?.let { ArticleReadingAidRuntime(binding.tvArticleText,
             binding.readingAidWordDock, it, config = ReadingAidPolicyConfig.definitionPrototype()
-                .copy(conditionId = "SMOOTHED_ARTICLE_DEFINITION_V9"),
+                .copy(conditionId = "SMOOTHED_ARTICLE_DEFINITION_V10"),
             preferences = aidPreferences, definitionPopup = definitionPopup,
             coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED,
             onConsultationChanged = { active, at, reason -> scanpathSession?.setConsultation(active, at, reason) }) }
@@ -1287,6 +1287,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         readingAidRuntime?.close(reason)
         readingAidRuntime = null
         definitionPopup?.onConsultationChanged = { _, _, _ -> }
+        definitionPopup?.onOfferEvent = { _, _, _ -> }
         definitionPopup?.onRender = { _, _, _, _ -> }
         session.close(reason)
         Log.i("Scanpath", "closed reason=$reason patternRecords=${scanpathCounts.toSortedMap()}")
@@ -1347,8 +1348,11 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         // Presentation draw receipts never enter live runtime traces.
         aidOverlay.onRender = { _, _, _, _ -> }
         definitionPopup?.onConsultationChanged = { _, _, _ -> }
+        definitionPopup?.onOfferEvent = { _, _, _ -> }
         articleDemo = ArticleReadingAidDemoPresenter(binding.tvArticleText, aidOverlay,
-            renderWord = { definitionPopup?.showAction(it) },
+            renderWord = { value ->
+                if (value == null) definitionPopup?.clear("demo_stage_changed") else definitionPopup?.offerAction(value)
+            },
             onStatus = { binding.articleAidDemoStatus.text = it },
             onStopped = { stopArticleDemo(it) }, guideStyle = aidPreferences.guideStyle,
             focusStyle = aidPreferences.focusStyle)
@@ -1383,9 +1387,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     private fun readingAidEntryContains(x: Float, y: Float): Boolean {
-        if (binding.btnArticleReadingAids.visibility != View.VISIBLE) return false
         val rect = Rect()
-        return binding.btnArticleReadingAids.getVisibleRectOnScreen(rect) && rect.contains(x.toInt(), y.toInt())
+        return (binding.btnArticleReadingAids.visibility == View.VISIBLE &&
+            binding.btnArticleReadingAids.getVisibleRectOnScreen(rect) && rect.contains(x.toInt(), y.toInt())) ||
+            definitionPopup?.lookupOfferContains(x, y) == true
     }
 
     private fun showReadingAidControls() {

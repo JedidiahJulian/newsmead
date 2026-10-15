@@ -71,11 +71,17 @@ internal class ArticleReadingAidDemoPresenter(
         }
         // Prefer a real article word with a bundled entry so the preview also works offline.
         // Longer words take priority over function words; no article text is substituted.
-        val coveredWords = eligibleWords.filter {
+        // Reserve above-word headroom for the lookup control inside the visible article.
+        val offerHeadroom = 52 * body.resources.displayMetrics.density
+        val wordsWithHeadroom = eligibleWords.filter {
+            val row = body.layout.getLineForOffset(it.startUtf16)
+            frame.originY + body.layout.getLineTop(row) - offerHeadroom >= frame.visible.top
+        }.ifEmpty { eligibleWords }
+        val coveredWords = wordsWithHeadroom.filter {
             OfflineWordDefinitions.lookup(originalBody.substring(it.startUtf16, it.endUtf16)) != null
         }
         val word = coveredWords.firstOrNull { it.endUtf16 - it.startUtf16 >= 4 }
-            ?: coveredWords.firstOrNull() ?: eligibleWords.firstOrNull()
+            ?: coveredWords.firstOrNull() ?: wordsWithHeadroom.firstOrNull()
             ?: error("No complete word is visible.")
         line = body.layout.getLineForOffset(word.startUtf16)
         wordStart = word.startUtf16; wordEnd = word.endUtf16
@@ -118,7 +124,7 @@ internal class ArticleReadingAidDemoPresenter(
                 ReadingAidType.CURRENT_SENTENCE -> "CURRENT_SENTENCE_CONTEXT_HIGHLIGHT_V1"
                 ReadingAidType.NEXT_LINE_START -> LineStartMarkerAppearance.FORM_ID
                 ReadingAidType.READING_BOOKMARK -> LineStartMarkerAppearance.BOOKMARK_FORM_ID
-                ReadingAidType.WORD_DEFINITION -> "CONTEXT_WORD_DEFINITION_V1"
+                ReadingAidType.WORD_DEFINITION -> "CONTEXT_WORD_LOOKUP_OFFER_V1"
                 ReadingAidType.FOCUS_REGION -> "CONTEXT_FOCUS_REGION_V4"
                 ReadingAidType.WORD_MAGNIFIER -> "CONTEXT_WORD_MAGNIFIER_V1"
             }, "DEMO_PRESENTATION_ONLY", ReadingAidAnchor(generation, geometry!!.snapshotId,

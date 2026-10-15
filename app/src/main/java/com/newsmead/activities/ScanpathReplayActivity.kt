@@ -131,10 +131,13 @@ class ScanpathReplayActivity : AppCompatActivity() {
             try {
                 // Closed runtimes must not receive presentation consultation/render callbacks.
                 definitionPopup.onConsultationChanged = { _, _, _ -> }
+                definitionPopup.onOfferEvent = { _, _, _ -> }
                 definitionPopup.onRender = { _, _, _, _ -> }
                 overlay.onRender = { _, _, _, _ -> }
                 demoPresenter = ArticleReadingAidDemoPresenter(binding.replayBody, overlay,
-                    renderWord = { definitionPopup.showAction(it) },
+                    renderWord = { value ->
+                        if (value == null) definitionPopup.clear("demo_stage_changed") else definitionPopup.offerAction(value)
+                    },
                     onStatus = { binding.replayStatus.text = it },
                     onStopped = { stopReplay(it) }, guideStyle = readerPreferences.guideStyle,
                     focusStyle = readerPreferences.focusStyle)
@@ -207,7 +210,7 @@ class ScanpathReplayActivity : AppCompatActivity() {
         plannedFrame = geometry
         originElapsedMs = ceil(now())
         runtime = ArticleReadingAidRuntime(binding.replayBody, binding.replayWordDock, overlay,
-            ReadingAidPolicyConfig.definitionPrototype().copy(conditionId = "SMOOTHED_REPLAY_DEFINITION_V9"), readerPreferences,
+            ReadingAidPolicyConfig.definitionPrototype().copy(conditionId = "SMOOTHED_REPLAY_DEFINITION_V10"), readerPreferences,
             ReadingAidInputSource.SYNTHETIC_REPLAY,
             onDecision = { d ->
                 log?.decision(d)
@@ -227,11 +230,15 @@ class ScanpathReplayActivity : AppCompatActivity() {
                     .put("at_ms", at).put("reason", reason))
                 session?.setConsultation(active, at, reason)
             }, coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED,
-            onFocusEpisode = { episode -> log?.focusEpisode(episode) })
+            onFocusEpisode = { episode -> log?.focusEpisode(episode) },
+            onDefinitionOffer = { action, event, at -> log?.append("definition_offer", JSONObject()
+                .put("action_id", action.id).put("event", event).put("at_ms", at)
+                .put("user_requested_panel", event == "accepted")) })
         val expectations = currentExpectations()
         log = ScanpathReplayLog(this, scenario.copy(expectedPatternIds = expectations.first, expectedAidTypes = expectations.second), binding.replayBody.text.toString(),
             runtime!!.configurationSnapshot().put("dictionary_mode", "bundled_only")
-                .put("ui_layout_id", "CONTEXT_GUIDE_MENU_GUTTER_V1").put("reserved_word_strip_dp", 0), points, originElapsedMs)
+                .put("ui_layout_id", "CONTEXT_GUIDE_MENU_LOOKUP_OFFER_V2")
+                .put("lookup_offer_fixture_top_padding_dp", 56).put("reserved_word_strip_dp", 0), points, originElapsedMs)
         session = ArticleScanpathSession(binding.replayBody, runtime!!.scanpathConfig,
             onGeometry = { generation, value ->
                 log?.geometry(generation, value)
@@ -284,7 +291,8 @@ class ScanpathReplayActivity : AppCompatActivity() {
             val selectedY = point.y?.toFloat()
             cursor.point(selectedX?.toDouble(), selectedY?.toDouble())
             session?.record(MgazeNetGazeProvider.Observation(capture, deliveryNs, ordinal.toLong(),
-                point.sourceReason ?: if (point.x?.isFinite() == true && point.y?.isFinite() == true) "coordinate" else "synthetic_loss", selectedX, selectedY,
+                if (selectedX != null && selectedY != null && definitionPopup.lookupOfferContains(selectedX, selectedY)) "reader_controls"
+                else point.sourceReason ?: if (point.x?.isFinite() == true && point.y?.isFinite() == true) "coordinate" else "synthetic_loss", selectedX, selectedY,
                 null, null))
             ordinal++
             binding.replayStatus.text = "${scenario.label}\nSamples $ordinal/${points.size} · ${patternCounts.keys.joinToString(" ")}\n" +
@@ -319,6 +327,7 @@ class ScanpathReplayActivity : AppCompatActivity() {
         if (::definitionPopup.isInitialized) {
             definitionPopup.clear(reason)
             definitionPopup.onConsultationChanged = { _, _, _ -> }
+            definitionPopup.onOfferEvent = { _, _, _ -> }
             definitionPopup.onRender = { _, _, _, _ -> }
         }
         if (::cursor.isInitialized) cursor.point(null, null)
@@ -340,7 +349,9 @@ class ScanpathReplayActivity : AppCompatActivity() {
             recorder.close(reason, JSONObject().put("samples_sent", ordinal).put("samples_planned", points.size)
                 .put("observed_patterns", JSONObject().apply { patternCounts.forEach { (id, count) -> put(id, count) } })
                 .put("chosen_aids", JSONArray(chosenAids.toList()))
-                .put("drawn_proxy_aids", JSONArray(drawnAids.toList())).put("enabled_expected_aids", JSONArray(enabledExpected.toList()))
+                .put("drawn_proxy_aids", JSONArray(drawnAids.toList()))
+                .put("word_definition_draw_semantics", "lookup_offer_or_user_requested_panel; inspect presentation_phase")
+                .put("enabled_expected_aids", JSONArray(enabledExpected.toList()))
                 .put("software_expectations_met", reason == "completed" && patternCounts.keys.containsAll(expectations.first) &&
                     chosenAids.containsAll(enabledExpected) && drawnAids.containsAll(enabledExpected) && recorder.failure == null))
             lastResult = ScanpathReplayResult(scenario.id, reason, ordinal, patternCounts.keys.toSet(), chosenAids.toSet(),
@@ -355,7 +366,7 @@ class ScanpathReplayActivity : AppCompatActivity() {
         }
     }
 
-    /** Definition consultation is a deliberate sequence boundary, not detector failure. */
+    /** A user-requested consultation is a sequence boundary; an unclicked lookup offer is not. */
     private fun currentExpectations(): Pair<Set<String>, Set<String>> {
         val currentAids = scenario.expectedAidTypes.map {
             when {
@@ -372,7 +383,7 @@ class ScanpathReplayActivity : AppCompatActivity() {
         return when (scenario.id) {
             "word_refixations" -> setOf("P04", "P13") to setOf(
                 if (readerPreferences.guideStyle == ReadingGuideStyle.SENTENCE) "CURRENT_SENTENCE" else "CURRENT_LINE", "WORD_DEFINITION")
-            // Consultation opens during the long word hold, before final line residence evidence.
+            // The reader may accept during the hold, before final line residence evidence.
             "line_cycle" -> setOf("P08", "P10", "P11", "P13") to setOf(
                 if (readerPreferences.guideStyle == ReadingGuideStyle.SENTENCE) "CURRENT_SENTENCE" else "CURRENT_LINE", "WORD_DEFINITION")
             else -> scenario.expectedPatternIds to currentAids

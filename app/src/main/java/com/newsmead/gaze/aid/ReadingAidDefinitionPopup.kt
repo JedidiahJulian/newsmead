@@ -27,7 +27,12 @@ class ReadingAidDefinitionPopup(
     private val body: TextView,
     private val repository: WordDefinitionRepository = DictionaryDefinitionRepository(context),
     private val unavailableMessageRes: Int = R.string.definition_unavailable,
+    offerClock: () -> Double = { SystemClock.elapsedRealtimeNanos() / 1e6 },
+    offerSchedule: (Runnable, Long) -> Unit = { task, delay -> body.postDelayed(task, delay); Unit },
+    offerCancel: (Runnable) -> Unit = { body.removeCallbacks(it); Unit },
 ) {
+    companion object { const val OFFER_TTL_MS = 5_000L }
+    var onOfferEvent: (ReadingAidAction, String, Double) -> Unit = { _, _, _ -> }
     var onConsultationChanged: (Boolean, Double, String) -> Unit = { _, _, _ -> }
     var onRender: (ReadingAidAction, Boolean, String, Double) -> Unit = { _, _, _, _ -> }
     var languageSupported = true
@@ -42,6 +47,19 @@ class ReadingAidDefinitionPopup(
     private var sourceText = ""
     private var frame: ScanpathTextGeometry? = null
     private val reader = ScanpathTextGeometryReader()
+    private val offer = ReadingAidDefinitionOffer(context, host, body, offerClock, offerSchedule,
+        offerCancel, { value -> showAction(value) },
+        { value, event, at -> onOfferEvent(value, event, at) },
+        { value, rendered, reason, at -> onRender(value, rendered, reason, at) })
+    val isOfferShowing get() = offer.isShowing
+    fun lookupOfferContains(x: Float, y: Float): Boolean = offer.contains(x, y)
+    fun offerAction(value: ReadingAidAction?) {
+        if (!closed && !isShowing) offer.offer(value)
+    }
+    /** Only a valid observed word releases suppression after the reader leaves an ignored offer. */
+    fun observeReadingTarget(generation: Long, start: Int?, end: Int?) {
+        if (!closed) offer.observeReadingTarget(generation, start, end)
+    }
     private val geometryListener = ViewTreeObserver.OnPreDrawListener {
         if (isShowing && (body.text.toString() != sourceText || reader.read(body) != frame)) clear("article_layout_changed")
         true
@@ -161,6 +179,7 @@ class ReadingAidDefinitionPopup(
     }
 
     fun clear(reason: String) {
+        offer.clear(reason, resetSuppression = true)
         token++
         pending?.cancel(); pending = null
         val previous = card ?: return

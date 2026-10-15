@@ -35,6 +35,7 @@ class ArticleReadingAidRuntime(
     private val onConsultationChanged: (Boolean, Double, String) -> Unit = { _, _, _ -> },
     val coordinateStream: ScanpathCoordinateStream = ScanpathCoordinateStream.CALIBRATED_RAW,
     private val onFocusEpisode: (ReadingAidFocusEpisode) -> Unit = {},
+    private val onDefinitionOffer: (ReadingAidAction, String, Double) -> Unit = { _, _, _ -> },
 ) {
     val scanpathConfig = ScanpathConfig(returnSweepStartFraction = 0.25, returnSweepEndFraction = 0.75,
         wordResidenceMs = config.wordMinObservedMs, lineResidenceMs = config.lineMinObservedMs,
@@ -87,6 +88,16 @@ class ArticleReadingAidRuntime(
         }
         wordDock.onRender = overlay.onRender
         definitionPopup?.onRender = overlay.onRender
+        definitionPopup?.onOfferEvent = offerEvent@{ action, event, at ->
+            if (closed) return@offerEvent
+            if (event == "expired") dismissedDefinitionAnchor = action.anchor
+            trace.record("definition_offer", at, JSONObject().put("event", event)
+                .put("action_id", action.id).put("at_ms", at)
+                .put("word_start_utf16", action.anchor.wordStartUtf16 ?: JSONObject.NULL)
+                .put("word_end_utf16", action.anchor.wordEndUtf16 ?: JSONObject.NULL)
+                .put("user_requested_panel", event == "accepted"))
+            onDefinitionOffer(action, event, at)
+        }
         definitionPopup?.onConsultationChanged = { active, at, reason ->
             overlay.clearFocusScrollHold()
             consulting = active
@@ -163,6 +174,7 @@ class ArticleReadingAidRuntime(
             rawSample = sample, bookmarkInputAllowed = interpretationAllowed,
             guideRange = if (valid) guideResolver.resolve(body.text.toString(), snapshot, sample.line) else null,
             focusInputAllowed = interpretationAllowed)
+        if (valid) definitionPopup?.observeReadingTarget(generation.toLong(), sample.wordStartUtf16, sample.wordEndUtf16)
         val dismissed = dismissedDefinitionAnchor
         if (valid && dismissed != null && (dismissed.generation != generation.toLong() ||
             dismissed.wordStartUtf16 != sample.wordStartUtf16 || dismissed.wordEndUtf16 != sample.wordEndUtf16))
@@ -272,7 +284,7 @@ class ArticleReadingAidRuntime(
                     trace.render(definition, false, "dictionary_language_unsupported", context.nowMs)
                     onRenderReceipt(definition, false, "dictionary_language_unsupported", context.nowMs)
                 }
-            } else definitionPopup?.showAction(definition)
+            } else definitionPopup?.offerAction(definition)
         }
     }
 
@@ -309,6 +321,14 @@ class ArticleReadingAidRuntime(
             .put("smoothing_beta", if (coordinateStream == ScanpathCoordinateStream.ARTICLE_SMOOTHED) MgazeNetReadingSmoother.BETA else JSONObject.NULL)
             .put("automatic_rules_enabled", config.automaticRulesEnabled).put("word_min_refixations", config.wordMinRefixations)
             .put("word_aid_type", config.wordAidType.name).put("definition_min_observed_ms", config.definitionMinObservedMs)
+            .put("definition_presentation_mode", "above_word_offer_then_user_requested_panel")
+            .put("definition_offer_ttl_ms", ReadingAidDefinitionPopup.OFFER_TTL_MS)
+            .put("definition_offer_style", ReadingAidDefinitionOffer.STYLE_ID)
+            .put("definition_offer_tip_gap_dp", ReadingAidDefinitionOffer.TIP_GAP_DP)
+            .put("definition_offer_vertical_anchor", "word_ink_top_from_layout_baseline")
+            .put("definition_offer_opens_panel_automatically", false)
+            .put("definition_offer_pauses_measurement", false)
+            .put("definition_render_receipts", "lookup_offer_and_definition_panel_are_separate_phases")
             .put("dictionary_adapter_version", DictionaryDefinitionRepository.ONLINE_ROUTE_VERSION)
             .put("word_min_observed_ms", config.wordMinObservedMs).put("word_saturation_ms", config.wordSaturationMs)
             .put("line_min_observed_ms", config.lineMinObservedMs).put("line_saturation_ms", config.lineSaturationMs)
@@ -401,7 +421,7 @@ class ArticleReadingAidRuntime(
             .put("assignment_agreement", scanpathConfig.assignmentAgreement)
         val digest = MessageDigest.getInstance("SHA-256").digest(values.toString().toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
-        return JSONObject().put("policy_version", 14).put("extractor_version", ScanpathEngine.EXTRACTOR_VERSION)
+        return JSONObject().put("policy_version", 15).put("extractor_version", ScanpathEngine.EXTRACTOR_VERSION)
             .put("classifier_version", ScanpathEngine.CLASSIFIER_VERSION)
             .put("provisional_evidence_version", ScanpathEngine.PROVISIONAL_EVIDENCE_VERSION)
             .put("input_source", inputSource.name)

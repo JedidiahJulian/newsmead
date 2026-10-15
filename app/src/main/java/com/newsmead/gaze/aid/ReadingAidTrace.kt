@@ -89,7 +89,11 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
         .put("action", value.action?.let(::action) ?: JSONObject.NULL))
     fun render(value: ReadingAidAction, drawn: Boolean, reason: String, nowMs: Double) =
         record("render", nowMs, JSONObject().put("action_id", value.id).put("drawn_proxy", drawn)
-            .put("reason", reason).put("verified_visibility", false))
+            .put("reason", reason).put("presentation_phase", when {
+                reason.startsWith("definition_offer_") -> "lookup_offer"
+                reason.startsWith("definition_") -> "definition_panel"
+                else -> JSONObject.NULL
+            }).put("verified_visibility", false))
 
     /** App-private numeric export includes gaze coordinates; no word text, camera frames or upload. */
     fun export(context: Context, configuration: JSONObject): File {

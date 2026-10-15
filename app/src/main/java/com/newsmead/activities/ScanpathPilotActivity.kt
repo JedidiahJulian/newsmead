@@ -217,7 +217,7 @@ class ScanpathPilotActivity : AppCompatActivity() {
         val condition = if (reading) settings.readingCondition else PilotReadingCondition.NO_AIDS
         val prefs = if (condition == PilotReadingCondition.NO_AIDS) settings.preferences.copy(enabled = false) else settings.preferences
         runtime = ArticleReadingAidRuntime(binding.pilotBody, binding.pilotWordDock, overlay,
-            ReadingAidPolicyConfig.definitionPrototype().copy(conditionId = "SMOOTHED_PILOT_DEFINITION_${condition.name}_V9"), prefs,
+            ReadingAidPolicyConfig.definitionPrototype().copy(conditionId = "SMOOTHED_PILOT_DEFINITION_${condition.name}_V10"), prefs,
             if (synthetic) ReadingAidInputSource.SYNTHETIC_REPLAY else ReadingAidInputSource.LIVE_MGAZENET,
             onDecision = { d -> log?.decision(d); if (d.status == ReadingAidDecisionStatus.CHOSEN) d.action?.let { chosen.add(it.aidType.name) } },
             onRenderReceipt = { a, visible, reason, at -> log?.render(a, visible, reason, at); if (visible) drawn.add(a.aidType.name) },
@@ -232,7 +232,10 @@ class ScanpathPilotActivity : AppCompatActivity() {
                 session?.setConsultation(active, at, reason)
                 if (!active) consultationAnchor = null
             }, coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED,
-            onFocusEpisode = { episode -> log?.focusEpisode(episode) })
+            onFocusEpisode = { episode -> log?.focusEpisode(episode) },
+            onDefinitionOffer = { action, event, at -> log?.append("definition_offer", JSONObject()
+                .put("action_id", action.id).put("event", event).put("at_ms", at)
+                .put("user_requested_panel", event == "accepted")) })
         log = ScanpathTraceWriter(this, "scanpath_pilot", header(plan, runtime!!.configurationSnapshot()
             .put("dictionary_mode", if (synthetic) "bundled_only" else "online_then_bundled")
             .put("dictionary_online_route_version", if (synthetic) "none" else DictionaryDefinitionRepository.ONLINE_ROUTE_VERSION)
@@ -290,7 +293,8 @@ class ScanpathPilotActivity : AppCompatActivity() {
                 displayX = o.x?.toDouble(), displayY = o.y?.toDouble(), coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED)
             log?.sample(lastGeneration, observations, s); scorer?.record(s)
         } else {
-            session?.record(o)
+            val overLookup = o.x != null && o.y != null && definitionPopup.lookupOfferContains(o.x, o.y)
+            session?.record(if (overLookup) o.copy(reason = "reader_controls") else o)
             if (waitingForInput && o.reason == "coordinate") beginTimeline()
             val reason = pendingStop ?: log?.failure?.let { "trace_failure" }
             if (reason != null) stopRun(reason)

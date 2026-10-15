@@ -114,6 +114,11 @@ open class ScanpathTraceWriter(context: Context, prefix: String, header: JSONObj
 
     fun render(a: ReadingAidAction, drawn: Boolean, reason: String, atMs: Double) = append("render", JSONObject()
         .put("action_id", a.id).put("drawn_proxy", drawn).put("reason", reason).put("render_ms", atMs)
+        .put("presentation_phase", when {
+            reason.startsWith("definition_offer_") -> "lookup_offer"
+            reason.startsWith("definition_") -> "definition_panel"
+            else -> JSONObject.NULL
+        })
         .put("verified_visibility", false))
 
     fun close(reason: String, summary: JSONObject) {
