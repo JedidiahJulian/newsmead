@@ -26,14 +26,13 @@ object StudyConfig {
     const val ARTICLES_ASSET = "study_articles.json"
 
     /**
-     * Lock the article body font size for the study and remove the in-article
-     * text-size (+/-) controls. Line bounding boxes for gaze AOI mapping (Stage 4)
-     * are only stable if the font size cannot change during a session.
+     * Optional normal-article lock. Live scanpath geometry is rebuilt after a
+     * reader resizes text; dedicated validation/pilot views set their own size.
      */
-    const val LOCK_ARTICLE_FONT_SIZE = true
+    const val LOCK_ARTICLE_FONT_SIZE = false
 
     /**
-     * Fixed article body size. Applied in **dp** (not sp) so it ignores the OS
+     * Controlled-view/reference body size. Applied in **dp** (not sp) so it ignores the OS
      * accessibility font-scale setting - the on-screen pixel size, and therefore
      * the line boxes, stay fixed on a given device. 22dp == 22sp at 100% system
      * font. (App's original default was 20sp; ts_body_large.)

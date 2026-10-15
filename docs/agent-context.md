@@ -12,6 +12,45 @@ protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
 
+**2026-10-15 footer appearance revision (verified software checkpoint):** owner requests gear
+Aids, matching circular font controls and tighter theme spacing. All six controls
+share a transparent circle/caption style: theme swatches fixed 144 dp on the left,
+font/gear fixed 144 dp on the right, 8 dp outer padding and flexible center gap.
+Symbols are 28 dp with 48 dp touch widths; font and gear tint follow article
+colors. First build caught plain-Button binding types for font icon tinting;
+explicit MaterialButton declarations correct it. Owner-approved retry passes both
+APK builds and data-preserving A56 updates. The existing native footer check
+passes at 320/360/400 dp with all controls visible, contained, nonoverlapping and
+at least 48 dp touch dimensions. Synthetic 320/400 dp previews are visually
+inspected. Test-only pre-draw refinement renders detached labels; final native
+check passes in 0.513 s. No camera, calibration change, staging or commit.
+Evidence: `output/article-footer-style-check-02/summary.json` and previews/logs;
+failed build retained in 01.
+[Contract](article-text-size-controls.md).
+
+**2026-10-15 article font controls (verified software checkpoint):** owner asks
+to restore increase/decrease and proportional line spacing. Ordinary articles now
+use remembered 22 sp default, 14–60 sp bounds, symmetric 2 sp steps and system font
+scaling. Footer fits themes, A−/A+ and Aids in one row. Spacing is 1.6× plus extra
+px equal to rendered font px/22. Resize preserves the first visible source offset
+where possible, clears old aid/lookup/demo state, gates reflow, refreshes actual
+geometry and keeps the existing 150 ms settling guard. Recording disables size
+controls; dedicated Validation/Pilot/Replay keep their controlled 22 dp settings.
+Typography pixel metrics accompany aid trace configuration and geometry. Timers
+are unchanged, not font-normalized or validated. Initial review caught pause
+discarding the pending reading-position restore; the callback/gate now persist
+for the same view's next draw, with destruction invalidating them. Follow-up
+review has no actionable findings. First app build passed but new Android test
+had a View/ViewParent property ambiguity; reviewed explicit-View correction and
+owner-approved retry pass both APK builds and 10/10 focused JVM checks. Approved
+data-preserving A56 app/test updates succeed; all 7/7 camera-free native checks
+pass in 2.002 s, including real footer bounds at 320/360/400 dp, proportional
+spacing/reflow, fresh settled geometry and stale lookup invalidation. Fragment
+pause/resume is source-reviewed, not exercised by the native fixtures. No camera,
+calibration changes, staging or commit. Evidence:
+`output/article-text-size-check-02/summary.json`; failed build retained in 01.
+[Contract](article-text-size-controls.md).
+
 **2026-10-15 closer lookup bubble (verified software checkpoint):** owner screenshot shows the
 V3 bubble too far above the source word. V4 anchors its vector tail to the word's
 painted top (layout baseline plus current word ink bounds), with3dp gap, replacing

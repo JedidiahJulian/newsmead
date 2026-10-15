@@ -1,5 +1,12 @@
 # Article demo and word-definition aid
 
+**2026-10-15 typography update:** ordinary article font size is now adjustable
+(14–60 sp, 22 sp default) with proportional spacing. The attachment algorithm
+continues to use current painted-word bounds; reflow clears stale offers.
+The 22 dp setup below describes the earlier checked baseline. Dedicated Pilot
+and Replay retain that controlled size. The 1,500 ms rule is unchanged and is
+not font-normalized. See [article text size](article-text-size-controls.md).
+
 **2026-10-15 closer word attachment (verified software checkpoint):** owner finds the icon-word
 gap excessive. `WORD_LOOKUP_INFO_BUBBLE_INK_CORNER_V4` positions the actual vector
 tip3dp above the current word's painted letter top, measured from the Layout

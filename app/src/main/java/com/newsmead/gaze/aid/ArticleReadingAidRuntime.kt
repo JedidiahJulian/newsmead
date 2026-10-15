@@ -136,7 +136,10 @@ class ArticleReadingAidRuntime(
             geometry = value, targetX = null, guideRange = null)
         trace.record("geometry", context.nowMs, JSONObject().put("generation", generation)
             .put("geometry_snapshot_id", value?.snapshotId ?: JSONObject.NULL)
-            .put("body_sha256", sha256(body.text.toString())).put("line_count", value?.lines?.size ?: 0))
+            .put("body_sha256", sha256(body.text.toString())).put("line_count", value?.lines?.size ?: 0)
+            .put("text_size_px", body.textSize).put("line_height_px", body.lineHeight)
+            .put("line_spacing_extra_px", body.lineSpacingExtra)
+            .put("line_spacing_multiplier", body.lineSpacingMultiplier))
         decisions(policy.reset(context, preserveCompletedFocus = true))
     }
 
@@ -430,6 +433,10 @@ class ArticleReadingAidRuntime(
             .put("settings", values).put("settings_sha256", digest)
             .put("calibration_sha256", calibrationFingerprint ?: JSONObject.NULL)
             .put("body_sha256", sha256(body.text.toString()))
+            .put("typography", JSONObject().put("text_size_px", body.textSize)
+                .put("line_height_px", body.lineHeight).put("line_spacing_extra_px", body.lineSpacingExtra)
+                .put("line_spacing_multiplier", body.lineSpacingMultiplier)
+                .put("system_font_scale", body.resources.configuration.fontScale))
             .put("max_history_fixations", com.newsmead.gaze.scanpath.ArticleScanpathSession.MAX_HISTORY_FIXATIONS)
             .put("preferences", preferenceJson()).put("experimental", true)
     }

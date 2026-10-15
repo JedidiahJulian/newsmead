@@ -207,6 +207,11 @@
     <string name="article_theme_dark">Dark</string>
     <string name="article_theme_sepia">Sepia</string>
     <string name="article_text_smaller_btn">Smaller Text</string>
+    <string name="article_text_smaller_symbol">A−</string>
+    <string name="article_text_larger_symbol">A+</string>
+    <string name="article_text_size_current">Text size: %1$d</string>
+    <string name="article_text_smaller_caption">Smaller</string>
+    <string name="article_text_larger_caption">Larger</string>
     <string name="article_text_larger_btn">Larger Text</string>
 
     <!-- ~~~~~~~~~~~~~~~~~~~~ Bottom Sheet ~~~~~~~~~~~~~~~~~~~~ -->
