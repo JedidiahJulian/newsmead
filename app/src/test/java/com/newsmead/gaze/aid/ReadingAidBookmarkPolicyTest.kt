@@ -5,6 +5,37 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReadingAidBookmarkPolicyTest {
+    @Test fun startupTimerDoesNotBlockDelayedFirstVisitFromSavingBookmark() {
+        val p = delayedStartupAndLoss(100.0)
+        val cue = marker(p)!!
+        assertEquals(3, cue.anchor.line)
+        assertEquals(980.0, cue.bookmarkEvidence!!.source.firstCaptureMs, 0.0)
+        assertEquals("sustained_gaze_unavailable", cue.bookmarkEvidence!!.departureReason)
+    }
+
+    @Test fun explicitBoundaryStillRejectsAVisitStartingBeforeThatBoundary() {
+        assertNull(marker(delayedStartupAndLoss(1000.0)))
+    }
+
+    private fun delayedStartupAndLoss(boundaryMs: Double): ReadingAidPolicy {
+        val p = policy(ReaderAidPreferences(lineGuide = false, focusRegion = false))
+        val noInput = context(boundaryMs).copy(nowMs = boundaryMs, captureMs = null,
+            evidenceAvailableMs = null, validLiveInput = false, rawSample = null)
+        p.reset(noInput)
+        p.tick(noInput.copy(nowMs = 1000.0))
+        // Arrival1180 carries a first supported capture980 preceding the startup tick.
+        p.onObservation(candidate(1100.0, start = 980.0).copy(evidenceAvailableMs = 1180.0),
+            context(1100.0).copy(nowMs = 1180.0, evidenceAvailableMs = 1180.0))
+        for (capture in 1200..1800 step 100) {
+            val t = capture.toDouble()
+            p.onObservation(null, context(t, null).copy(nowMs = t + 80,
+                evidenceAvailableMs = t + 80, validLiveInput = false,
+                rawSample = ScanpathSample(t, t + 80, null, null, null, null, null,
+                    "g", false, "no_face")))
+        }
+        return p
+    }
+
     @Test fun smoothedDepartureChecksSelectedPointWithoutRawFallback() {
         fun departure(p: ReadingAidPolicy, t: Double, rawX: Double, displayX: Double?) =
             p.onObservation(null, context(t, null).copy(validLiveInput = false,

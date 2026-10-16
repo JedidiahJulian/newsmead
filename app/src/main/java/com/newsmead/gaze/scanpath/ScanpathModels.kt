@@ -1,6 +1,6 @@
 package com.newsmead.gaze.scanpath
 
-/** All offsets are Android UTF-16 offsets; all rectangles and gaze coordinates are screen pixels. */
+/** Offsets are Android UTF-16. Coordinates are pixels in the explicitly selected frame. */
 data class WordRange(val startUtf16: Int, val endUtf16: Int)
 data class ScanpathRect(val left: Double, val top: Double, val right: Double, val bottom: Double)
 data class ScanpathLine(
@@ -29,7 +29,8 @@ data class ScanpathSample(
     val geometrySnapshotId: String?,
     val eligible: Boolean = true, val exclusion: String? = null,
     val displayX: Double? = null, val displayY: Double? = null,
-    val coordinateStream: ScanpathCoordinateStream = ScanpathCoordinateStream.CALIBRATED_RAW
+    val coordinateStream: ScanpathCoordinateStream = ScanpathCoordinateStream.CALIBRATED_RAW,
+    val motionCompensation: ScanpathMotionCompensation? = null
 ) {
     val processingX: Double? get() = when (coordinateStream) {
         ScanpathCoordinateStream.CALIBRATED_RAW -> rawX
@@ -38,6 +39,15 @@ data class ScanpathSample(
     val processingY: Double? get() = when (coordinateStream) {
         ScanpathCoordinateStream.CALIBRATED_RAW -> rawY
         ScanpathCoordinateStream.ARTICLE_SMOOTHED -> displayY
+    }
+    /** Body-local pixels only for validated opt-in metadata; processing/display stay on screen. */
+    val analysisX: Double? get() {
+        val motion = motionCompensation ?: return processingX
+        return motion.contentX.takeIf { motion.validFor(this) }
+    }
+    val analysisY: Double? get() {
+        val motion = motionCompensation ?: return processingY
+        return motion.contentY.takeIf { motion.validFor(this) }
     }
 }
 

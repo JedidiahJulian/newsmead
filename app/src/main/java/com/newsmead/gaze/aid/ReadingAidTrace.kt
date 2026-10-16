@@ -34,6 +34,14 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
             .put("processing_y_px", value.rawSample?.processingY?.takeIf { it.isFinite() } ?: JSONObject.NULL)
             .put("raw_x_px", value.rawSample?.rawX?.takeIf { it.isFinite() } ?: JSONObject.NULL)
             .put("raw_y_px", value.rawSample?.rawY?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+            .put("analysis_x_content_px", value.rawSample?.motionCompensation?.contentX?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+            .put("analysis_y_content_px", value.rawSample?.motionCompensation?.contentY?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+            .put("analysis_frame", value.rawSample?.motionCompensation?.modeId ?: "screen")
+            .put("capture_geometry_at_ms", value.rawSample?.motionCompensation?.geometryTimeMs?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+            .put("capture_text_origin_x_px", value.rawSample?.motionCompensation?.textOriginX?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+            .put("capture_text_origin_y_px", value.rawSample?.motionCompensation?.textOriginY?.takeIf { it.isFinite() } ?: JSONObject.NULL)
+            .put("presentation_text_origin_x_px", value.geometry?.textOriginX ?: JSONObject.NULL)
+            .put("presentation_text_origin_y_px", value.geometry?.textOriginY ?: JSONObject.NULL)
     }
     fun event(generation: Int, e: ScanpathEvent) {
         remember(generation, e.eventId, JSONObject().put("kind", "finalized_pattern")

@@ -117,7 +117,17 @@ data class ReadingAidContext(
     val focusInputAllowed: Boolean = true,
     /** Rendered font pixels divided by display density; includes Android font scaling. */
     val focusTextSizeDp: Double = 22.0
-)
+) {
+    /** Presentation projection only; rawSample still contains the actual selected screen point. */
+    val presentationSample: ScanpathSample? get() {
+        val sample = rawSample ?: return null
+        val motion = sample.motionCompensation ?: return sample
+        val frame = geometry ?: return null
+        if (!motion.validFor(sample) || frame.snapshotId != motion.geometrySnapshotId) return null
+        return sample.copy(displayX = motion.contentX + frame.textOriginX,
+            displayY = motion.contentY + frame.textOriginY, motionCompensation = null)
+    }
+}
 
 /** Engineering prototype settings, not paper thresholds or calibrated difficulty cutoffs. */
 data class ReadingAidPolicyConfig(

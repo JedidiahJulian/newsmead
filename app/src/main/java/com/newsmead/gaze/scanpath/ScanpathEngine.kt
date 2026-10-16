@@ -42,6 +42,7 @@ class ScanpathEngine(
     private var lastAcceptedMs: Double? = null
     private var latestCaptureMs: Double? = initialCaptureMs
     private var coordinateStream: ScanpathCoordinateStream? = null
+    private var motionMode: String? = null
     private val states = mapOf("word" to PathState(), "line" to PathState())
 
     init {
@@ -67,6 +68,7 @@ class ScanpathEngine(
         val t = sample.captureMs
         val valid = sample.eligible && t != null && t.isFinite() &&
             sample.processingX?.isFinite() == true && sample.processingY?.isFinite() == true &&
+            (sample.motionCompensation?.validFor(sample) ?: true) &&
             currentGeometry != null && sample.geometrySnapshotId == currentGeometry?.snapshotId
         if (!valid) {
             boundary("invalid_sample", t, availability(sample).first, availability(sample).second)
@@ -82,8 +84,11 @@ class ScanpathEngine(
         noteCapture(t)
         if (coordinateStream != null && sample.coordinateStream != coordinateStream) {
             boundary("coordinate_stream_change", t, available, basis)
+        } else if (coordinateStream != null && sample.motionCompensation?.modeId != motionMode) {
+            boundary("analysis_frame_change", t, available, basis)
         }
         coordinateStream = sample.coordinateStream
+        motionMode = sample.motionCompensation?.modeId
         val last = lastAcceptedMs
         if (last != null && t - last > config.maxSampleGapMs) {
             boundary("sample_gap", t, available, basis)
@@ -171,8 +176,8 @@ class ScanpathEngine(
     }
 
     private fun dispersion(samples: List<ScanpathSample>): Double =
-        samples.maxOf { it.processingX!! } - samples.minOf { it.processingX!! } +
-            samples.maxOf { it.processingY!! } - samples.minOf { it.processingY!! }
+        samples.maxOf { it.analysisX!! } - samples.minOf { it.analysisX!! } +
+            samples.maxOf { it.analysisY!! } - samples.minOf { it.analysisY!! }
 
     private fun <T> majority(values: List<T>): Pair<T, Double> {
         val counts = linkedMapOf<T, Int>()
@@ -193,7 +198,7 @@ class ScanpathEngine(
         val evidence = available?.takeIf { it.isFinite() && it >= end }
         val fixation = ScanpathFixation(
             retainedFixations.size, segment, start, end, end - start, pending.size,
-            pending.map { it.processingX!! }.average(), pending.map { it.processingY!! }.average(),
+            pending.map { it.analysisX!! }.average(), pending.map { it.analysisY!! }.average(),
             dispersion(pending), if (wordAssigned) word.startUtf16 else null,
             if (wordAssigned) word.endUtf16 else null, wordAgreement,
             if (lineAssigned) lineValue else null, lineAgreement,

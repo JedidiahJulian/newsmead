@@ -86,7 +86,7 @@ internal class ReadingFocusPolicy(
         if (alternationDemand?.let { c.nowMs - it.activatedMs > config.focusInterruptionWindowMs } == true) {
             alternationDemand = null; witnessesExpired = true
         }
-        val s = c.rawSample ?: run { presence = null; interruptReading(); breakLineSequence(); return }
+        val s = c.presentationSample ?: run { presence = null; interruptReading(); breakLineSequence(); return }
         val d = s.deliveryMs; val t = s.captureMs
         val clocks = d?.isFinite() == true && d >= 0 && d <= c.nowMs && d >= lastDelivery &&
             (t == null || (t.isFinite() && t >= 0 && t <= d))

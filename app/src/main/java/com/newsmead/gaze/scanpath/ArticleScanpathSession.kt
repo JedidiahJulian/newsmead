@@ -23,6 +23,8 @@ class ArticleScanpathSession(
     private val onFixation: (generation: Int, fixation: ScanpathFixation) -> Unit = { _, _ -> },
     private val onAcceptance: (generation: Int, sample: ScanpathSample, accepted: Boolean) -> Unit = { _, _, _ -> },
     val coordinateStream: ScanpathCoordinateStream = ScanpathCoordinateStream.CALIBRATED_RAW,
+    /** Live aid prototype only; frozen Pilot/Replay retain the default screen-frame adapter. */
+    val motionCompensatedAids: Boolean = false,
 ) {
     var generation: Int = 0
         private set
@@ -38,6 +40,9 @@ class ArticleScanpathSession(
     private var snapshotId: String? = null
     private var geometrySequence = 0
     private var geometryChangedMs = Double.POSITIVE_INFINITY
+    private val geometryTimeline = ScanpathGeometryTimeline()
+    private var controlledAutoScroll = false
+    private var layoutSignature: List<Any?>? = null
     private var active = true
     private var closed = false
     private val consultation = ConsultationCaptureGate()
@@ -52,11 +57,20 @@ class ArticleScanpathSession(
         override fun afterTextChanged(s: Editable?) = Unit
     }
 
-    init { textView.addTextChangedListener(textWatcher) }
+    init {
+        require(!motionCompensatedAids || coordinateStream == ScanpathCoordinateStream.ARTICLE_SMOOTHED)
+        textView.addTextChangedListener(textWatcher)
+    }
 
     private fun createEngine(captureFloor: Double? = null) = ScanpathEngine(words.ranges, config,
         onEvent = { event -> onEvent(generation, event) },
-        onFixation = { fixation -> onFixation(generation, fixation) }, retainEvents = false,
+        onFixation = { fixation ->
+            // Engine clusters are in content pixels; aid policy consumes their current
+            // screen projection. Selected input coordinates remain untouched in onInput.
+            val g = geometry
+            onFixation(generation, if (motionCompensatedAids && g != null)
+                fixation.copy(x = fixation.x + g.originX, y = fixation.y + g.originY) else fixation)
+        }, retainEvents = false,
         initialCaptureMs = captureFloor)
 
     /** Also called before drawing, so a scroll breaks continuity without waiting for gaze. */
@@ -80,6 +94,7 @@ class ArticleScanpathSession(
             snapshotId = null
             geometrySequence = 0
             geometryChangedMs = Double.POSITIVE_INFINITY
+            geometryTimeline.clear()
         }
         val current = geometryReader.read(textView)
         if (current == null) {
@@ -88,15 +103,65 @@ class ArticleScanpathSession(
             geometry = null
             snapshotId = null
             geometryChangedMs = Double.POSITIVE_INFINITY
+            geometryTimeline.clear()
             return
         }
-        if (current == geometry) return
+        val signature = listOf(textView.width, textView.height, textView.textSize, textView.textScaleX,
+            textView.letterSpacing, textView.typeface, textView.lineSpacingExtra, textView.lineSpacingMultiplier,
+            textView.totalPaddingLeft, textView.totalPaddingTop, textView.totalPaddingRight, textView.totalPaddingBottom)
+        val sameLayout = !motionCompensatedAids || signature == layoutSignature
+        layoutSignature = signature
+        if (current == geometry && sameLayout) {
+            if (motionCompensatedAids) snapshotId?.let { geometryTimeline.record(now, current.forEngine(it)) }
+            return
+        }
+        val previous = geometry
+        val translation = motionCompensatedAids && controlledAutoScroll && sameLayout && previous != null &&
+            current.originX == previous.originX && current.lines == previous.lines &&
+            current.lineHeightPx == previous.lineHeightPx && current.direction == previous.direction &&
+            current.visible.left == previous.visible.left && current.visible.right == previous.visible.right
         geometry = current
+        if (translation && snapshotId != null) {
+            val display = current.forEngine(snapshotId!!)
+            geometryTimeline.record(now, display)
+            onGeometry(generation, display)
+            return
+        }
         snapshotId = "geometry:${++geometrySequence}"
         geometryChangedMs = now
         val snapshot = current.forEngine(snapshotId!!)
+        geometryTimeline.clear()
+        if (motionCompensatedAids) geometryTimeline.record(now, snapshot)
         onGeometry(generation, snapshot)
-        dispatchEngine { engine.updateGeometry(snapshot, now) }
+        dispatchEngine { engine.updateGeometry(engineGeometry(snapshot), now) }
+    }
+
+    private fun engineGeometry(display: ScanpathGeometry): ScanpathGeometry = if (!motionCompensatedAids) display
+        else display.copy(textOriginX = 0.0, textOriginY = 0.0, visibleRectScreen = ScanpathRect(
+            0.0, 0.0, (textView.layout?.width ?: textView.width).toDouble(),
+            (textView.layout?.height ?: textView.height).toDouble()))
+
+    /** Only the explicit navigation controller may mark translations as controlled. */
+    fun autoScrollMotion(moving: Boolean, reason: String? = null) {
+        checkMainThread()
+        if (closed || !active || !motionCompensatedAids) return
+        if (moving) {
+            checkGeometry()
+            controlledAutoScroll = true
+        } else {
+            // An external move/reflow must never be smuggled through the final self-scroll snapshot.
+            if (reason in listOf("external_scroll", "reading_layout_changed")) {
+                controlledAutoScroll = false
+                onGeometry(generation, null)
+                dispatchEngine { engine.boundary("uncontrolled_scroll", elapsedMs()) }
+                geometry = null
+                snapshotId = null
+                geometryTimeline.clear()
+                geometryChangedMs = Double.POSITIVE_INFINITY
+            }
+            checkGeometry()
+            controlledAutoScroll = false
+        }
     }
 
     fun record(observation: MgazeNetGazeProvider.Observation) {
@@ -114,10 +179,19 @@ class ArticleScanpathSession(
         val valid = observation.reason == "coordinate" && x != null && y != null &&
             x.isFinite() && y.isFinite() && capture != null && capture.isFinite()
         val settled = capture != null && capture >= geometryChangedMs + GEOMETRY_SETTLE_MS
+        val historical = if (motionCompensatedAids && capture != null)
+            geometryTimeline.at(capture, MAX_CAPTURE_GEOMETRY_AGE_MS) else null
+        val captureGeometry = if (motionCompensatedAids) historical?.geometry?.let {
+            ScanpathTextGeometry(it.textOriginX, it.textOriginY, it.visibleRectScreen,
+                it.lineHeightPx, it.lines, it.textDirection ?: ScanpathTextDirection.UNKNOWN)
+        } else current
+        val freshMotionInput = !motionCompensatedAids || (capture != null &&
+            observation.outputMs >= capture && observation.outputMs <= elapsedMs() &&
+            elapsedMs() - capture <= MAX_MOTION_INPUT_AGE_MS)
         val consultationReason = consultation.exclusion(capture)
-        val target = if (valid && settled && current != null && consultationReason == null)
-            words.targetAt(textView, current, x!!, y!!) else TextTarget.INVALID
-        val eligible = valid && settled && target.isValid
+        val target = if (valid && settled && captureGeometry != null && freshMotionInput && consultationReason == null)
+            words.targetAt(textView, captureGeometry, x!!, y!!) else TextTarget.INVALID
+        val eligible = valid && settled && freshMotionInput && target.isValid
         val sample = ScanpathSample(
             capture, observation.outputMs, rawX, rawY,
             target.lineIndex.takeIf { target.isValid },
@@ -130,10 +204,16 @@ class ArticleScanpathSession(
                     observation.reason else "coordinate_unavailable"
                 current == null -> "layout_unavailable"
                 !settled -> "geometry_unsettled"
+                motionCompensatedAids && historical == null -> "scroll_geometry_unavailable"
+                !freshMotionInput -> "scroll_input_stale"
                 !target.isValid -> "outside_visible_text"
                 else -> null
             },
             displayX, displayY, coordinateStream,
+            motionCompensation = if (motionCompensatedAids && historical != null && valid)
+                ScanpathMotionCompensation(historical.atMs, historical.geometry.snapshotId,
+                    historical.geometry.textOriginX, historical.geometry.textOriginY,
+                    x!! - historical.geometry.textOriginX, y!! - historical.geometry.textOriginY) else null,
         )
         onInput(generation, sample)
         val accepted = if (consultationReason == null) dispatchEngine { engine.onSample(sample) } else false
@@ -149,7 +229,7 @@ class ArticleScanpathSession(
             geometry?.let { state -> snapshotId?.let { id ->
                 val snapshot = state.forEngine(id)
                 onGeometry(generation, snapshot)
-                dispatchEngine { engine.updateGeometry(snapshot, now) }
+                dispatchEngine { engine.updateGeometry(engineGeometry(snapshot), now) }
             } }
         }
     }
@@ -187,6 +267,8 @@ class ArticleScanpathSession(
 
     fun pause(reason: String) {
         boundary(reason)
+        controlledAutoScroll = false
+        geometryTimeline.clear()
         active = false
     }
 
@@ -213,6 +295,8 @@ class ArticleScanpathSession(
         const val GEOMETRY_SETTLE_MS = 150.0
         // Engineering resource guard, not a reading or difficulty threshold.
         const val MAX_HISTORY_FIXATIONS = 512
+        const val MAX_CAPTURE_GEOMETRY_AGE_MS = 100.0
+        const val MAX_MOTION_INPUT_AGE_MS = 250.0
         private fun elapsedMs() = SystemClock.elapsedRealtimeNanos() / 1e6
     }
 }

@@ -466,7 +466,7 @@ class ReadingAidPolicy(
         // Focus follows coarse physical-line support, including line-only mapper targets.
         val article = c.geometry.visibleRectScreen
         if (!x.isFinite() || x !in article.left..article.right) return
-        c.rawSample?.let { sample ->
+        c.presentationSample?.let { sample ->
             val y = sample.processingY
             if (!sample.eligible || sample.geometrySnapshotId != c.geometrySnapshotId ||
                 sample.processingX?.isFinite() != true || y?.isFinite() != true ||
@@ -596,7 +596,11 @@ class ReadingAidPolicy(
         if (!valid(c)) {
             clearDynamic(c.nowMs, "invalid_live_input", out, retainFocus(c))
             resetEvidence(config.lineStartAidType == ReadingAidType.READING_BOOKMARK, preserveFocus = true)
-            continuationFloor = c.captureMs ?: c.nowMs
+            // A timer with no observation has no new capture boundary. Advancing
+            // to wall time would reject an entire first prefix delivered with lag.
+            c.captureMs?.takeIf { it.isFinite() && it >= 0 }?.let {
+                continuationFloor = maxOf(continuationFloor, it)
+            }
         } else {
             val word = active[ReadingAidType.WORD_MAGNIFIER]
             if (word != null && (word.anchor.line != c.targetLine ||

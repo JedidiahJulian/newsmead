@@ -1271,9 +1271,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         scanpathCounts.clear()
         val aids = readingAidOverlay?.let { ArticleReadingAidRuntime(binding.tvArticleText,
             binding.readingAidWordDock, it, config = ReadingAidPolicyConfig.definitionPrototype()
-                .copy(conditionId = "SMOOTHED_ARTICLE_DEFINITION_V10"),
+                .copy(conditionId = "SMOOTHED_ARTICLE_CONTENT_AIDS_V11"),
             preferences = aidPreferences, definitionPopup = definitionPopup,
             coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED, blinkFilterEnabled = true,
+            motionCompensatedAids = true,
             onConsultationChanged = { active, at, reason ->
                 articleAutoScroll?.interrupt("definition_consultation")
                 scanpathSession?.setConsultation(active, at, reason)
@@ -1283,6 +1284,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             SystemClock.elapsedRealtimeNanos() / 1e6, auto.configuration().put("enabled", auto.enabled)) }
         val liveScanpath = ArticleScanpathSession(binding.tvArticleText,
             coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED,
+            motionCompensatedAids = true,
             config = aids?.scanpathConfig ?: com.newsmead.gaze.scanpath.ScanpathConfig(),
             onEvent = { generation, event ->
             scanpathCounts[event.patternId] = (scanpathCounts[event.patternId] ?: 0) + 1
@@ -1303,6 +1305,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
         provider.onObservation = { observation ->
             // An old provider's terminal callback must not close a newer article stream.
+            // Detect external movement before any gaze can be interpreted as self-scroll.
+            if (scanpathSession === liveScanpath) articleAutoScroll?.onPreDraw()
             val controlsExcluded = readerControlGate.excludes(observation.captureMs) ||
                 (observation.x != null && observation.y != null &&
                     readingAidEntryContains(observation.x, observation.y))
@@ -1310,7 +1314,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             if (scanpathSession === liveScanpath) {
                 liveScanpath.record(when {
                     controlsExcluded -> observation.copy(reason = "reader_controls")
-                    autoScrollExclusion != null -> observation.copy(reason = autoScrollExclusion)
+                    autoScrollExclusion != null && !liveScanpath.motionCompensatedAids ->
+                        observation.copy(reason = autoScrollExclusion)
                     else -> observation
                 })
                 articleAutoScroll?.onObservation(if (controlsExcluded)
@@ -1467,8 +1472,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 else -> null
             } },
             onBoundary = { moving, at, detail ->
+                scanpathSession?.autoScrollMotion(moving, detail.optString("reason"))
                 readingAidRuntime?.autoScrollBoundary(moving, at, detail)
-                scanpathSession?.boundary(if (moving) "auto_scroll_start" else "auto_scroll_end")
+                if (scanpathSession?.motionCompensatedAids != true)
+                    scanpathSession?.boundary(if (moving) "auto_scroll_start" else "auto_scroll_end")
             },
             onJournal = { event, at, detail -> readingAidRuntime?.autoScrollEvent(event, at, detail) },
             onState = { enabled, paused ->

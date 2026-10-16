@@ -12,6 +12,59 @@ protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
 
+**2026-10-16 gaze-scroll direction research (design pending):** owner explicitly
+requests gaze down → scroll down, gaze up → scroll up, rejecting manual speed
+control and calibration-specific design. Primary-source review found a direct
+bidirectional steady-speed precedent in Käki et al.2014, plus mobile gesture/dwell
+comparisons in DynamicRead2023. Stanford2007 reading auto-scroll was intentionally
+forward-only; it does not establish bidirectional control or our old thresholds.
+Actual reading gaze before manual scrolling varies across people/regions
+(Turner et al.2015). Intent confirmation and phone-specific timings remain open.
+A provisional policy/test draft is saved outside active source in
+`output/gaze-scroll-direction-research/directional-policy-draft.patch`; its two
+initially clean source files were restored so the app retains the verified V3
+controller and existing moving-text aid edits. No new build/device attempt.
+[Evidence and exact source locations](gaze-scroll-interaction-evidence.md).
+Follow-up: owner supplied GazeScroll (officially bidirectional, undisclosed
+controller). OptiKey Look-to-scroll is a detailed public reference for a chosen
+anchor, stationary deadzone, two-way control and optional zero distance
+acceleration. Android Deep-SkyLabs source exists but uses discrete actions and
+has simulator/configuration caveats. SeeSo UIAutoScroll source is forward-only.
+No external program/camera/install or source import ran; findings appended to
+the evidence note. No new direction controller has been installed.
+
+**2026-10-16 aids during auto-scroll (verified software checkpoint):** owner
+reports aids do not trigger. Source confirms broad motion exclusion plus geometry
+reset on every translation. Live-only opt-in adapter now uses capture-aligned
+text-local analysis while preserving raw/display/processing screen points. Last
+geometry at/before capture, max100 ms snapshot age/250 ms input age, two-second/
+4096-snapshot history. Explicit self-scroll retains layout ID; manual/external
+scroll or reflow clears it. Engine coordinates are local; policy/render positions
+project into current display. Runtime preserves same-ID translation evidence and
+logs motion start/end without clearing it. Existing guide, definition, focus and
+bookmark rules remain; lookup offer/panel pauses navigation. Condition
+SMOOTHED_ARTICLE_CONTENT_AIDS_V11/modeauto_scroll_content_frame_v1 labels
+content-residence proxies, not physiological fixations or validated difficulty.
+Pilot/Replay default adapter and classifier thresholds remain unchanged. Review
+caught callback-before-preDraw external scroll retaining history; controller
+prechecks and forced invalidation/newID now cover it. Follow-up source review
+clean. First attempt passed 271 JVM checks/builds and 8/10 native checks, with
+focus/bookmark failures retained. Source confirmed startup no-input timer advanced
+bookmark capture floor past delayed first prefix; corrected to advance only actual
+finite capture floors, with two passing policy regressions. Native focus fixture
+uses explicit 24 dp STANDARD tier and asserts its premise; font scaling is a
+possible first-failure cause, not proved from that log. Final corrections reviewed.
+Owner-approved retry passes **273/273 JVM checks across 31 suites**, both APK builds
+and **5/5 aid integration checks in 14.222 s**. A56 replace installs preserve app
+data/calibration. Guides, lookup/navigation block, real line-cycle focus,
+tracking-loss bookmark and forced external-motion invalidation pass. The old five
+navigation tests passed on attempt 01, not rerun on the corrected APK. Evidence:
+`output/auto-scroll-reading-aids-check-02/summary.json` plus copied XML/build/
+native/install logs; attempt 01 remains intact. Camera stayed off; no human
+collection. Replay-hosted attached fixtures exercise production components with
+synthetic inputs; complete live Fragment routing and human validity remain unchecked.
+[Contract](auto-scroll-reading-aids.md).
+
 **2026-10-16 auto-scroll V3 continuous speed (verified software checkpoint):**
 owner confirms V2 works but wants immediate, controlled Athena-like movement;
 explicit choice is lower gaze speeds up, higher gaze slows/stops. V3 replaces

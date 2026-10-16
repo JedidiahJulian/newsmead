@@ -38,6 +38,7 @@ class ArticleReadingAidRuntime(
     private val onFocusEpisode: (ReadingAidFocusEpisode) -> Unit = {},
     private val onDefinitionOffer: (ReadingAidAction, String, Double) -> Unit = { _, _, _ -> },
     private val blinkFilterEnabled: Boolean = false,
+    private val motionCompensatedAids: Boolean = false,
 ) {
     val scanpathConfig = ScanpathConfig(returnSweepStartFraction = 0.25, returnSweepEndFraction = 0.75,
         wordResidenceMs = config.wordMinObservedMs, lineResidenceMs = config.lineMinObservedMs,
@@ -73,6 +74,7 @@ class ArticleReadingAidRuntime(
     }
 
     init {
+        require(!motionCompensatedAids || coordinateStream == ScanpathCoordinateStream.ARTICLE_SMOOTHED)
         overlay.onFocusScrollRender = { source, displayedSnapshot, top, bottom, at ->
             // Presentation continuity is not new gaze support or a detector decision.
             trace.record("focus_scroll_presentation", at, JSONObject()
@@ -128,6 +130,19 @@ class ArticleReadingAidRuntime(
     fun geometry(generation: Int, value: ScanpathGeometry?) {
         checkMain()
         if (closed) return
+        val previous = snapshot
+        if (motionCompensatedAids && previous != null && value != null &&
+            previous.snapshotId == value.snapshotId && context.generation == generation.toLong() &&
+            ReadingFocusMotion.compatibleTranslation(previous, value)) {
+            // Same content layout, new display position. Preserve accumulated evidence
+            // and anchor IDs while rendering each aid against the current screen frame.
+            snapshot = value
+            context = context.copy(geometry = value, nowMs = elapsedMs(),
+                targetX = context.rawSample?.motionCompensation?.let { it.contentX + value.textOriginX }
+                    ?: context.targetX)
+            decisions(emptyList())
+            return
+        }
         definitionPopup?.clear("geometry_changed")
         dismissedDefinitionAnchor = null
         snapshot = value
@@ -155,12 +170,15 @@ class ArticleReadingAidRuntime(
         val ordered = capture != null && capture.isFinite() && capture > latestCapture
         if (capture != null && capture.isFinite()) latestCapture = maxOf(latestCapture, capture)
         val matchingStream = sample.coordinateStream == coordinateStream
+        val matchingAnalysis = (sample.motionCompensation?.let {
+            motionCompensatedAids && it.validFor(sample) } ?: true) &&
+            (!motionCompensatedAids || !sample.eligible || sample.motionCompensation != null)
         val eyeExcluded = sample.exclusion == "blink" || sample.exclusion == "eye_state_unavailable"
         val selectedPointValid = sample.processingX?.isFinite() == true && sample.processingY?.isFinite() == true
-        val valid = !suspended && !consulting && matchingStream && !eyeExcluded && selectedPointValid &&
+        val valid = !suspended && !consulting && matchingStream && matchingAnalysis && !eyeExcluded && selectedPointValid &&
             sample.eligible && ordered && delivery != null && delivery.isFinite() &&
             delivery >= capture!! && delivery <= now && sample.geometrySnapshotId == snapshot?.snapshotId
-        val interpretationAllowed = !suspended && !consulting && matchingStream &&
+        val interpretationAllowed = !suspended && !consulting && matchingStream && matchingAnalysis &&
             sample.geometrySnapshotId == snapshot?.snapshotId &&
             (sample.exclusion == null || sample.exclusion == "outside_visible_text" ||
                 sample.exclusion !in listOf("layout_unavailable", "geometry_unsettled") &&
@@ -169,7 +187,7 @@ class ArticleReadingAidRuntime(
                     .none { sample.exclusion.contains(it) })
         // Only translation/unsettled geometry may retain the focus presentation.
         // Menus, consultation, calibration and provider/screen stops must remove it.
-        if (!matchingStream || sample.exclusion?.let { reason ->
+        if (!matchingStream || !matchingAnalysis || sample.exclusion?.let { reason ->
                 reason != "geometry_unsettled" && reason != "scroll" &&
                     (reason == "layout_unavailable" || reason.startsWith("definition_") ||
                         listOf("calibration", "control", "pause", "restart", "stop", "camera", "provider_failed", "text_change")
@@ -177,7 +195,9 @@ class ArticleReadingAidRuntime(
             } == true) overlay.clearFocusScrollHold()
         context = ReadingAidContext(generation.toLong(), snapshot?.snapshotId ?: "",
             snapshot?.lines?.size ?: 0, sample.line, sample.wordStartUtf16, sample.wordEndUtf16,
-            now, capture, delivery, valid, geometry = snapshot, targetX = sample.processingX,
+            now, capture, delivery, valid, geometry = snapshot,
+            targetX = sample.motionCompensation?.let { it.contentX + (snapshot?.textOriginX ?: 0.0) }
+                ?: sample.processingX,
             rawSample = sample, bookmarkInputAllowed = interpretationAllowed,
             guideRange = if (valid) guideResolver.resolve(body.text.toString(), snapshot, sample.line) else null,
             focusInputAllowed = interpretationAllowed, focusTextSizeDp = renderedFontDp())
@@ -274,6 +294,11 @@ class ArticleReadingAidRuntime(
     fun autoScrollBoundary(moving: Boolean, atMs: Double, detail: JSONObject) {
         checkMain()
         if (closed) return
+        if (motionCompensatedAids) {
+            autoScrollEvent(if (moving) "start" else "end", atMs,
+                JSONObject(detail.toString()).put("aid_input_mode", "auto_scroll_content_frame_v1"))
+            return
+        }
         context = context.copy(nowMs = atMs, validLiveInput = false, rawSample = null,
             focusInputAllowed = false, bookmarkInputAllowed = false)
         latestFixation = null
@@ -339,6 +364,11 @@ class ArticleReadingAidRuntime(
         val values = JSONObject().put("config_id", config.configId).put("condition_id", config.conditionId)
             .put("coordinate_stream", coordinateStream.id)
             .put("processing_pipeline_version", "SELECTED_PROVIDER_COORDINATES_V1")
+            .put("motion_compensated_aids", motionCompensatedAids)
+            .put("aid_analysis_frame", if (motionCompensatedAids) "auto_scroll_content_frame_v1" else "screen")
+            .put("motion_cluster_interpretation", if (motionCompensatedAids)
+                "experimental_content_residence_proxy_not_physiological_fixation" else JSONObject.NULL)
+            .put("motion_geometry_max_age_ms", if (motionCompensatedAids) 100 else JSONObject.NULL)
             .put("blink_filter_enabled", blinkFilterEnabled)
             .put("blink_filter_version", if (blinkFilterEnabled) MgazeNetBlinkGate.VERSION else JSONObject.NULL)
             .put("blink_close_aspect_ratio", if (blinkFilterEnabled) MgazeNetBlinkGate.CLOSE_THRESHOLD else JSONObject.NULL)

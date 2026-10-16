@@ -74,6 +74,16 @@ positions. Export still uses the explicit Save aid trace action.
 
 ## Scanpath implications
 
+**Current live aid extension (2026-10-16):** the owner requested aid activation
+while scrolling. The opt-in live article adapter now retains selected screen
+coordinates and derives capture-aligned content coordinates for experimental aid
+triggers. Controlled translations preserve layout identity; external changes
+still break it. See [aids during scrolling](auto-scroll-reading-aids.md) for the
+contract, trace condition and software/device verification. The following paragraph
+describes the original stationary adapter, which remains the default for frozen
+Pilot/Replay; its blanket exclusion is no longer applied to the opted-in live aid
+adapter. Content-residence proxies are not validated stationary-text metrics.
+
 This mode moves text while the reader may be looking at it. Existing stationary
 text detectors are not motion-compensated. Motion intervals and captures through
 motion end+150 ms remain excluded with auto_scroll_motion/auto_scroll_settling;

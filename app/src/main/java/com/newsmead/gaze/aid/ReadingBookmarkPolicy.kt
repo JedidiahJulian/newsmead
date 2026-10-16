@@ -83,7 +83,7 @@ internal class ReadingBookmarkPolicy(private val detector: ScanpathConfig) {
     fun input(c: ReadingAidContext, maxAgeMs: Double, lossMs: Double): Change {
         if (!c.nowMs.isFinite() || c.nowMs < 0 || c.nowMs < lastNow) { clearLoss(); clearOutside(); return Change() }
         lastNow = c.nowMs
-        val s = c.rawSample ?: return confirmLoss(c.nowMs, lossMs)
+        val s = c.presentationSample ?: return confirmLoss(c.nowMs, lossMs)
         val delivery = s.deliveryMs
         val capture = s.captureMs
         val clockValid = delivery?.isFinite() == true && delivery >= 0 && delivery <= c.nowMs &&
