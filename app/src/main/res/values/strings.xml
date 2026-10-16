@@ -152,6 +152,11 @@
     <string name="article_read_aloud_btn">Read Aloud</string>
     <string name="article_calibrate_gaze">Run gaze calibration</string>
     <string name="article_gaze_test">Run gaze accuracy test</string>
+    <string name="article_mahalanobis_start">Test Mahalanobis</string>
+    <string name="article_mahalanobis_stop">Stop Mahalanobis test</string>
+    <string name="calib_save_diagnostic">Save for testing only</string>
+    <string name="calib_diagnostic_title">Use poor calibration for testing?</string>
+    <string name="calib_diagnostic_message">This calibration failed its quality checks. Gaze location, reading metrics, and Mahalanobis results may be inaccurate. Save it only to test that the pipeline runs.</string>
     <!-- gaze accuracy test (ported Stage 3) -->
     <string name="gaze_test_hint">Look around - the dot should follow your gaze</string>
     <string name="gaze_test_no_calibration">No calibration found. Run calibration first.</string>

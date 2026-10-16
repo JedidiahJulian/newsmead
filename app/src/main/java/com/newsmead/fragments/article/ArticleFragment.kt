@@ -44,6 +44,7 @@ import com.newsmead.gaze.LineAoiMapper
 import com.newsmead.gaze.ReadingStateInferencer
 import com.newsmead.gaze.ReadingMeasurementLog
 import com.newsmead.gaze.ScaffoldLevel
+import com.newsmead.gaze.ScaffoldScoringMethod
 import com.newsmead.gaze.ScaffoldUpdate
 import com.newsmead.gaze.TextTarget
 import com.newsmead.gaze.WindowedStabilityEstimator
@@ -73,6 +74,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var targetStabilizer: GazeTargetStabilizer? = null
     private var stabilityEstimator: WindowedStabilityEstimator? = null
     private var scaffoldController: AdaptiveScaffoldController? = null
+    private var mahalanobisTestActive = false
     private var currentTextTarget = TextTarget.INVALID
     private var lastStabilityLogMs = 0L
     private var lastAoiLogMs = 0L
@@ -93,6 +95,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     ): View {
         Log.d("ArticleFragment", "onCreateView: ArticleFragment started")
         binding = FragmentArticleBinding.inflate(inflater, container, false)
+        binding.btnMahalanobis.visibility = if (StudyConfig.GAZE_ENABLED) View.VISIBLE else View.GONE
+        binding.btnMahalanobis.setOnClickListener { toggleMahalanobisTest() }
 
         // Disable the Read Aloud button until the TextToSpeech engine is initialized
         binding.btnReadAloudArticle.isEnabled = false
@@ -494,7 +498,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     override fun onResume() {
         super.onResume()
-        if (StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE && scaffoldController != null) {
+        if (!mahalanobisTestActive && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE && scaffoldController != null) {
             startScaffoldDemoCycle()
         }
         if (resumeGazeAfterStop && !launchedCalibration) {
@@ -604,7 +608,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         binding.btnReadAloudArticle.isEnabled = true
         resetAdaptiveReadingSession()
         gazeOverlay?.setDotOnly(false)
-        if (restore && isResumed && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) {
+        if (restore && isResumed && !mahalanobisTestActive && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) {
             startScaffoldDemoCycle()
         }
     }
@@ -637,6 +641,39 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         rsiInferencer = createRsiInferencer()
         Log.i("GazeScaffold", "Adaptive reading session reset after calibration/test interruption")
     }
+
+    private fun toggleMahalanobisTest() {
+        if (readingMeasurement != null) return
+        mahalanobisTestActive = !mahalanobisTestActive
+        if (mahalanobisTestActive && MgazeNetCalibrationStore(requireContext()).isDiagnostic()) {
+            Toast.makeText(context, "Diagnostic calibration: gaze and reading scores may be inaccurate", Toast.LENGTH_LONG).show()
+            Log.w("GazeScaffold", "Mahalanobis uses a failed-quality diagnostic calibration")
+        }
+        scaffoldDemoHandler.removeCallbacksAndMessages(null)
+        gazeOverlay?.setScaffoldCaption(null)
+        scaffoldController = createScaffoldController()
+        resetAdaptiveReadingSession()
+        binding.btnMahalanobis.setText(if (mahalanobisTestActive)
+            R.string.article_mahalanobis_stop else R.string.article_mahalanobis_start)
+        if (!mahalanobisTestActive && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) {
+            startScaffoldDemoCycle()
+        }
+        Log.i("GazeScaffold", "Mahalanobis test active=$mahalanobisTestActive; baseline restarted")
+    }
+
+    private fun createScaffoldController() = AdaptiveScaffoldController(
+        wordThreshold = StudyConfig.SCAFFOLD_WORD_THRESHOLD_Z,
+        lineThreshold = StudyConfig.SCAFFOLD_LINE_THRESHOLD_Z,
+        focusThreshold = StudyConfig.SCAFFOLD_FOCUS_THRESHOLD_Z,
+        reentryThreshold = StudyConfig.SCAFFOLD_REENTRY_THRESHOLD_Z,
+        minimumConfidence = StudyConfig.SCAFFOLD_MIN_GAZE_CONFIDENCE,
+        escalationPersistenceMs = StudyConfig.SCAFFOLD_ESCALATION_PERSISTENCE_MS,
+        recoveryPersistenceMs = StudyConfig.SCAFFOLD_RECOVERY_PERSISTENCE_MS,
+        scoringMethod = if (mahalanobisTestActive) ScaffoldScoringMethod.MAHALANOBIS
+            else StudyConfig.SCAFFOLD_SCORING_METHOD,
+        mahalanobisDirectionPolicy = StudyConfig.MAHALANOBIS_DIRECTION_POLICY,
+        forcedLevel = if (mahalanobisTestActive) null else forcedScaffoldLevel(),
+    )
     // Function to convert text to speech
     private fun speak(text: String) {
         if(!isTranslated && language.lowercase() == "english"){
@@ -741,18 +778,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             mahalanobisOffDiagonalShrinkage = StudyConfig.MAHALANOBIS_OFF_DIAGONAL_SHRINKAGE,
             mahalanobisDirectionDeadbandZ = StudyConfig.MAHALANOBIS_DIRECTION_DEADBAND_Z,
         )
-        val controller = AdaptiveScaffoldController(
-            wordThreshold = StudyConfig.SCAFFOLD_WORD_THRESHOLD_Z,
-            lineThreshold = StudyConfig.SCAFFOLD_LINE_THRESHOLD_Z,
-            focusThreshold = StudyConfig.SCAFFOLD_FOCUS_THRESHOLD_Z,
-            reentryThreshold = StudyConfig.SCAFFOLD_REENTRY_THRESHOLD_Z,
-            minimumConfidence = StudyConfig.SCAFFOLD_MIN_GAZE_CONFIDENCE,
-            escalationPersistenceMs = StudyConfig.SCAFFOLD_ESCALATION_PERSISTENCE_MS,
-            recoveryPersistenceMs = StudyConfig.SCAFFOLD_RECOVERY_PERSISTENCE_MS,
-            scoringMethod = StudyConfig.SCAFFOLD_SCORING_METHOD,
-            mahalanobisDirectionPolicy = StudyConfig.MAHALANOBIS_DIRECTION_POLICY,
-            forcedLevel = forcedScaffoldLevel(),
-        )
+        val controller = createScaffoldController()
         targetStabilizer = stabilizer
         stabilityEstimator = estimator
         scaffoldController = controller
@@ -768,7 +794,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             val target = stabilizer.update(rawTarget, timestampMs)
             currentTextTarget = target
             estimator.recordGazeSample(rawTarget.isValid, timestampMs)
-            controller.onGazeTarget(target, timestampMs)
+            scaffoldController?.onGazeTarget(target, timestampMs)
 
             if (timestampMs - lastAoiLogMs >= ARTICLE_DIAGNOSTIC_LOG_INTERVAL_MS) {
                 lastAoiLogMs = timestampMs
@@ -783,9 +809,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             if (target.isValid) {
                 rsiInferencer?.onLine(target.lineIndex, target.lineCount, timestampMs)
             } else {
-                applyScaffoldUpdate(
-                    controller.update(estimator.currentSnapshot(timestampMs), target, timestampMs)
-                )
+                scaffoldController?.update(estimator.currentSnapshot(timestampMs), target, timestampMs)
+                    ?.let(::applyScaffoldUpdate)
             }
         }
 
@@ -797,7 +822,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             attachLiveGaze(onGaze)
         }
 
-        if (StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) startScaffoldDemoCycle()
+        if (!mahalanobisTestActive && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) startScaffoldDemoCycle()
     }
 
     /**

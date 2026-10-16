@@ -11,6 +11,7 @@ import android.view.View
 import android.view.WindowManager
 import java.util.Locale
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -65,6 +66,15 @@ class GazeCalibrationActivity : AppCompatActivity() {
             requestStart()
         }
         binding.btnAccept.setOnClickListener { save() }
+        binding.btnSaveDiagnostic.setOnClickListener {
+            if (qualityReport?.passed != false || comparisonSpec != null) return@setOnClickListener
+            AlertDialog.Builder(this)
+                .setTitle(com.newsmead.R.string.calib_diagnostic_title)
+                .setMessage(com.newsmead.R.string.calib_diagnostic_message)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(com.newsmead.R.string.calib_save_diagnostic) { _, _ -> save(diagnostic = true) }
+                .show()
+        }
         binding.btnRedoAll.setOnClickListener { discardAndPrepareRetry() }
         binding.btnRedoWorst.visibility = View.GONE
         binding.btnRedoAll.visibility = View.GONE
@@ -271,6 +281,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
         val spec = checkSpec(verification)
         if (checkPredictions.isEmpty()) {
             summaries.add("${spec.label}: no usable coordinates")
+            Log.i("MGazeNetCalibration", "check=${spec.label} usable_samples=0")
             return
         }
         val expected = checkTarget()
@@ -290,6 +301,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
         summaries.add(String.format(Locale.US,
             "%s: n=%d, dx=%.3f cm, dy=%.3f cm, 2D=%.3f cm",
             result.label,result.sampleCount,result.dxCm,result.dyCm,result.radialCm))
+        Log.i("MGazeNetCalibration", summaries.last())
     }
     private fun finishChecks() {
         source?.pauseCapture()
@@ -303,6 +315,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
             report.passed,report.median2dCm,report.worst2dCm,report.medianVerticalCm,
             report.worstRepeatCm,session?.postureRejected ?: 0,session?.practiceRestarts ?: 0,
             session?.trainingCandidates ?: 0,CalibrationIdentity.FIT_TARGET_COUNT*CalibrationIdentity.SAMPLES_PER_TARGET))
+        report.failures.forEach { Log.i("MGazeNetCalibration", "quality_failure=$it") }
         if (comparisonSpec != null && report.passed) {
             binding.progressText.text = "Finalizing the slot calibration…"
             binding.gatePanel.visibility = View.GONE
@@ -317,15 +330,24 @@ class GazeCalibrationActivity : AppCompatActivity() {
         binding.gateText.text = qualitySummary(report)
         binding.btnAccept.visibility = if (report.passed) View.VISIBLE else View.GONE
         binding.btnAccept.isEnabled = report.passed
+        binding.btnSaveDiagnostic.visibility = if (report.passed) View.GONE else View.VISIBLE
         binding.btnRedoAll.visibility = if (report.passed) View.GONE else View.VISIBLE
         binding.btnRedoAll.text = "Discard and recalibrate"
         binding.btnAccept.text = "Save MGazeNet calibration"
     }
-    private fun save() {
-        if (!active || verification != 6 || qualityReport?.passed != true || !geometryMatches()) return
+    private fun save(diagnostic: Boolean = false) {
+        if (!active || verification != 6 || qualityReport == null ||
+            qualityReport?.passed != !diagnostic || (diagnostic && comparisonSpec != null) || !geometryMatches()) return
         binding.btnAccept.isEnabled = false
+        binding.btnSaveDiagnostic.isEnabled = false
         source!!.save(identity!!) { success ->
-            stop(if (success) "MGazeNet calibration saved." else "Calibration could not be saved.")
+            if (success) {
+                MgazeNetCalibrationStore(this).recordDiagnosticStatus(diagnostic)
+                Log.i("MGazeNetCalibration", "saved diagnostic=$diagnostic quality_pass=${qualityReport?.passed}")
+            }
+            stop(if (success) {
+                if (diagnostic) "Diagnostic calibration saved for testing only." else "MGazeNet calibration saved."
+            } else "Calibration could not be saved.")
             if (success) finish()
         }
     }
@@ -422,7 +444,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private fun qualitySummary(report: MgazeNetCalibrationQualityGate.Report): String {
         fun value(number: Double) = if (number.isFinite()) String.format(Locale.US,"%.3f",number) else "unavailable"
         val heading = if (report.passed) "Calibration quality: PASS" else "Calibration quality: RETRY REQUIRED"
-        val metrics = "$heading\n" +
+        val firstFailure = report.failures.firstOrNull()?.let { "\nReason: $it" } ?: ""
+        val metrics = "$heading$firstFailure\n" +
             "Median 2D: ${value(report.median2dCm)} cm (limit ${MgazeNetCalibrationQualityGate.MAX_MEDIAN_2D_CM} cm)\n" +
             "Worst 2D: ${value(report.worst2dCm)} cm (limit ${MgazeNetCalibrationQualityGate.MAX_WORST_2D_CM} cm)\n" +
             "Median |vertical|: ${value(report.medianVerticalCm)} cm (limit ${MgazeNetCalibrationQualityGate.MAX_MEDIAN_VERTICAL_CM} cm)\n" +

@@ -41,6 +41,19 @@ class MgazeNetCalibrationStore(context: Context) {
         val file = File(root,"calibration.bin"); require(file.length() in 1..17L*1024*1024)
         CalibrationIdentity.hash(file.readBytes())
     }.getOrNull()
+    /** Bound to the saved artifact so a later accepted calibration is never mislabeled. */
+    fun recordDiagnosticStatus(diagnostic: Boolean) {
+        val preferences = context.getSharedPreferences("mgazenet_calibration_status",Context.MODE_PRIVATE)
+        preferences.edit().apply {
+            if (diagnostic) putString("diagnostic_fingerprint",fingerprint())
+            else remove("diagnostic_fingerprint")
+        }.apply()
+    }
+    fun isDiagnostic(): Boolean {
+        val saved = fingerprint() ?: return false
+        return context.getSharedPreferences("mgazenet_calibration_status",Context.MODE_PRIVATE)
+            .getString("diagnostic_fingerprint",null) == saved
+    }
     /** Capture immutable artifact/geometry on main before native work; never access a View on worker. */
     fun snapshot(view: View): CalibrationBundle.Artifact = read(view)
     fun load(saved: CalibrationBundle.Artifact): SvrCalibration = withModelFiles { x,y ->

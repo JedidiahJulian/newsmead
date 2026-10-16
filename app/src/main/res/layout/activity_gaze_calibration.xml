@@ -91,6 +91,14 @@
             android:text="@string/calib_redo_worst" />
 
         <Button
+            android:id="@+id/btnSaveDiagnostic"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/calib_save_diagnostic"
+            android:visibility="gone" />
+
+        <Button
             android:id="@+id/btnRedoAll"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
