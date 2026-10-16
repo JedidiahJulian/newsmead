@@ -16,6 +16,7 @@ import com.newsmead.gaze.scanpath.ScanpathGeometry
 import com.newsmead.gaze.scanpath.ScanpathSample
 import com.newsmead.gaze.mgazenet.MgazeNetCalibrationStore
 import com.newsmead.gaze.mgazenet.MgazeNetReadingSmoother
+import com.newsmead.gaze.mgazenet.MgazeNetBlinkGate
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
@@ -36,6 +37,7 @@ class ArticleReadingAidRuntime(
     val coordinateStream: ScanpathCoordinateStream = ScanpathCoordinateStream.CALIBRATED_RAW,
     private val onFocusEpisode: (ReadingAidFocusEpisode) -> Unit = {},
     private val onDefinitionOffer: (ReadingAidAction, String, Double) -> Unit = { _, _, _ -> },
+    private val blinkFilterEnabled: Boolean = false,
 ) {
     val scanpathConfig = ScanpathConfig(returnSweepStartFraction = 0.25, returnSweepEndFraction = 0.75,
         wordResidenceMs = config.wordMinObservedMs, lineResidenceMs = config.lineMinObservedMs,
@@ -60,7 +62,7 @@ class ArticleReadingAidRuntime(
     private var dismissedDefinitionAnchor: ReadingAidAnchor? = null
     private var unsupportedDefinitionActionId: String? = null
     private var context = ReadingAidContext(0, "", 0, null, null, null,
-        elapsedMs(), null, null, false)
+        elapsedMs(), null, null, false, focusTextSizeDp = renderedFontDp())
     private val guideResolver = ReadingGuideResolver()
     private val pulse = object : Runnable {
         override fun run() {
@@ -133,13 +135,14 @@ class ArticleReadingAidRuntime(
         context = context.copy(generation = generation.toLong(), geometrySnapshotId = value?.snapshotId ?: "",
             lineCount = value?.lines?.size ?: 0, targetLine = null, targetWordStartUtf16 = null,
             targetWordEndUtf16 = null, nowMs = elapsedMs(), validLiveInput = false,
-            geometry = value, targetX = null, guideRange = null)
+            geometry = value, targetX = null, guideRange = null, focusTextSizeDp = renderedFontDp())
         trace.record("geometry", context.nowMs, JSONObject().put("generation", generation)
             .put("geometry_snapshot_id", value?.snapshotId ?: JSONObject.NULL)
             .put("body_sha256", sha256(body.text.toString())).put("line_count", value?.lines?.size ?: 0)
             .put("text_size_px", body.textSize).put("line_height_px", body.lineHeight)
             .put("line_spacing_extra_px", body.lineSpacingExtra)
-            .put("line_spacing_multiplier", body.lineSpacingMultiplier))
+            .put("line_spacing_multiplier", body.lineSpacingMultiplier)
+            .put("focus_text_size_dp", context.focusTextSizeDp))
         decisions(policy.reset(context, preserveCompletedFocus = true))
     }
 
@@ -152,8 +155,9 @@ class ArticleReadingAidRuntime(
         val ordered = capture != null && capture.isFinite() && capture > latestCapture
         if (capture != null && capture.isFinite()) latestCapture = maxOf(latestCapture, capture)
         val matchingStream = sample.coordinateStream == coordinateStream
+        val eyeExcluded = sample.exclusion == "blink" || sample.exclusion == "eye_state_unavailable"
         val selectedPointValid = sample.processingX?.isFinite() == true && sample.processingY?.isFinite() == true
-        val valid = !suspended && !consulting && matchingStream && selectedPointValid &&
+        val valid = !suspended && !consulting && matchingStream && !eyeExcluded && selectedPointValid &&
             sample.eligible && ordered && delivery != null && delivery.isFinite() &&
             delivery >= capture!! && delivery <= now && sample.geometrySnapshotId == snapshot?.snapshotId
         val interpretationAllowed = !suspended && !consulting && matchingStream &&
@@ -176,7 +180,7 @@ class ArticleReadingAidRuntime(
             now, capture, delivery, valid, geometry = snapshot, targetX = sample.processingX,
             rawSample = sample, bookmarkInputAllowed = interpretationAllowed,
             guideRange = if (valid) guideResolver.resolve(body.text.toString(), snapshot, sample.line) else null,
-            focusInputAllowed = interpretationAllowed)
+            focusInputAllowed = interpretationAllowed, focusTextSizeDp = renderedFontDp())
         if (valid) definitionPopup?.observeReadingTarget(generation.toLong(), sample.wordStartUtf16, sample.wordEndUtf16)
         val dismissed = dismissedDefinitionAnchor
         if (valid && dismissed != null && (dismissed.generation != generation.toLong() ||
@@ -266,6 +270,22 @@ class ArticleReadingAidRuntime(
 
     fun export(context: Context): File = trace.export(context, configuration())
     fun configurationSnapshot(): JSONObject = configuration()
+    /** Explicit navigation is neither reader regression nor new evidence of distraction. */
+    fun autoScrollBoundary(moving: Boolean, atMs: Double, detail: JSONObject) {
+        checkMain()
+        if (closed) return
+        context = context.copy(nowMs = atMs, validLiveInput = false, rawSample = null,
+            focusInputAllowed = false, bookmarkInputAllowed = false)
+        latestFixation = null
+        decisions(policy.reset(context, preserveCompletedFocus = true))
+        autoScrollEvent(if (moving) "start" else "end", atMs, detail)
+    }
+    fun autoScrollEvent(event: String, atMs: Double, detail: JSONObject) {
+        checkMain()
+        if (!closed) trace.record("auto_scroll_$event", atMs, detail)
+    }
+    private fun renderedFontDp(): Double =
+        body.textSize.toDouble() / body.resources.displayMetrics.density.toDouble()
     fun activeActions(): List<ReadingAidAction> = policy.activeActions()
 
     private fun decisions(values: List<ReadingAidDecision>) {
@@ -306,6 +326,7 @@ class ArticleReadingAidRuntime(
     }
 
     private fun preferenceJson() = JSONObject().put("enabled", preferences.enabled)
+        .put("auto_scroll", preferences.autoScroll)
         .put("line_guide", preferences.lineGuide).put("line_start_cue", preferences.lineStartCue)
         .put("guide_style", preferences.guideStyle.name)
         .put("word_magnifier", preferences.wordMagnifier).put("focus_region", preferences.focusRegion)
@@ -318,6 +339,13 @@ class ArticleReadingAidRuntime(
         val values = JSONObject().put("config_id", config.configId).put("condition_id", config.conditionId)
             .put("coordinate_stream", coordinateStream.id)
             .put("processing_pipeline_version", "SELECTED_PROVIDER_COORDINATES_V1")
+            .put("blink_filter_enabled", blinkFilterEnabled)
+            .put("blink_filter_version", if (blinkFilterEnabled) MgazeNetBlinkGate.VERSION else JSONObject.NULL)
+            .put("blink_close_aspect_ratio", if (blinkFilterEnabled) MgazeNetBlinkGate.CLOSE_THRESHOLD else JSONObject.NULL)
+            .put("blink_reopen_aspect_ratio", if (blinkFilterEnabled) MgazeNetBlinkGate.OPEN_THRESHOLD else JSONObject.NULL)
+            .put("blink_reopen_fresh_frames", if (blinkFilterEnabled) MgazeNetBlinkGate.REOPEN_FRAMES else JSONObject.NULL)
+            .put("blink_geometry", if (blinkFilterEnabled) "each_eye_perpendicular_lid_gap_divided_by_pixel_corner_width" else JSONObject.NULL)
+            .put("blink_reason_means", if (blinkFilterEnabled) "closure_or_reopening_or_initial_opening_guard_not_blink_event_count" else JSONObject.NULL)
             .put("smoothing", coordinateStream == ScanpathCoordinateStream.ARTICLE_SMOOTHED)
             .put("smoothing_filter", if (coordinateStream == ScanpathCoordinateStream.ARTICLE_SMOOTHED) "one_euro" else JSONObject.NULL)
             .put("smoothing_min_cutoff", if (coordinateStream == ScanpathCoordinateStream.ARTICLE_SMOOTHED) MgazeNetReadingSmoother.MIN_CUTOFF else JSONObject.NULL)
@@ -360,7 +388,15 @@ class ArticleReadingAidRuntime(
             .put("bookmark_tracking_loss_ms", config.bookmarkTrackingLossMs)
             .put("bookmark_tracking_loss_time_basis", "delivery_elapsed_time")
             .put("bookmark_tracking_loss_interpretation", "unavailable_gaze_not_attention_diagnosis")
-            .put("focus_rule_version", "RETURN_PRESENCE_AND_LINE_VISITS_V4")
+            .put("focus_rule_version", "FONT_AWARE_LINE_VISITS_V5_UNCHANGED_RETURN_PRESENCE")
+            .put("focus_font_rule_version", ReadingFocusTypography.VERSION)
+            .put("focus_text_size_dp", renderedFontDp())
+            .put("focus_font_size_basis", "rendered_font_pixels_divided_by_display_density_including_system_font_scale")
+            .put("focus_font_rules", org.json.JSONArray(listOf(
+                ReadingFocusTypography.COMPACT, ReadingFocusTypography.SMALL, ReadingFocusTypography.STANDARD).map {
+                JSONObject().put("id", it.id).put("required_alternations", it.requiredAlternations)
+                    .put("minimum_line_visit_ms", maxOf(scanpathConfig.minFixationMs, it.extraMinVisitMs))
+            }))
             .put("focus_interruption_min_episodes", config.focusInterruptionMinEpisodes)
             .put("focus_interruption_window_ms", config.focusInterruptionWindowMs)
             .put("focus_loss_min_ms", config.focusLossMinMs)
@@ -390,7 +426,8 @@ class ArticleReadingAidRuntime(
                 "full_visible_overlay_width" else "visible_text_bounds")
             .put("focus_form", if (config.configId == "DEFINITION_PROFILE_V4") "CONTEXT_FOCUS_REGION_V4" else "CONTEXT_FOCUS_REGION_V1")
             .put("focus_mask_color", if (config.configId == "DEFINITION_PROFILE_V4") "per_action_focus_style" else "#000000")
-            .put("focus_appearance_selector_version", "FOCUS_MASK_STYLE_V3")
+            .put("focus_appearance_selector_version", "FOCUS_MASK_STYLE_V4_VISIBLE_SURROUNDINGS")
+            .put("focus_max_surrounding_opacity", ReadingFocusAppearance.MAX_SURROUNDING_OPACITY)
             .put("focus_dark_onset_ms", ReadingFocusOnset.ONSET_MS)
             .put("focus_dark_onset_curve", "smoothstep_presentation_only")
             .put("focus_default_style", ReadingFocusStyle.FADE_TEXT.name)
@@ -424,7 +461,7 @@ class ArticleReadingAidRuntime(
             .put("assignment_agreement", scanpathConfig.assignmentAgreement)
         val digest = MessageDigest.getInstance("SHA-256").digest(values.toString().toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
-        return JSONObject().put("policy_version", 15).put("extractor_version", ScanpathEngine.EXTRACTOR_VERSION)
+        return JSONObject().put("policy_version", 16).put("extractor_version", ScanpathEngine.EXTRACTOR_VERSION)
             .put("classifier_version", ScanpathEngine.CLASSIFIER_VERSION)
             .put("provisional_evidence_version", ScanpathEngine.PROVISIONAL_EVIDENCE_VERSION)
             .put("input_source", inputSource.name)

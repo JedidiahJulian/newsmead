@@ -7,14 +7,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReadingFocusAppearanceTest {
-    @Test fun backgroundMaskMakesOutsideTextFaintAtBothStrengthsAndFadesContinuously() {
+    @Test fun backgroundMaskPreservesSurroundingContrastAtBothStrengthsAndFadesContinuously() {
         val g = geometry()
         fun mask(strength: Double, style: ReadingFocusStyle = ReadingFocusStyle.FADE_TEXT) = ReadingFocusAppearance.resolve(g, g.visibleRectScreen,
             4, 2, strength, limitContextHeight = false, keepLineCount = true,
             occludeSurroundings = true, focusStyle = style)
-        assertEquals(230, mask(0.5).appearance!!.alpha)
-        assertEquals(250, mask(1.0).appearance!!.alpha)
-        assertEquals(115, mask(0.25).appearance!!.alpha)
+        assertEquals(153, mask(0.5).appearance!!.alpha)
+        assertEquals(217, mask(1.0).appearance!!.alpha)
+        assertEquals(77, mask(0.25).appearance!!.alpha)
+        assertEquals(38, mask(0.125).appearance!!.alpha)
+        assertEquals(185, mask(0.75).appearance!!.alpha)
         assertEquals(mask(0.5).appearance!!.clearTop, mask(1.0).appearance!!.clearTop, 0.0)
         assertEquals(mask(0.5).appearance!!.clearBottom, mask(1.0).appearance!!.clearBottom, 0.0)
         assertEquals("focus_alpha_zero", mask(0.0).withheldReason)
@@ -26,6 +28,26 @@ class ReadingFocusAppearanceTest {
             mask(0.5, ReadingFocusStyle.DARK_SURROUNDINGS).appearance!!.clearTop, 0.0)
         assertEquals(mask(0.5).appearance!!.clearBottom,
             mask(0.5, ReadingFocusStyle.DARK_SURROUNDINGS).appearance!!.clearBottom, 0.0)
+    }
+
+    @Test fun everyStyleAndHistoricalMaskStaysBelowSurroundingOpacityCeilingForFiniteStrengths() {
+        val g = geometry()
+        assertEquals(0.85, ReadingFocusAppearance.MAX_SURROUNDING_OPACITY, 0.0)
+        val strengths = (-1000..2000).map { it / 1000.0 } +
+            listOf(-Double.MAX_VALUE, Double.MAX_VALUE, Double.MIN_VALUE)
+        for (style in ReadingFocusStyle.values()) {
+            for (occlude in listOf(false, true)) {
+                for (strength in strengths) {
+                    val result = ReadingFocusAppearance.resolve(g, g.visibleRectScreen,
+                        4, 2, strength, limitContextHeight = false, keepLineCount = true,
+                        occludeSurroundings = occlude, focusStyle = style)
+                    val alpha = result.appearance?.alpha ?: 0
+                    assertTrue("$style, occlude=$occlude, strength=$strength: alpha=$alpha",
+                        alpha in 0..217)
+                    if (!occlude) assertTrue(alpha <= 40)
+                }
+            }
+        }
     }
 
     @Test fun currentProfileKeepsFiveLinesEvenAboveTheFormerViewportBudget() {

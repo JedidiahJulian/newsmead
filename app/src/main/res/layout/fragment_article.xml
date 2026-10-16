@@ -371,6 +371,13 @@
                     android:text="@string/article_text_loading"
                     android:textColor="?primaryTextColor" />
 
+                <View
+                    android:id="@+id/articleAutoScrollTail"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:visibility="gone"
+                    android:importantForAccessibility="no" />
+
                 <Button
                     android:id="@+id/btnReadFullArticle"
                     style="@style/ButtonMedium_Text"
@@ -418,6 +425,18 @@
                     android:orientation="vertical" />
             </LinearLayout>
         </com.newsmead.custom.LockableNestedScrollView>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnArticleAutoScrollPause"
+            style="@style/ButtonSmall_LowEmphasis"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="80dp"
+            android:translationZ="12dp"
+            android:visibility="gone"
+            android:text="@string/article_auto_scroll_pause" />
 
         <com.google.android.material.bottomappbar.BottomAppBar
             android:id="@+id/bottomAppBar"

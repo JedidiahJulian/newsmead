@@ -6,6 +6,55 @@ import org.junit.Test
 
 /** Synthetic policy contracts, not evidence of gaze accuracy or human aid benefit. */
 class ReadingFocusPolicyTest {
+    @Test fun repeatedBlinksNeverBecomeLookAwayEpisodesOrAddRecoveryReadingTime() {
+        val completed = mutableListOf<ReadingAidFocusEpisode>()
+        val p = ReadingFocusPolicy(config, ScanpathConfig(), completed::add)
+        activated(p)
+        evidence(p)
+        val before = p.currentEvidence(c(2400.0))!!
+        for (start in listOf(2500.0, 2900.0, 3300.0)) {
+            p.input(c(start, reason = "blink", x = null, y = null))
+            p.input(c(start + 80.0, reason = "blink", x = null, y = null))
+            prime(p, start + 120.0)
+        }
+        val after = evidence(p, 3520.0)!!
+        assertEquals(3, completed.size)
+        assertEquals(3, after.episodeCount)
+        assertEquals(before.observedRecoveryMs, after.observedRecoveryMs, 0.0)
+        assertEquals(0.5, after.initialStrength, 0.0)
+    }
+
+    @Test fun eyeExclusionsCannotLengthenBriefNoFaceGlitchesIntoLookAwayEpisodes() {
+        for (reason in listOf("blink", "eye_state_unavailable")) {
+            val completed = mutableListOf<ReadingAidFocusEpisode>()
+            val p = ReadingFocusPolicy(config, ScanpathConfig(), completed::add)
+            prime(p)
+            for (start in listOf(200.0, 1000.0, 1800.0)) {
+                missing(p, start)
+                for (offset in listOf(50.0, 250.0, 450.0))
+                    p.input(c(start + offset, reason = reason, x = null, y = null))
+                prime(p, start + 500.0)
+            }
+            assertTrue(completed.isEmpty())
+            assertFalse(p.hasDemand)
+        }
+    }
+
+    @Test fun alreadyQualifiedLossCanStillCompleteAfterBlinkWithoutCountingBlinkAsAnotherEpisode() {
+        val completed = mutableListOf<ReadingAidFocusEpisode>()
+        val p = ReadingFocusPolicy(config, ScanpathConfig(), completed::add)
+        prime(p)
+        missing(p, 200.0); missing(p, 700.0) // 500 ms of missing-source evidence before the blink.
+        p.input(c(750.0, reason = "blink", x = null, y = null))
+        prime(p, 800.0)
+        val episode = completed.single()
+        assertEquals(listOf("no_face"), episode.missingReasons)
+        assertEquals(200.0, episode.missingFirstDeliveryMs, 0.0)
+        assertEquals(700.0, episode.missingLastDeliveryMs, 0.0)
+        assertEquals(800.0, episode.firstRecoveryDeliveryMs, 0.0)
+        assertFalse(p.hasDemand)
+    }
+
     private val config = ReadingAidPolicyConfig.definitionPrototype()
     private val geometry = ScanpathGeometry("g", 0.0, 0.0,
         ScanpathRect(0.0, 0.0, 100.0, 100.0), 20.0,
@@ -243,7 +292,7 @@ class ReadingFocusPolicyTest {
             p.breakLineSequence()
             for ((i, line) in listOf(0, 1, 0, 1).withIndex()) visit(p, 9000.0 + i * 100, line)
             val selected = p.currentEvidence(c(9300.0), prefs)!!
-            assertEquals("A4_LINE_VISIT_ALTERNATION_FOCUS_V2", selected.ruleId)
+            assertEquals("A4_FONT_SCALED_LINE_VISITS_V3", selected.ruleId)
             assertEquals(0.0, selected.observedRecoveryMs, 0.0)
             assertEquals(1, selected.alternations.size)
             assertTrue(selected.episodes.isEmpty())
@@ -297,7 +346,7 @@ class ReadingFocusPolicyTest {
         val p = ReadingFocusPolicy(config, ScanpathConfig()) {}
         assertNull(visit(p, 100.0, 0)); assertNull(visit(p, 200.0, 1)); assertNull(visit(p, 300.0, 0))
         val first = visit(p, 400.0, 1, first = 380.0)!!
-        assertEquals("A4_LINE_VISIT_ALTERNATION_FOCUS_V2", first.ruleId)
+        assertEquals("A4_FONT_SCALED_LINE_VISITS_V3", first.ruleId)
         assertEquals(0.5, first.initialStrength, 0.0)
         assertTrue(first.cycleEventIds.isEmpty()); assertTrue(first.cycleFixationIndices.isEmpty())
         val a = first.alternations.single()

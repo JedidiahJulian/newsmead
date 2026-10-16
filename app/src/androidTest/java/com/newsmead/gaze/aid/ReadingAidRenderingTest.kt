@@ -61,11 +61,11 @@ class ReadingAidRenderingTest {
                 overlay.setActions(source, initial, 0, listOf(focus))
                 overlay.draw(Canvas(bitmap))
                 val pixel = bitmap.getPixel(0, 0)
-                assertEquals(230, android.graphics.Color.alpha(pixel))
+                assertEquals(153, android.graphics.Color.alpha(pixel))
                 for (x in listOf(0, margin - 1, margin, width / 2, width - margin, width - 1)) {
-                    assertEquals("V4 top veil spans viewport including side gutters", 230,
+                    assertEquals("V4 top veil spans viewport including side gutters", 153,
                         android.graphics.Color.alpha(bitmap.getPixel(x, 0)))
-                    assertEquals("V4 bottom veil spans viewport including side gutters", 230,
+                    assertEquals("V4 bottom veil spans viewport including side gutters", 153,
                         android.graphics.Color.alpha(bitmap.getPixel(x, height - 1)))
                     for (line in 2..6) {
                         val row = initial.lines[line]
@@ -80,12 +80,21 @@ class ReadingAidRenderingTest {
                 assertTrue(kotlin.math.abs(75 - android.graphics.Color.blue(pixel)) <= 1)
                 val clearY = ((initial.lines[4].top + initial.lines[4].bottom) / 2).toInt()
                 assertEquals(0, android.graphics.Color.alpha(bitmap.getPixel(width / 2, clearY)))
+                overlay.setActions(source, initial, 0, listOf(focus.copy(strength = 1.0)))
+                bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
+                overlay.draw(Canvas(bitmap))
+                assertEquals("Full-strength surroundings retain about 15% contrast", 217,
+                    android.graphics.Color.alpha(bitmap.getPixel(0, 0)))
+                assertEquals(0, android.graphics.Color.alpha(bitmap.getPixel(width / 2, clearY)))
+                overlay.setActions(source, initial, 0, listOf(focus))
+                bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
+                overlay.draw(Canvas(bitmap))
                 source.scrollTo(0, source.lineHeight / 2)
                 val scrolled = reader.read(source)!!.forEngine("g2")
                 overlay.setActions(source, scrolled, 0, emptyList())
                 bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
                 overlay.draw(Canvas(bitmap))
-                assertEquals(230, android.graphics.Color.alpha(bitmap.getPixel(0, 0)))
+                assertEquals(153, android.graphics.Color.alpha(bitmap.getPixel(0, 0)))
                 assertEquals(0, android.graphics.Color.alpha(bitmap.getPixel(width / 2, clearY)))
                 assertEquals(listOf("g2"), held)
                 overlay.draw(Canvas(bitmap))
@@ -166,7 +175,7 @@ class ReadingAidRenderingTest {
                 overlay.setActions(source, scrolled, 0, listOf(focus.copy(anchor = dark.anchor)))
                 bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
                 overlay.draw(Canvas(bitmap))
-                assertEquals(230, android.graphics.Color.alpha(bitmap.getPixel(0, 0)))
+                assertEquals(153, android.graphics.Color.alpha(bitmap.getPixel(0, 0)))
                 overlay.setActions(source, scrolled, 0, listOf(dark))
                 source.scrollTo(0, source.scrollY + source.lineHeight)
                 val undrawnStyleScroll = reader.read(source)!!.forEngine("undrawn-style-scroll")
@@ -227,7 +236,7 @@ class ReadingAidRenderingTest {
             overlay.setActions(source, snapshot, 0, emptyList())
             bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
             overlay.draw(Canvas(bitmap))
-            assertEquals(230, android.graphics.Color.alpha(bitmap.getPixel(0, 0)))
+            assertEquals(153, android.graphics.Color.alpha(bitmap.getPixel(0, 0)))
             assertEquals(listOf("scroll"), held)
         }
         try {
@@ -238,7 +247,7 @@ class ReadingAidRenderingTest {
                 overlay.setActions(source, snapshot, 0, emptyList())
                 bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
                 overlay.draw(Canvas(bitmap))
-                assertEquals("Hold survives briefly after scroll at original strength", 230,
+                assertEquals("Hold survives briefly after scroll at original strength", 153,
                     android.graphics.Color.alpha(bitmap.getPixel(0, 0)))
                 assertEquals(listOf("scroll", "tick"), held)
             }

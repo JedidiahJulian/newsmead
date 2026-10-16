@@ -235,7 +235,7 @@ class ScanpathPilotActivity : AppCompatActivity() {
             onFocusEpisode = { episode -> log?.focusEpisode(episode) },
             onDefinitionOffer = { action, event, at -> log?.append("definition_offer", JSONObject()
                 .put("action_id", action.id).put("event", event).put("at_ms", at)
-                .put("user_requested_panel", event == "accepted")) })
+                .put("user_requested_panel", event == "accepted")) }, blinkFilterEnabled = !synthetic)
         log = ScanpathTraceWriter(this, "scanpath_pilot", header(plan, runtime!!.configurationSnapshot()
             .put("dictionary_mode", if (synthetic) "bundled_only" else "online_then_bundled")
             .put("dictionary_online_route_version", if (synthetic) "none" else DictionaryDefinitionRepository.ONLINE_ROUTE_VERSION)
@@ -268,7 +268,7 @@ class ScanpathPilotActivity : AppCompatActivity() {
         handler.postDelayed({ if (token == mine && running && waitingForInput) stopRun("no_coordinate_input") }, 20000)
         handler.postDelayed({ if (token == mine && running) stopRun("resource_time_limit") }, 600000)
         if (synthetic) beginTimeline() else {
-            provider = MgazeNetGazeProvider(this, binding.pilotBody, smoothForReading = true).also { p ->
+            provider = MgazeNetGazeProvider(this, binding.pilotBody, smoothForReading = true, rejectBlinks = true).also { p ->
                 p.onObservation = ::receive
                 p.onFailure = { reason -> log?.append("provider_failure", JSONObject().put("reason", reason)); stopRun("provider_failed") }
                 p.start(this)
@@ -281,6 +281,8 @@ class ScanpathPilotActivity : AppCompatActivity() {
         observations++
         log?.append("raw_observation", JSONObject().put("input_ordinal", observations).put("delivery_id", o.deliveryId)
             .put("capture_ms", finite(o.captureMs)).put("delivery_ms", o.outputMs).put("reason", o.reason)
+            .put("blink_filter_applied", o.blinkFilterApplied)
+            .put("left_eye_aspect_ratio", finite(o.leftEyeAspect)).put("right_eye_aspect_ratio", finite(o.rightEyeAspect))
             .put("raw_x", finite(o.rawX?.toDouble())).put("raw_y", finite(o.rawY?.toDouble()))
             .put("provider_x", finite(o.x?.toDouble())).put("provider_y", finite(o.y?.toDouble()))
             .put("arrivals", o.arrivals ?: JSONObject.NULL).put("busy_drops", o.busyDrops ?: JSONObject.NULL)

@@ -20,6 +20,9 @@ internal class ReadingFocusPolicy(
     private val alternations = mutableListOf<ReadingAidFocusAlternation>()
     private val visits = mutableListOf<ReadingAidContinuationEvidence>()
     private var lastVisit: ReadingAidContinuationEvidence? = null
+    private var observedLine: Int? = null
+    private var observedSegment: Int? = null
+    private var observedLineQualified = false
     private var source: ReadingAidContinuationEvidence? = null
     private var sourceEpoch: Pair<Long, String>? = null
     private var loss: Loss? = null
@@ -35,6 +38,8 @@ internal class ReadingFocusPolicy(
     private var interruptionDemand: Demand? = null
     private var alternationDemand: Demand? = null
     private var serial = 0L
+    private var textSizeDp = 22.0
+    private var typography = ReadingFocusTypography.STANDARD
     var witnessesExpired: Boolean = false
         private set
 
@@ -53,7 +58,10 @@ internal class ReadingFocusPolicy(
         breakLineSequence()
     }
 
-    fun breakLineSequence() { visits.clear(); lastVisit = null }
+    fun breakLineSequence() {
+        visits.clear(); lastVisit = null
+        observedLine = null; observedSegment = null; observedLineQualified = false
+    }
     fun interruptReading() { lastCapture = null }
 
     val hasDemand: Boolean get() = listOfNotNull(interruptionDemand, alternationDemand).any {
@@ -65,6 +73,7 @@ internal class ReadingFocusPolicy(
         nowMs - maxOf(lastSupportedDelivery, lastPresenceDelivery) in 0.0..config.focusTrackingGraceMs
 
     fun input(c: ReadingAidContext) {
+        selectTypography(c.focusTextSizeDp)
         witnessesExpired = false
         if (!c.nowMs.isFinite() || c.nowMs < 0 || c.nowMs < lastNow) { reset(); return }
         lastNow = c.nowMs
@@ -100,6 +109,15 @@ internal class ReadingFocusPolicy(
                 pending.lastDelivery = d; pending.lastCapture = t
                 pending.reasons.add(s.exclusion!!); pending.count++
             }
+            return
+        }
+        if (s.exclusion == "blink" || s.exclusion == "eye_state_unavailable") {
+            // Eye closure is not evidence of looking away. It must not extend a
+            // preceding brief tracking glitch into a qualifying >=500 ms loss.
+            val pending = loss
+            if (pending != null && pending.firstRecoveryDelivery == null &&
+                pending.lastDelivery - pending.firstDelivery < config.focusLossMinMs) loss = null
+            interruptReading(); presence = null; breakLineSequence()
             return
         }
         val selected = s.processingX?.isFinite() == true && s.processingY?.isFinite() == true
@@ -168,6 +186,7 @@ internal class ReadingFocusPolicy(
 
     fun support(value: ReadingAidContinuationEvidence, c: ReadingAidContext,
                 preferences: ReaderAidPreferences = ReaderAidPreferences()): ReadingAidFocusEvidence? {
+        selectTypography(c.focusTextSizeDp)
         if (value.lastCaptureMs < lastSupportedCapture ||
             (value.lastCaptureMs == lastSupportedCapture && value.line != source?.line)) return null
         if (value.lastCaptureMs > lastSupportedCapture && value.evidenceAvailableMs > lastSupportedDelivery) {
@@ -181,10 +200,24 @@ internal class ReadingFocusPolicy(
     }
 
     private fun observeVisit(value: ReadingAidContinuationEvidence, c: ReadingAidContext) {
+        if (observedSegment != null && observedSegment != value.segment) breakLineSequence()
+        if (observedLine != value.line) {
+            // A completed short detour is still part of the observed order. It
+            // must break pending ABAB, rather than disappear from the sequence.
+            if (observedLine != null && !observedLineQualified) breakLineSequence()
+            observedLine = value.line
+            observedSegment = value.segment
+            observedLineQualified = false
+        }
+        // Support already passes the detector's minimum. Smaller letters add a
+        // longer same-visit requirement before this aid counts a line transition.
+        if (value.lastCaptureMs - value.firstCaptureMs < typography.extraMinVisitMs) return
         val previous = lastVisit
         if (previous != null && previous.segment != value.segment) breakLineSequence()
         val prior = lastVisit
-        if (prior != null && (prior.line == value.line || prior.firstCaptureMs == value.firstCaptureMs)) return
+        if (prior != null && prior.firstCaptureMs == value.firstCaptureMs && prior.line != value.line) return
+        observedLineQualified = true
+        if (prior?.line == value.line) return
         lastVisit = value
         visits.add(value)
         if (visits.size > 4) visits.removeAt(0)
@@ -195,16 +228,30 @@ internal class ReadingFocusPolicy(
         val alternation = ReadingAidFocusAlternation("focus_alternation:" + (++serial), v,
             c.geometrySnapshotId, c.generation, value.evidenceAvailableMs)
         alternations.add(alternation); if (alternations.size > 512) alternations.removeAt(0)
-        alternationDemand = Demand(strength(alternations.size), 0.0, value.evidenceAvailableMs,
-            alternations = alternations.toList())
+        if (alternations.size >= typography.requiredAlternations)
+            alternationDemand = Demand(strength(alternations.size - typography.requiredAlternations + 1),
+                0.0, value.evidenceAvailableMs, alternations = alternations.toList())
         // Each strength-increasing sequence needs four new, nonoverlapping visits.
         visits.clear()
     }
 
     private fun strength(count: Int) = (count * ReadingAidPolicyConfig.FOCUS_STRENGTH_STEP).coerceIn(0.0, 1.0)
 
+    private fun selectTypography(sizeDp: Double) {
+        val normalized = sizeDp.takeIf { it.isFinite() && it > 0.0 } ?: 0.0
+        if (kotlin.math.abs(normalized - textSizeDp) <= 0.001) return
+        textSizeDp = normalized
+        typography = ReadingFocusTypography.rule(normalized)
+        // Line numbers and qualifying spans change after resizing. Confirmed
+        // look-away episodes and their response are independent of font size.
+        breakLineSequence()
+        alternations.clear()
+        alternationDemand = null
+    }
+
     fun currentEvidence(c: ReadingAidContext,
                         preferences: ReaderAidPreferences = ReaderAidPreferences()): ReadingAidFocusEvidence? {
+        selectTypography(c.focusTextSizeDp)
         val value = source ?: return null
         if (sourceEpoch != (c.generation to c.geometrySnapshotId) ||
             c.nowMs - value.evidenceAvailableMs !in 0.0..config.focusInterruptionWindowMs) return null
@@ -221,8 +268,10 @@ internal class ReadingFocusPolicy(
         return ReadingAidFocusEvidence(demand.episodes, initialStrength = demand.initialStrength,
             observedRecoveryMs = demand.recoveryMs, recoveryFadeMs = config.focusRecoveryFadeMs,
             windowMs = config.focusInterruptionWindowMs, support = value,
-            ruleId = if (interruption) "A4_RETURN_PRESENCE_FOCUS_V2" else "A4_LINE_VISIT_ALTERNATION_FOCUS_V2",
-            recoveryHoldMs = config.focusRecoveryHoldMs, alternations = demand.alternations)
+            ruleId = if (interruption) "A4_RETURN_PRESENCE_FOCUS_V2" else "A4_FONT_SCALED_LINE_VISITS_V3",
+            recoveryHoldMs = config.focusRecoveryHoldMs, alternations = demand.alternations,
+            textSizeDp = textSizeDp, requiredAlternations = typography.requiredAlternations,
+            minimumLineVisitMs = maxOf(detector.minFixationMs, typography.extraMinVisitMs))
     }
 
     fun diagnostics(now: Double): Map<String, Any> = mapOf(
@@ -235,6 +284,9 @@ internal class ReadingFocusPolicy(
             else -> "collecting_recent_episodes_or_visits"
         },
         "recent_episode_count" to episodes.size, "recent_alternation_count" to alternations.size,
+        "text_size_dp" to textSizeDp, "font_rule" to typography.id,
+        "required_alternations" to typography.requiredAlternations,
+        "minimum_line_visit_ms" to maxOf(detector.minFixationMs, typography.extraMinVisitMs),
         "return_sample_count" to (presence?.count?.coerceAtMost(config.focusReturnMinSamples) ?: 0),
         "has_demand" to hasDemand,
         "has_anchor" to (source != null && now - source!!.evidenceAvailableMs in 0.0..config.focusInterruptionWindowMs))

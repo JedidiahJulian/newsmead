@@ -28,6 +28,7 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
             .put("delivery_ms", value.evidenceAvailableMs ?: JSONObject.NULL)
             .put("valid_live_input", value.validLiveInput)
             .put("focus_input_allowed", value.focusInputAllowed)
+            .put("focus_text_size_dp", value.focusTextSizeDp.takeIf { it.isFinite() } ?: JSONObject.NULL)
             .put("coordinate_stream", value.rawSample?.coordinateStream?.id ?: JSONObject.NULL)
             .put("processing_x_px", value.rawSample?.processingX?.takeIf { it.isFinite() } ?: JSONObject.NULL)
             .put("processing_y_px", value.rawSample?.processingY?.takeIf { it.isFinite() } ?: JSONObject.NULL)

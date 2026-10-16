@@ -8,6 +8,7 @@
     <item name="readingAidMenuFocus" type="id" />
     <item name="readingAidMenuFocusFade" type="id" />
     <item name="readingAidMenuFocusDark" type="id" />
+    <item name="readingAidMenuAutoScroll" type="id" />
     <item name="readingAidMenuAdaptive" type="id" />
     <item name="readingAidMenuCap" type="id" />
     <item name="readingAidMenuStrength" type="id" />

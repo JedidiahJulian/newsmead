@@ -125,12 +125,14 @@ object ResearchSession {
      * Throttle at the call site; this is the highest-volume record type and
      * the queue is bounded.
      */
-    fun articleScroll(articleId: String, scrollYPx: Int, viewportHeightPx: Int, contentHeightPx: Int) {
+    fun articleScroll(articleId: String, scrollYPx: Int, viewportHeightPx: Int, contentHeightPx: Int,
+        origin: String = "manual_or_layout") {
         log?.event("article_scroll") {
             put("article_id", articleId)
             put("scroll_y_px", scrollYPx)
             put("viewport_height_px", viewportHeightPx)
             put("content_height_px", contentHeightPx)
+            put("scroll_origin", origin)
         }
     }
 

@@ -127,7 +127,7 @@ class ScanpathAidPipelineTest {
         val focus = p.policy.activeActions().single { it.aidType == ReadingAidType.FOCUS_REGION }
         assertEquals(0, focus.anchor.line)
         assertTrue(focus.eventIds.isEmpty())
-        assertEquals("A4_LINE_VISIT_ALTERNATION_FOCUS_V2", focus.ruleId)
+        assertEquals("A4_FONT_SCALED_LINE_VISITS_V3", focus.ruleId)
         assertEquals(0.5, focus.strength, 0.0)
         assertEquals(1, focus.focusEvidence!!.cycleCount)
         assertFalse(p.patterns.any { it.patternId == "P12" && it.metrics["slow_flag"] == true })

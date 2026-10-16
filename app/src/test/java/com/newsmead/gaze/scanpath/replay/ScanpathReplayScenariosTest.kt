@@ -268,7 +268,7 @@ class ScanpathReplayScenariosTest {
         val first = result.actions.first { it.aidType == ReadingAidType.FOCUS_REGION }
         val e = checkNotNull(first.focusEvidence)
         assertEquals(0.5, first.strength, 0.0)
-        assertEquals("A4_LINE_VISIT_ALTERNATION_FOCUS_V2", e.ruleId)
+        assertEquals("A4_FONT_SCALED_LINE_VISITS_V3", e.ruleId)
         assertTrue(e.episodes.isEmpty())
         assertTrue(e.cycleEventIds.isEmpty())
         val alternation = e.alternations.single()

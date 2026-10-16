@@ -7,8 +7,9 @@ import kotlin.math.roundToInt
 /** Focus geometry in screen pixels. The anchor itself is never clipped to the context budget. */
 internal object ReadingFocusAppearance {
     const val MAX_CONTEXT_HEIGHT_FRACTION = 0.6
-    const val BASE_BACKGROUND_OPACITY = 0.90
-    const val MAX_BACKGROUND_OPACITY = 0.98
+    const val BASE_BACKGROUND_OPACITY = 0.60
+    const val MAX_BACKGROUND_OPACITY = 0.85
+    const val MAX_SURROUNDING_OPACITY = 0.85
     const val BASE_DARK_OPACITY = 0.40
     const val MAX_DARK_OPACITY = 0.60
 
@@ -41,8 +42,11 @@ internal object ReadingFocusAppearance {
         val opacity = if (boundedStrength <= 0.5) baseOpacity * boundedStrength / 0.5
             else baseOpacity + (maxOpacity - baseOpacity) *
                 (boundedStrength - 0.5) / 0.5
-        val alpha = if (occludeSurroundings) (255 * opacity).roundToInt()
-            else (40 * boundedStrength).toInt()
+        // Retain nominally 15% of surrounding contrast (subject to 8-bit alpha rounding),
+        // even if a style's opacity is raised later.
+        val alpha = (if (occludeSurroundings) (255 * opacity).roundToInt()
+            else (40 * boundedStrength).toInt())
+            .coerceAtMost((255 * MAX_SURROUNDING_OPACITY).roundToInt())
         if (alpha <= 0) return withheld("focus_alpha_zero")
         if (listOf(viewport.left, viewport.top, viewport.right, viewport.bottom).any { !it.isFinite() } ||
             viewport.right <= viewport.left || viewport.bottom <= viewport.top ||

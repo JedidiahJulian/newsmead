@@ -1,5 +1,68 @@
 # Repeated-interruption focus window
 
+## Font-aware line switching and visible surroundings — 2026-10-15
+
+Owner reports that small-font reading activates focus too quickly. The final
+instruction changes **only line switching**: look-away remains **3 separate
+qualified episodes within 30 seconds**, with the existing loss/return guards.
+
+| Rendered font size | ABAB cycles before activation | Minimum supported visit span |
+| --- | --- | --- |
+| 22 dp and above | 1 | Existing detector minimum (100 ms) |
+| 18 to below 22 dp | 2 | 160 ms |
+| Below 18 dp | 3 | 240 ms |
+
+Size means actual font pixels divided by Android display density, including
+system font scaling. With system scaling at 100%, the article's sp selection
+matches these dp values. The tiny 0.001 dp boundary tolerance avoids float
+roundoff; invalid size uses the strictest rule. A visit is an established
+same-line evidence prefix, not accumulated time across separate fixations.
+No word assignment is needed. Every cycle uses four new nonoverlapping visits
+and must fit within the existing 8-second cycle limit. Completed cycles count
+within the existing rolling 30 seconds. First qualifying demand is 50%; one
+additional new cycle reaches 100%. The normal 3-second reading-time hold and
+7-second recovery fade remain.
+
+A detector-established visit that ends before meeting the extra font guard
+breaks the pending order: A–B–C(short)–A–B cannot become an invented ABAB.
+A still-growing prefix may qualify later. Any font-size change, even within
+one tier, clears pending/completed line cycles and line-triggered demand.
+Completed look-away episodes and their demand remain independent of font size;
+operational controls still clear pending evidence and require a fresh anchor.
+
+Fade surrounding text now uses **60% opacity at 50% action strength** and
+**85% at 100%**, retaining nominally 40%/15% of original text/background
+contrast (8-bit alpha 153/217). All resolved focus masks are capped at 85%.
+Dark surroundings retains 40%/60% black opacity and its 400 ms onset.
+The 4–5-line opening, full width, 180 ms motion and scroll handover are unchanged.
+This preserves pixel contrast; readability and comfort are not established.
+
+These font tiers, counts, durations and opacity values are trial safeguards
+chosen for this implementation and owner feedback, not study-derived difficulty
+cutoffs. Scanpath extraction, calibration, smoothing, word-definition rules and
+controlled validation text sizes are unchanged. Policy version 16, line rule
+`A4_FONT_SCALED_LINE_VISITS_V3`, font rule `RENDERED_SIZE_LINE_VISITS_V1` and
+appearance `FOCUS_MASK_STYLE_V4_VISIBLE_SURROUNDINGS` identify the change. Aid
+configuration/context/evidence record actual size and effective cycle/visit rules.
+
+Source review caught and corrected the short-detour issue; follow-up has no
+actionable findings. First run assembled both APKs and passed 84/85 focused
+JVM checks. The new typography fixture assumed an 80 ms detector baseline;
+the existing minimum is 100 ms. Its source correction supplies established
+prefixes at 120 ms on a 40 ms sample grid and checks the actual 100 ms minimum.
+Review found no issue with that correction. Owner-approved retry passes both
+APK builds and **85/85** focused JVM checks. Data-preserving A56 app/test installs
+succeed; all **5/5** camera-free native checks pass in **5.007 s**. Actual mask
+pixels are 153/217 at half/full strength; Dark onset, scrolling hold, fresh-anchor
+handover, rendered-size settings and unchanged three-episode recovery are checked.
+No camera, calibration changes, staging or commit. Final evidence:
+`output/focus-font-visibility-check-02/summary.json`, build/native/install logs
+and copied JVM XML. Initial failed-run evidence stays in 01.
+Native settings checks cover real rendered sizes; activation and preservation
+across sizes are covered by synthetic policy fixtures, not natural gaze data.
+
+Earlier amendments below retain historical values and verification.
+
 ## Softer dark onset amendment — 2026-10-15
 
 Owner clarifies that Dark surroundings is too strong as an immediate visual

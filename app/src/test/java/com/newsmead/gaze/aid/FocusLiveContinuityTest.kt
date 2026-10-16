@@ -80,6 +80,31 @@ class FocusLiveContinuityTest {
         }
 
         fun focus() = policy.activeActions().singleOrNull { it.aidType == ReadingAidType.FOCUS_REGION }
+
+        fun autoScroll(t: Double) {
+            for ((reason, at) in listOf("auto_scroll_start" to t, "auto_scroll_end" to t + 400)) {
+                context = context.copy(nowMs = at, validLiveInput = false, rawSample = null,
+                    focusInputAllowed = false, bookmarkInputAllowed = false)
+                policy.reset(context, preserveCompletedFocus = true) // Runtime navigation boundary.
+                engine.boundary(reason, at) // Session callback emits P13 to the same policy.
+            }
+        }
+    }
+
+    @Test fun automaticScrollPreservesCompletedEpisodesWithoutJoiningReadingAcrossMotion() {
+        val p = LivePipeline()
+        p.hold(200.0)
+        p.episode(400.0)
+        p.episode(1200.0)
+        assertEquals(2, p.episodes.size)
+        p.autoScroll(2000.0)
+        assertTrue(p.patterns.any { it.patternId == "P13" && it.metrics["reason"] == "auto_scroll_start" })
+        assertTrue(p.patterns.any { it.patternId == "P13" && it.metrics["reason"] == "auto_scroll_end" })
+        p.hold(2600.0)
+        p.episode(2800.0)
+        assertEquals(3, p.episodes.size)
+        assertEquals(3, p.focus()!!.focusEvidence!!.episodeCount)
+        assertFalse(p.patterns.any { it.patternId == "P11" })
     }
 
     @Test fun completedEpisodesSurviveRealWordAndLineUnclassifiedGap() {

@@ -16,7 +16,8 @@ import com.newsmead.R
 /** Immediate session preferences; strength is a normalized setting, not paint opacity. */
 object ReadingAidControlsSheet {
     fun show(context: Context, preferences: ReaderAidPreferences,
-        onChanged: (ReaderAidPreferences) -> Unit, onDismiss: () -> Unit = {}): BottomSheetDialog {
+        onChanged: (ReaderAidPreferences) -> Unit, onDismiss: () -> Unit = {},
+        supportsAutoScroll: Boolean = false, autoScrollStatusLabel: String? = null): BottomSheetDialog {
         val dialog = BottomSheetDialog(context)
         var prefs = preferences
         fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
@@ -63,6 +64,14 @@ object ReadingAidControlsSheet {
         focusStyles.check(if (prefs.focusStyle == ReadingFocusStyle.FADE_TEXT) fadeText.id else darkSurroundings.id)
         focusStyles.setOnCheckedChangeListener { _, id ->
             change(prefs.copy(focusStyle = if (id == fadeText.id) ReadingFocusStyle.FADE_TEXT else ReadingFocusStyle.DARK_SURROUNDINGS))
+        }
+        if (supportsAutoScroll) {
+            toggle(R.id.readingAidMenuAutoScroll, R.string.reading_aid_menu_auto_scroll, prefs.autoScroll) {
+                prefs.copy(autoScroll = it)
+            }
+            text(R.string.reading_aid_menu_auto_scroll_help)
+            if (autoScrollStatusLabel != null) text(R.string.reading_aid_menu_auto_scroll_status).text =
+                context.getString(R.string.reading_aid_menu_auto_scroll_status, autoScrollStatusLabel)
         }
         val advanced = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         MaterialButton(context).apply {

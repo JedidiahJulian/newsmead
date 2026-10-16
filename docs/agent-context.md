@@ -1,4 +1,4 @@
-# Agent context — updated 2026-10-15
+# Agent context — updated 2026-10-16
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,165 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-10-16 auto-scroll V3 continuous speed (verified software checkpoint):**
+owner confirms V2 works but wants immediate, controlled Athena-like movement;
+explicit choice is lower gaze speeds up, higher gaze slows/stops. V3 replaces
+steps/dwell/rearm/cooldown with continuous velocity: target0 atY<=40% physical
+screen, linear to6% screen height/s atY>=65%; nominal180 ms acceleration/braking,
+per-frame elapsed cap50 ms. Selected calibrated/smoothed coordinates stay shared
+with dot; no line/word/reading-speed inference. Freshness delivery150 ms/capture
+250 ms; missing/invalid gaze hard-stops. Own translation does not reset control;
+real reflow/external scroll/controls require fresh settled input. Settling rejects
+do not move input floor forward, avoiding starvation of delayed camera captures.
+Motion/+150 ms remains excluded from stationary scanpaths, so continuous mode
+can exclude most reading time; no motion-compensated metric validation is claimed.
+Review caught idle time contributing to the first lower-gaze restart frame;
+acceptance now resets its baseline when zero demand/speed becomes positive, with
+a10 ms regression. Source follow-up clean.202/202 JVM checks across22 suites and
+both APK builds pass. Continuing owner-authorized A56 app/test updates use-r,
+preserving data/calibration.5/5 camera-free attached/controller checks pass in
+13.550 s: speed changes, upper braking/restart, stale/noncoordinate stops,
+lookup blocking, touch pause/resume, tail and menu scope. The80 ms capture lag
+fixtures verify first actual movement within400 ms and multiple scroll changes.
+Evidence: `output/article-auto-scroll-continuous-check-01/summary.json` plus
+XML/build/native/install logs. No camera started or human gaze collected;
+actual comfort/accuracy and complete live Fragment routing remain unvalidated.
+Official Athena
+product description and Kumar/Winograd2007 Figure4 support interaction precedent,
+not exact trial settings or human outcomes. [Contract](article-auto-scroll-prototype.md).
+
+**2026-10-16 auto-scroll V2 correction (verified software checkpoint):** owner
+reports Pause button but no movement and explicitly requests gaze up/down rather
+than line classification. Policy/controller now use clipped-body gaze regions:
+Y>=45% screen for700 ms/min5, across changing X/Y/rows; fresh Y<=37.5% for200 ms/
+min3 rearms, with existing2 s cooldown. Final gaze's text point moves toward30%
+screen, guarded3% below viewport top;400 ms motion/150 ms settling remain. Row
+lookup, same-row support and Layout-instance comparisons are removed. Content,
+size and viewport changes still break support. The menu reports pre-open status;
+phase/block reasons are journaled. A new actual attached article-layout test uses
+synthetic varying-region gaze and real capture clocks, without ArticleFragment
+or camera startup. Review caught an unreachable upper-rearm viewport; geometry
+now requires usable upper space before moving. Both APKs build;200/201 JVM checks
+pass. A new test used gaze outside its shortened candidate body and got
+outside_article rather than geometry_unavailable; its gaze now uses the body's
+center. Owner-approved retry passes201/201 JVM checks across22 suites and builds
+both APKs. Approved A56 app/test updates use-r preserving app data/calibration;
+7/7 camera-free native checks pass in3.459 s in one run, including attached actual
+article layout, changing lower-region Y and400 ms animation. Same text point
+reaches30% screen; motion/settle exclusion, controls, touch cancellation, missing
+gaze and optional tail pass. The attached fixture uses the controller directly;
+it does not start ArticleFragment, a gaze provider, camera or human collection.
+Evidence: `output/article-auto-scroll-region-check-02/summary.json` and copied
+XML/build/native/install logs; failed first-attempt evidence remains in01.
+Actual live reading comfort and complete Fragment routing remain unverified.
+This removes an unnecessary row gate; the exact
+cause of the owner's live failure remains unconfirmed. [Contract](article-auto-scroll-prototype.md).
+
+**2026-10-16 optional auto-scroll (verified software checkpoint):** owner-approved
+article-only prototype adds default-off aids-menu switch and visible Pause/Resume
+while enabled. Same calibrated/smoothed point; no exact-word requirement or model,
+calibration, numeric smoothing or frozen Pilot/Replay changes. Trial V1 uses700 ms
+same-row support/min5 captures at/below45% physical-screen height,150 ms maximum
+sample gap,250 ms maximum age;400 ms step moves row center toward30% screen,
+subject to toolbar/viewport/actual scroll bounds. Fresh upper-row support200 ms/
+min3 and2 s cooldown precede another700 ms trigger. Touch pauses until explicit
+Resume. Controls/lookup offers/definition panels/read-aloud/gaze loss/reflow/pause
+interrupt pending support and motion. Enabled-only70% screen-height tail lets
+last body lines reach the band. Journals mark support/request/actual motion and
+start/end/cancel; scroll-depth events mark auto versus manual-or-layout origin.
+Motion and captures through end+150 ms are excluded from reading patterns and
+look-away evidence; actual geometry still must settle150 ms. Completed focus
+summaries survive operational boundaries; pending anchors/chains do not. Review
+caught control-excluded inputs feeding navigation and P13 auto boundaries erasing
+focus history; both fixed with regressions, follow-up clean.202/202 focused JVM
+checks and both APK builds pass. Owner-approved A56 app/test installs preserve
+data/calibration. Initial native run passes3/6; three tests asserted zero-duration
+animation completion within one UI callback. Owner-approved test-only retry waits
+off UI for next frame/end latch;2/3 rerun checks pass,5/6 distinct native checks
+now pass. Remaining check confirms scroll delta then uses an invalid detached
+getLocationOnScreen position (SDK36.1 View source confirms zero without AttachInfo).
+Fixture now uses descendant-to-root rectangle conversion including parent scroll;
+review clean. Owner-approved final test APK rebuild/install passes remaining1/1
+native check in0.060 s. All6/6 distinct native checks pass across initial run and
+two approved retries, not one six-check run. App hash unchanged. Detached fixture
+does not establish production window-inset behavior or human reading benefit.
+No camera, recalibration, staging or commit. Upper-region advantage is intermittent, not demonstrated
+accuracy improvement. Primary studies, trial rules, source paths and limitations:
+[contract](article-auto-scroll-prototype.md). Evidence:
+`output/article-auto-scroll-check-03/summary.json`; prior gates retained in01/02.
+
+**2026-10-15 lower-screen vertical error (user observation; unresolved):** owner
+reports good top-half vertical accuracy and worse behavior lower down. Owner
+clarifies the dot still moves downward but starts to struggle past the middle;
+it is not a hard stop, and this predates the blink update.
+Owner subsequently reports good tracking again without another install or runtime
+change; the quality issue appears intermittent and its cause remains unresolved.
+Source-only inspection finds live output has no lower-quarter cutoff: normalized
+SVR predictions scale to physical screen pixels, reading smoothing is independent
+of position, and the article dot uses the same selected coordinates as scanpaths.
+Blink gating can withhold output but does not shift coordinates. Calibration and
+live prediction share camera preprocessing and features; no static scaling
+mismatch was found. Regional fit quality and posture changes remain unconfirmed
+possibilities, not established causes. Calibration fit targets reach90% viewport height
+(`CalibrationIdentity.kt`); save-gate checks aggregate regions and cannot establish
+bottom-specific accuracy (`MgazeNetCalibrationQualityGate.kt`). The existing
+nine-point accuracy task samples20/50/80% viewport rows and reports signed dy per
+target (`MgazeNetAccuracyProtocol.kt`, `GazeTestActivity.kt`). No recordings read,
+new tests, device actions, recalibration or runtime changes for this observation.
+The next diagnostic is the existing raw nine-point check using the current saved
+calibration, comparing signed vertical errors and availability across its rows;
+it excludes article smoothing/blink filtering and does not reproduce article
+reading. Preserve this distinction when interpreting results. Do not infer a
+cause or apply a vertical correction without matched evidence.
+
+**2026-10-15 live blink filter (verified software checkpoint):** owner reports
+closed eyes still move gaze vertically; old16-point source had eyelid hysteresis,
+while MGazeNet only guards pixel eye areas. New live-only per-eye projected lid
+gap/width guard reuses initial0.040close/0.055open tuning and requires2fresh
+clearlyopen frames at startup/reopening. Article/livePilot explicitly enable it;
+provider/camera flags defaultfalse, preserving calibration/accuracy raw contracts
+and saved calibration. Invalid/closed frames have nullselectedpoint/no dot callback;
+rawpredictions remain excluded diagnostics. Source clock/expiry precedes blinking;
+invalid inputs reset smoothing. Brief blinks do not enter look-away sets or reading
+time; existing focus grace holds, scanpath gap remains. Metadata/optional per-eye
+ratio fields support later review without camera images. Source review caught
+blink time lengthening a pending short no-face loss; the corrected focus branch
+discards unqualified pending losses and preserves already qualified evidence.
+Mixed-loss and repeated-blink regressions are added; follow-up review is clean.
+All70/70 focused JVM checks and both APK builds pass. Owner-approved A56 app/test
+updates preserve app data and calibration;2/2 camera-free native checks pass in
+3.276 s, covering closure/reopening scanpath gaps and focus scroll continuity.
+No camera started. Actual eyelid closure still needs the owner's live article
+check; these are trial gates, not validated human blink labels. Evidence:
+`output/live-blink-check-01/summary.json` and native/build logs.
+[Contract](live-gaze-blink-filter.md).
+
+**2026-10-15 font-aware focus (verified software checkpoint):** owner reports
+small fonts activate focus too quickly, then clarifies to keep look-away at
+3 episodes/30 s and use an 85% maximum mask. Line route uses rendered font dp:
+22+ requires 1 ABAB; 18..<22 requires 2 cycles with each supported visit >=160 ms;
+below18 requires 3 cycles with visits >=240 ms. Detector baseline remains100 ms.
+Each cycle is four new visits/<=8 s; counts retain the existing30 s window.
+Resize clears only line-cycle history/demand, including within one size tier.
+Completed look-away histories remain. Fade changes90%/98% to60%/85%, all masks
+capped85%; Dark40%/60%, 4–5 lines, motion/scroll, hold/recovery stay the same.
+Source review's short-detour finding is fixed: an unqualified intervening
+established visit breaks pending ABAB instead of being removed from the order.
+Follow-up has no actionable findings. Policy16/font-ruleV1/line-ruleV3 and
+appearanceV4 record current settings and actual size in traces. Values are trial
+safeguards, not validated difficulty cutoffs. Initial run built both APKs and
+passed84/85 JVM checks; the new fixture assumed80 ms baseline. Its reviewed
+correction uses the actual unchanged100 ms minimum, sampled at120 ms on a40 ms
+grid. Owner-approved retry passes85/85 JVM checks and both builds. Approved
+data-preserving A56 updates succeed;5/5 camera-free native checks pass in5.007 s:
+actual153/217 mask pixels, Dark onset, scroll/fresh-anchor continuity, rendered
+size settings and unchanged three-episode return. Small-font activation and
+look-away preservation across resizing rely on policy fixtures/source review;
+natural gaze accuracy, visibility and comfort remain unvalidated. No camera,
+calibration changes, staging or commit. Final evidence:
+`output/focus-font-visibility-check-02/summary.json`; initial failed gate in01.
+[Contract](repeated-interruption-focus-window.md).
 
 **2026-10-15 footer appearance revision (verified software checkpoint):** owner requests gear
 Aids, matching circular font controls and tighter theme spacing. All six controls

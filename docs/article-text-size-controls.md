@@ -22,8 +22,11 @@
   physical typography so a trace can identify a resize.
 
 These sizes and spacing are interface choices, not validated reading benefits.
-Detector timing thresholds, including the **1,500 ms** word-residence trigger,
-are unchanged and are not normalized or validated across font sizes. Actual line
+The **1,500 ms** word-residence trigger remains unchanged and is not normalized
+or validated across font sizes. Focus now has stricter small-font line-cycle
+counts/visit guards; [current focus rules](repeated-interruption-focus-window.md)
+give the values and validation limits. Look-away remains 3 episodes/30 seconds.
+Actual line
 and word bounds are recalculated; natural gaze accuracy at each size still needs
 human evaluation.
 

@@ -91,7 +91,8 @@ data class ReaderAidPreferences(
     val manualStrength: Double = 0.5,
     val wordDefinition: Boolean = true,
     val guideStyle: ReadingGuideStyle = ReadingGuideStyle.LINE,
-    val focusStyle: ReadingFocusStyle = ReadingFocusStyle.FADE_TEXT
+    val focusStyle: ReadingFocusStyle = ReadingFocusStyle.FADE_TEXT,
+    val autoScroll: Boolean = false
 ) {
     init { require(maxStrength.isFinite() && maxStrength in 0.0..1.0 && manualStrength.isFinite() && manualStrength in 0.0..1.0) }
 }
@@ -113,7 +114,9 @@ data class ReadingAidContext(
     val rawSample: ScanpathSample? = null,
     val bookmarkInputAllowed: Boolean = true,
     val guideRange: ReadingGuideRange? = null,
-    val focusInputAllowed: Boolean = true
+    val focusInputAllowed: Boolean = true,
+    /** Rendered font pixels divided by display density; includes Android font scaling. */
+    val focusTextSizeDp: Double = 22.0
 )
 
 /** Engineering prototype settings, not paper thresholds or calibrated difficulty cutoffs. */
@@ -229,7 +232,10 @@ data class ReadingAidFocusEvidence(
     val support: ReadingAidContinuationEvidence,
     val ruleId: String,
     val recoveryHoldMs: Double = 0.0,
-    val alternations: List<ReadingAidFocusAlternation> = emptyList()
+    val alternations: List<ReadingAidFocusAlternation> = emptyList(),
+    val textSizeDp: Double = 22.0,
+    val requiredAlternations: Int = 1,
+    val minimumLineVisitMs: Double = 0.0
 ) {
     val episodeCount: Int get() = episodes.size
     val cycleCount: Int get() = cycleEventIds.size + alternations.size

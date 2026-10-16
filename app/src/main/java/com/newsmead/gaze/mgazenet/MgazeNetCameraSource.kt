@@ -33,11 +33,13 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private val ready: (Map<String, Any?>) -> Unit, private val result: (Frame) -> Unit,
     private val failed: (String) -> Unit,
     private val store: MgazeNetCalibrationStore,
-    private val saved: CalibrationBundle.Artifact? = null) {
+    private val saved: CalibrationBundle.Artifact? = null,
+    private val eyelidTelemetryEnabled: Boolean = false) {
     data class Frame(val captureMs: Double, val outputMs: Double, val features: FloatArray?,
         val leftArea: Double, val rightArea: Double, val prediction: FloatArray?, val reason: String,
         val cropSizes: List<List<Int>>?, val posture: MgazeNetPostureGate.Sample?,
-        val arrivals: Long, val busyDrops: Long) {
+        val arrivals: Long, val busyDrops: Long,
+        val eyelids: MgazeNetEyelidGeometry.Sample? = null) {
         val eligible get() = features?.let { it.size == 258 && it.all(Float::isFinite) } == true &&
             leftArea.isFinite() && rightArea.isFinite() && leftArea > 10 && rightArea > 10
     }
@@ -146,15 +148,16 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 val detected = landmarker!!.detectForVideo(mp,videoMs)
                 val localizerFinishedNs = SystemClock.elapsedRealtimeNanos()
                 val landmarks = detected.faceLandmarks().firstOrNull()
-                val crops = landmarks?.let { points ->
-                    if (points.size != landmarkX.size) null else {
-                        points.forEachIndexed { index, point ->
-                            landmarkX[index] = point.x().toDouble()
-                            landmarkY[index] = point.y().toDouble()
-                        }
-                        GazeGeometry.crops(landmarkX,landmarkY,bitmap.width,bitmap.height)
-                    }
+                val points = landmarks?.takeIf { it.size == landmarkX.size }
+                points?.forEachIndexed { index, point ->
+                    landmarkX[index] = point.x().toDouble()
+                    landmarkY[index] = point.y().toDouble()
                 }
+                // Immutable scalars are captured per frame before the analyzer arrays are reused.
+                // This telemetry does not alter pinned crop arithmetic or calibration eligibility.
+                val eyelids = if (eyelidTelemetryEnabled) points?.let { MgazeNetEyelidGeometry.from(
+                    landmarkX, landmarkY, bitmap.width, bitmap.height) } else null
+                val crops = points?.let { GazeGeometry.crops(landmarkX,landmarkY,bitmap.width,bitmap.height) }
                 val reason = when { landmarks == null -> "no_face"; crops == null -> "invalid_crops"; else -> "features" }
                 val posture = crops?.let { MgazeNetPostureGate.from(it,bitmap.width,bitmap.height) }
                 val preprocessor = if (crops == null) null else availablePreprocessors.poll()
@@ -189,7 +192,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                             drops = drops.get(),
                             nowNs = finishedNs,
                         )
-                        deliver(captureNs,features,crops,posture,prediction,reason)
+                        deliver(captureNs,features,crops,posture,prediction,reason,eyelids)
                     } catch (e: Throwable) { error(e) }
                     finally { preprocessor?.let { availablePreprocessors.offer(it) } }
                 }
@@ -199,7 +202,8 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     }
 
     private fun deliver(captureNs: Long, features: FloatArray?, crops: GazeGeometry.Crops?,
-        posture: MgazeNetPostureGate.Sample?, prediction: FloatArray?, reason: String) {
+        posture: MgazeNetPostureGate.Sample?, prediction: FloatArray?, reason: String,
+        eyelids: MgazeNetEyelidGeometry.Sample?) {
         main.execute callback@{
             // Delivery time includes main-queue delay. Final queued results precede close completion.
             if (stopped.get()) { features?.fill(0f); return@callback }
@@ -207,7 +211,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 crops?.rightOpenness ?: 0.0,prediction,reason,crops?.let {
                     listOf(listOf(it.face.width,it.face.height),listOf(it.left.width,it.left.height),
                         listOf(it.right.width,it.right.height))
-                },posture,arrivals.get(),drops.get())) } finally { features?.fill(0f) }
+                },posture,arrivals.get(),drops.get(),eyelids)) } finally { features?.fill(0f) }
         }
     }
     fun fit(features: Array<FloatArray>, labels: Array<FloatArray>, complete: (Boolean) -> Unit) {

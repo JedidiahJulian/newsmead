@@ -47,10 +47,13 @@ class MgazeNetGazeProvider(
     private val context: Context,
     private val view: View,
     private val smoothForReading: Boolean = false,
+    private val rejectBlinks: Boolean = false,
 ) : GazeProvider, DefaultLifecycleObserver {
     data class Observation(val captureMs: Double?, val deliveryElapsedNs: Long, val deliveryId: Long, val reason: String,
         val x: Float? = null, val y: Float? = null, val rawX: Float? = null, val rawY: Float? = null,
-        val arrivals: Long? = null, val busyDrops: Long? = null) {
+        val arrivals: Long? = null, val busyDrops: Long? = null,
+        val leftEyeAspect: Double? = null, val rightEyeAspect: Double? = null,
+        val blinkFilterApplied: Boolean = false) {
         val outputMs: Double get() = deliveryElapsedNs / 1e6
     }
     private var listener: GazeProvider.OnGaze? = null
@@ -67,7 +70,7 @@ class MgazeNetGazeProvider(
     private var fpsCount = 0
     private var deliverySequence = 0L
     private val displaySize = Point()
-    private val readingSmoother = MgazeNetReadingSmoother()
+    private var liveOutput: MgazeNetLiveOutput? = null
     private val stopCompletions = MgazeNetStopCompletionQueue()
     override fun setOnGaze(listener: GazeProvider.OnGaze) { this.listener = listener }
     override fun start(owner: LifecycleOwner) {
@@ -79,9 +82,9 @@ class MgazeNetGazeProvider(
         this.owner = owner; owner.lifecycle.addObserver(this)
         lastCapture = -1.0; lastOutput = -1.0; fpsStart = MgazeNetCameraSource.now(); fpsCount = 0
         deliverySequence = 0L
-        readingSmoother.reset()
         val identity = saved.identity
-        val gate = MgazeNetOutputGate(identity.screenWidth,identity.screenHeight)
+        val output = MgazeNetLiveOutput(identity.screenWidth, identity.screenHeight, smoothForReading, rejectBlinks)
+        liveOutput = output
         source = MgazeNetCameraSource(context,owner,ready = {}, result = { frame ->
             val size = view.physicalDisplaySize(displaySize)
             if (size.x != identity.screenWidth || size.y != identity.screenHeight || view.display.rotation != identity.rotation) {
@@ -90,22 +93,19 @@ class MgazeNetGazeProvider(
                 val deliveryElapsedNs = SystemClock.elapsedRealtimeNanos()
                 val now = deliveryElapsedNs / 1e6
                 val deliveryId = ++deliverySequence
-                val result = gate.evaluate(frame.captureMs,now,frame.eligible,frame.prediction,
-                    if (frame.features == null) frame.reason else "eye_area")
-                val reason = result.reason; val x = result.rawX; val y = result.rawY
+                val result = output.evaluate(frame.captureMs,now,frame.eligible,frame.prediction,
+                    if (frame.features == null) frame.reason else "eye_area", frame.eyelids)
+                val reason = result.reason
                 lastCapture = frame.captureMs; lastOutput = frame.outputMs
                 fresh = reason == "coordinate"
-                val captureMs = frame.captureMs.toLong()
-                val outputX = if (fresh && smoothForReading) readingSmoother.filterX(x!!,captureMs) else x
-                val outputY = if (fresh && smoothForReading) readingSmoother.filterY(y!!,captureMs) else y
-                if (!fresh) readingSmoother.reset()
-                onObservation?.invoke(Observation(frame.captureMs,deliveryElapsedNs,deliveryId,reason,if (fresh) outputX else null,if (fresh) outputY else null,
-                    x,y,frame.arrivals,frame.busyDrops))
-                if (fresh) listener?.onGaze(outputX!!,outputY!!)
+                onObservation?.invoke(Observation(frame.captureMs,deliveryElapsedNs,deliveryId,reason,result.x,result.y,
+                    result.rawX,result.rawY,frame.arrivals,frame.busyDrops,
+                    frame.eyelids?.leftAspect,frame.eyelids?.rightAspect,rejectBlinks))
+                if (fresh) listener?.onGaze(result.x!!,result.y!!)
                 fpsCount++
                 if (now-fpsStart >= 1000) { onFps?.invoke((fpsCount*1000/(now-fpsStart)).toFloat()); fpsStart=now; fpsCount=0 }
             }
-        }, failed = ::fail, store = store, saved = saved).also { it.start() }
+        }, failed = ::fail, store = store, saved = saved, eyelidTelemetryEnabled = rejectBlinks).also { it.start() }
         handler.post(watchdog)
     }
     private val watchdog = object : Runnable {
@@ -115,8 +115,9 @@ class MgazeNetGazeProvider(
             if (lastOutput < 0 && now - fpsStart > 20000) { fail("MGazeNet initialization timed out."); return }
             if (fresh && now-lastCapture > MAX_OUTPUT_AGE_MS) {
                 fresh = false
-                readingSmoother.reset()
-                onObservation?.invoke(Observation(lastCapture,SystemClock.elapsedRealtimeNanos(),++deliverySequence,"stale"))
+                liveOutput?.invalidate()
+                onObservation?.invoke(Observation(lastCapture,SystemClock.elapsedRealtimeNanos(),++deliverySequence,"stale",
+                    blinkFilterApplied = rejectBlinks))
             }
             handler.postDelayed(this,50)
         }
@@ -137,7 +138,8 @@ class MgazeNetGazeProvider(
         }
         handler.removeCallbacksAndMessages(null)
         owner?.lifecycle?.removeObserver(this); owner = null
-        val closing = source; source = null; fresh = false; readingSmoother.reset()
+        val closing = source; source = null; fresh = false
+        liveOutput?.invalidate(); liveOutput = null
         if (closing == null) {
             stopCompletions.complete().forEach { it() }
             return
@@ -148,6 +150,7 @@ class MgazeNetGazeProvider(
                     null,SystemClock.elapsedRealtimeNanos(),++deliverySequence,"stopped",
                     arrivals = counts["analyzer_arrivals"] as? Long,
                     busyDrops = counts["observed_busy_drops"] as? Long,
+                    blinkFilterApplied = rejectBlinks,
                 ))
             } finally {
                 stopCompletions.complete().forEach { it() }

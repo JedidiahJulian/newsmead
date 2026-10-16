@@ -17,6 +17,31 @@ import org.junit.runner.RunWith
 /** Camera-free supplied evidence verifies routing, not actual fixation or reading difficulty. */
 @RunWith(AndroidJUnit4::class)
 class SmoothedReadingAidRuntimeTest {
+    @Test fun configurationTracksActualRenderedSizeAcrossResizesAndKeepsLookAwayRule() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+            val body = TextView(ctx).apply { text = "Source text" }
+            val runtime = ArticleReadingAidRuntime(body, ReadingAidWordView(ctx), ReadingAidOverlayView(ctx),
+                config = ReadingAidPolicyConfig.definitionPrototype(),
+                inputSource = ReadingAidInputSource.SYNTHETIC_REPLAY, renderAids = false)
+            try {
+                for (size in listOf(14f, 20f, 22f, 60f, 16f)) {
+                    body.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, size)
+                    runtime.geometry(0, null)
+                    val configuration = runtime.configurationSnapshot()
+                    val settings = configuration.getJSONObject("settings")
+                    assertEquals(body.textSize.toDouble() / body.resources.displayMetrics.density,
+                        settings.getDouble("focus_text_size_dp"), 0.0001)
+                    assertEquals(3, settings.getInt("focus_interruption_min_episodes"))
+                    assertEquals(30000.0, settings.getDouble("focus_interruption_window_ms"), 0.0)
+                    assertEquals(0.85, settings.getDouble("focus_max_surrounding_opacity"), 0.0)
+                    assertEquals(16, configuration.getInt("policy_version"))
+                    assertEquals(3, settings.getJSONArray("focus_font_rules").length())
+                }
+            } finally { runtime.close("font-settings-fixture") }
+        }
+    }
+
     @Test fun activeFocusSurvivesScrollAsPresentationWithoutInventingNewPolicySupport() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         lateinit var runtime: ArticleReadingAidRuntime
@@ -30,7 +55,8 @@ class SmoothedReadingAidRuntimeTest {
             val root = FrameLayout(ctx).apply { setBackgroundColor(Color.WHITE) }
             body = TextView(ctx).apply {
                 text = (1..24).joinToString("\n") { "Reading line $it" }
-                setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, 36f)
+                // Standard-size fixture: isolate scroll continuity from compact-font activation.
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 22f)
             }
             overlay = ReadingAidOverlayView(ctx)
             root.addView(body, FrameLayout.LayoutParams(600, 400))

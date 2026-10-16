@@ -8,6 +8,8 @@ internal fun ReadingAidAction.focusEvidenceJson(): Any {
     return JSONObject().put("rule_id", e.ruleId).put("episode_count", e.episodeCount)
         .put("cycle_count", e.cycleCount).put("window_ms", e.windowMs)
         .put("initial_strength", e.initialStrength).put("observed_recovery_ms", e.observedRecoveryMs)
+        .put("text_size_dp", e.textSizeDp).put("required_alternations", e.requiredAlternations)
+        .put("minimum_line_visit_ms", e.minimumLineVisitMs)
         .put("recovery_hold_ms", e.recoveryHoldMs).put("recovery_fade_ms", e.recoveryFadeMs)
         .put("recovery_time_basis", "eligible_ordered_selected_capture_deltas")
         .put("episodes", JSONArray().apply { e.episodes.forEach { put(it.focusEpisodeJson()) } })

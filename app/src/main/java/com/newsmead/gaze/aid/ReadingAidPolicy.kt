@@ -95,13 +95,14 @@ class ReadingAidPolicy(
                 wordVisit = null
                 clear(ReadingAidType.WORD_MAGNIFIER, context.nowMs, reason, out)
             } else {
+                val autoScroll = reason == "auto_scroll_start" || reason == "auto_scroll_end"
                 val keepBookmark = config.lineStartAidType == ReadingAidType.READING_BOOKMARK &&
                     reason in listOf("invalid_sample", "sample_gap", "unassigned_line", "non_monotonic_capture")
                 // Preserve display briefly while the engine still breaks both sequence paths.
                 val keepFocus = reason in listOf("invalid_sample", "sample_gap", "unassigned_line",
                     "non_monotonic_capture", "unclassified_fixation_gap", "geometry_change", "layout_unavailable") ||
-                    reason.startsWith("definition_")
-                if (reason == "geometry_change" || reason == "layout_unavailable" || reason.startsWith("definition_"))
+                    reason.startsWith("definition_") || autoScroll
+                if (reason == "geometry_change" || reason == "layout_unavailable" || reason.startsWith("definition_") || autoScroll)
                     focus.pause()
                 else if (reason != "unclassified_fixation_gap") focus.breakLineSequence()
                 val holdFocus = keepFocus && retainFocus(context)

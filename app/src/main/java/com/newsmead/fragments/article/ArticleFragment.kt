@@ -45,6 +45,7 @@ import com.newsmead.gaze.AdaptiveScaffoldController
 import com.newsmead.gaze.GazeOverlayView
 import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
 import com.newsmead.gaze.mgazenet.MgazeNetCalibrationStore
+import com.newsmead.gaze.scroll.ArticleAutoScrollController
 import com.newsmead.gaze.GazeProvider
 import com.newsmead.gaze.getVisibleRectOnScreen
 import com.newsmead.gaze.GazeTargetStabilizer
@@ -127,6 +128,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var demoStartToken = 0
     private var aidPreferences = ReaderAidPreferences(wordMagnifier = false)
     private var readingAidControls: BottomSheetDialog? = null
+    private var articleAutoScroll: ArticleAutoScrollController? = null
     private var articleOptionsDialog: AlertDialog? = null
     private val readerControlGate = ReadingAidControlGate()
     private var controlsRuntime: ArticleReadingAidRuntime? = null
@@ -136,6 +138,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         get() = StudyConfig.SCANPATH_READING_AIDS && !StudyConfig.GAZE_TOUCH_VALIDATION
     private val scanpathCounts = mutableMapOf<String, Int>()
     private val scanpathGeometryListener = ViewTreeObserver.OnPreDrawListener {
+        articleAutoScroll?.onPreDraw()
         scanpathSession?.checkGeometry()
         readingAidRuntime?.tick()
         true
@@ -348,7 +351,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             val now = SystemClock.elapsedRealtime()
             if (now - lastScrollLogMs < SCROLL_LOG_INTERVAL_MS) return@setOnScrollChangeListener
             lastScrollLogMs = now
-            ResearchSession.articleScroll(articleId, scrollY, viewport, content)
+            ResearchSession.articleScroll(articleId, scrollY, viewport, content,
+                if (articleAutoScroll?.isMoving == true) "auto_scroll" else "manual_or_layout")
         }
 
         // When the user zooms in on the ZoomImageView, disable the NestedScrollView scrolling
@@ -696,6 +700,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     override fun onResume() {
         super.onResume()
+        articleAutoScroll?.setEnabled(aidPreferences.enabled && aidPreferences.autoScroll)
         scanpathSession?.resume()
         if (!readerControlGate.active) readingAidRuntime?.resume()
         if (!demoCameraSuppressed && !scanpathAidsEnabled && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE && scaffoldController != null) {
@@ -735,6 +740,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     override fun onPause() {
+        articleAutoScroll?.interrupt("screen_paused")
         dismissReaderControls()
         // Keep a pending source-offset restore for this view's next pre-draw.
         // The capture gate stays closed to reading while paused, and the existing
@@ -749,6 +755,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     override fun onDestroyView() {
+        articleAutoScroll?.close()
+        articleAutoScroll = null
+        binding.nsvArticleText.onUserTouch = null
         dismissReaderControls()
         cancelTextResize()
         stopArticleDemo("article_view_destroyed")
@@ -849,6 +858,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             return
         }
         val fingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint() ?: return
+        articleAutoScroll?.pauseByReader("diagnostic_recording")
         readingAidRuntime?.suspend("diagnostic_recording")
         lateinit var session: ReadingMeasurementLog
         try {
@@ -1256,16 +1266,21 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             Toast.makeText(context, issue, Toast.LENGTH_LONG).show()
             return
         }
-        val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true)
+        val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true, rejectBlinks = true)
         stopScanpathSession("provider_replaced")
         scanpathCounts.clear()
         val aids = readingAidOverlay?.let { ArticleReadingAidRuntime(binding.tvArticleText,
             binding.readingAidWordDock, it, config = ReadingAidPolicyConfig.definitionPrototype()
                 .copy(conditionId = "SMOOTHED_ARTICLE_DEFINITION_V10"),
             preferences = aidPreferences, definitionPopup = definitionPopup,
-            coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED,
-            onConsultationChanged = { active, at, reason -> scanpathSession?.setConsultation(active, at, reason) }) }
+            coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED, blinkFilterEnabled = true,
+            onConsultationChanged = { active, at, reason ->
+                articleAutoScroll?.interrupt("definition_consultation")
+                scanpathSession?.setConsultation(active, at, reason)
+            }) }
         readingAidRuntime = aids
+        articleAutoScroll?.let { auto -> aids?.autoScrollEvent("configuration",
+            SystemClock.elapsedRealtimeNanos() / 1e6, auto.configuration().put("enabled", auto.enabled)) }
         val liveScanpath = ArticleScanpathSession(binding.tvArticleText,
             coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED,
             config = aids?.scanpathConfig ?: com.newsmead.gaze.scanpath.ScanpathConfig(),
@@ -1291,8 +1306,16 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             val controlsExcluded = readerControlGate.excludes(observation.captureMs) ||
                 (observation.x != null && observation.y != null &&
                     readingAidEntryContains(observation.x, observation.y))
-            if (scanpathSession === liveScanpath) liveScanpath.record(
-                if (controlsExcluded) observation.copy(reason = "reader_controls") else observation)
+            val autoScrollExclusion = articleAutoScroll?.exclusion(observation.captureMs)
+            if (scanpathSession === liveScanpath) {
+                liveScanpath.record(when {
+                    controlsExcluded -> observation.copy(reason = "reader_controls")
+                    autoScrollExclusion != null -> observation.copy(reason = autoScrollExclusion)
+                    else -> observation
+                })
+                articleAutoScroll?.onObservation(if (controlsExcluded)
+                    observation.copy(reason = "reader_controls") else observation)
+            }
             readingMeasurement?.record(observation)
             if (observation.reason != "coordinate") gazeOverlay?.clearGaze()
         }
@@ -1428,12 +1451,46 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     /** Fixed access in the existing bottom bar; article touches keep their normal behavior. */
     private fun setupReadingAidEntry() {
         binding.btnArticleReadingAids.setOnClickListener { showReadingAidControls() }
+        articleAutoScroll = ArticleAutoScrollController(binding.tvArticleText, binding.nsvArticleText,
+            binding.bottomAppBar, binding.articleAutoScrollTail,
+            blocked = { when {
+                !isResumed -> "screen_paused"
+                !articleBodyReady -> "article_loading"
+                gazeProvider == null -> "gaze_unavailable"
+                readingMeasurement != null -> "diagnostic_recording"
+                readerControlGate.active -> "reader_controls"
+                textResizePending -> "text_resizing"
+                demoCameraSuppressed -> "article_demo"
+                definitionPopup?.isShowing == true -> "definition_open"
+                definitionPopup?.isOfferShowing == true -> "lookup_offer"
+                ::textToSpeech.isInitialized && textToSpeech.isSpeaking -> "read_aloud"
+                else -> null
+            } },
+            onBoundary = { moving, at, detail ->
+                readingAidRuntime?.autoScrollBoundary(moving, at, detail)
+                scanpathSession?.boundary(if (moving) "auto_scroll_start" else "auto_scroll_end")
+            },
+            onJournal = { event, at, detail -> readingAidRuntime?.autoScrollEvent(event, at, detail) },
+            onState = { enabled, paused ->
+                binding.btnArticleAutoScrollPause.visibility = if (enabled) View.VISIBLE else View.GONE
+                binding.btnArticleAutoScrollPause.setText(if (paused) R.string.article_auto_scroll_resume
+                    else R.string.article_auto_scroll_pause)
+            })
+        binding.nsvArticleText.onUserTouch = { event ->
+            if (event.actionMasked == MotionEvent.ACTION_DOWN)
+                articleAutoScroll?.pauseByReader("manual_touch")
+        }
+        binding.btnArticleAutoScrollPause.setOnClickListener {
+            articleAutoScroll?.let { if (it.pausedByReader) it.resumeByReader() else it.pauseByReader() }
+        }
     }
 
     private fun readingAidEntryContains(x: Float, y: Float): Boolean {
         val rect = Rect()
         return (binding.bottomAppBar.visibility == View.VISIBLE &&
             binding.bottomAppBar.getVisibleRectOnScreen(rect) && rect.contains(x.toInt(), y.toInt())) ||
+            (binding.btnArticleAutoScrollPause.visibility == View.VISIBLE &&
+                binding.btnArticleAutoScrollPause.getVisibleRectOnScreen(rect) && rect.contains(x.toInt(), y.toInt())) ||
             definitionPopup?.lookupOfferContains(x, y) == true
     }
 
@@ -1441,19 +1498,40 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         if (readingMeasurement != null || readingAidControls != null) return
         stopArticleDemo("reader_controls")
         val runtime = readingAidRuntime
+        val autoStatus = articleAutoScroll?.statusReason?.let { reason ->
+            getString(when (reason) {
+                "manual_pause" -> R.string.auto_scroll_status_paused
+                "definition_open", "lookup_offer" -> R.string.auto_scroll_status_dictionary
+                "read_aloud" -> R.string.auto_scroll_status_read_aloud
+                "gaze_unavailable", "stale", "invalid_clock" -> R.string.auto_scroll_status_gaze
+                "waiting_upper", "collecting_upper" -> R.string.auto_scroll_status_upper
+                "collecting_lower" -> R.string.auto_scroll_status_preparing
+                "waiting_lower" -> R.string.auto_scroll_status_ready
+                "cooldown" -> R.string.auto_scroll_status_cooldown
+                "moving" -> R.string.auto_scroll_status_moving
+                "slowing" -> R.string.auto_scroll_status_slowing
+                "no_scroll_room" -> R.string.auto_scroll_status_end
+                "geometry_unavailable", "text_resizing", "settling" -> R.string.auto_scroll_status_layout
+                "outside_article" -> R.string.auto_scroll_status_article
+                "disabled" -> R.string.auto_scroll_status_off
+                else -> R.string.auto_scroll_status_reading
+            })
+        }
         if (!openReaderControls("aids")) return
         readingAidControls = ReadingAidControlsSheet.show(requireContext(), aidPreferences,
             onChanged = { preferences ->
                 aidPreferences = preferences
                 if (readingAidRuntime === runtime) runtime?.updatePreferences(preferences)
+                articleAutoScroll?.setEnabled(preferences.enabled && preferences.autoScroll)
             }, onDismiss = {
                 readingAidControls = null
                 closeReaderControls("aids")
-            })
+            }, supportsAutoScroll = scanpathAidsEnabled, autoScrollStatusLabel = autoStatus)
     }
 
     private fun openReaderControls(tag: String): Boolean {
         val currentView = view ?: return false
+        articleAutoScroll?.interrupt("reader_controls")
         if (!readerControlGate.active) {
             controlsView = currentView
             controlsRuntime = readingAidRuntime
