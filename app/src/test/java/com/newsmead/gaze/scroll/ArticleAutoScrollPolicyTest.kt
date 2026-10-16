@@ -20,7 +20,8 @@ class ArticleAutoScrollPolicyTest {
         policy.onSample(ArticleAutoScrollPolicy.Sample(capture, delivery, x, y), geometry, now)
 
     @Test fun targetSpeedIncreasesLinearlyWithScreenYAndCapsBelowFullSpeed() {
-        listOf(100.0 to 0.0, 400.0 to 0.0, 525.0 to 30.0, 650.0 to 60.0,
+        listOf(100.0 to 0.0, 300.0 to 0.0, 350.0 to 15.0, 400.0 to 30.0,
+            450.0 to 45.0, 500.0 to 60.0, 650.0 to 60.0,
             899.0 to 60.0).forEach { (y, expected) ->
             val policy = ArticleAutoScrollPolicy()
             assertTrue(sample(policy, y = y))
@@ -57,7 +58,7 @@ class ArticleAutoScrollPolicyTest {
         frame = policy.advance(260.0, body)
         assertEquals(60.0 * 50 / 180, frame.speedPxPerSecond, 1e-9)
         assertTrue(frame.deltaPx > 0)
-        assertTrue(sample(policy, 250.0, y = 400.0))
+        assertTrue(sample(policy, 250.0, y = 300.0))
         frame = policy.advance(310.0, body)
         assertEquals(0.0, frame.speedPxPerSecond, 1e-9)
         assertTrue(frame.deltaPx >= 0)
@@ -215,10 +216,10 @@ class ArticleAutoScrollPolicyTest {
     }
 
     @Test fun geometryNeedsUsableStopBandButFullSpeedNeedNotBeVisible() {
-        val short = body.copy(viewportBottomPx = 600.0, textVisibleBottomPx = 600.0)
-        assertTrue(sample(ArticleAutoScrollPolicy(), y = 550.0, geometry = short))
+        val short = body.copy(viewportBottomPx = 450.0, textVisibleBottomPx = 450.0)
+        assertTrue(sample(ArticleAutoScrollPolicy(), y = 400.0, geometry = short))
         listOf(body.copy(viewportTopPx = 400.0, textVisibleTopPx = 400.0),
-            body.copy(viewportBottomPx = 400.0, textVisibleBottomPx = 400.0),
+            body.copy(viewportBottomPx = 300.0, textVisibleBottomPx = 300.0),
             body.copy(screenHeightPx = Double.NaN), body.copy(maxScrollYPx = 99.0),
             body.copy(textVisibleBottomPx = 100.0), body.copy(textVisibleRightPx = 20.0),
             body.copy(textVisibleTopPx = 99.0), body.copy(viewportBottomPx = 1001.0)).forEach { g ->
@@ -251,7 +252,7 @@ class ArticleAutoScrollPolicyTest {
             { ArticleAutoScrollPolicy.Config(startScreenFraction = Double.NaN) },
             { ArticleAutoScrollPolicy.Config(startScreenFraction = 0.0) },
             { ArticleAutoScrollPolicy.Config(startScreenFraction = 1.0) },
-            { ArticleAutoScrollPolicy.Config(fullSpeedScreenFraction = .4) },
+            { ArticleAutoScrollPolicy.Config(fullSpeedScreenFraction = .3) },
             { ArticleAutoScrollPolicy.Config(fullSpeedScreenFraction = 1.1) },
             { ArticleAutoScrollPolicy.Config(fullSpeedScreenFraction = Double.NaN) },
             { ArticleAutoScrollPolicy.Config(maxSpeedScreenFractionPerSecond = 0.0) },

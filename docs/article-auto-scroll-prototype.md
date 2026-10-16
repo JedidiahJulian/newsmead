@@ -1,6 +1,22 @@
 # Optional article auto-scroll
 
-## Current V3 direction — 2026-10-16
+## Current V3 region adjustment — 2026-10-16
+
+The owner returned to `measurement/scanpath-pilot` and explicitly chose the
+original downward-scrolling version, with its speed ramp moved to 30%–50% of
+physical-screen height. Only the default start/full-speed positions change.
+All 16 focused scroll-policy checks pass (zero failures/errors/skips), and both
+APKs build. The short-viewport fixture was adjusted to stay below the new full-
+speed height and the final policy check passes. Owner-approved A56 replace
+installs preserve app data/calibration. The attached scrolling check passes
+1/1 in 4.019 s: 35% starts movement, 50% reaches full speed, upper 25% stops,
+and fresh input restarts. Inputs are synthetic with 80 ms capture lag; the camera
+stays off. Human reading accuracy/comfort remains unchecked. Evidence:
+`output/auto-scroll-region-30-50-check-01/summary.json`.
+The separate feature branch's staged bidirectional work was preserved in a named
+Git stash before switching. It is not part of this adjustment.
+
+## Earlier V3 checkpoint — 2026-10-16
 
 The owner confirms V2 scrolling works, but wants more immediate, continuous
 control like Athena. The owner explicitly selects: gaze lower to speed up;
@@ -23,13 +39,13 @@ Athena's proprietary algorithm.
 
 | Gaze height from physical-screen top | Target forward speed |
 | --- | --- |
-| At/above40% | Zero |
-| 45% | 1.2% of physical screen height per second |
-| 50% | 2.4% of physical screen height per second |
-| 60% | 4.8% of physical screen height per second |
-| At/below65% | Maximum6% of physical screen height per second |
+| At/above30% | Zero |
+| 35% | 1.5% of physical screen height per second |
+| 40% | 3% of physical screen height per second |
+| 45% | 4.5% of physical screen height per second |
+| At/below50% | Maximum6% of physical screen height per second |
 
-Between40% and65%, target speed increases linearly. The controller renders on
+Between30% and50%, target speed increases linearly. The controller renders on
 Android animation frames and accumulates fractional pixels; there are no page
 jumps or fixed-distance steps. Speed changes are bounded by a nominal180 ms
 zero-to-maximum acceleration/braking ramp. Each frame integrates at most50 ms;
@@ -112,7 +128,7 @@ a separate motion-aware measurement design and validation.
   govern start, stop and faster scrolling, with gradual rate transitions. Their
   system used a Tobii1750; pilot feedback from10 users is preliminary. This is a
   precedent for the interaction pattern, not evidence for NewsMead's phone
-  accuracy or the40/65%,6%/s and180 ms choices. V3 does not implement their
+  accuracy or the30/50%,6%/s and180 ms choices. V3 does not implement their
   reading-speed estimator or claim to reproduce Athena.
 - [Lei et al., DynamicRead (2023)](https://arxiv.org/html/2304.09584v1), §§3.1,
   5.2,6.5: an iPhone13ProMax/server-iTracker study with20 adults aged20–31.

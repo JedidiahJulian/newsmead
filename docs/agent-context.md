@@ -12,6 +12,27 @@ protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
 
+**2026-10-16 measurement V3 region adjustment (software/device checks passed):** owner requests
+return to `measurement/scanpath-pilot` and explicitly selects the original
+downward-scroll mapping: start below 30%, reach maximum speed at 50% physical
+screen height. Only those defaults change; existing response/freshness/control
+and moving-text aid behavior remains V3. Tests and current contract updated.
+The feature branch had twelve staged files; they were preserved with staging in
+the named stash `feature/gaze-auto-scroll preserved before measurement 30-50
+region adjustment 2026-10-16` before switching. Stash SHA and patch backups:
+`output/auto-scroll-region-30-50-check-01/`. Stash SHA:
+`5bad148d6b5913d9568b8f23009552c98367290e`; restore staging with `git stash apply
+--index <SHA>` only after returning to the feature branch with a clean worktree.
+The separate bidirectional/movement design is not applied here. All 16 focused
+scroll-policy checks pass (zero failures/errors/skips); both APKs build. A short-
+viewport fixture was corrected to keep its full-speed-unreachable premise, then
+the final focused check passed. Owner-approved A56 replace installs preserve app
+data/calibration; 1/1 attached scroll check passes in 4.019 s using synthetic
+80 ms lag inputs: 35% movement, 50% maximum, upper 25% stop and fresh restart.
+Other native cases were not rerun; actual reading accuracy/comfort is unchecked.
+Evidence: `output/auto-scroll-region-30-50-check-01/summary.json`. No camera,
+human collection, staging or commit ran for this adjustment.
+
 **2026-10-16 gaze-scroll direction research (design pending):** owner explicitly
 requests gaze down → scroll down, gaze up → scroll up, rejecting manual speed
 control and calibration-specific design. Primary-source review found a direct

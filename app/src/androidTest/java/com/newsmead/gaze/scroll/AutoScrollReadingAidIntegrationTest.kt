@@ -335,7 +335,7 @@ private class AutoScrollAidFixture(preferences: ReaderAidPreferences) : Closeabl
                 g.textOriginY + row.bottom < g.visibleRectScreen.bottom &&
                 x >= g.visibleRectScreen.left && x < g.visibleRectScreen.right)
         assertTrue("Pursued target is no longer in the controller's lower region: y=$y",
-            y > .40 * screenHeight)
+            y > ArticleAutoScrollPolicy.Config().startScreenFraction * screenHeight)
     }
 
     private fun emit(target: Target?, missing: Boolean) {

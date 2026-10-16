@@ -9,8 +9,8 @@ import kotlin.math.min
 class ArticleAutoScrollPolicy(val config: Config = Config()) {
     data class Config(
         val version: String = VERSION,
-        val startScreenFraction: Double = .40,
-        val fullSpeedScreenFraction: Double = .65,
+        val startScreenFraction: Double = .30,
+        val fullSpeedScreenFraction: Double = .50,
         val maxSpeedScreenFractionPerSecond: Double = .06,
         val responseMs: Double = 180.0,
         val maxSampleGapMs: Double = 150.0,

@@ -31,7 +31,7 @@ class ArticleAutoScrollAttachedLayoutTest {
     @Test fun gazeHeightControlsContinuousSpeedAndUpperGazeBrakesThenLowerRestarts() {
         AutoScrollAttachedFixture().use { f ->
             val before = f.scrollY()
-            f.feed(750, .45)
+            f.feed(750, .35)
             val slowEnd = f.scrollY()
             f.onMain {
                 val firstChange = f.scrollChanges.firstOrNull { it.second > before }
@@ -39,7 +39,7 @@ class ArticleAutoScrollAttachedLayoutTest {
                 assertTrue("First actual motion exceeded 400 ms", firstChange!!.first - f.captureTimes.first() <= 400.0)
                 assertTrue("Expected multiple actual scroll changes", f.scrollChanges.count { it.second > before } >= 3)
             }
-            f.feed(750, .65)
+            f.feed(750, .50)
             val fastEnd = f.scrollY()
             assertTrue("Expected slow phase movement", slowEnd > before)
             assertTrue("Lower gaze should move faster", fastEnd - slowEnd > slowEnd - before)
@@ -50,8 +50,8 @@ class ArticleAutoScrollAttachedLayoutTest {
                 val config = f.controller.configuration()
                 assertEquals("ARTICLE_AUTO_SCROLL_TRIAL_V3", config.getString("version"))
                 assertTrue(config.getBoolean("trial_settings"))
-                assertEquals(.40, config.getDouble("start_screen_fraction"), 0.0)
-                assertEquals(.65, config.getDouble("full_speed_screen_fraction"), 0.0)
+                assertEquals(.30, config.getDouble("start_screen_fraction"), 0.0)
+                assertEquals(.50, config.getDouble("full_speed_screen_fraction"), 0.0)
                 assertEquals(.06, config.getDouble("max_speed_screen_fraction_per_second"), 0.0)
                 assertEquals(180.0, config.getDouble("response_ms"), 0.0)
                 assertEquals(150.0, config.getDouble("max_sample_gap_ms"), 0.0)
@@ -64,7 +64,7 @@ class ArticleAutoScrollAttachedLayoutTest {
                 assertTrue(detail.getDouble("source_capture_ms") <= detail.getDouble("source_delivery_ms"))
                 assertFalse(detail.keys().asSequence().any { it.startsWith("source_line") })
             }
-            f.feed(400, .30)
+            f.feed(400, .25)
             f.onMain {
                 assertFalse("Fresh upper gaze should finish braking", f.controller.isMoving)
                 val end = f.boundaries.last()
@@ -75,7 +75,7 @@ class ArticleAutoScrollAttachedLayoutTest {
                 assertNull(f.controller.exclusion(end.detail.getDouble("exclude_captures_through_ms") + 1))
             }
             val stoppedY = f.scrollY()
-            f.feed(250, .30)
+            f.feed(250, .25)
             assertEquals(stoppedY, f.scrollY())
             f.feed(350, .65)
             assertTrue("Lower gaze must restart without old dwell or cooldown", f.scrollY() > stoppedY)
@@ -174,7 +174,7 @@ internal class AutoScrollAttachedFixture : Closeable {
                 assertTrue(binding.tvArticleText.isAttachedToWindow)
                 screenHeight = binding.tvArticleText.physicalDisplaySize().y
                 assertTrue(screenHeight > 0)
-                listOf(.30, .45, .65).forEach { point(it) }
+                listOf(.25, .35, .50).forEach { point(it) }
                 scrollChanges.clear()
             }
         } catch (failure: Throwable) {
