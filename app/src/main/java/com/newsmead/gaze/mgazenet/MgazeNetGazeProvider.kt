@@ -115,7 +115,10 @@ class MgazeNetGazeProvider(
         override fun run() {
             if (source == null) return
             val now = MgazeNetCameraSource.now()
-            if (lastOutput < 0 && now - fpsStart > 20000) { fail("MGazeNet initialization timed out."); return }
+            if (lastOutput < 0 && now - fpsStart > INITIALIZATION_TIMEOUT_MS) {
+                fail("MGazeNet initialization timed out after ${INITIALIZATION_TIMEOUT_MS / 1000} seconds.")
+                return
+            }
             if (fresh && now-lastCapture > maxOutputAgeMs) {
                 fresh = false
                 liveOutput?.expire()
@@ -163,5 +166,8 @@ class MgazeNetGazeProvider(
     companion object {
         // Explicit operational expiry, NOT an accuracy threshold. No interpolation.
         const val MAX_OUTPUT_AGE_MS = MgazeNetOutputGate.EXPIRY_MS
+        // The A02's first delivered output has been observed near 20 seconds.
+        // This bounds startup only; it does not admit older gaze samples.
+        const val INITIALIZATION_TIMEOUT_MS = 40_000.0
     }
 }

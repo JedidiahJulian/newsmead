@@ -1,5 +1,22 @@
 # Agent context — updated 2026-10-18
 
+**2026-10-18 A02 first-output startup timeout during article reading:**
+The newly installed build produced valid frozen baseline profiles in private
+`no_backup/mahalanobis_baseline_e4318368-e8b4-4dc8-a106-ea11a8a19bbc.jsonl`
+and `no_backup/mahalanobis_baseline_442399b3-a206-4a62-9642-b89b8a0cf02a.jsonl`.
+Their first logged gaze inputs arrived about 19.6 and 20.1 seconds after the
+first baseline tick. Subsequent private article logs
+`no_backup/mahalanobis_reading_7901cd23-59f1-4d3f-be51-23c26f129f4c.jsonl`
+and `no_backup/mahalanobis_reading_7535d61e-3ee2-4a54-b915-5bcd176980ed.jsonl`
+had a valid baseline profile but zero gaze samples and ended `provider_failed`
+after about 14 and 20 seconds of scoring. The provider's first-output watchdog
+was 20 seconds, so slow startup on this A02 is the leading explanation; the
+old reading logs did not retain the exact provider failure message. The
+first-output watchdog is now 40 seconds, while per-frame 650 ms expiry and
+feature quality are unchanged. Article reading logs the provider failure
+message for its own active session. This is an operational fix, not evidence
+of valid live MD2 scoring. No agent-led install or post-fix collection occurred.
+
 **2026-10-18 A02 post-scroll-fix baseline follow-up (source fix, device unverified):**
 Private run `no_backup/mahalanobis_baseline_a372aa79-9041-4c69-84e2-e4af986ed86c.jsonl`
 used the 650 ms reading output age limit. It yielded 179 vectors over about

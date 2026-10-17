@@ -1043,8 +1043,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         val provider = MgazeNetGazeProvider(requireContext(), binding.root, smoothForReading = true,
             rejectBlinks = true, maxOutputAgeMs = StudyConfig.READING_MAX_OUTPUT_AGE_MS)
         provider.onFps = { gazeOverlay?.setFps(it) }
-        provider.onFailure = { message ->
-            if (readingSession === session) stopReadingSession("provider_failed")
+        provider.onFailure = failure@{ message ->
+            if (readingSession !== session) return@failure
+            detectorLog?.write(org.json.JSONObject().put("type", "provider_failure").put("reason", message))
+            stopReadingSession("provider_failed")
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
         provider.onObservation = { observation ->
