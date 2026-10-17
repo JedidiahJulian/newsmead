@@ -9,7 +9,7 @@ import android.view.ViewTreeObserver
 import androidx.core.view.doOnPreDraw
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.newsmead.activities.ReadingReplayActivity
+import com.newsmead.activities.ReadingBaselineActivity
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.fragments.article.ArticleTypography
 import com.newsmead.gaze.getVisibleRectOnScreen
@@ -116,7 +116,7 @@ class ArticleAutoScrollAttachedLayoutTest {
  */
 internal class AutoScrollAttachedFixture : Closeable {
     data class Boundary(val start: Boolean, val timeMs: Double, val detail: JSONObject)
-    private val scenario = ActivityScenario.launch(ReadingReplayActivity::class.java)
+    private val scenario = ActivityScenario.launch(ReadingBaselineActivity::class.java)
     private val handler = Handler(Looper.getMainLooper())
     lateinit var binding: FragmentArticleBinding
         private set
@@ -184,7 +184,7 @@ internal class AutoScrollAttachedFixture : Closeable {
     }
 
     fun nowMs(): Double = SystemClock.elapsedRealtimeNanos() / 1e6
-    fun onMain(block: (ReadingReplayActivity) -> Unit) = scenario.onActivity(block)
+    fun onMain(block: (ReadingBaselineActivity) -> Unit) = scenario.onActivity(block)
     fun scrollY(): Int {
         var y = 0
         onMain { y = binding.nsvArticleText.scrollY }

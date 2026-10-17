@@ -1,5 +1,29 @@
 # Agent context — updated 2026-10-16
 
+**2026-10-17 ARMv7 calibration check adjustment:** On a 32-bit ARM device, the
+user reported five post-fit locations with 10–11 usable samples where 12 were
+required, while all reported spatial error summaries passed the existing limits.
+The post-fit sample interval was extended from 2.5 to 4.0 seconds per location
+after the same 3-second settling interval; the 250 ms output grace, 12-sample
+gate and spatial error limits are unchanged. This is a software timing response
+to a reported run, not proof that another run or the reading detector will pass.
+No device calibration or collection was performed by the agent.
+
+**2026-10-17 Mahalanobis branch checkpoint (exploratory software):**
+`measurement/mahalanobis` replaces the active Scanpath detector, pilot, replay,
+pattern aids and logs with a frozen participant baseline and standard full
+covariance Mahalanobis distance over existing line regression, completed dwell
+and sustained line-stay rates. A separate unassisted baseline-reading activity
+was added because the prior 20-second automatic warm-up was not the standardized
+phase. Default 10-second windows/500 ms updates, 60 seconds of valid union
+baseline coverage, 30 retained windows, λ=1e−6, in-sample P95, 1.5-second
+confirmation and 3.5-second recovery are exploratory settings. Capture/geometry
+and coordinate-stream infrastructure was extracted to neutral `gaze/reading`.
+Historical Scanpath notes below remain as provenance; they do not describe an
+active detector on this branch. See [implementation and limits](mahalanobis-detector.md),
+[branch audit](mahalanobis-replacement-audit.md), and
+[removal inventory](mahalanobis-removed-files.json). No human validity claim.
+
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
 local documentation to avoid loading full histories each time.

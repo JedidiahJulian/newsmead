@@ -45,7 +45,8 @@ class RollingReadingFeatures(private val config: MahalanobisConfig = Mahalanobis
         trimQuality(atMs)
         val first = counters.first
         val span = atMs - first.at
-        val fraction = if (quality.isEmpty()) 0.0 else quality.count { it.valid }.toDouble() / quality.size
+        val validCount = quality.count { it.valid }
+        val fraction = if (quality.isEmpty()) 0.0 else validCount.toDouble() / quality.size
         val fresh = lastInput?.let { atMs - it in 0..config.maxGapMs } == true
         val state = when {
             span < config.windowMs -> FeatureQuality.INSUFFICIENT
@@ -59,7 +60,8 @@ class RollingReadingFeatures(private val config: MahalanobisConfig = Mahalanobis
             ((latest.dwellMs - first.dwellMs).toDouble() / span).coerceIn(0.0, 1.0),
             (latest.stays - first.stays) * 60_000.0 / span,
         ) else RdfValues(0.0, 0.0, 0.0)
-        return RdfFeatureVector(atMs, first.at, atMs, values, state, fraction)
+        return RdfFeatureVector(atMs, first.at, atMs, values, state, fraction,
+            validCount, quality.size)
     }
 
     fun reset() {

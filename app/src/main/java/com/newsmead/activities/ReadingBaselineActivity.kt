@@ -73,8 +73,8 @@ class ReadingBaselineActivity : AppCompatActivity() {
         override fun run() {
             if (!running) return
             collectTick()
-            status.text = "Reading: ${(now() - startedAt) / 1000}s ? valid windows $validVectors / $vectors.\nRead for at least 60 seconds, then Finish and freeze."
-            handler.postDelayed(this, 500L)
+            status.text = "Reading: ${(now() - startedAt) / 1000}s; valid windows $validVectors / $vectors.\nCollect at least ${minimumElapsedSeconds()} seconds, then Finish and freeze."
+            handler.postDelayed(this, config.updateIntervalMs)
         }
     }
 
@@ -91,7 +91,7 @@ class ReadingBaselineActivity : AppCompatActivity() {
             textSize = 22f
         })
         root.addView(TextView(this).apply {
-            text = "Read naturally and scroll by hand for at least 60 seconds. Finish requires at least 30 valid windows and 60 seconds of covered reading. A new baseline is required after app restart or recalibration."
+            text = "Read naturally and scroll by hand for at least ${minimumElapsedSeconds()} seconds. Finish requires at least ${config.minimumRetainedWindows} valid windows and ${config.minimumBaselineDurationMs / 1000} seconds of covered reading. A new baseline is required after app restart or recalibration."
         })
         participant = EditText(this).apply { hint = "Participant code"; isSingleLine = true }
         root.addView(participant)
@@ -316,6 +316,7 @@ class ReadingBaselineActivity : AppCompatActivity() {
         .put("passageId", PASSAGE_ID).put("passageSha256", passageHash)
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun now() = SystemClock.elapsedRealtime()
+    private fun minimumElapsedSeconds() = (maxOf(config.windowMs, config.minimumBaselineDurationMs) + 999) / 1000
 
     companion object {
         private const val PASSAGE_ID = "fixed_provisional_baseline_stimulus_v1"

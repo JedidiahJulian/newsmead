@@ -149,7 +149,7 @@ def summarize(fixations, word_ranges, max_transition_gap_ms=125.0):
         if fixation['segment'] != previous_segment:
             group += 1
         elif previous_end is not None and fixation['start_ms'] - previous_end > max_transition_gap_ms:
-            # Continuous camera samples do not guarantee a continuously classified scanpath.
+            # Continuous camera samples do not guarantee continuous usable reading evidence.
             # Discarded short/noisy candidates can hide intermediate fixations or visits.
             group += 1
             sequence_gap_breaks += 1

@@ -13,6 +13,30 @@ import java.util.concurrent.TimeUnit
 
 /** Private feature-only journal. No images, raw gaze, uploads or invented labels. */
 class MahalanobisSessionLog(context: Context, kind: String) {
+    companion object {
+        /** Explicit researcher action; include prior completed sessions as well as this one. */
+        fun shareAll(context: Context, current: MahalanobisSessionLog? = null): Intent {
+            current?.let {
+                if (!it.closed) it.queue.submit {}.get(5, TimeUnit.SECONDS)
+                else check(it.queue.awaitTermination(5, TimeUnit.SECONDS)) { "Log is still closing" }
+            }
+            current?.failure?.let { throw it }
+            val files = context.noBackupFilesDir.listFiles { candidate ->
+                candidate.isFile && candidate.name.startsWith("mahalanobis_") && candidate.name.endsWith(".jsonl")
+            }.orEmpty().sortedByDescending(File::lastModified)
+            require(files.isNotEmpty()) { "No detector logs have been recorded" }
+            val staging = File(context.cacheDir, "research-export").apply { mkdirs() }
+            val uris = ArrayList<android.net.Uri>()
+            for (file in files) {
+                val copy = File(staging, file.name)
+                file.copyTo(copy, overwrite = true)
+                uris.add(FileProvider.getUriForFile(context, context.packageName + ".research.fileprovider", copy))
+            }
+            return Intent.createChooser(Intent(Intent.ACTION_SEND_MULTIPLE)
+                .setType("application/x-ndjson").putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Export detector logs")
+        }
+    }
     val file = File(context.noBackupFilesDir, "mahalanobis_${kind}_${UUID.randomUUID()}.jsonl")
     private val writer = file.bufferedWriter()
     private val queue = Executors.newSingleThreadExecutor()
@@ -69,6 +93,7 @@ object MahalanobisJson {
         .put("baselineMD2", JSONArray(p.baselineMd2)).put("P90", p.p90Md2).put("P95", p.p95Md2).put("P99", p.p99Md2)
         .put("activeThreshold", p.thresholdMd2).put("thresholdMode", p.config.percentile.name)
         .put("totalBaselineWindows", p.sampling.receivedCount).put("validBaselineWindows", p.sampling.validCount)
+        .put("invalidBaselineWindows", p.sampling.invalidCount).put("baselineCoverageMs", p.sampling.coverageMs)
         .put("retainedBaselineWindows", p.sampling.retainedCount).put("baselineSamplingMode", p.sampling.policy.name)
         .put("independentObservations", false).put("referenceDistribution", "in_sample")
     fun update(score: MahalanobisScore, state: TemporalResult, p: FrozenMahalanobisProfile?, scaffold: String,
@@ -80,6 +105,8 @@ object MahalanobisJson {
         .put("directions", score.directions?.let { JSONArray(it.map(Direction::name)) } ?: JSONObject.NULL)
         .put("MD2", score.md2 ?: JSONObject.NULL).put("MD", score.md ?: JSONObject.NULL)
         .put("scoreStatus", score.status.name).put("activeThreshold", score.thresholdMd2 ?: JSONObject.NULL)
+        .put("P90", p?.p90Md2 ?: JSONObject.NULL).put("P95", p?.p95Md2 ?: JSONObject.NULL)
+        .put("P99", p?.p99Md2 ?: JSONObject.NULL)
         .put("thresholdMode", c.percentile.name).put("candidateDeviation", state.high ?: JSONObject.NULL)
         .put("confirmedInstability", state.active).put("baselineValid", p != null)
         .put("persistenceState", state.status.name).put("scaffoldState", scaffold)

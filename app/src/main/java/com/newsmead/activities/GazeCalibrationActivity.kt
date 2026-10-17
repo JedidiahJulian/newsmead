@@ -232,7 +232,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
                         else { verification = 0; showCheck() }
                     }
                 }
-            } else if (verification in 0..5 && checkStart.isFinite() && now >= checkStart+5750) {
+            } else if (verification in 0..5 && MgazeNetPostFitTiming.finished(checkStart, now)) {
                 finishCheck()
                 verification++
                 if (verification == 6) finishChecks() else showCheck()
@@ -255,8 +255,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
         binding.calibrationView.showTarget(local.x,local.y,1800)
     }
     private fun observeCheck(frame: MgazeNetCameraSource.Frame) {
-        if (verification !in 0..5 || !checkStart.isFinite() || frame.captureMs < checkStart+3000 ||
-            frame.captureMs >= checkStart+5500 || frame.outputMs >= checkStart+5750 || !frame.eligible) return
+        if (verification !in 0..5 || !MgazeNetPostFitTiming.accepts(checkStart, frame.captureMs, frame.outputMs) ||
+            !frame.eligible) return
         if (session?.postureAccepted(frame.posture) != true) {
             binding.statusText.text = "Return to the calibration posture"
             return
@@ -428,7 +428,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
             "Median |vertical|: ${value(report.medianVerticalCm)} cm (limit ${MgazeNetCalibrationQualityGate.MAX_MEDIAN_VERTICAL_CM} cm)\n" +
             "Worst repeat: ${value(report.worstRepeatCm)} cm (limit ${MgazeNetCalibrationQualityGate.MAX_WORST_REPEAT_CM} cm)\n" +
             "Posture-rejected frames: ${session?.postureRejected ?: 0}; practice restarts: ${session?.practiceRestarts ?: 0}\n" +
-            "Stable training candidates: ${session?.trainingCandidates ?: 0}; selected: ${CalibrationIdentity.FIT_TARGET_COUNT*CalibrationIdentity.SAMPLES_PER_TARGET}"
+            "Stable training candidates: ${session?.trainingCandidates ?: 0}; selected: ${CalibrationIdentity.FIT_TARGET_COUNT*CalibrationIdentity.SAMPLES_PER_TARGET}\n" +
+            "Post-fit capture: ${((MgazeNetPostFitTiming.CAPTURE_END_MS - MgazeNetPostFitTiming.SETTLE_MS) / 1000).toInt()} seconds per target after settling"
         val decision = if (report.passed) {
             "This guardrail passed. Saving will replace the previous calibration. The separate nine-point check remains the accuracy evaluation."
         } else {

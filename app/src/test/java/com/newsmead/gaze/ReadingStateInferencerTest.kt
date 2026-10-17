@@ -6,6 +6,24 @@ import org.junit.Test
 class ReadingStateInferencerTest {
 
     @Test
+    fun gapResetsRegressionSequenceWithoutResettingCumulativeCounts() {
+        val events = RecordingListener()
+        val inferencer = ReadingStateInferencer(events)
+        inferencer.onLine(10, 20, 1_000)
+        inferencer.breakContinuity(1_000)
+        inferencer.onLine(7, 20, 2_000)
+        inferencer.onLine(8, 20, 2_200)
+        inferencer.onLine(8, 20, 2_550)
+        assertEquals(0, events.regressions.size)
+        inferencer.onLine(6, 20, 2_700)
+        inferencer.onLine(6, 20, 3_050)
+        assertEquals(1, events.regressions.size)
+        assertEquals(8, events.regressions.single().fromLine)
+        assertEquals(6, events.regressions.single().toLine)
+        assertEquals(1, events.scores.last().regressionCount)
+    }
+
+    @Test
     fun emitsFixationAfterDwellingOnSameLine() {
         val events = RecordingListener()
         val inferencer = ReadingStateInferencer(events, fixationThresholdMs = 300, minDwellMs = 120)

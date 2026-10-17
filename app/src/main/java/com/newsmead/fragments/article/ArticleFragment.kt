@@ -977,8 +977,6 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         attachLiveGaze(onGaze)
     }
 
-)
-
     private fun applyScaffoldUpdate(update: ScaffoldUpdate) {
         gazeOverlay?.setScaffoldState(binding.tvArticleText, update.state)
     }
@@ -1194,7 +1192,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     private fun saveReadingAidTrace() {
-        try { detectorLog?.let { startActivity(it.share(requireContext())) } }
+        try { startActivity(MahalanobisSessionLog.shareAll(requireContext(), detectorLog)) }
         catch (e: Exception) { Toast.makeText(context, "Could not export detector log: ${e.message}", Toast.LENGTH_LONG).show() }
     }
 

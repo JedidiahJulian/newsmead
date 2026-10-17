@@ -83,5 +83,6 @@
   "app/src/test/java/com/newsmead/gaze/WindowedStabilityEstimatorTest.kt",
   "app/src/test/java/com/newsmead/gaze/AdaptiveScaffoldControllerTest.kt",
   "app/src/androidTest/java/com/newsmead/gaze/scroll/AutoScrollReadingAidIntegrationTest.kt",
-  "app/src/main/res/values/reading_aid_menu_ids.xml"
+  "app/src/main/res/values/reading_aid_menu_ids.xml",
+  "app/src/test/resources/scanpath/live-reference.tsv"
 ]

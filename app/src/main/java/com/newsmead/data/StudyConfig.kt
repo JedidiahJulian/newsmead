@@ -26,7 +26,7 @@ object StudyConfig {
     const val ARTICLES_ASSET = "study_articles.json"
 
     /**
-     * Optional normal-article lock. Live scanpath geometry is rebuilt after a
+     * Optional normal-article lock. Live reading geometry is rebuilt after a
      * reader resizes text; dedicated validation/pilot views set their own size.
      */
     const val LOCK_ARTICLE_FONT_SIZE = false

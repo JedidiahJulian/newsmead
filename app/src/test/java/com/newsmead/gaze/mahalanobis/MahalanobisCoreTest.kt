@@ -26,9 +26,9 @@ class MahalanobisCoreTest {
         assertEquals(above.md2!!, below.md2!!, 1e-10)
         assertEquals(Direction.ABOVE_BASELINE, above.directions!![0])
         assertEquals(Direction.BELOW_BASELINE, below.directions!![0])
-        assertEquals(Direction.NEAR_BASELINE, above.directions[1])
+        assertEquals(Direction.NEAR_BASELINE, above.directions!![1])
         assertEquals(Direction.NEAR_BASELINE, scorer.score(vector(20_000, 10.0 + 5e-10)).directions!![0])
-        assertEquals(above.md2!!, above.md!! * above.md, 1e-10)
+        assertEquals(above.md2!!, above.md!! * above.md!!, 1e-10)
     }
     @Test fun unequalScalesAndCorrelationsUseFullCovariance() {
         val vs = axisVectors().map { it.copy(values = RdfValues(it.values[0], it.values[1], it.values[2] + 2 * (it.values[0] - 10))) }
@@ -102,7 +102,7 @@ class MahalanobisCoreTest {
             val decision = controller.accept(breakScore)
             assertFalse(decision.active)
             assertEquals(1, decision.completedEpisode!!.sampleCount)
-            assertEquals(0L, decision.completedEpisode.durationMs)
+            assertEquals(0L, decision.completedEpisode!!.durationMs)
         }
     }
     @Test fun replayUsesSameScorerAndClosesAtLastObservation() {
