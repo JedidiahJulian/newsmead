@@ -40,9 +40,12 @@ class ArticleAutoScrollAttachedLayoutTest {
                 assertTrue("Expected multiple actual scroll changes", f.scrollChanges.count { it.second > before } >= 3)
             }
             f.feed(750, .50)
+            val middleEnd = f.scrollY()
+            f.feed(750, .60)
             val fastEnd = f.scrollY()
             assertTrue("Expected slow phase movement", slowEnd > before)
-            assertTrue("Lower gaze should move faster", fastEnd - slowEnd > slowEnd - before)
+            assertTrue("50% gaze should move faster than35%", middleEnd - slowEnd > slowEnd - before)
+            assertTrue("50% gaze must stay slower than full speed at60%", fastEnd - middleEnd > middleEnd - slowEnd)
             f.onMain {
                 assertTrue(f.controller.isMoving)
                 assertEquals("auto_scroll_motion", f.controller.exclusion(f.nowMs()))
@@ -51,7 +54,7 @@ class ArticleAutoScrollAttachedLayoutTest {
                 assertEquals("ARTICLE_AUTO_SCROLL_TRIAL_V3", config.getString("version"))
                 assertTrue(config.getBoolean("trial_settings"))
                 assertEquals(.30, config.getDouble("start_screen_fraction"), 0.0)
-                assertEquals(.50, config.getDouble("full_speed_screen_fraction"), 0.0)
+                assertEquals(.60, config.getDouble("full_speed_screen_fraction"), 0.0)
                 assertEquals(.06, config.getDouble("max_speed_screen_fraction_per_second"), 0.0)
                 assertEquals(180.0, config.getDouble("response_ms"), 0.0)
                 assertEquals(150.0, config.getDouble("max_sample_gap_ms"), 0.0)
@@ -174,7 +177,7 @@ internal class AutoScrollAttachedFixture : Closeable {
                 assertTrue(binding.tvArticleText.isAttachedToWindow)
                 screenHeight = binding.tvArticleText.physicalDisplaySize().y
                 assertTrue(screenHeight > 0)
-                listOf(.25, .35, .50).forEach { point(it) }
+                listOf(.25, .35, .50, .60).forEach { point(it) }
                 scrollChanges.clear()
             }
         } catch (failure: Throwable) {
