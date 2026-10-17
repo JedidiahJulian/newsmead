@@ -55,54 +55,10 @@ object StudyConfig {
      */
     const val GAZE_TOUCH_VALIDATION = false
 
-    /** Independent scanpath aid prototype in the article; no change to frozen validation activities. */
-    const val SCANPATH_READING_AIDS = true
-
-    // ---- Adaptive graded visual scaffolding (manuscript Section 4.3.5) ----
-
-    enum class ScaffoldMode {
-        OFF,
-        ADAPTIVE,
-        FORCE_WORD,
-        FORCE_LINE,
-        FORCE_FOCUS,
-        FORCE_REENTRY,
-        DEMO_CYCLE,
-    }
-
-    /**
-     * ADAPTIVE is the study condition. Forced modes are validation aids that
-     * make one renderer visible without waiting for an instability trigger.
-     * DEMO_CYCLE walks every level in turn for recording; it is not a study mode.
-     */
-    val SCAFFOLD_MODE = ScaffoldMode.DEMO_CYCLE
-
-    /** How long DEMO_CYCLE holds each level before moving to the next one. */
-    const val SCAFFOLD_DEMO_LEVEL_DURATION_MS = 12_000L
-
-    /** Draw the active level's name on screen during DEMO_CYCLE recordings. */
-    const val SCAFFOLD_DEMO_CAPTION = true
-
-    /** Gaze dot and FPS are researcher diagnostics, not participant scaffolds. */
-    const val GAZE_DEBUG_VISUALS = true
-
-    /** Recent behavior window used by adaptation; cumulative RSI remains logged. */
-    const val SCAFFOLD_WINDOW_MS = 10_000L
-
-    /**
-     * Automatic per-article baseline warm-up. No scaffold appears during this
-     * interval. Before formal collection this should be replaced or supplied by
-     * the standardized baseline-reading phase described in the manuscript.
-     */
-    const val SCAFFOLD_BASELINE_DURATION_MS = 20_000L
-
-    const val SCAFFOLD_WORD_THRESHOLD_Z = 1.0
-    const val SCAFFOLD_LINE_THRESHOLD_Z = 1.5
-    const val SCAFFOLD_FOCUS_THRESHOLD_Z = 2.0
-    const val SCAFFOLD_REENTRY_THRESHOLD_Z = 2.5
-    const val SCAFFOLD_MIN_GAZE_CONFIDENCE = 0.65
-    const val SCAFFOLD_ESCALATION_PERSISTENCE_MS = 1_500L
-    const val SCAFFOLD_RECOVERY_PERSISTENCE_MS = 3_500L
+    /** Exploratory settings; freeze with the participant baseline. */
+    val MAHALANOBIS_CONFIG = com.newsmead.gaze.mahalanobis.MahalanobisConfig()
+    val MAHALANOBIS_SUPPORT_LEVEL = com.newsmead.gaze.ScaffoldLevel.LINE
+    const val GAZE_DEBUG_VISUALS = false
 
     /**
      * Blink filtering thresholds for the local MediaPipe gaze source. Openness is

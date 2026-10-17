@@ -2,17 +2,15 @@
 
 Example: python tools/gaze/analyze_reading_measurement.py recording.jsonl --output analysis.json
 All thresholds are provisional engineering parameters, retained in the output.
+Analysis version 6 removes the retired pattern classifier and its output schema;
+raw measurement, dispersion candidates, sequence events and coverage remain.
 """
 import argparse
 from collections import Counter
-import hashlib
 import json
 import math
 from pathlib import Path
 import statistics
-
-from scanpath_patterns import classify_patterns
-
 
 def finite_number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
@@ -385,7 +383,7 @@ def replay_paths(fixations, word_ranges, segment_boundaries=(), max_transition_g
 
 
 def analyze(records, dispersion_lines=0.5, min_ms=100.0, min_samples=3,
-            max_gap_ms=125.0, agreement=0.8, allow_incomplete=False, pattern_config=None):
+            max_gap_ms=125.0, agreement=0.8, allow_incomplete=False):
     if not (all(finite_number(v) for v in (dispersion_lines, min_ms, max_gap_ms, agreement))
             and dispersion_lines > 0 and min_ms > 0 and max_gap_ms > 0
             and min_samples >= 2 and 0.5 < agreement <= 1):
@@ -469,12 +467,6 @@ def analyze(records, dispersion_lines=0.5, min_ms=100.0, min_samples=3,
     metrics, visits = summarize(detector.fixations, metadata['word_ranges'], max_gap_ms)
     paths = replay_paths(detector.fixations, metadata['word_ranges'],
                          detector.segment_boundaries, max_gap_ms)
-    patterns = classify_patterns(detector.fixations, metadata['word_ranges'],
-                                 detector.segment_boundaries, geometries=geometry_snapshots,
-                                 config=pattern_config, max_transition_gap_ms=max_gap_ms)
-    patterns['config_sha256'] = hashlib.sha256(json.dumps(
-        patterns['config'], sort_keys=True, separators=(',', ':'), allow_nan=False
-    ).encode('utf-8')).hexdigest()
     observation_span = last_capture - first_capture if first_capture is not None else None
     span_fraction = lambda span: span / observation_span if observation_span and observation_span > 0 else None
     fixation_span = sum(f['duration_ms'] for f in detector.fixations)
@@ -493,7 +485,7 @@ def analyze(records, dispersion_lines=0.5, min_ms=100.0, min_samples=3,
                                     if detector.fixations else None),
     )
     return dict(
-        analysis_version=5, session_id=metadata['session_id'], source_complete=complete,
+        analysis_version=6, session_id=metadata['session_id'], source_complete=complete,
         source_metadata=metadata,
         parameters=dict(dispersion_lines=dispersion_lines, min_ms=min_ms, min_samples=min_samples,
                         max_gap_ms=max_gap_ms, word_sample_agreement=agreement,
@@ -512,10 +504,10 @@ def analyze(records, dispersion_lines=0.5, min_ms=100.0, min_samples=3,
                                    median_ms=statistics.median(coordinate_ages) if coordinate_ages else None,
                                    p95_ms=percentile95(coordinate_ages)),
         metrics=metrics, fixations=detector.fixations, visits=visits,
-        geometry_snapshots=geometry_snapshots, patterns=patterns,
+        geometry_snapshots=geometry_snapshots,
         segment_boundaries=detector.segment_boundaries, **paths,
         segment_boundary_event_counts=dict(Counter(b['reason'] for b in detector.segment_boundaries)),
-        interpretation='Descriptive pattern candidates from provisional gaze measurements; '
+        interpretation='Descriptive raw measurement and dispersion candidates; '
                        'no difficulty probability, RII, attention diagnosis, or independent eye labels.',
     )
 
@@ -530,21 +522,11 @@ def main():
     parser.add_argument('--max-gap-ms', type=float, default=125.0)
     parser.add_argument('--agreement', type=float, default=0.8)
     parser.add_argument('--allow-incomplete', action='store_true')
-    parser.add_argument('--pattern-config', type=Path,
-                        help='JSON object of explicit development settings; no calibrated difficulty thresholds.')
     args = parser.parse_args()
-    pattern_config = None
-    if args.pattern_config is not None:
-        try:
-            pattern_config = json.loads(args.pattern_config.read_text(encoding='utf-8-sig'))
-            if not isinstance(pattern_config, dict):
-                raise ValueError('Pattern configuration must be a JSON object')
-        except (OSError, ValueError) as error:
-            parser.error(str(error))
     with args.recording.open(encoding='utf-8') as source:
         records = [json.loads(line) for line in source if line.strip()]
     result = analyze(records, args.dispersion_lines, args.min_ms, args.min_samples,
-                     args.max_gap_ms, args.agreement, args.allow_incomplete, pattern_config)
+                     args.max_gap_ms, args.agreement, args.allow_incomplete)
     args.output.write_text(json.dumps(result, indent=2, allow_nan=False) + '\n', encoding='utf-8')
     print(json.dumps(result['metrics'], indent=2))
 

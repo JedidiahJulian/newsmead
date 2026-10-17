@@ -77,6 +77,15 @@ class ReadingStateInferencer(
             emitDwell(currentLine, activeLineCount, activeStartedAtMs, dwellMs)
         }
         emitScore(timestampMs)
+        activeLine = null
+        pendingRegression = null
+    }
+
+    /** End observed residence at the last valid capture; missing time is never dwell. */
+    fun breakContinuity(lastObservedTimestampMs: Long) {
+        flush(lastObservedTimestampMs)
+        maxLineReached = -1
+        inRegressionEpisode = false
     }
 
     private fun startLine(lineIndex: Int, lineCount: Int, timestampMs: Long) {

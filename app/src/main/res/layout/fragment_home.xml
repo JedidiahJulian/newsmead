@@ -68,26 +68,16 @@
                     app:layout_constraintTop_toBottomOf="@+id/tvHome" />
 
                 <Button
-                    android:id="@+id/btnScanpathReplay"
+                    android:id="@+id/btnReadingBaseline"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginHorizontal="8dp"
-                    android:text="@string/scanpath_replay_title"
+                    android:text="@string/reading_baseline_title"
                     android:textSize="16sp"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/btnGazeCalibration" />
 
-                <Button
-                    android:id="@+id/btnScanpathPilot"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="8dp"
-                    android:text="@string/scanpath_pilot_title"
-                    android:textSize="16sp"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/btnScanpathReplay" />
                 <Button
                     android:id="@+id/btnLanguage"
                     android:layout_width="0dp"
@@ -100,7 +90,7 @@
                     app:iconGravity="textStart"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/btnScanpathPilot" />
+                    app:layout_constraintTop_toBottomOf="@id/btnReadingBaseline" />
 
                 <com.google.android.material.button.MaterialButtonToggleGroup
                     android:id="@+id/tgRegion"

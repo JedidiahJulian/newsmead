@@ -13,8 +13,7 @@ import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.newsmead.R
 import com.newsmead.activities.GazeCalibrationActivity
-import com.newsmead.activities.ScanpathReplayActivity
-import com.newsmead.activities.ScanpathPilotActivity
+import com.newsmead.activities.ReadingBaselineActivity
 import com.newsmead.custom.CustomDividerItemDecoration
 import com.newsmead.data.DataHelper
 import com.newsmead.data.news.NewsDataApi
@@ -93,11 +92,8 @@ class HomeFragment : Fragment(), clickListener {
         this.viewBinding.btnGazeCalibration.setOnClickListener {
             startActivity(Intent(requireContext(), GazeCalibrationActivity::class.java))
         }
-        viewBinding.btnScanpathReplay.setOnClickListener {
-            startActivity(Intent(requireContext(), ScanpathReplayActivity::class.java))
-        }
-        viewBinding.btnScanpathPilot.setOnClickListener {
-            startActivity(Intent(requireContext(), ScanpathPilotActivity::class.java))
+        viewBinding.btnReadingBaseline.setOnClickListener {
+            startActivity(Intent(requireContext(), ReadingBaselineActivity::class.java))
         }
 
         // Language Button (Toggles between English and Filipino)

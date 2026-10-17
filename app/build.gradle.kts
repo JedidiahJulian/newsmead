@@ -244,3 +244,19 @@ tasks.register("verifyMgazeNetDebugApk") {
         }
     }
 }
+
+// Offline exploratory replay runs JVM code from the unit-test runtime, not Android.
+tasks.register<JavaExec>("mahalanobisReplay") {
+    group = "verification"
+    description = "Replay a recorded baseline and session at P90/P95/P99 without labels."
+    dependsOn("compileDebugUnitTestKotlin", "compileDebugUnitTestJavaWithJavac")
+    mainClass.set("com.newsmead.gaze.mahalanobis.MahalanobisReplayCli")
+    workingDir(rootProject.projectDir)
+    doFirst {
+        classpath = tasks.named<Test>("testDebugUnitTest").get().classpath
+        fun requiredProperty(name: String): String = providers.gradleProperty(name).orNull
+            ?.takeIf { it.isNotBlank() } ?: error("Supply -P$name=<path>")
+        args = listOf("--baseline", requiredProperty("baselineLog"), "--input", requiredProperty("inputLog"),
+            "--output-dir", requiredProperty("replayOutput"))
+    }
+}

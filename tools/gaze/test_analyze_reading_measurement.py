@@ -257,78 +257,21 @@ class RecordingTests(unittest.TestCase):
         rows += [dict(type='session_end', complete=True, dropped_records=0, sample_records=4)]
         return rows
 
-    def pattern_records(self):
-        rows = [dict(type='session_start', schema_version=1, session_id='synthetic-patterns',
-                     word_ranges=WORDS),
-                dict(type='geometry', geometry_id=1, elapsed_ms=0, line_height_px=40,
-                     text_origin_x=100, text_origin_y=20,
-                     visible_rect_screen=[100, 20, 300, 100],
-                     lines=[[0, 25, 0, 200, 0, 40], [25, 50, 0, 200, 40, 80]])]
-        for index, (word, line, x, y) in enumerate([(4, 0, 280, 40), (5, 1, 120, 80),
-                                                   (4, 0, 280, 40), (5, 1, 120, 80)]):
-            rows += [sample(t, word=word, line=line, x=x, y=y, delivery_ms=t + 10,
-                            display_x=0, display_y=0)
-                     for t in range(index * 160, index * 160 + 121, 40)]
-        rows += [dict(type='session_end', elapsed_ms=640, complete=True,
-                      dropped_records=0, sample_records=16)]
-        return rows
-
-    def test_named_complex_patterns_from_raw_recording(self):
-        result = analyze(self.pattern_records(), pattern_config={
-            'return_sweep_end_fraction': 0.75, 'return_sweep_start_fraction': 0.25,
-            'text_direction': 'ltr'})
-        patterns = result['patterns']
-        self.assertEqual({f'P{i:02d}' for i in range(1, 14)}, set(patterns['registry']))
-        cycles = [e for e in patterns['events'] if e['pattern_id'] == 'P11']
-        self.assertEqual(['word', 'line'], [e['resolution'] for e in cycles])
-        self.assertEqual([0, 1, 2, 3], cycles[0]['fixation_indices'])
-        self.assertEqual(640, cycles[0]['evidence_available_ms'])
-        resuming = [e for e in patterns['events'] if e['pattern_id'] == 'P10'
-                    and e['metrics']['phase'] == 'frontier_reached']
-        self.assertEqual({'word', 'line'}, {e['resolution'] for e in resuming})
-        sweeps = [e for e in patterns['events'] if e['pattern_id'] == 'P09'
-                  and e['metrics']['status'] == 'observed']
-        self.assertEqual(2, len(sweeps))
-        self.assertEqual(0.9, sweeps[0]['metrics']['from_end_fraction'])
-        self.assertEqual(0.1, sweeps[0]['metrics']['to_start_fraction'])
-        self.assertTrue(all(e['metrics'].get('long_flag') is None
-                            and e['metrics'].get('slow_flag') is None
-                            for e in patterns['events'] if e['pattern_id'] == 'P12'))
-        json.dumps(result, allow_nan=False)
-
-    def test_unconfigured_sweeps_are_not_positive_detections(self):
-        result = analyze(self.pattern_records())
-        sweeps = [e for e in result['patterns']['events'] if e['pattern_id'] == 'P09']
-        self.assertEqual(2, len(sweeps))
-        self.assertTrue(all(e['metrics']['status'] == 'abstain'
-                            and e['metrics']['reason'] == 'not_configured' for e in sweeps))
-
-    def test_recorded_invalid_sample_prevents_complex_episode_joining(self):
-        rows = self.pattern_records()
-        rows.insert(10, dict(sample(300, delivery_ms=310), measurement_valid=False))
-        rows[-1]['sample_records'] = 17
-        result = analyze(rows)
-        self.assertEqual([], [e for e in result['patterns']['events'] if e['pattern_id'] == 'P11'])
-        self.assertTrue(any(e['pattern_id'] == 'P13'
-                            and e['metrics']['reason'] == 'invalid_sample'
-                            for e in result['patterns']['events']))
-
-    def test_cli_loads_pattern_configuration_and_writes_named_output(self):
+    def test_cli_writes_raw_measurement_without_retired_classifier_output(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as folder:
             root = Path(folder)
-            source, output, settings = root / 'input.jsonl', root / 'analysis.json', root / 'settings.json'
-            source.write_text('\n'.join(json.dumps(row) for row in self.pattern_records()) + '\n',
+            source, output = root / 'input.jsonl', root / 'analysis.json'
+            source.write_text('\n'.join(json.dumps(row) for row in self.records()) + '\n',
                               encoding='utf-8')
-            settings.write_text(json.dumps({'return_sweep_end_fraction': 0.75,
-                                             'return_sweep_start_fraction': 0.25,
-                                             'text_direction': 'ltr'}), encoding='utf-8-sig')
             process = subprocess.run([sys.executable, str(Path(__file__).with_name('analyze_reading_measurement.py')),
-                                      str(source), '--output', str(output), '--pattern-config', str(settings)],
+                                      str(source), '--output', str(output)],
                                      capture_output=True, text=True, check=False)
             self.assertEqual(0, process.returncode, process.stderr)
             result = json.loads(output.read_text(encoding='utf-8'))
-            self.assertEqual(5, result['analysis_version'])
-            self.assertTrue(any(e['pattern_id'] == 'P11' for e in result['patterns']['events']))
+            self.assertEqual(6, result['analysis_version'])
+            self.assertNotIn('patterns', result)
+            self.assertEqual(1, result['metrics']['detected_fixations'])
+            self.assertEqual(120, result['coverage']['observed_fixation_span_ms'])
 
     def test_raw_stream_used_not_display_coordinates(self):
         rows = self.records()
@@ -369,7 +312,7 @@ class RecordingTests(unittest.TestCase):
         rows += [dict(type='session_end', elapsed_ms=500, complete=True,
                      dropped_records=0, sample_records=13)]
         result = analyze(rows)
-        self.assertEqual(5, result['analysis_version'])
+        self.assertEqual(6, result['analysis_version'])
         self.assertEqual([0, 1, 2], [v['line'] for v in result['line_visits']])
         self.assertEqual([], result['line_transitions'])
         self.assertEqual(['geometry_change'], result['sequence_breaks'][0]['line_reasons'])
@@ -395,7 +338,7 @@ class RecordingTests(unittest.TestCase):
         self.assertEqual(10, result['geometry_snapshots']['geometry:1']['text_origin_x'])
         self.assertEqual(100, result['geometry_snapshots']['geometry:2']['text_origin_x'])
         self.assertEqual([], result['line_transitions'])
-        self.assertIn('patterns', result)
+        self.assertNotIn('patterns', result)
 
     def test_usable_sample_count_excludes_nonmonotonic_samples(self):
         rows = self.records()[:2]

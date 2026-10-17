@@ -16,11 +16,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.newsmead.R
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
-import com.newsmead.gaze.scanpath.ArticleScanpathSession
-import com.newsmead.gaze.scanpath.ScanpathGeometry
-import com.newsmead.gaze.scanpath.ScanpathSample
-import com.newsmead.gaze.scanpath.ScanpathTextGeometryReader
-import com.newsmead.gaze.scanpath.ScanpathWordMapper
+import com.newsmead.gaze.reading.ArticleReadingSession
+import com.newsmead.gaze.reading.ReadingCoordinateStream
+import com.newsmead.gaze.reading.ReadingGeometry
+import com.newsmead.gaze.reading.ReadingSample
+import com.newsmead.gaze.reading.ReadingTextGeometryReader
+import com.newsmead.gaze.reading.ReadingWordMapper
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -48,11 +49,11 @@ class ArticleTypographyTest {
     @Test fun arialReflowsAndSpacingScalesWhileUtf16WordAnchorsSurvive() = onMain {
         val fixture = Fixture()
         val view = fixture.body
-        val reader = ScanpathTextGeometryReader()
-        val mapper = ScanpathWordMapper(view.text.toString(), view)
+        val reader = ReadingTextGeometryReader()
+        val mapper = ReadingWordMapper(view.text.toString(), view)
         val heights = mutableMapOf<Float, Int>()
         val lineCounts = mutableMapOf<Float, Int>()
-        var defaultLines: List<com.newsmead.gaze.scanpath.ScanpathLine>? = null
+        var defaultLines: List<com.newsmead.gaze.reading.ReadingLine>? = null
         for (size in listOf(14f, 22f, 60f, 22f, 14f)) {
             fixture.resize(size)
             val expectedPx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, size,
@@ -84,17 +85,16 @@ class ArticleTypographyTest {
 
     @Test fun sessionRebuildsAfterResizeAndRequiresFreshSettledGeometry() {
         lateinit var fixture: Fixture
-        lateinit var session: ArticleScanpathSession
-        val samples = mutableListOf<ScanpathSample>()
-        val accepted = mutableListOf<Boolean>()
-        val geometries = mutableListOf<ScanpathGeometry>()
+        lateinit var session: ArticleReadingSession
+        val samples = mutableListOf<ReadingSample>()
+        val geometries = mutableListOf<ReadingGeometry>()
         onMain {
             fixture = Fixture()
             fixture.resize(22f)
-            session = ArticleScanpathSession(fixture.body,
+            session = ArticleReadingSession(fixture.body,
                 onGeometry = { _, geometry -> geometry?.let(geometries::add) },
                 onInput = { _, sample -> samples.add(sample) },
-                onAcceptance = { _, _, value -> accepted.add(value) })
+                coordinateStream = ReadingCoordinateStream.CALIBRATED_RAW, motionCompensatedAids = false)
             session.checkGeometry()
         }
         // Called only inside runOnMainSync: capture and delivery use real elapsed clocks.
@@ -105,42 +105,39 @@ class ArticleTypographyTest {
                 SystemClock.elapsedRealtimeNanos(), samples.size.toLong(), "coordinate",
                 point.first, point.second, point.first, point.second))
         }
-        fun recordSettledCandidate() {
+        fun recordSettledSamples() {
             // All waits run on the instrumentation thread, allowing UI work to continue.
-            SystemClock.sleep(ArticleScanpathSession.GEOMETRY_SETTLE_MS.toLong() + 10L)
+            SystemClock.sleep(ArticleReadingSession.GEOMETRY_SETTLE_MS.toLong() + 10L)
             repeat(4) { index ->
                 if (index > 0) SystemClock.sleep(40L)
                 onMain { record() }
             }
         }
         try {
-            recordSettledCandidate()
-            lateinit var old: ScanpathGeometry
+            recordSettledSamples()
+            lateinit var old: ReadingGeometry
             onMain {
-                assertNotNull(session.engine.currentCandidateEvidence())
                 old = geometries.last()
             }
             for (size in listOf(60f, 14f, 22f)) {
-                lateinit var current: ScanpathGeometry
+                lateinit var current: ReadingGeometry
                 onMain {
                     fixture.resize(size)
                     session.checkGeometry()
                     current = geometries.last()
                     assertNotEquals(samples.last().geometrySnapshotId, current.snapshotId)
-                    assertNull(session.engine.currentCandidateEvidence())
                     record()
                     assertEquals("geometry_unsettled", samples.last().exclusion)
                     assertFalse(samples.last().eligible)
-                    assertFalse(accepted.last())
+                    assertFalse(samples.last().eligible)
                     assertNull(samples.last().wordStartUtf16)
                 }
-                recordSettledCandidate()
+                recordSettledSamples()
                 onMain {
-                    assertTrue(accepted.last())
+                    assertTrue(samples.last().eligible)
                     assertEquals(current.snapshotId, samples.last().geometrySnapshotId)
                     assertEquals(fixture.wordStart, samples.last().wordStartUtf16)
                     assertEquals(fixture.wordStart + 5, samples.last().wordEndUtf16)
-                    assertNotNull(session.engine.currentCandidateEvidence())
                     assertEquals(0, session.generation)
                 }
             }
@@ -239,7 +236,7 @@ class ArticleTypographyTest {
         }
 
         fun wordPoint(): Pair<Float, Float> {
-            val geometry = checkNotNull(ScanpathTextGeometryReader().read(body))
+            val geometry = checkNotNull(ReadingTextGeometryReader().read(body))
             val layout = body.layout
             val offset = wordStart + 2
             val line = layout.getLineForOffset(offset)

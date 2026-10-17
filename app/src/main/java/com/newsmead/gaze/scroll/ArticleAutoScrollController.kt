@@ -10,8 +10,8 @@ import com.newsmead.custom.LockableNestedScrollView
 import com.newsmead.gaze.getVisibleRectOnScreen
 import com.newsmead.gaze.physicalDisplaySize
 import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
-import com.newsmead.gaze.scanpath.ArticleScanpathSession
-import com.newsmead.gaze.scanpath.ScanpathCoordinateStream
+import com.newsmead.gaze.reading.ArticleReadingSession
+import com.newsmead.gaze.reading.ReadingCoordinateStream
 import org.json.JSONObject
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -128,7 +128,7 @@ internal class ArticleAutoScrollController(
         }
         val current = refreshGeometry() ?: run { halt("geometry_unavailable"); return }
         // This floor is for controls/reflow only. Navigation must keep receiving
-        // fresh gaze while its own motion is excluded from scanpath evidence.
+        // fresh gaze while its own motion is excluded from reading evidence.
         if (capture <= inputAfterMs || capture < layoutReadyAfterMs) {
             // Discard delayed captures without moving the floor forward again.
             policy.interrupt("settling")
@@ -164,7 +164,7 @@ internal class ArticleAutoScrollController(
             if (!isMoving) {
                 isMoving = true
                 val detail = JSONObject().put("policy", ArticleAutoScrollPolicy.VERSION)
-                    .put("coordinate_stream", ScanpathCoordinateStream.ARTICLE_SMOOTHED.id)
+                    .put("coordinate_stream", ReadingCoordinateStream.ARTICLE_SMOOTHED.id)
                     .put("from_scroll_y_px", scroller.scrollY)
                     .put("source_capture_ms", tick.sourceCaptureTimeMs)
                     .put("source_delivery_ms", tick.sourceDeliveryTimeMs)
@@ -207,7 +207,7 @@ internal class ArticleAutoScrollController(
         if (!isMoving) return
         isMoving = false
         val now = clock()
-        captureFloorMs = max(captureFloorMs, now + ArticleScanpathSession.GEOMETRY_SETTLE_MS)
+        captureFloorMs = max(captureFloorMs, now + ArticleReadingSession.GEOMETRY_SETTLE_MS)
         val detail = JSONObject(motionDetail?.toString() ?: "{}")
             .put("result", result).put("reason", reason)
             .put("actual_to_scroll_y_px", scroller.scrollY)
@@ -248,7 +248,7 @@ internal class ArticleAutoScrollController(
         val externalScroll = expectedScrollY != null && expectedScrollY != scroller.scrollY
         if (layoutChanged || externalScroll) {
             halt(if (layoutChanged) "reading_layout_changed" else "external_scroll")
-            layoutReadyAfterMs = clock() + ArticleScanpathSession.GEOMETRY_SETTLE_MS
+            layoutReadyAfterMs = clock() + ArticleReadingSession.GEOMETRY_SETTLE_MS
         }
         if (next != old || contentChanged) geometryKey++
         snapshot = next
@@ -275,7 +275,7 @@ internal class ArticleAutoScrollController(
         .put("max_sample_gap_ms", policy.config.maxSampleGapMs)
         .put("max_output_age_ms", policy.config.maxOutputAgeMs)
         .put("max_frame_delta_ms", policy.config.maxFrameDeltaMs)
-        .put("settle_ms", ArticleScanpathSession.GEOMETRY_SETTLE_MS).put("trial_settings", true)
+        .put("settle_ms", ArticleReadingSession.GEOMETRY_SETTLE_MS).put("trial_settings", true)
 
     fun close() {
         if (closed) return
