@@ -1009,6 +1009,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         val scorer = MahalanobisScorer(baseline?.profile)
         temporal = MahalanobisTemporalController(config)
         detectorLog = MahalanobisSessionLog(requireContext(), "reading")
+        detectorLog?.write(org.json.JSONObject().put("type", "reading_setup")
+            .put("maxOutputAgeMs", StudyConfig.READING_MAX_OUTPUT_AGE_MS)
+            .put("staticGeometryFallback", true)
+            .put("autoScrollMotionExcluded", true))
         baseline?.let {
             detectorLog?.write(MahalanobisJson.profile(it.profile).put("participantCode", it.participantCode)
                 .put("baselineLogName", it.baselineLogName).put("calibrationFingerprint", it.calibrationFingerprint))
@@ -1018,7 +1022,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             onGeometry = { _, geometry -> readingLineCount = geometry?.lines?.size ?: 0 },
             onBoundary = { reason ->
                 if (reason != "invalid_sample" && reason != "non_monotonic_capture") {
-                    features?.boundary()
+                    if (reason == "reading_scroll") features?.breakContinuity() else features?.boundary()
                     temporal?.finish()?.let { detectorLog?.write(MahalanobisJson.episode(it)) }
                     scaffoldController?.reset()?.let(::applyScaffoldUpdate)
                 }
@@ -1036,7 +1040,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         readingSession = session
         binding.root.viewTreeObserver.addOnPreDrawListener(readingGeometryListener)
         session.checkGeometry()
-        val provider = MgazeNetGazeProvider(requireContext(), binding.root, smoothForReading = true, rejectBlinks = true)
+        val provider = MgazeNetGazeProvider(requireContext(), binding.root, smoothForReading = true,
+            rejectBlinks = true, maxOutputAgeMs = StudyConfig.READING_MAX_OUTPUT_AGE_MS)
         provider.onFps = { gazeOverlay?.setFps(it) }
         provider.onFailure = { message ->
             if (readingSession === session) stopReadingSession("provider_failed")
@@ -1045,12 +1050,15 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         provider.onObservation = { observation ->
             if (readingSession === session) {
                 articleAutoScroll?.onPreDraw()
+                val scrollExclusion = articleAutoScroll?.exclusion(observation.captureMs)
                 val excluded = readerControlGate.excludes(observation.captureMs) || readingMeasurement != null ||
                     (observation.x != null && observation.y != null && readingAidEntryContains(observation.x, observation.y)) ||
                     (::textToSpeech.isInitialized && textToSpeech.isSpeaking)
-                val input = if (excluded) observation.copy(reason = "reader_controls") else observation
-                session.record(input)
-                articleAutoScroll?.onObservation(input)
+                val controllerInput = if (excluded) observation.copy(reason = "reader_controls") else observation
+                val readingInput = if (scrollExclusion != null)
+                    controllerInput.copy(reason = scrollExclusion) else controllerInput
+                session.record(readingInput)
+                articleAutoScroll?.onObservation(controllerInput)
             }
             readingMeasurement?.record(observation)
             if (observation.reason != "coordinate") gazeOverlay?.clearGaze()

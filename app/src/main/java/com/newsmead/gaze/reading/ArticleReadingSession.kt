@@ -103,6 +103,12 @@ class ArticleReadingSession(
             current.originX == previous.originX && current.lines == previous.lines &&
             current.lineHeightPx == previous.lineHeightPx && current.direction == previous.direction &&
             current.visible.left == previous.visible.left && current.visible.right == previous.visible.right
+        val readingScroll = !controlledAutoScroll && previous != null && sameLayout &&
+            current.originX == previous.originX && current.lines == previous.lines &&
+            current.lineHeightPx == previous.lineHeightPx && current.direction == previous.direction &&
+            current.visible.left == previous.visible.left && current.visible.right == previous.visible.right &&
+            (current.originY != previous.originY || current.visible.top != previous.visible.top ||
+                current.visible.bottom != previous.visible.bottom)
         geometry = current
         if (translation && snapshotId != null) {
             val display = current.snapshot(snapshotId!!)
@@ -116,7 +122,7 @@ class ArticleReadingSession(
         geometryTimeline.clear()
         if (motionCompensatedAids) geometryTimeline.record(now, snapshot)
         onGeometry(generation, snapshot)
-        emitBoundary("geometry_change")
+        emitBoundary(if (readingScroll) "reading_scroll" else "geometry_change")
     }
 
     /** Only the explicit navigation controller may mark translations as controlled. */
@@ -159,11 +165,15 @@ class ArticleReadingSession(
         val settled = capture != null && capture >= geometryChangedMs + GEOMETRY_SETTLE_MS
         val historical = if (motionCompensatedAids && capture != null)
             geometryTimeline.at(capture, MAX_CAPTURE_GEOMETRY_AGE_MS) else null
-        val captureGeometry = if (motionCompensatedAids) historical?.geometry?.let {
+        val historicalGeometry = historical?.geometry?.let {
             ReadingTextGeometry(it.textOriginX, it.textOriginY, it.visibleRectScreen,
                 it.lineHeightPx, it.lines, it.textDirection ?: ReadingTextDirection.UNKNOWN)
-        } else current
-        val freshMotionInput = !motionCompensatedAids || (capture != null &&
+        }
+        // A stationary body can use its current geometry after the capture-based
+        // settle guard. Controlled translation still needs causal history.
+        val captureGeometry = if (motionCompensatedAids && controlledAutoScroll)
+            historicalGeometry else historicalGeometry ?: current
+        val freshMotionInput = !motionCompensatedAids || !controlledAutoScroll || (capture != null &&
             observation.outputMs >= capture && observation.outputMs <= elapsedMs() &&
             elapsedMs() - capture <= MAX_MOTION_INPUT_AGE_MS)
         val consultationReason = consultation.exclusion(capture)
@@ -187,7 +197,7 @@ class ArticleReadingSession(
                     observation.reason else "coordinate_unavailable"
                 current == null -> "layout_unavailable"
                 !settled -> "geometry_unsettled"
-                motionCompensatedAids && historical == null -> "scroll_geometry_unavailable"
+                motionCompensatedAids && controlledAutoScroll && historical == null -> "scroll_geometry_unavailable"
                 !freshMotionInput -> "scroll_input_stale"
                 !target.isValid -> "outside_visible_text"
                 !monotonic -> "non_monotonic_capture"

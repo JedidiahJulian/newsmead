@@ -66,6 +66,16 @@ class MgazeNetLiveOutputTest {
         assertTrue(output(p, 340.0).emitted)
     }
 
+    @Test fun expiredOpenEyeFrameAdvancesBlinkRecoveryWithoutEmittingItsCoordinate() {
+        val p = reading()
+        assertEquals("blink", output(p, 100.0, shut).reason)
+        val expired = p.evaluate(140.0, 800.0, true, floatArrayOf(.9f, .9f), "eye_area", open)
+        assertEquals("stale", expired.reason)
+        assertNull(expired.x)
+        assertNull(expired.y)
+        assertTrue(output(p, 180.0, open).emitted)
+    }
+
     @Test fun optOutRetainsTheFrozenRawOutputAndOptionalSmoothingContracts() {
         val raw = MgazeNetLiveOutput(1000, 2000, smoothForReading = false, rejectBlinks = false)
         val first = output(raw, 100.0, null, floatArrayOf(-.1f, 1.1f))

@@ -45,6 +45,9 @@ class ReadingFeaturePipeline(val config: MahalanobisConfig = MahalanobisConfig()
         stabilizer.reset()
     }
 
+    /** A scroll interrupts line events, but keeps the timed feature window intact. */
+    fun breakContinuity() = interrupt()
+
     /** Reflow, passage and navigation boundaries reset features, never the frozen model. */
     fun boundary() {
         interrupt(); rolling.reset(); inferencer = newInferencer(); lastCapture = null

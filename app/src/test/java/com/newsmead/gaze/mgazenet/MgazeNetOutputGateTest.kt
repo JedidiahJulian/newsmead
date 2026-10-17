@@ -17,6 +17,16 @@ class MgazeNetOutputGateTest {
         assertFalse(stale.emitted); assertEquals("stale",stale.reason); assertEquals(540f,stale.rawX!!,0f)
         assertFalse(gate.evaluate(1000.0,1502.0,true,floatArrayOf(.5f,.5f),"features").emitted)
     }
+    @Test fun readingAgeLimitCanBeConfiguredWithoutChangingTheDefault() {
+        val reading = MgazeNetOutputGate(1080, 2340, 650.0)
+        assertTrue(reading.evaluate(1000.0, 1600.0, true,
+            floatArrayOf(.5f, .5f), "features").emitted)
+        assertEquals("stale", reading.evaluate(1100.0, 1751.0, true,
+            floatArrayOf(.5f, .5f), "features").reason)
+        val default = MgazeNetOutputGate(1080, 2340)
+        assertEquals("stale", default.evaluate(1000.0, 1600.0, true,
+            floatArrayOf(.5f, .5f), "features").reason)
+    }
     @Test fun noFaceBadShapeNonfiniteAndBadClocksNeverEmit() {
         val gate = MgazeNetOutputGate(1080,2340)
         assertEquals("no_face",gate.evaluate(1.0,2.0,false,null,"no_face").reason)

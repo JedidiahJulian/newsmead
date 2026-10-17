@@ -1,4 +1,85 @@
-# Agent context — updated 2026-10-16
+# Agent context — updated 2026-10-18
+
+**2026-10-18 baseline window reset follow-up (source fix, device unverified):**
+Read-only summary of the user's latest private A02 baseline log
+`no_backup/mahalanobis_baseline_765bca9a-edab-4197-a965-fb01b9b0730c.jsonl`
+found 293 `geometry_change` boundaries in 32 seconds, 64/64 `INSUFFICIENT`
+vectors, and a longest uninterrupted rolling span of about 7.0 seconds.
+There were 63 adapter observations but only one eligible; exclusions were 19
+stale, 19 blink, 17 outside visible text, and seven geometry unsettled. These
+counts identify both a feature reset problem and separate gaze eligibility
+problems; they do not prove a participant or detector outcome. Verified manual
+vertical translation now breaks line-event continuity without discarding the
+10-second rolling feature window in baseline and adaptive article reading.
+True text/layout changes still reset the window. An expired coordinate stays
+excluded, while its capture-ordered eyelid sample may advance blink recovery;
+duplicate clocks and missing eye data retain their abstention behavior. The
+baseline screen now displays valid-window and covered-time progress, the latest
+quality reason, and gives the text more screen space during collection. Focused
+source review found no remaining integration issue. No new APK install or
+post-change camera collection was performed by the agent.
+
+**2026-10-18 A02 repeat baseline and reading freshness follow-up:** A newer
+installed debug APK (package last updated 02:00:26 local) produced private log
+`no_backup/mahalanobis_baseline_8c41eff9-d7f0-41d6-8bc7-33e9a7217eba.jsonl`:
+173 vectors (146 insufficient, 27 missing), 379 adapter observations, 20
+eligible, maximum valid fraction 0.30; exclusions 152 stale, 118 blink, 76
+outside visible text and 13 geometry unsettled. Interval capture-to-delivery
+mean ages had median about 485 ms and P90 about 528 ms. Current
+`MGazeNetPerf` batches show the one-slot live queue change worked mechanically
+(average queue about 0.2–0.3 ms, versus 115–160 ms previously), yet overall
+age remains near the 500 ms gate. The reading-only exploratory output age limit
+is now 650 ms for baseline and article; calibration/validation keep the default
+500 ms. Article reading can use current geometry only when text is not in
+controlled motion and the capture-based settle guard passes. Auto-scroll motion
+and its late captures are excluded from reading features while controller input
+still receives the original coordinate. Capture timestamps and the 65% window
+quality requirement are unchanged. This is software tuning from one A02 run,
+not human detector validation. Source review caught and corrected a controller
+routing regression before delivery. Debug APK and androidTest sources compile;
+focused gaze/Mahalanobis JVM tests pass. Full JVM suite had 311/312 pass, with
+unrelated `FirebaseTest.createAccount` failing at `FirebaseTest.kt:16`.
+No new app install or post-change camera collection was performed by the agent.
+
+**2026-10-18 attached A02 baseline failure (read-only device evidence):** The
+latest private `no_backup/mahalanobis_baseline_7d4be860-4831-4861-8b63-616c5e0937a3.jsonl`
+contains 121/121 `INSUFFICIENT` vectors, 209 adapter inputs, zero eligible,
+208 `stale` and one `blink`; maximum valid fraction is zero. Recent
+`MGazeNetPerf` logcat batches report average worker queue time about 115–160 ms
+and analyzer-start-to-finish total about 430–570 ms. These are separate
+measurements: the performance averages do not directly measure capture-to-output
+age. The baseline geometry correction below did not resolve this observed run.
+`MgazeNetCameraSource.kt` now permits one outstanding cropped inference for a
+saved-calibration/live source, keeping calibration's two-slot path unchanged.
+`ReadingBaselineActivity.kt` records interval capture-to-delivery age alongside
+rejection counts. Source review found no concurrency issue. No new app install,
+camera collection, or post-change device validation occurred. Local Gradle
+checks could not resolve the Android Gradle plugin from the offline cache.
+
+**2026-10-18 baseline zero-valid-window follow-up (source fix, device unverified):**
+The unassisted baseline screen now uses stationary text geometry in
+`ReadingBaselineActivity.kt` rather than the optional moving-article geometry
+history. The previous default required a geometry snapshot no more than 100 ms
+before each camera capture; delayed frames on a static baseline page could all be
+excluded as `scroll_geometry_unavailable`. At that point manual scrolling reset
+the feature window; the newer follow-up above changes this. The existing 150 ms
+settle guard remains. A
+synthetic delayed-capture fixture was added in `ArticleReadingSessionTest.kt`.
+Each baseline vector log now includes input/eligible counts and exclusion-reason
+counts for its update interval, allowing a later device run to distinguish this
+path from camera, text-region, or quality failures without storing gaze images.
+Focused source review found no correctness issue, but no device observation or
+completed Gradle build establishes that this was the user's sole failure cause.
+
+**2026-10-18 ordinary calibration sample guard (software):** The six post-fit
+checks now wait at least the existing 4-second capture interval, extend a
+low-sample location to at most 8 seconds after the same 3-second settling
+period, then retry that location once if it still has fewer than 12 usable
+predictions. Completed locations and the fitted model are retained during this
+local retry. The 12-sample and spatial-error gates are unchanged, and accuracy
+failures are not retried to obtain a favorable result. Matched comparison runs
+retain their fixed 4-second check procedure. Attempt counts/duration appear in
+the results. Host checks do not establish performance on the user's device.
 
 **2026-10-17 ARMv7 calibration check adjustment:** On a 32-bit ARM device, the
 user reported five post-fit locations with 10–11 usable samples where 12 were

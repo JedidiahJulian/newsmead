@@ -2,12 +2,13 @@ package com.newsmead.gaze.mgazenet
 
 /** Shared output for the reading dot, observations and aid input; no replay of a hidden point. */
 internal class MgazeNetLiveOutput(width: Int, height: Int,
-    private val smoothForReading: Boolean, private val rejectBlinks: Boolean) {
+    private val smoothForReading: Boolean, private val rejectBlinks: Boolean,
+    outputExpiryMs: Double = MgazeNetOutputGate.EXPIRY_MS) {
     data class Result(val reason: String, val rawX: Float?, val rawY: Float?,
         val x: Float?, val y: Float?) {
         val emitted get() = reason == "coordinate"
     }
-    private val outputGate = MgazeNetOutputGate(width, height)
+    private val outputGate = MgazeNetOutputGate(width, height, outputExpiryMs)
     private val blinkGate = MgazeNetBlinkGate()
     private val smoother = MgazeNetReadingSmoother()
 
@@ -15,8 +16,8 @@ internal class MgazeNetLiveOutput(width: Int, height: Int,
                  prediction: FloatArray?, sourceReason: String,
                  eyes: MgazeNetEyelidGeometry.Sample?): Result {
         val gated = outputGate.evaluate(captureMs, deliveryMs, eligible, prediction, sourceReason)
-        // A duplicate/expired frame cannot count toward reopening after a reset.
-        if (gated.reason == "invalid_clock" || gated.reason == "stale") {
+        // A duplicate capture cannot advance eye state.
+        if (gated.reason == "invalid_clock") {
             invalidate()
             return Result(gated.reason, gated.rawX, gated.rawY, null, null)
         }
@@ -25,6 +26,13 @@ internal class MgazeNetLiveOutput(width: Int, height: Int,
         val checkEyes = rejectBlinks && (eligible || (sourceReason == "eye_area" && eyes != null))
         val eyeReason = if (checkEyes) blinkGate.evaluate(captureMs, eyes) else null
         if (rejectBlinks && !checkEyes) blinkGate.reset()
+        // An expired coordinate remains unusable, but its capture-ordered eyelid
+        // measurement can contribute to reopening. Otherwise one slow frame can
+        // repeatedly reset the blink gate before two open frames arrive.
+        if (gated.reason == "stale") {
+            smoother.reset()
+            return Result("stale", gated.rawX, gated.rawY, null, null)
+        }
         val reason = eyeReason ?: gated.reason
         if (reason != "coordinate") {
             smoother.reset()

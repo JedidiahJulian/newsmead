@@ -49,4 +49,17 @@ class RollingReadingFeaturesTest {
         assertFalse(invalid.isUsable(config))
         assertTrue(invalid.validFraction < 1.0)
     }
+
+    @Test fun scrollBreakKeepsRollingTenSecondWindow() {
+        val pipeline = ReadingFeaturePipeline(config)
+        for (t in 0L..10_000L step 500L) {
+            pipeline.sample(TextTarget(0, 2), true, t)
+            if (t == 5_000L) pipeline.breakContinuity()
+            val vector = pipeline.tick(t)!!
+            if (t == 10_000L) {
+                assertEquals(0L, vector.windowStartMs)
+                assertEquals(FeatureQuality.VALID, vector.quality)
+            }
+        }
+    }
 }

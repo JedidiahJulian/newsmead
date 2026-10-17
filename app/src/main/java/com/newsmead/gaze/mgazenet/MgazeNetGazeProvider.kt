@@ -48,6 +48,7 @@ class MgazeNetGazeProvider(
     private val view: View,
     private val smoothForReading: Boolean = false,
     private val rejectBlinks: Boolean = false,
+    private val maxOutputAgeMs: Double = MgazeNetOutputGate.EXPIRY_MS,
 ) : GazeProvider, DefaultLifecycleObserver {
     data class Observation(val captureMs: Double?, val deliveryElapsedNs: Long, val deliveryId: Long, val reason: String,
         val x: Float? = null, val y: Float? = null, val rawX: Float? = null, val rawY: Float? = null,
@@ -83,7 +84,8 @@ class MgazeNetGazeProvider(
         lastCapture = -1.0; lastOutput = -1.0; fpsStart = MgazeNetCameraSource.now(); fpsCount = 0
         deliverySequence = 0L
         val identity = saved.identity
-        val output = MgazeNetLiveOutput(identity.screenWidth, identity.screenHeight, smoothForReading, rejectBlinks)
+        val output = MgazeNetLiveOutput(identity.screenWidth, identity.screenHeight,
+            smoothForReading, rejectBlinks, maxOutputAgeMs)
         liveOutput = output
         source = MgazeNetCameraSource(context,owner,ready = {}, result = { frame ->
             val size = view.physicalDisplaySize(displaySize)
@@ -113,7 +115,7 @@ class MgazeNetGazeProvider(
             if (source == null) return
             val now = MgazeNetCameraSource.now()
             if (lastOutput < 0 && now - fpsStart > 20000) { fail("MGazeNet initialization timed out."); return }
-            if (fresh && now-lastCapture > MAX_OUTPUT_AGE_MS) {
+            if (fresh && now-lastCapture > maxOutputAgeMs) {
                 fresh = false
                 liveOutput?.invalidate()
                 onObservation?.invoke(Observation(lastCapture,SystemClock.elapsedRealtimeNanos(),++deliverySequence,"stale",

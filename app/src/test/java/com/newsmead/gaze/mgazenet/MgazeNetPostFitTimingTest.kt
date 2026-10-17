@@ -17,4 +17,24 @@ class MgazeNetPostFitTimingTest {
         assertFalse(MgazeNetPostFitTiming.finished(start, start + 7_249.0))
         assertTrue(MgazeNetPostFitTiming.finished(start, start + 7_250.0))
     }
+
+    @Test fun ordinaryCheckExtendsAndRetriesOnlyForInsufficientSamples() {
+        val start = 1_000.0
+        val timing = MgazeNetPostFitTiming
+        assertEquals(MgazeNetPostFitTiming.Decision.WAIT, timing.decision(start, start + 7_249.0, 10, 1, true))
+        assertEquals(MgazeNetPostFitTiming.Decision.EXTEND, timing.decision(start, start + 7_250.0, 10, 1, true))
+        assertTrue(timing.accepts(start, start + 9_000.0, start + 9_100.0, true))
+        assertEquals(MgazeNetPostFitTiming.Decision.COMPLETE, timing.decision(start, start + 9_100.0, 12, 1, true))
+        assertFalse(timing.accepts(start, start + 11_000.0, start + 11_100.0, true))
+        assertEquals(MgazeNetPostFitTiming.Decision.RETRY, timing.decision(start, start + 11_250.0, 11, 1, true))
+        assertEquals(MgazeNetPostFitTiming.Decision.FAILED, timing.decision(start, start + 11_250.0, 11, 2, true))
+    }
+
+    @Test fun comparisonCheckKeepsTheExistingFixedWindowAndQualityDecision() {
+        val start = 1_000.0
+        val timing = MgazeNetPostFitTiming
+        assertEquals(MgazeNetPostFitTiming.Decision.COMPLETE, timing.decision(start, start + 7_250.0, 10, 1, false))
+        assertFalse(timing.accepts(start, start + 7_000.0, start + 7_100.0, false))
+        assertTrue(timing.accepts(start, start + 6_999.0, start + 7_249.0, false))
+    }
 }

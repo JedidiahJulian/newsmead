@@ -58,6 +58,9 @@ object StudyConfig {
     /** Exploratory settings; freeze with the participant baseline. */
     val MAHALANOBIS_CONFIG = com.newsmead.gaze.mahalanobis.MahalanobisConfig()
     val MAHALANOBIS_SUPPORT_LEVEL = com.newsmead.gaze.ScaffoldLevel.LINE
+    // Reading-only operational freshness limit on the A02 pilot. Capture times
+    // remain unchanged; calibration/validation retain the provider's 500 ms default.
+    const val READING_MAX_OUTPUT_AGE_MS = 650.0
     const val GAZE_DEBUG_VISUALS = false
 
     /**

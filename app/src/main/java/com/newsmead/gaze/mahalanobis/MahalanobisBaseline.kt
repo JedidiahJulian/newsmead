@@ -12,6 +12,7 @@ class MahalanobisBaselineCollector(val config: MahalanobisConfig = MahalanobisCo
     private var invalidOrder = false
     private var frozen: BaselineFit? = null
     val status: BaselineStatus get() = frozen?.status ?: BaselineStatus.COLLECTING
+    val coveredDurationMs: Long get() = retainedCoverageMs()
     /** Snapshot for serialization; reloading/refitting is explicit, never online adaptation. */
     val baselineVectors: List<RdfFeatureVector> get() = java.util.Collections.unmodifiableList(ArrayList(retained))
 

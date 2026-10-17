@@ -14,6 +14,47 @@ import org.junit.runner.RunWith
 /** Synthetic existing provider outputs only; no camera or second smoothing pass. */
 @RunWith(AndroidJUnit4::class)
 class ArticleReadingSessionTest {
+    @Test fun stationaryTextAcceptsDelayedCaptureWithoutRecentGeometrySnapshot() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+            val body = TextView(ctx).apply { text = "Alpha beta\nGamma delta"; textSize = 20f }
+            val host = FrameLayout(ctx)
+            host.addView(body, FrameLayout.LayoutParams(600, 800))
+            host.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(800, View.MeasureSpec.EXACTLY))
+            host.layout(0, 0, 600, 800)
+            val stationaryRows = mutableListOf<ReadingSample>()
+            val movingRows = mutableListOf<ReadingSample>()
+            val stationary = ArticleReadingSession(body, onInput = { _, sample -> stationaryRows.add(sample) },
+                motionCompensatedAids = false)
+            val moving = ArticleReadingSession(body, onInput = { _, sample -> movingRows.add(sample) })
+            try {
+                stationary.checkGeometry()
+                moving.checkGeometry()
+                val geometry = ReadingTextGeometryReader().read(body)!!
+                val x = (geometry.originX + body.layout.getPrimaryHorizontal(2)).toFloat()
+                val y = (geometry.originY +
+                    (body.layout.getLineTop(0) + body.layout.getLineBottom(0)) / 2.0).toFloat()
+                // This resembles a slow camera inference: capture is 180 ms before delivery,
+                // with no redraw/snapshot in the intervening stationary interval.
+                SystemClock.sleep(400)
+                val capture = SystemClock.elapsedRealtimeNanos() / 1e6 - 180.0
+                val observation = MgazeNetGazeProvider.Observation(capture,
+                    SystemClock.elapsedRealtimeNanos(), 1L, "coordinate", x, y)
+                stationary.record(observation)
+                moving.record(observation)
+                assertTrue(stationaryRows.single().eligible)
+                assertTrue(movingRows.single().eligible)
+                moving.autoScrollMotion(true)
+                SystemClock.sleep(400)
+                val movingCapture = SystemClock.elapsedRealtimeNanos() / 1e6 - 180.0
+                moving.record(MgazeNetGazeProvider.Observation(movingCapture,
+                    SystemClock.elapsedRealtimeNanos(), 2L, "coordinate", x, y))
+                assertEquals("scroll_geometry_unavailable", movingRows.last().exclusion)
+            } finally { stationary.close("fixture"); moving.close("fixture") }
+        }
+    }
+
     @Test fun mappingUsesFilteredPointAndMissingnessConsultationAndScrollBreakContinuity() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             val ctx = InstrumentationRegistry.getInstrumentation().targetContext
@@ -89,6 +130,7 @@ class ArticleReadingSessionTest {
                 val oldId = rows.last().geometrySnapshotId
                 body.scrollTo(0, 10)
                 session.checkGeometry()
+                assertEquals("reading_scroll", boundaries.last())
                 session.record(observation(0.0))
                 assertNotEquals(oldId, rows.last().geometrySnapshotId)
                 assertEquals("geometry_unsettled", rows.last().exclusion)
@@ -136,6 +178,24 @@ class ArticleReadingSessionTest {
                 assertEquals(1, session.generation)
                 assertEquals(1, geometries.last().first)
                 assertTrue(boundaries.contains("text_changed"))
+            } finally { session.close("fixture") }
+        }
+    }
+
+    @Test fun manualArticleScrollIsAContinuityBreakRatherThanAReflow() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+            val body = TextView(ctx).apply { text = "Alpha beta\nGamma delta"; textSize = 20f }
+            body.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(800, View.MeasureSpec.EXACTLY))
+            body.layout(0, 0, 600, 800)
+            val boundaries = mutableListOf<String>()
+            val session = ArticleReadingSession(body, onBoundary = { boundaries.add(it) })
+            try {
+                session.checkGeometry()
+                body.scrollTo(0, 10)
+                session.checkGeometry()
+                assertEquals(listOf("geometry_change", "reading_scroll"), boundaries)
             } finally { session.close("fixture") }
         }
     }

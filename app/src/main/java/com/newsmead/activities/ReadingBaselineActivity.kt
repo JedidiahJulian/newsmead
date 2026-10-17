@@ -1,6 +1,7 @@
 package com.newsmead.activities
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
@@ -8,7 +9,9 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.TypedValue
 import android.view.ViewTreeObserver
+import android.view.View
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -37,6 +40,7 @@ class ReadingBaselineActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var root: LinearLayout
     private lateinit var body: TextView
+    private lateinit var instructions: TextView
     private lateinit var participant: EditText
     private lateinit var status: TextView
     private lateinit var startButton: MaterialButton
@@ -60,6 +64,13 @@ class ReadingBaselineActivity : AppCompatActivity() {
     private var lineCount = 0
     private var vectors = 0
     private var validVectors = 0
+    private var latestWindowSummary = "Waiting for gaze samples"
+    private var intervalInputCount = 0
+    private var intervalEligibleCount = 0
+    private val intervalExclusions = linkedMapOf<String, Int>()
+    private var intervalAgeCount = 0
+    private var intervalAgeSumMs = 0.0
+    private var intervalAgeMaxMs = 0.0
     private val passageHash = MessageDigest.getInstance("SHA-256")
         .digest(BASELINE_PASSAGE.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     private val cameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -73,7 +84,9 @@ class ReadingBaselineActivity : AppCompatActivity() {
         override fun run() {
             if (!running) return
             collectTick()
-            status.text = "Reading: ${(now() - startedAt) / 1000}s; valid windows $validVectors / $vectors.\nCollect at least ${minimumElapsedSeconds()} seconds, then Finish and freeze."
+            status.text = "Valid $validVectors/$vectors (need ${config.minimumRetainedWindows}); ${(now() - startedAt) / 1000}s\n" +
+                "Covered ${collector.coveredDurationMs / 1000}s/${config.minimumBaselineDurationMs / 1000}s\n" +
+                latestWindowSummary
             handler.postDelayed(this, config.updateIntervalMs)
         }
     }
@@ -90,9 +103,10 @@ class ReadingBaselineActivity : AppCompatActivity() {
             text = "Unassisted reading baseline"
             textSize = 22f
         })
-        root.addView(TextView(this).apply {
-            text = "Read naturally and scroll by hand for at least ${minimumElapsedSeconds()} seconds. Finish requires at least ${config.minimumRetainedWindows} valid windows and ${config.minimumBaselineDurationMs / 1000} seconds of covered reading. A new baseline is required after app restart or recalibration."
-        })
+        instructions = TextView(this).apply {
+            text = "Read naturally and scroll by hand. A ${config.windowMs / 1000}-second window must fill first; then collect at least ${config.minimumRetainedWindows} valid windows and ${config.minimumBaselineDurationMs / 1000} seconds of covered valid reading. This can take longer than one minute. A new baseline is required after app restart or recalibration."
+        }
+        root.addView(instructions)
         participant = EditText(this).apply { hint = "Participant code"; isSingleLine = true }
         root.addView(participant)
         status = TextView(this).apply { minLines = 3; maxLines = 3 }
@@ -148,6 +162,11 @@ class ReadingBaselineActivity : AppCompatActivity() {
 
     private fun updateButtons() {
         if (destroyed) return
+        instructions.visibility = if (running) View.GONE else View.VISIBLE
+        participant.visibility = if (running) View.GONE else View.VISIBLE
+        startButton.visibility = if (running) View.GONE else View.VISIBLE
+        finishButton.visibility = if (running) View.VISIBLE else View.GONE
+        exportButton.visibility = if (!running && log != null) View.VISIBLE else View.GONE
         participant.isEnabled = !running && !stopping && !frozen
         startButton.text = if (frozen) "Start New session" else "Start / retry baseline"
         startButton.isEnabled = !running && !stopping &&
@@ -190,6 +209,9 @@ class ReadingBaselineActivity : AppCompatActivity() {
             return
         }
         fingerprint = calibration
+        participant.clearFocus()
+        (getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+            ?.hideSoftInputFromWindow(participant.windowToken, 0)
         log?.close()
         ResearchSession.start(this, participantCode, "mahalanobis")
         ParticipantReadingBaseline.beginNewBaseline()
@@ -199,15 +221,33 @@ class ReadingBaselineActivity : AppCompatActivity() {
             .put("stimulusStatus", "fixed_provisional_baseline_stimulus_v1")
             .put("aids", false).put("gazeDot", false).put("autoScroll", false)
             .put("smoothForReading", true).put("rejectBlinks", true)
+            .put("maxOutputAgeMs", StudyConfig.READING_MAX_OUTPUT_AGE_MS)
             .put("baselinePersistence", "process_session_only_new_baseline_after_restart"))
         pipeline = ReadingFeaturePipeline(config)
         collector = MahalanobisBaselineCollector(config)
         vectors = 0; validVectors = 0
+        latestWindowSummary = "Waiting for gaze samples"
+        intervalInputCount = 0; intervalEligibleCount = 0; intervalExclusions.clear()
+        intervalAgeCount = 0; intervalAgeSumMs = 0.0; intervalAgeMaxMs = 0.0
         startedAt = now()
         running = true
         adapter = ArticleReadingSession(body,
             onGeometry = { _, geometry -> lineCount = geometry?.lines?.size ?: 0 },
             onInput = { _, sample ->
+                intervalInputCount++
+                if (sample.eligible) intervalEligibleCount++
+                else {
+                    val reason = sample.exclusion ?: "unknown"
+                    intervalExclusions[reason] = (intervalExclusions[reason] ?: 0) + 1
+                }
+                val ageMs = sample.captureMs?.let { capture ->
+                    sample.deliveryMs?.minus(capture)?.takeIf { it.isFinite() && it >= 0.0 }
+                }
+                if (ageMs != null) {
+                    intervalAgeCount++
+                    intervalAgeSumMs += ageMs
+                    intervalAgeMaxMs = maxOf(intervalAgeMaxMs, ageMs)
+                }
                 val capture = sample.captureMs
                 if (running && capture != null && capture.isFinite() && capture >= startedAt) {
                     val target = sample.line?.let { line -> TextTarget(line, lineCount,
@@ -217,12 +257,21 @@ class ReadingBaselineActivity : AppCompatActivity() {
                 }
             },
             onBoundary = { reason ->
-                if (reason !in setOf("invalid_sample", "non_monotonic_capture")) pipeline.boundary()
+                when (reason) {
+                    "invalid_sample", "non_monotonic_capture" -> Unit
+                    "reading_scroll" -> pipeline.breakContinuity()
+                    else -> pipeline.boundary()
+                }
                 log?.write(JSONObject().put("type", "reading_boundary").put("reason", reason).put("atMs", now()))
-            })
+            },
+            // The baseline has no controlled auto-scroll. Its stationary text geometry
+            // remains valid across camera delivery latency; ordinary scroll changes
+            // still create a boundary and require the geometry settle interval.
+            motionCompensatedAids = false)
         adapter?.checkGeometry()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val camera = MgazeNetGazeProvider(this, body, smoothForReading = true, rejectBlinks = true)
+        val camera = MgazeNetGazeProvider(this, body, smoothForReading = true,
+            rejectBlinks = true, maxOutputAgeMs = StudyConfig.READING_MAX_OUTPUT_AGE_MS)
         provider = camera
         camera.onObservation = { observation -> if (running && provider === camera) adapter?.record(observation) }
         camera.onFailure = { reason ->
@@ -242,7 +291,27 @@ class ReadingBaselineActivity : AppCompatActivity() {
             collector.add(vector)
             vectors++
             if (vector.isUsable(config)) validVectors++
-            log?.write(MahalanobisJson.vector(vector, "baseline_vector", config))
+            val dominantExclusion = when (intervalExclusions.maxByOrNull { it.value }?.key) {
+                "outside_visible_text" -> "off text"
+                "geometry_unsettled" -> "scroll settling"
+                "stale" -> "late gaze"
+                "blink" -> "blink"
+                else -> null
+            }
+            latestWindowSummary = "${vector.quality}: ${(vector.validFraction * 100).toInt()}% valid gaze" +
+                (dominantExclusion?.let { "; $it" } ?: "")
+            val reasons = JSONObject()
+            intervalExclusions.forEach { (reason, count) -> reasons.put(reason, count) }
+            log?.write(MahalanobisJson.vector(vector, "baseline_vector", config)
+                .put("inputCountSincePreviousUpdate", intervalInputCount)
+                .put("eligibleInputCountSincePreviousUpdate", intervalEligibleCount)
+                .put("inputExclusionsSincePreviousUpdate", reasons)
+                .put("inputAgeMeanMsSincePreviousUpdate",
+                    if (intervalAgeCount > 0) intervalAgeSumMs / intervalAgeCount else JSONObject.NULL)
+                .put("inputAgeMaxMsSincePreviousUpdate",
+                    if (intervalAgeCount > 0) intervalAgeMaxMs else JSONObject.NULL))
+            intervalInputCount = 0; intervalEligibleCount = 0; intervalExclusions.clear()
+            intervalAgeCount = 0; intervalAgeSumMs = 0.0; intervalAgeMaxMs = 0.0
         }
     }
 
@@ -316,7 +385,6 @@ class ReadingBaselineActivity : AppCompatActivity() {
         .put("passageId", PASSAGE_ID).put("passageSha256", passageHash)
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun now() = SystemClock.elapsedRealtime()
-    private fun minimumElapsedSeconds() = (maxOf(config.windowMs, config.minimumBaselineDurationMs) + 999) / 1000
 
     companion object {
         private const val PASSAGE_ID = "fixed_provisional_baseline_stimulus_v1"

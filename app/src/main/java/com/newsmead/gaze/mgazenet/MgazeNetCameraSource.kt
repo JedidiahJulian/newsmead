@@ -55,7 +55,11 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private var model: MnnEstimator? = null
     private var landmarker: FaceLandmarker? = null
     private var preprocessors: List<Preprocessor> = emptyList()
-    private val availablePreprocessors = ArrayBlockingQueue<Preprocessor>(PREPROCESSOR_SLOT_COUNT)
+    // A saved calibration identifies live reading. Keep at most one live frame in
+    // inference so an older queued frame cannot consume the output-age budget.
+    // The calibration capture path retains its existing two slots.
+    private val preprocessorSlotCount = if (saved == null) PREPROCESSOR_SLOT_COUNT else 1
+    private val availablePreprocessors = ArrayBlockingQueue<Preprocessor>(preprocessorSlotCount)
     private var svr: SvrCalibration? = null
     private val frames = CameraFrames()
     @Volatile private var clockReady = false
@@ -74,7 +78,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 check(CalibrationIdentity.hash(context.assets.open("face_landmarker.task").use { it.readBytes() }) == CalibrationIdentity.LOCALIZER)
                 store.verifyNativePersistence()
                 model = MnnEstimator(context)
-                preprocessors = List(PREPROCESSOR_SLOT_COUNT) { Preprocessor() }
+                preprocessors = List(preprocessorSlotCount) { Preprocessor() }
                 preprocessors.forEach { availablePreprocessors.add(it) }
                 svr = saved?.let { store.load(it) } ?: SvrCalibration()
                 fun localizer(delegate: Delegate) = FaceLandmarker.createFromOptions(context,

@@ -38,6 +38,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private var startedAt = 0.0
     private var verification = -1
     private var checkStart = Double.NaN
+    private var checkAttempt = 1
+    private var postFitPostureWarningUntil = Double.NEGATIVE_INFINITY
     private val checkPredictions = ArrayList<Pair<Float,Float>>()
     private val checkResults = ArrayList<MgazeNetCalibrationQualityGate.Check>()
     private val summaries = ArrayList<String>()
@@ -232,10 +234,32 @@ class GazeCalibrationActivity : AppCompatActivity() {
                         else { verification = 0; showCheck() }
                     }
                 }
-            } else if (verification in 0..5 && MgazeNetPostFitTiming.finished(checkStart, now)) {
-                finishCheck()
-                verification++
-                if (verification == 6) finishChecks() else showCheck()
+            } else if (verification in 0..5) {
+                when (MgazeNetPostFitTiming.decision(checkStart, now, checkPredictions.size,
+                    checkAttempt, comparisonSpec == null)) {
+                    MgazeNetPostFitTiming.Decision.WAIT -> Unit
+                    MgazeNetPostFitTiming.Decision.EXTEND ->
+                        binding.statusText.text = if (now < postFitPostureWarningUntil)
+                            "Return to the calibration posture" else
+                            "More usable samples needed: ${checkPredictions.size} / ${MgazeNetCalibrationQualityGate.MIN_SAMPLES_PER_CHECK}. Keep looking at this target."
+                    MgazeNetPostFitTiming.Decision.COMPLETE -> {
+                        recordCheckAttempt(now, "completed")
+                        finishCheck()
+                        verification++
+                        checkAttempt = 1
+                        if (verification == 6) finishChecks() else showCheck()
+                    }
+                    MgazeNetPostFitTiming.Decision.RETRY -> {
+                        recordCheckAttempt(now, "insufficient; repeating this location")
+                        checkAttempt++
+                        showCheck()
+                    }
+                    MgazeNetPostFitTiming.Decision.FAILED -> {
+                        recordCheckAttempt(now, "insufficient; stopped")
+                        stop("${checkSpec(verification).label}: only ${checkPredictions.size} usable samples after two local attempts; ${MgazeNetCalibrationQualityGate.MIN_SAMPLES_PER_CHECK} required. Nothing was saved; any previous calibration remains untouched.")
+                        return
+                    }
+                }
             }
             handler.postDelayed(this,50)
         }
@@ -248,24 +272,38 @@ class GazeCalibrationActivity : AppCompatActivity() {
     }
     private fun showCheck() {
         checkPredictions.clear(); checkStart = Double.NaN
+        postFitPostureWarningUntil = Double.NEGATIVE_INFINITY
         val p = checkTarget(); val local = identity!!.viewport.toLocal(p.x,p.y)
-        binding.progressText.text = if (verification == 0) "Near-centre repeat" else "Validation $verification of 5"
+        binding.progressText.text = if (checkAttempt > 1) "Retry ${checkSpec(verification).label}" else
+            if (verification == 0) "Near-centre repeat" else "Validation $verification of 5"
         binding.statusText.text = "Keep looking at the target"
         binding.calibrationView.onNextTargetDraw { if (active) checkStart = MgazeNetCameraSource.now() }
         binding.calibrationView.showTarget(local.x,local.y,1800)
     }
     private fun observeCheck(frame: MgazeNetCameraSource.Frame) {
-        if (verification !in 0..5 || !MgazeNetPostFitTiming.accepts(checkStart, frame.captureMs, frame.outputMs) ||
+        if (verification !in 0..5 || !MgazeNetPostFitTiming.accepts(checkStart, frame.captureMs, frame.outputMs,
+            comparisonSpec == null) ||
             !frame.eligible) return
         if (session?.postureAccepted(frame.posture) != true) {
+            postFitPostureWarningUntil = frame.outputMs + 1_000.0
             binding.statusText.text = "Return to the calibration posture"
             return
         }
-        binding.statusText.text = "Keep looking at the target"
+        postFitPostureWarningUntil = Double.NEGATIVE_INFINITY
         val p = frame.prediction ?: return
         val x = p[0]*identity!!.screenWidth
         val y = p[1]*identity!!.screenHeight
-        if (x.isFinite() && y.isFinite()) checkPredictions.add(x to y)
+        if (x.isFinite() && y.isFinite()) {
+            checkPredictions.add(x to y)
+            binding.statusText.text = "Usable samples: ${checkPredictions.size} / ${MgazeNetCalibrationQualityGate.MIN_SAMPLES_PER_CHECK}. Keep looking at the target."
+        }
+    }
+    private fun recordCheckAttempt(now: Double, outcome: String) {
+        val summary = String.format(Locale.US, "%s attempt %d: n=%d, elapsed=%.2f s, %s",
+            checkSpec(verification).label, checkAttempt, checkPredictions.size,
+            (now - checkStart) / 1000.0, outcome)
+        summaries.add(summary)
+        Log.i("MGazeNetCalibration", summary)
     }
     private fun finishCheck() {
         val spec = checkSpec(verification)
@@ -429,7 +467,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
             "Worst repeat: ${value(report.worstRepeatCm)} cm (limit ${MgazeNetCalibrationQualityGate.MAX_WORST_REPEAT_CM} cm)\n" +
             "Posture-rejected frames: ${session?.postureRejected ?: 0}; practice restarts: ${session?.practiceRestarts ?: 0}\n" +
             "Stable training candidates: ${session?.trainingCandidates ?: 0}; selected: ${CalibrationIdentity.FIT_TARGET_COUNT*CalibrationIdentity.SAMPLES_PER_TARGET}\n" +
-            "Post-fit capture: ${((MgazeNetPostFitTiming.CAPTURE_END_MS - MgazeNetPostFitTiming.SETTLE_MS) / 1000).toInt()} seconds per target after settling"
+            "Post-fit capture: ${((MgazeNetPostFitTiming.CAPTURE_END_MS - MgazeNetPostFitTiming.SETTLE_MS) / 1000).toInt()} seconds after settling; " +
+            if (comparisonSpec == null) "up to ${((MgazeNetPostFitTiming.EXTENDED_CAPTURE_END_MS - MgazeNetPostFitTiming.SETTLE_MS) / 1000).toInt()} seconds and one same-location retry for low sample count" else "fixed comparison timing"
         val decision = if (report.passed) {
             "This guardrail passed. Saving will replace the previous calibration. The separate nine-point check remains the accuracy evaluation."
         } else {
@@ -453,6 +492,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
             fitting = false
             verification = -1
             checkStart = Double.NaN
+            checkAttempt = 1
+            postFitPostureWarningUntil = Double.NEGATIVE_INFINITY
             checkPredictions.clear()
             checkResults.clear()
             summaries.clear()
