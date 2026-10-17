@@ -1,5 +1,26 @@
 # Agent context — updated 2026-10-18
 
+**2026-10-18 A02 post-scroll-fix baseline follow-up (source fix, device unverified):**
+Private run `no_backup/mahalanobis_baseline_a372aa79-9041-4c69-84e2-e4af986ed86c.jsonl`
+used the 650 ms reading output age limit. It yielded 179 vectors over about
+90 seconds: 20 `INSUFFICIENT`, 141 `MISSING`, 18 `DISCONTINUITY`, zero valid.
+The 10-second rolling span now holds (median about 10.07 seconds); 396
+`reading_scroll` boundaries and one `geometry_change` show the earlier scroll
+reset was removed. Quality was the blocker: maximum valid gaze fraction 0.50
+against the configured 0.65. Interval exclusions totaled 139 stale, 100 blink,
+12 outside visible text, and ten geometry unsettled; 86 of 347 reported
+adapter observations were eligible. Interval mean capture-to-delivery ages had
+median about 588 ms. The timeout watchdog previously called full live-output
+invalidation, resetting the capture-ordered blink gate soon after a processed
+coordinate aged past 650 ms. This is a plausible cause of recurring blink
+exclusions, not proven from the old log because it did not distinguish timeout
+and source stale observations. The watchdog now resets the coordinate smoother
+without resetting eye state; a new measured closed eye still blocks output.
+Baseline vectors now log `watchdogStaleCountSincePreviousUpdate` to distinguish
+timeout observations in a later run. Focused source review found no P1/P2 issue;
+the focused live-output test and debug APK build passed. The agent did not
+install this build or collect a post-change device run.
+
 **2026-10-18 baseline window reset follow-up (source fix, device unverified):**
 Read-only summary of the user's latest private A02 baseline log
 `no_backup/mahalanobis_baseline_765bca9a-edab-4197-a965-fb01b9b0730c.jsonl`

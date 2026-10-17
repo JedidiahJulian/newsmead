@@ -67,6 +67,7 @@ class ReadingBaselineActivity : AppCompatActivity() {
     private var latestWindowSummary = "Waiting for gaze samples"
     private var intervalInputCount = 0
     private var intervalEligibleCount = 0
+    private var intervalWatchdogStaleCount = 0
     private val intervalExclusions = linkedMapOf<String, Int>()
     private var intervalAgeCount = 0
     private var intervalAgeSumMs = 0.0
@@ -227,7 +228,8 @@ class ReadingBaselineActivity : AppCompatActivity() {
         collector = MahalanobisBaselineCollector(config)
         vectors = 0; validVectors = 0
         latestWindowSummary = "Waiting for gaze samples"
-        intervalInputCount = 0; intervalEligibleCount = 0; intervalExclusions.clear()
+        intervalInputCount = 0; intervalEligibleCount = 0; intervalWatchdogStaleCount = 0
+        intervalExclusions.clear()
         intervalAgeCount = 0; intervalAgeSumMs = 0.0; intervalAgeMaxMs = 0.0
         startedAt = now()
         running = true
@@ -273,7 +275,12 @@ class ReadingBaselineActivity : AppCompatActivity() {
         val camera = MgazeNetGazeProvider(this, body, smoothForReading = true,
             rejectBlinks = true, maxOutputAgeMs = StudyConfig.READING_MAX_OUTPUT_AGE_MS)
         provider = camera
-        camera.onObservation = { observation -> if (running && provider === camera) adapter?.record(observation) }
+        camera.onObservation = { observation ->
+            if (running && provider === camera) {
+                if (observation.timeoutWatchdog) intervalWatchdogStaleCount++
+                adapter?.record(observation)
+            }
+        }
         camera.onFailure = { reason ->
             if (provider === camera && !destroyed) {
                 stopCollection("provider_failure") { status.text = "Baseline stopped: $reason. Press Start to retry." }
@@ -305,12 +312,14 @@ class ReadingBaselineActivity : AppCompatActivity() {
             log?.write(MahalanobisJson.vector(vector, "baseline_vector", config)
                 .put("inputCountSincePreviousUpdate", intervalInputCount)
                 .put("eligibleInputCountSincePreviousUpdate", intervalEligibleCount)
+                .put("watchdogStaleCountSincePreviousUpdate", intervalWatchdogStaleCount)
                 .put("inputExclusionsSincePreviousUpdate", reasons)
                 .put("inputAgeMeanMsSincePreviousUpdate",
                     if (intervalAgeCount > 0) intervalAgeSumMs / intervalAgeCount else JSONObject.NULL)
                 .put("inputAgeMaxMsSincePreviousUpdate",
                     if (intervalAgeCount > 0) intervalAgeMaxMs else JSONObject.NULL))
-            intervalInputCount = 0; intervalEligibleCount = 0; intervalExclusions.clear()
+            intervalInputCount = 0; intervalEligibleCount = 0; intervalWatchdogStaleCount = 0
+            intervalExclusions.clear()
             intervalAgeCount = 0; intervalAgeSumMs = 0.0; intervalAgeMaxMs = 0.0
         }
     }

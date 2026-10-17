@@ -54,7 +54,8 @@ class MgazeNetGazeProvider(
         val x: Float? = null, val y: Float? = null, val rawX: Float? = null, val rawY: Float? = null,
         val arrivals: Long? = null, val busyDrops: Long? = null,
         val leftEyeAspect: Double? = null, val rightEyeAspect: Double? = null,
-        val blinkFilterApplied: Boolean = false) {
+        val blinkFilterApplied: Boolean = false,
+        val timeoutWatchdog: Boolean = false) {
         val outputMs: Double get() = deliveryElapsedNs / 1e6
     }
     private var listener: GazeProvider.OnGaze? = null
@@ -117,9 +118,9 @@ class MgazeNetGazeProvider(
             if (lastOutput < 0 && now - fpsStart > 20000) { fail("MGazeNet initialization timed out."); return }
             if (fresh && now-lastCapture > maxOutputAgeMs) {
                 fresh = false
-                liveOutput?.invalidate()
+                liveOutput?.expire()
                 onObservation?.invoke(Observation(lastCapture,SystemClock.elapsedRealtimeNanos(),++deliverySequence,"stale",
-                    blinkFilterApplied = rejectBlinks))
+                    blinkFilterApplied = rejectBlinks, timeoutWatchdog = true))
             }
             handler.postDelayed(this,50)
         }

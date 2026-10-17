@@ -76,6 +76,18 @@ class MgazeNetLiveOutputTest {
         assertTrue(output(p, 180.0, open).emitted)
     }
 
+    @Test fun deliveryGapDoesNotRequireTwoNewOpenFramesButStillRejectsClosedEyes() {
+        val p = reading()
+        assertEquals("blink", output(p, 100.0).reason)
+        assertTrue(output(p, 140.0).emitted)
+        p.expire()
+        assertTrue(output(p, 800.0, open).emitted)
+        p.expire()
+        assertEquals("blink", output(p, 1_500.0, shut).reason)
+        assertFalse(output(p, 1_540.0, open).emitted)
+        assertTrue(output(p, 1_580.0, open).emitted)
+    }
+
     @Test fun optOutRetainsTheFrozenRawOutputAndOptionalSmoothingContracts() {
         val raw = MgazeNetLiveOutput(1000, 2000, smoothForReading = false, rejectBlinks = false)
         val first = output(raw, 100.0, null, floatArrayOf(-.1f, 1.1f))

@@ -43,6 +43,10 @@ internal class MgazeNetLiveOutput(width: Int, height: Int,
         return Result(reason, gated.rawX, gated.rawY, x, y)
     }
 
-    /** Expiry resets temporal filters, while the output clock still rejects repeated frames. */
+    /** A delivery gap invalidates the displayed point, but the next eyelid
+     * measurement still determines whether a new coordinate may pass. */
+    fun expire() { smoother.reset() }
+
+    /** Stop or invalid clock starts a new capture-ordered eye sequence. */
     fun invalidate() { smoother.reset(); blinkGate.reset() }
 }
