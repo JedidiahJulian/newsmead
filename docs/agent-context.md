@@ -1,4 +1,24 @@
-# Agent context — updated 2026-10-18
+# Agent context — updated 2026-10-19
+
+**2026-10-19 scaffold target freshness change (source change, device unverified):**
+User observation showed confirmed support could appear on a previously viewed
+line. Mahalanobis confirmation is based on a rolling 10-second R/D/F interval
+and does not localize a causal line; the old renderer consumed the target held
+at the 500 ms scoring tick. Normal scaffolds now clear their pre-confirmation
+target, require gaze captured at or after confirmation, and require the mapped
+line to remain stable for 120 ms. A changed line clears the old highlight while
+the replacement is stabilized, and capture-time gaze can update the target
+between scoring ticks. Invalid targets clear after a 200 ms grace period.
+Independent displaced-return evidence is retained as an explicit `REENTRY`
+target because it intentionally points to an earlier stable line. Schema version 2 reading logs
+now record scaffold configuration, mapped/stabilized/current/rendered/re-entry
+lines, capture/confirmation/not-before timestamps, target age/status, and
+material target-update reasons. No camera images or raw gaze coordinates were
+added. The user reserved focused behavioral tests; no device install or capture
+was performed. The local wrapper first attempted a blocked Gradle download; a
+direct cached Gradle 8.4 invocation then stopped because Android Gradle Plugin
+8.3.0 was absent from the offline cache, so compilation remains unverified in
+this environment.
 
 **2026-10-18 A02 first-output startup timeout during article reading:**
 The newly installed build produced valid frozen baseline profiles in private

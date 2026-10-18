@@ -106,8 +106,17 @@ class GazeOverlayView @JvmOverloads constructor(
 
         fadeAnimator?.cancel()
         if (state.level == ScaffoldLevel.NONE) {
-            fadeAnimator = animateOpacity(scaffoldOpacity, 0f) {
-                if (requestedState.level == ScaffoldLevel.NONE) renderedState = requestedState
+            val targetBeingReplaced = state.targetStatus == ScaffoldTargetStatus.WAITING_FOR_TARGET ||
+                state.targetStatus == ScaffoldTargetStatus.INVALID
+            if (targetBeingReplaced) {
+                // A fade would leave the prior line visible during target acquisition.
+                renderedState = state
+                scaffoldOpacity = 0f
+                postInvalidateOnAnimation()
+            } else {
+                fadeAnimator = animateOpacity(scaffoldOpacity, 0f) {
+                    if (requestedState.level == ScaffoldLevel.NONE) renderedState = requestedState
+                }
             }
         } else {
             renderedState = state

@@ -971,7 +971,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         overlay.translationZ = 1000f
         overlay.setDebugVisualsEnabled(StudyConfig.GAZE_DEBUG_VISUALS)
         features = ReadingFeaturePipeline(StudyConfig.MAHALANOBIS_CONFIG)
-        scaffoldController = AdaptiveScaffoldController(StudyConfig.MAHALANOBIS_SUPPORT_LEVEL)
+        scaffoldController = AdaptiveScaffoldController(StudyConfig.MAHALANOBIS_SCAFFOLD_CONFIG)
         val onGaze = GazeProvider.OnGaze { x, y -> overlay.setGazeScreen(x, y) }
         articleGazeSink = onGaze
         attachLiveGaze(onGaze)
@@ -979,6 +979,13 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     private fun applyScaffoldUpdate(update: ScaffoldUpdate) {
         gazeOverlay?.setScaffoldState(binding.tvArticleText, update.state)
+        update.targetReason?.let { reason ->
+            detectorLog?.write(MahalanobisJson.scaffoldTarget(
+                update.state,
+                SystemClock.elapsedRealtime(),
+                reason,
+            ))
+        }
     }
 
 
@@ -1012,7 +1019,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         detectorLog?.write(org.json.JSONObject().put("type", "reading_setup")
             .put("maxOutputAgeMs", StudyConfig.READING_MAX_OUTPUT_AGE_MS)
             .put("staticGeometryFallback", true)
-            .put("autoScrollMotionExcluded", true))
+            .put("autoScrollMotionExcluded", true)
+            .put("scaffoldConfig", MahalanobisJson.scaffoldConfig(
+                StudyConfig.MAHALANOBIS_SCAFFOLD_CONFIG)))
         baseline?.let {
             detectorLog?.write(MahalanobisJson.profile(it.profile).put("participantCode", it.participantCode)
                 .put("baselineLogName", it.baselineLogName).put("calibrationFingerprint", it.calibrationFingerprint))
@@ -1034,7 +1043,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                             sample.wordEndUtf16 ?: TextTarget.NO_OFFSET) else TextTarget.INVALID
                     features?.sample(raw, sample.eligible, at)
                     currentTextTarget = features?.target ?: TextTarget.INVALID
-                    scaffoldController?.onGazeTarget(raw, at)
+                    scaffoldController?.onGazeTarget(raw, at)?.let(::applyScaffoldUpdate)
                 }
             })
         readingSession = session
@@ -1082,7 +1091,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                         aidsEnabled && !readerControlGate.active && readingMeasurement == null)
                     applyScaffoldUpdate(update)
                     val record = MahalanobisJson.update(score, state, baseline?.profile?.takeIf { stillCurrent },
-                        update.state.level.name, config)
+                        update.state, config)
                     lastDetectorDebug = record.toString(2)
                     detectorLog?.write(record)
                     state.completedEpisode?.let { detectorLog?.write(MahalanobisJson.episode(it)) }

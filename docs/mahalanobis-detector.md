@@ -1,6 +1,6 @@
 # Participant baseline deviation detector
 
-Status: exploratory implementation on `measurement/mahalanobis`, 2026-10-17.
+Status: exploratory implementation on `measurement/mahalanobis`, updated 2026-10-19.
 This is software behavior and a measurement plan, not a validated reading
 difficulty or comprehension detector. The [branch audit](mahalanobis-replacement-audit.md)
 records Scanpath removal and the existing feature definitions; the
@@ -65,6 +65,24 @@ evidence can select its re-entry renderer. No extra MD² severity bands are
 inferred. These timings and interventions are prototype settings, not validated
 human thresholds.
 
+Normal spatial scaffolds use a separate post-confirmation target gate. When the
+temporal controller first confirms an episode, the renderer clears any prior
+normal target and waits for gaze captured at or after that confirmation. A
+mapped line must remain the candidate for 120 ms before it can be rendered. If
+the mapped line changes, the old scaffold is cleared while the new line is
+stabilized. Eligible capture-time gaze can then move the target immediately;
+target movement does not wait for the next 500 ms Mahalanobis update. An invalid
+target clears normal spatial support after a 200 ms grace period. These values
+are centralized in `AdaptiveScaffoldConfig` through
+`StudyConfig.MAHALANOBIS_SCAFFOLD_CONFIG`.
+
+Re-entry remains explicit independent positional evidence: after at least 800
+ms off text and a return at least two lines from the last stable line, confirmed
+support may intentionally render that earlier stable line for the configured
+evidence interval. A re-entry target therefore has a different logged status
+from a normal current-gaze target. Mahalanobis confirms a time interval of
+baseline deviation; it does not identify the causal line.
+
 All parameters are centralized in `MahalanobisConfig`, exposed through
 `StudyConfig.MAHALANOBIS_CONFIG`. The default baseline sampling mode is
 `ALL_VALID_WINDOWS`; `THINNED_WINDOWS` and `NON_OVERLAPPING_WINDOWS` are
@@ -86,6 +104,15 @@ signed difference per feature, directional labels, MD², MD, threshold/mode,
 candidate and confirmed states, score/baseline/quality validity, persistence
 state, and current scaffold. Candidate episodes are separate records. No camera
 images or artificial labels enter these logs.
+
+Each scoring record also stores target status; mapped, stabilized, current,
+rendered, and re-entry line indices; target capture, detector confirmation, and
+not-before timestamps; and target age. Material target decisions are separate
+`scaffold_target_update` records with a reason such as waiting for a fresh
+post-confirmation target, starting a line candidate, acquiring a fresh target,
+invalidating a target, or using independent re-entry evidence. `reading_setup`
+stores the scaffold timing and re-entry configuration once per session. This is
+Mahalanobis log schema version 2.
 
 Run recorded baseline and reading logs without the UI:
 
