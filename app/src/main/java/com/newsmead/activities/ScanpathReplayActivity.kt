@@ -210,7 +210,7 @@ class ScanpathReplayActivity : AppCompatActivity() {
         plannedFrame = geometry
         originElapsedMs = ceil(now())
         runtime = ArticleReadingAidRuntime(binding.replayBody, binding.replayWordDock, overlay,
-            ReadingAidPolicyConfig.definitionPrototype().copy(conditionId = "SMOOTHED_REPLAY_DEFINITION_V10"), readerPreferences,
+            ReadingAidPolicyConfig.evidenceAlignedPrototype().copy(conditionId = "SMOOTHED_REPLAY_EVIDENCE_V11"), readerPreferences,
             ReadingAidInputSource.SYNTHETIC_REPLAY,
             onDecision = { d ->
                 log?.decision(d)
@@ -368,13 +368,15 @@ class ScanpathReplayActivity : AppCompatActivity() {
 
     /** A user-requested consultation is a sequence boundary; an unclicked lookup offer is not. */
     private fun currentExpectations(): Pair<Set<String>, Set<String>> {
-        val currentAids = scenario.expectedAidTypes.map {
+        val legacyAids = scenario.expectedAidTypes.map {
             when {
                 it == "NEXT_LINE_START" -> "READING_BOOKMARK"
                 it == "CURRENT_LINE" && readerPreferences.guideStyle == ReadingGuideStyle.SENTENCE -> "CURRENT_SENTENCE"
                 else -> it
             }
         }.toSet()
+        val currentAids = if (scenario.id in setOf("bookmark_return", "bookmark_skip", "continuation_return", "continuation_skip"))
+            legacyAids - "READING_BOOKMARK" else legacyAids
         val definitionsEnabled = readerPreferences.enabled && readerPreferences.wordDefinition &&
             readerPreferences.maxStrength > 0 &&
             (readerPreferences.adaptiveStrength || readerPreferences.manualStrength > 0)

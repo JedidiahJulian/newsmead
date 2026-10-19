@@ -1,4 +1,4 @@
-# Agent context — updated 2026-10-16
+# Agent context — updated 2026-10-19
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,615 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-10-19 new explicit implementation request — current direction:** user
+supplied a four-aid proposal and authorized its implementation after the rollback
+below. New opt-in `EVIDENCE_ALIGNED_V5` is selected by Article, Pilot and Replay.
+It adds ordinary stabilized location guides (8–13% gray, measured-only 19% search
+emphasis), fresh 1000ms word residence followed by an optional lookup offer,
+five-visit broad rereading alongside existing focus routes, and persistent
+bookmarks with supported recovery. Frozen extractor and earlier profiles remain.
+Details and primary-source findings: `docs/reading-aid-evidence-aligned-v5.md`.
+**Latest owner correction:** both gray line guide and blue bookmark must remain
+single-line; the earlier wider display was explicitly rejected. Line mode now
+paints one stabilized estimated row. V5 bookmark no longer activates on earlier
+or skipped rows: outside gaze and unavailable tracking each require 500ms.
+Saving its source requires agreement with the eligible line mapper; a different
+unsupported coarse row withholds an unshown stale source. Persistence timers stay
+1.5s minimum visible, 1s supported return or 1.5s coherent reading elsewhere.
+Precise bookmark support uses its own accepted capture run/evidence IDs; rejected
+mapper samples cannot backfill return credit from the longer coarse visit.
+Correction verified: 271 aid/replay tests across 28 suites passed (zero failures,
+errors or skips), both APK tasks succeeded, focused whitespace check passed and
+independent source review found no remaining actionable issue. Results:
+`output/aid-single-line-bookmark-check-01/summary.json` and `build.log`.
+Current app APK SHA-256:
+`3009eeafb1e310206ed2e3dc6b9b22cacb1464bf6cfa3afa9adcebb366b00117`.
+No phone install/camera capture was performed for this correction. These checks
+establish software behaviour, not real gaze accuracy or human reading benefit.
+No measured uncertainty radius is persisted in the current calibration artifact;
+neighbouring-row uncertainty remains internal, not displayed. Pairwise
+measured search emphasis stays gated; mapping-only word confidence is logged as
+unvalidated. Settings remain pilot choices, not paper-validated cutoffs.
+Independent source reviews found timing/scroll-clearance/zero-opacity-receipt
+issues that were corrected. Initial V5 validation before the single-line correction: 267 tests across 28
+aid/replay suites, zero failures/errors/skips; app and instrumentation APKs built.
+Results: `output/aid-evidence-v5-check-01/summary.json` and `build.log` (ignored).
+Historical initial APK SHA-256: `5a7e2010cd97ba315ceabacb3a7dd3801484756479faa74c7c5fb97c23165d21`.
+Focused whitespace check passed. Tests cover software timing, duplicates/gaps,
+5Hz continuity, uncertainty gating, route separation and translated protected
+context; no new device/human appearance, gaze-accuracy or benefit validation.
+No device actions, staging or commit in this task; independent low-light camera
+work and existing documentation were preserved.
+
+**2026-10-19 user-requested rollback — historical baseline:** user explicitly
+rejected the assistant's scanpath changes and requested the older version.
+Restored the pre-experiment `DEFINITION_PROFILE_V4` implementation from current
+HEAD `eaa3c1ed3f20309816135eb66a46eccf14be3519`: nine aid production files and
+`ReadingFocusOnsetTest.kt` match that commit byte-for-byte. ArticleFragment again
+calls `definitionPrototype()`; its independent camera/frame-rate/lifecycle work
+and both MGazeNet camera/provider files were preserved. Original rules, strength,
+fade and bookmark release are restored, including the original 1500ms definition
+threshold. Do not re-enable V1 or V2 experimental triggers without a new request.
+
+All 14 experiment-only source/test files were backed up then removed from
+`app/src`; no experiment symbols remain in active Kotlin sources. Recoverable
+backup and exact before hashes: `tmp/aid-experiment-backup-2026-10-19/manifest.json`.
+All ten restored files were verified against `git show HEAD:path`; no mismatch.
+The old renderer has no recursive horizontal-layout check in its span callback.
+Independent read-only review found no missed experiment entrypoint or unsafe
+mixing in the rollback boundaries. Research notes and presentation artifacts
+remain historical and do not describe the restored app behavior.
+
+Device checks remain authorized; the user previously selected automated checks
+instead of a human live-gaze session. Kept the demo-test explicit-offer fix and
+corrected the old `ReadingGuideRenderingTest` fixture to find its overlay in
+`replayViewport`, matching the existing activity hierarchy. These are test-only
+corrections. No stage or commit, calibration changes, or app-data clear.
+Validation completed: all 190 original aid unit tests passed (22 suites, no
+failures/skips), and both app/test APKs built successfully. Installed via
+`adb install -r` on the same Samsung Android 16 phone. Restored app APK SHA256
+`2d436b2cf11e29aea0fd432c9e3ec58675a6fdeec572fe4c486b85abdf4920f2`.
+All 24 focused on-phone tests passed with the phone awake: legacy guide2,
+rendering8, definition-offer13, explicit demo1. First run was 23/24 with a demo
+offer-layout timeout; the phone was found asleep afterward. Waking/dismissing
+the non-authenticated keyguard and rerunning produced 24/24 without source
+changes. Receipts: `tmp/phone-aid-rollback-tests-awake.txt`. Normal app navigation
+opened a full article successfully; no new crash buffer entries. Returned from
+the article after checking. Human gaze accuracy/benefit was not evaluated.
+
+**2026-10-19 on-phone article crash fix:** user explicitly authorized phone
+verification after article opening repeatedly crashed and no aids appeared.
+Connected Samsung SM_A566B / Android 16 crash buffer showed four NewsMead main
+thread `StackOverflowError`s, last at 13:54:16 local. Repeating chain:
+`GuideBackgroundSpan.updateDrawState -> guideSpanDrawEligible ->
+geometryMatchesLayout -> Layout.getLineRight -> TextLine.measure ->
+updateDrawState`. `ReadingAidOverlayView.kt` now validates horizontal geometry
+outside its span callback, caches the verified typography/width signature
+without Layout identity, and checks offsets/heights plus that signature inside
+the callback. This avoids recursive text measurement while withholding stale
+width/font geometry; appearance-only Spannable conversion can recreate Layout.
+Independent read-only review found no remaining actionable issue in this fix.
+
+Built `:app:assembleDebug :app:assembleDebugAndroidTest` with the Java 17 /
+in-process flags below and installed both APKs using `adb install -r` without
+clearing app data. The previously installed target was last updated Oct 17.
+Installed app APK SHA256:
+`a3f7a49df5c45578c3cb6128afc5615d0491f5437830fa55dedb2f6909a768e2`.
+Normal navigation opened two articles; the article remained resumed and no
+new crash entries appeared. Phone camera permission/provider remained available;
+no calibration was changed or live reading session/camera images collected.
+The user selected automated phone checks instead of a human live-gaze check.
+
+All 27 focused camera-free device tests passed: five new
+`ReadingPatternGuideRenderingTest` cases using the actual V1/V2 profile IDs,
+eight existing `ReadingAidRenderingTest` cases, 13 definition-offer cases, and
+the explicit six-stage demo case. The new tests exercise installed spans through
+measure/layout/geometry-read/draw, selected-row pixels, glyph preservation,
+removal, and stale width/typography. The demo fixture was corrected to accept
+the lookup offer and await its offline definition instead of assuming automatic
+panel opening. Another older demo test retains that assumption and was not run;
+do not claim the entire Android test suite passed. Receipts under
+`tmp/phone-aid-rendering-tests-final.txt` (27 passed), with earlier diagnostic
+runs retained separately. `git diff --check` passed for changed source/tests.
+These checks establish Android rendering and navigation, not real gaze accuracy
+or human reading benefit. No staging or commit; unrelated edits preserved.
+
+**2026-10-19 gaze-aid usability correction:** user reports that strict line
+and sentence scanpaths almost never activate, bookmark dismissal is too fast,
+and focus lost its earlier routes. The live `scanpathPrototype()` now selects
+`SCANPATH_NOISE_TOLERANT_V2`; `strictScanpathPrototype()` retains V1 for replay.
+This supersedes the V1 trigger behavior described in the slide inserts below;
+the presentation files were not revised during this app-behavior task.
+
+The aid-local `ReadingAidCoarseTracker.kt` uses fresh selected presentation
+coordinates, nearest visible body-row centers, a 600ms median window with
+two-thirds agreement within one row, at least three samples/240ms supported
+residence, and 250ms/three-sample anchor-change hysteresis. It accepts bounded
+250ms sample intervals (including 5Hz input); missing input receives no residence
+credit. A 350ms gap resets the anchor. These are pilot tolerance settings, not
+measured gaze accuracy or validated reading-difficulty thresholds. Frozen
+`ScanpathEngine` eligibility, classifier thresholds and word assignment were not
+changed. Word definition remains 1000ms of exact word residence.
+
+The light guide appears during ordinary supported reading over the estimated
+row plus one neighboring row each side, with no horizontal start/end requirement.
+Its adaptive strength starts at .25 and reaches .4 after 2s supported residence;
+a confirmed backward anchor jump of at least two rows raises it to .6 for 2s
+supported reading. Actual gray alpha is 20/32/48 out of 255, with 150ms entry,
+750ms support grace and 300ms exit. Refreshing the same guide preserves its onset;
+duplicate timer callbacks cannot renew support. Reader caps and operational
+exclusions still take precedence.
+
+Focus again permits three qualifying unavailable/return episodes in 30s and
+font-scaled stable ABAB row revisits within 8s. It also permits coarse
+`A -> B (at least A+2) -> A' (within one row of A) -> C (after A')` within 8s,
+and retains exact sentence rereading as an additional route. V2 starts at half
+strength, with 400ms presentation onset, 3s supported recovery hold and 7s fade,
+and a 1.5s tracking grace. A supported coarse sample survives extractor-only
+break callbacks; duplicates neither add time nor interrupt recovery. None of
+these routes diagnoses confusion, distraction or fatigue.
+
+Bookmark persistence is opt-in for V2: at least 1.5s visible, then 1s supported
+saved-row return or 1.5s coherent supported reading elsewhere; a 30s age bound
+and geometry/article/input invalidation remain. Visit intervals are disjoint
+when the stabilized row changes, so smoothing cannot freeze an old saved row
+or fabricate a skipped-line jump. Missing intervals are never dismissal credit.
+Fresh inside-body points with extractor assignment exclusions preserve bookmark
+progress. Same-epoch continuous raw article presence can bridge row-estimator
+settling for jump arming only; actual missing/outside/invalid input or raw sample
+gaps break that bridge. Extractor-only resets do not erase this independent
+coarse presence, and the bridge never adds residence or release credit.
+Implementation/evidence paths: `ReadingAidPolicy.kt`, `ReadingBookmarkPolicy.kt`,
+`ReadingFocusPolicy.kt`, `ReadingPatternFocusPolicy.kt`, `ReadingAidModels.kt`,
+`ReadingAidOverlayView.kt`, `ArticleReadingAidRuntime.kt`, `ReadingAidTrace.kt`
+and `ReadingAidFocusTrace.kt` under `app/src/main/java/com/newsmead/gaze/aid/`.
+Focused regressions are `ReadingNoiseTolerantProfileTest.kt`,
+`ReadingAidCoarseTrackerTest.kt` and `ReadingBookmarkPersistenceTest.kt`.
+Software validation and independent source review cover controller behavior,
+not on-device appearance, actual tracking accuracy or reader benefit. No device
+install, calibration or capture was performed; unrelated camera edits remain.
+Validation: all 282 aid unit tests across 30 suites passed, with no failures or
+skips; `:app:compileDebugAndroidTestKotlin` and focused `git diff --check` passed.
+Gradle used Java 17 with `-Pkotlin.compiler.execution.strategy=in-process` and
+`-Dorg.gradle.java.home=C:/Program Files/Java/jdk-17` to avoid the local compiler
+daemon/JDK module-export failure; no build configuration change was required.
+Independent read-only review checked the controller and the late disjoint-visit,
+duplicate-recovery and bookmark raw-continuity fixes. No staging or commit.
+
+**2026-10-18 template design correction:** user rejected repeating the source's
+three-box layout across all five content slides. Rebuilt the seven-slide insert
+as `outputs/scanpath-system/Scanpath_System_Insert_Template_Revision.pptx`.
+Directly adapts original source layouts 17 (aid overview with original right
+motif and circular illustrative photo), 11 (line-search image plus numbered
+steps), 22 (word-residence pipeline), 6 (focus sequence with left motif), 2
+(bookmark routes with top motif), and 28 for both reference slides. Retains
+all four aid rules, source links, pilot strength/fade settings, detailed notes
+and image provenance. No repeated three-card layout. Five content slides plus
+two references, no cover. All seven slides rendered and visually compared with
+the relevant source layouts. Package/layout/reference-font checks and reimport
+passed, with only original decoration boundary warnings. Private builder:
+`tmp/scanpath-slides/build_template_revision.mjs`; previews/receipt under
+`tmp/scanpath-slides/template-revision/`. SHA256
+`0c4725125d875feeb2c03424cae10389009a2e905f2ae193c69af71feec8d4b9`.
+No app/protocol/device edits, staging or commit.
+
+**2026-10-18 condensed scanpath insert:** user clarified a maximum of five
+content slides, plus references, and requested photos/graphics. Supersedes the
+17-slide presentation below with the insertion-ready seven-slide deck
+`outputs/scanpath-system/Scanpath_System_Insert_5_Slides.pptx` (five content,
+two references, no cover). Reuses source slide 8 and 28 layouts/theme. Contains
+an illustrative older-adult phone-reading photo and four enlarged cue graphics,
+all AI-generated, labelled as illustrative, with provenance/prompts in notes and
+`outputs/scanpath-system/insert-assets/image-provenance.json`. Primary trigger
+citations remain Wang2023, Hiraoka2016, Pellicer-Sanchez2016, Malsburg/Vasishth2011
+and Cane2012. Five aid/system slides retain explicit algorithms and pilot
+strength/fade settings, with detailed rules and population limits in notes.
+Independent content review corrected a line-release overstatement: supported
+start-to-nonstart progression on the same row or 3s timeout, not merely settling
+directly in another row's middle. All seven previews reviewed, cue illustrations
+corrected, package/layout/reference-font checks and reimport passed. Private
+builder/previews/receipt: `tmp/scanpath-slides/insert/` and `build_insert.mjs`.
+Final SHA256 `841292792d86c1ace45827d2d9a6f8a22df0daf5aa09622dfee02a6ecc45ea06`.
+No app/protocol/device edits, staging or commit.
+
+**2026-10-18 scanpath presentation:** user supplied the previous 28-slide PPTX
+as a visual template and requested slides covering all aids, trigger evidence and
+citations. Created a separate 17-slide deck at
+`outputs/scanpath-system/Scanpath_System_Triggers_and_Justifications.pptx`.
+Reuses source slide layouts, yellow/black/cream theme and original decoration.
+Contains each aid's evidence and exact rule, strength/fading table, quality
+gates, disabled coverage/regression proposal and two linked reference slides.
+Primary citations: Wang2023/2024, Hiraoka2016, Pellicer-Sanchez2016,
+von der Malsburg/Vasishth2011, Cane/Cauchard/Weger2012 and Frank2015.
+Speaker notes retain primary URLs and population/measurement limits. Independent
+content review corrected the mistaken statement that ordinary target changes
+break patterns. Private build/render/validation evidence is under
+`tmp/scanpath-slides/`. Seventeen slides rendered and reviewed; package/layout,
+reference-font policy and final Artifact Tool reimport passed. Original-template
+overflow warnings remain visually intentional. No app/protocol/device edits.
+
+**2026-10-18 scanpath pilot implementation:** user authorized the explicit
+pattern/strength/fade proposal. Live ArticleFragment now selects the separate
+`SCANPATH_PATTERNS_V1` profile; legacy definition/replay profiles retain their
+rules. `ReadingAidPatternDetector.kt` implements continuous 150ms region and
+sentence-word visits, candidate-line search and sentence-reprocessing prefix;
+ended short detours, gaps, uncertainty and layout changes break pending matches.
+`ReadingSentenceResolver.kt` uses exact original UTF-16 mapped-word boundaries.
+`ReadingPatternFocusPolicy.kt` replaces loss/ABAB activation in the new profile:
+fixed initial strength .5 (60% background/40% dark), reader may lower, no count
+escalation; 400ms onset, 3s supported-reading hold then 7s supported-reading fade,
+1s missing-support grace. Statistical coverage/regression branch stays disabled
+without the separate matched on-task baseline and independent validation.
+Line/sentence guide now needs the line-search episode, gray alpha20/255 with
+150ms entry/300ms exit after supported progression or 3s timeout. Traces retain
+all qualifying reread steps and fade timing. New profile also uses the agreed
+1000ms optional definition offer. These are pilot engineering rules, not
+validated cognitive diagnoses, threshold optima, or human outcomes. Focused
+independent review corrected same-row retrigger dedup, lowered-cap rendering,
+gap-based false release, and omitted intermediate step evidence. Tests/build
+validation: 227 aid JVM tests passed (zero failures/errors/skips) through
+`:app:testDebugUnitTest --tests com.newsmead.gaze.aid.*`; Android debug source and
+`:app:compileDebugAndroidTestKotlin` compile passed. `git diff --check` passed.
+Tests include actual extractor callbacks, gaps, same-row disjoint retriggers,
+uncertain mapping and recovery clocks; synthetic checks do not establish human
+validity or appearance on a device. No install, capture, staging or commit.
+
+**2026-10-18 explicit patterns/strength/fade proposal (no runtime changes):**
+owner wants algorithmic sequences and actual visual values in chat. Proposed
+pilot visit minimum150ms continuous supported residence (not physiological
+fixation), deduplicate by content-target+region; ended short detours/invalid
+mapping break matches. Line: middle->end(last20%)->two distinct starts(first20%)
+among adjacent body rows{i,i+1,i+2}, within3s after line-end exit. Example
+L5middle->L5end->L7start->L6start. Normal L5end->L6start->L6middle does not match.
+FocusA candidate reprocessing: N>=8, early<=25%N ->late>=75%N ->early<=25%N,
+then>=2 forward steps of1-2words spanning>=25%N, return/rereadphase<=8s.
+Example12-wordS3:w2->w10->w2->w4->w6; no completed-path claim at prefix.
+FocusB DEVELOPMENTONLY candidate: two nonoverlapping valid5s windows with
+coverage<P10 and backward-transition rate>P90 of separate matched on-task
+baseline. Article-wide indices; distinct reliable word transitions only;
+coverage over eligible continuously observable words between window min/max
+word indices. Invalid/uncertain windows reset pair; zero denominators/<2distinct
+visits rejected. These arbitrary percentile cutoffs are explicitly a new
+heuristic, not a literature-validated joint signature, and require independent
+thought-probe checks before activation. Keep line8%actualgrayopacity; focus
+defaults Fade60%theme-backgroundveil/Dark40%blackveil, with reader cap and no
+automatic escalation. Proposed onset150ms line/400ms focus, line offset300ms
+after resolution/max3s. Retain existing focus3s supported-readinghold+7s linear
+fade; both clocks exclude missing/retained-draw time. New disjoint episodes may
+restart at same opacity; frame refreshes cannot. Existing1s tracking grace then
+clear; no fabricated evidence. Review tightened word-order denominators,
+reread-prefix continuity and clocks. All numeric choices are pilot parameters,
+not scientific cognitive thresholds or validated doses. No app/device/protocol,
+collection/build/staging/commit change.
+
+**2026-10-18 final line/focus proposal (chat deliverable; no runtime change):**
+owner asks choose800/1000ms word offer and finalize both trigger proposals.
+Recommendation:1,000ms supported-residence optional offer,800ms comparator;
+provisional engineering choice, not a superior/validated unfamiliarity cutoff.
+Line: established line-end progression -> supported visits to at least two
+distinct line-start candidates in one continuous reliable transition (W23).
+Two candidates operationalize extra search, not an optimized threshold. Cue
+expected next row only if unambiguous; otherwise confirmed-destination
+orientation. Clear after forward reading/new settled location; freshness and
+uncertainty timeout remain gates. Focus has two proposed OR routes: A sentence-
+beginning return plus already observed forward rereading(MV11); B a model-
+development disengagement detector using probe-grounded candidate features
+(Frank2015, Foulsham2013, Mézière Study2). These features do not constitute an
+already validated joint signature. RouteB remains unavailable until word-level
+features and independent thought labels can be measured adequately. Coverage
+requires a defined traversed text segment with continuously observable words
+under matched reading/scroll conditions; unseen/uncertain words are not skips.
+Preserve purposeful skimming and useful rereading. Replace causal claims for
+current3-loss/30s and physical-lineABAB rules. Review resolved these distinctions;
+numeric sensitivities remain explicit development parameters. No code/device,
+protocol, collection, build, staging or commit change by this task.
+
+**2026-10-17 broader search / shortlist-completeness correction:** owner asks
+whether iMon/AFF-Net/TinyTracker are the best options. They are verified artifact
+candidates, not an exhaustive or best-performing ranking. Expanded primary-source
+screening includes newer phone systems, compact encoders and screen calibration.
+New public model lead: [GazeTorch](https://github.com/liszth87/GazeTorch),
+[MobileNet checkpoint inventory](https://huggingface.co/7thChord/GazeTorch/tree/main),
+[paper v2](https://arxiv.org/html/2603.26945v2). MobileNetV2+Coordinate Attention:
+3.8M parameters, 15.7 MB pickle, 224px RGB face input, 3D gaze output. Paper
+RealGaze uses 20 volunteers on a 13-inch tablet at 0.5m with lighting/accessory
+conditions; MobileNet five-point calibrated mean Euclidean error is 29.7 mm
+overall (24.0 ideal, 24.3 side-lit, 33.5 glasses, 33.1 masks), not a Samsung or
+reading result. Public frozen weights remove a need to repeat training, but
+native conversion/runtime, normalization/head-pose/camera geometry, screen
+projection, exact checkpoint configuration and CC-BY-NC-ND reuse terms remain
+unresolved. One-/five-point linear screen calibration does not establish that
+these geometry steps are unnecessary. This reopens a bounded research lead,
+not a demonstrated accuracy upgrade or a recommendation to port it immediately.
+[MAC-Gaze](https://arxiv.org/html/2505.22769v3) uses MobileViT-v2 with IMU and
+continual calibration/labels; its gains do not establish a public frozen Android
+replacement. [COMETIC](https://pi.cs.tsinghua.edu.cn/wp-content/uploads/2025/06/3706598.3713936.pdf)
+adds cursor-derived fine-tuning; [GazeSync](https://arxiv.org/html/2604.15348v1)
+is iOS coordinate synchronization using a commercial SDK and logging server.
+GLANCE targets an additional eye camera; EyeTheia uses iTracker-derived models
+and backend personalization; neither supplies the required new standalone
+phone accuracy evidence. Do not imply every relevant model has been ruled out.
+MGazeNet remains the strongest established local baseline; no preferred
+replacement has been established. No candidate integration/execution, model
+download, branch change or device operation occurred; checkpoint updated only.
+
+**2026-10-17 recommendation reassessment against the MGazeNet baseline:** owner
+requires a defensible accuracy recommendation, recognizing MGazeNet as the best
+option actually found for this project. Keep the current pretrained model and
+calibration as the control. Public artifact availability is necessary but does
+not itself justify a port. Earlier advice to prioritize iMon was premature:
+the public CoreML MobileNetV2 file has not been tied to the study's headline
+accuracy or timing configuration. Its [Swift reference](https://raw.githubusercontent.com/imonimwut/imon/main/iOS/GazeTracking/GazeTracking/ViewController.swift)
+disables enhancement, calls prediction, and leaves output retrieval commented;
+it does not implement the paper's fixation averaging/personal calibration or an
+accuracy/FPS evaluation. That incompleteness does not prove the weights are bad.
+Do not compare iMon's phone-only study result directly with the MGazeNet paper's
+separately processed GazeCapture result or our calibrated target checks.
+[MGazeNet study Table 2 / section 4.5](https://onlinelibrary.wiley.com/doi/full/10.1155/2024/2644725)
+uses matched MediaPipe preprocessing: MGazeNet beats AFF-Net in its GazeCapture-
+trained comparisons; mixed-training results trade small wins, and AFF-Net was
+slower on tested mobile devices. This is architecture/study evidence, not proof
+that our exact public binary beats the public AFF-Net checkpoint. TinyTracker
+offers efficiency evidence, not a strong accuracy replacement case. No candidate
+currently justifies a full native integration on an expectation of higher
+accuracy. iMon remains a conditional checkpoint/configuration investigation.
+Any subsequent comparison must give each model its own valid calibration, match
+the calibration burden and independent test conditions, and examine vertical
+reading error/tails, regional failures, availability and latency on both phones.
+Do not promote a smooth cursor, extra filtering, paper mean error or extra
+training images as evidence of improved reading accuracy. Existing failed
+calibration experiments must not be re-proposed without new evidence.
+The clean `experiment/gaze-model-comparison` worktree starts at `d44a305`;
+no candidate was integrated or run. This reassessment only updates this checkpoint.
+
+**2026-10-17 pinned-model provenance and Android candidate audit:** owner asks
+to verify the exact base training count and search again using recovered limits.
+The [README at our pinned GazeFollower revision](https://github.com/GanchengZhu/GazeFollower/blob/553920edcb7998c029828677f50f6d8eb4a16249/README.md#note)
+explicitly identifies its bundled model as trained on **7 million images**.
+Local `mgazenet-benchmark/vendor/assets/base.mnn` SHA-256 was recomputed as
+`2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96`, matching
+the manifest and app build's expected model hash; build copies this vendor asset.
+Thus 7M is supported by version-linked author documentation for our actual
+distribution, superseding the blanket unverified-count statement below and in
+older chats. No published per-image training manifest or precise corpus
+composition was recovered; do not claim an independently counted 7,000,000
+unique images or equivalence to a particular smartphone-paper checkpoint.
+Training-image count alone establishes neither an accuracy ceiling nor phone
+inference cost.
+New artifact evidence resolves earlier directory-access gaps:
+- [iMon MobileNetV2 CoreML weights](https://github.com/imonimwut/imon/blob/main/iOS/GazeTracking/GazeTracking/gaze_mobilenetv2.mlmodel)
+  are public (GitHub metadata 20.8 MB); an eye-enhancement CoreML model is also
+  present. The [paper](https://doi.org/10.1145/3494999) reports 1.49 cm smartphone
+  person-independent per-frame error, 1.11 cm with fixation averaging/calibration,
+  and up to 60 FPS on iPhone 12 Pro. Those are full-study results, not verified
+  performance of this specific MobileNetV2 file or either Samsung phone. Native
+  Swift reference uses Apple Vision/CoreML, eye crops and optional enhancement;
+  Android conversion, exact input/output parity, calibration and reuse terms
+  remain open. Conditional accuracy lead; the reassessment above supersedes the
+  earlier recommendation to prioritize its native port.
+- [AFF-Net pretrained checkpoint](https://github.com/vigil1917/AFF-Net/blob/main/checkpoint/Iter_10_AFF-Net.pt)
+  is public (7.42 MB, commit `8fb9c704000e86d5b4e26731b29acbf34a6bc8a7`,
+  Add pretrained model). Availability is no longer unresolved. Native conversion,
+  crop/calibration parity and reuse terms still require checking. The MGazeNet
+  paper's matched comparisons do not establish a general accuracy advantage for
+  AFF-Net; do not assign any paper score to this unexecuted checkpoint.
+- [TinyTracker TFLite](https://github.com/pbonazzi/tinytracker/blob/main/tinytracker/models/TinyTracker.tflite)
+  and TinyTrackerS files are public (GitHub metadata 611 KB / 169 KB). This is
+  2D screen gaze with face-crop/localization inputs, not another generic direction
+  model. [Paper Table III](https://arxiv.org/pdf/2307.07813) reports 2.62 cm for
+  112px INT8 TinyTracker; embedded-board timing is not Samsung Android evidence.
+  Supports an efficiency experiment, not a demonstrated accuracy upgrade; reuse
+  terms and target-phone performance remain unresolved.
+SAGE-SFO had no public weights verified; EyeMU artifact availability was not
+resolved by the source review. Qualcomm EyeGaze supplies small mobile artifacts
+but outputs pitch/yaw, leaving the old screen-mapping/target-hardware gaps.
+No candidate has demonstrated better accuracy than our exact calibrated model
+on both phones or older-adult reading. Only source/metadata and local hash checks
+ran: no candidate weights were downloaded/executed, no app/model/branch/device
+change or build occurred. Updated this checkpoint only; whitespace check passes.
+
+**2026-10-17 model-history correction (supersedes today's generic shortlist):**
+owner explicitly requests recovering older Android constraints instead of
+repeating unsuitable replacements. Read actual turns from these Codex chats:
+`Add telemetry ON OFF control` (`01a03222-4717-7a22-9d55-151e8aa91dae`,
+MGazeNet discovery/reassessment), `Plan hybrid gaze tracker`
+(`01a04582-fc00-7603-97a4-bba387f720c7`), `Verify git clone success`
+(`01a045a5-14cc-79b2-a044-27d2732992f7`, MobileEye pilot), archived
+`Explore gaze model fine tuning` (`01a0c304-43f9-7830-a37c-3aabdba32c33`),
+and `Find mGazeNet origin thread` (`01a0c339-8781-7963-9bbb-74803af0e5cf`).
+Retained constraints: standalone native Android on both A56 and SM-G991B;
+no laptop/Python/WiFi inference backend; no assumption that the thesis can
+fund a new labeled image corpus or substantial model training. Normal per-user
+calibration is distinct from training a new image estimator. Public weights
+alone do not establish a usable replacement: verify mobile execution/conversion,
+localization/crops, screen mapping/calibration, complete pipeline cost, and
+independent screen/reading accuracy on both phones before recommending adoption.
+MGazeNet was selected because an actual small pretrained `base.mnn` and explicit
+inference/calibration contract could be reproduced natively, not because all
+alternatives had been disproved. See [native handoff](gaze-mgazenet-handoff.md)
+and [replacement history](gaze-model-replacement.md); their older tracker status
+must not override the current implementation.
+The MobileEye chat reports one A56 pilot (150 frames/25 targets): CNN 5.42 cm
+2D RMSE versus 5.01 cm centre baseline; this is a failed transfer in that session,
+not a population result. Historical docs also record MobileGaze/L2CS and compact
+landmark failures, and the laptop GazeFollower deployment rejection. Do not
+repackage those as new options or confuse them with native MGazeNet.
+Today's 3DGazeNet, FAZE, UniGaze and WebEyeTrack leads have not cleared the above
+deployment/accuracy checks; withdraw them as immediate recommendations. This
+does not establish that 3DGazeNet is impossible or that it failed a phone test.
+Reopen a prior route only with concrete evidence addressing its earlier blocker.
+The archived fine-tuning and origin chats had retracted the training-count claim;
+the subsequent pinned-source audit above now supports the author's reported 7M
+count. Exact corpus composition and smartphone-paper checkpoint identity remain
+unverified. Do not infer a 7M accuracy ceiling or promise that the restricted
+GazeFollower model is a compatible smartphone upgrade. No replacement has been
+demonstrated better under the recovered constraints. This correction changes
+only this checkpoint; no branch/model/runtime/device change was made.
+
+**2026-10-17 quantitative trigger follow-up:** owner requests measured word
+durations/probabilities and multiple focus candidates; wants concise explanation
+in chat, no Markdown-file/essay deliverable. New primary anchors: Pellicer-Sánchez
+2016 [Table4,p114](https://www.cambridge.org/core/services/aop-cambridge-core/content/view/S0272263115000224),
+L2 first encounter invented/known controls: gaze421.83/293.82ms, total703.16/369.87ms.
+These are group means, not inverse probabilities; individual fixations>800ms were
+excluded. iDict2003 [author paper](https://www.researchgate.net/publication/221054255_Proactive_Response_to_Eye_Movements)
+used a variable typical800ms accumulated-word trigger, unvalidated and partly
+intentional gaze control. Hiraoka2016 Table4 personalized precision.507/recall.616,
+10-fold CV, not a duration-probability curve. Newer [EyeLingo2025](https://arxiv.org/html/2502.10378v1)
+uses gaze+text and post-reading labels; Table5 cross-user precision52.8%,recall68.4%,
+F159.6%; cross-document precision43.3%,recall62.8%,F151.1%. Model-score cutoffs are
+tuned, not universal ms limits; no probability calibration established. Extended
+3s gaze windows include following context; preserve latency/causality caveat.
+Focus must not be restricted to sentence reprocessing: investigate probe-labeled
+reduced word coverage(Frank2015), altered lexical sensitivity/irregular reading
+(Reichle2010/Foulsham2013), and skipped-long-word repair reductions
+([Mézière et al.,Study2](https://doi.org/10.3758/s13421-025-01797-8),56 young Finnish readers,
+1000Hz, exploratory). Distinct features can index the same disengagement process;
+do not invent separate diagnoses or equate any one event with a lapse. No app,
+device, protocol, collection, build, staging or commit change.
+
+**2026-10-17 trigger-first correction:** owner again states trigger justification
+must dominate the answer; prior consolidation still mixed in aid efficacy.
+Lead acknowledged the repeated mismatch. Added a trigger-only evidence table at
+the start of the [design review](gaze-aid-design-recommendations-2026-10-17.md).
+Present observable predicate -> independent label/manipulation -> source finding
+-> permitted inference before any design discussion. W23 provides observational
+line-search evidence, H16 reader-marked vocabulary labels, MV11 controlled
+ambiguity, Cane2012 known interruptions; each has transfer/diagnostic limits.
+Current focus loss/ABAB rules remain unsupported as attention classifiers. S13
+later returns indicate ambiguity-related effort, not unknown-word status. Do not
+substitute aid benefit or a newly named process for validation of existing rules.
+No runtime/device/protocol changes by this correction.
+
+**2026-10-17 consolidated aid designs (research/design only):** owner requests
+refined justifications/designs for the existing four aids and additional visual
+candidates. [Consolidated recommendations](gaze-aid-design-recommendations-2026-10-17.md)
+supersede earlier provisional shortlists: candidate-line search -> localized guide;
+word hesitation/later return -> optional lexical offer; sentence reprocessing ->
+context-preserving band; departure/return -> resumption cue. New candidates:
+word/phrase lens, mapped text-chart outlines, structure-return trail, later
+exploratory spacing adjustment. Each specifies observed order, evidence bridge,
+appearance/release and validation gap; current thresholds are not literature-
+validated constants. Source scout confirms V4 rules unchanged despite unrelated
+camera/scroll edits. Focused review corrected accepted-lens persistence across
+source/lens gaze; three reviewer paper fetches failed, so earlier source extracts
+remain the basis for those claims. Documentation whitespace checks pass. No
+runtime/protocol/device/build/collection/staging/commit change by this task.
+
+**2026-10-17 low-light FPS source review (experimental change, build blocked):**
+owner reports tracking FPS dropping in dim light and requests current GazeFollower
+source/docs. Upstream requests 640×480/30 FPS but has no verified low-light
+exposure fix; multiprocessing addresses desktop UI/GIL isolation. Current upstream
+Tasks IMAGE/fallback/calibration defaults differ from our pinned integration.
+Lighting warnings/papers do not validate a dim-light FPS threshold. Live article
+now requests [30,30] only when the selected front camera advertises it; other
+callers default off. Review caught shared natural-reading recording: source-close
+handoff now restores original camera defaults before log creation and live policy
+afterward, guarded across pause/view changes. Follow-up source review has no
+remaining findings; diff whitespace check passes. One offline Gradle attempt was
+blocked before compilation by denied wrapper-cache lock access; no build/tests
+passed and no retry/device/camera/calibration/collection/staging/commit ran.
+Actual throughput, dim-light quality, calibration transfer and handoff runtime
+remain unmeasured. [Sources, changes and limits](gaze-low-light-fps-review-2026-10-17.md);
+evidence: `output/low-light-fps-check-01/`. Existing scroll/research edits preserved.
+
+**2026-10-17 V3 ramp widened to30–60% (software/device checks passed):** owner keeps start at30%
+and moves full speed from50% to60%, making the50% target4% physical-screen
+height/s (two-thirds of the unchanged6%/s maximum). This is a parameter change on
+`measurement/scanpath-pilot`, not the separate feature-branch redesign. Host
+mapping expectations and attached35/50/60% speed phases updated. All16 policy tests
+pass; both APKs build. Owner reauthorized A56 USB debugging after the unauthorized
+preflight. Continuing approved replace installs preserve data/calibration;1/1
+camera-free native check passes in4.879 s, including50% slower than60%, upper stop
+and fresh restart. Evidence: `output/auto-scroll-region-30-60-check-01/summary.json`.
+Human comfort/accuracy and other test suites were not evaluated in this adjustment.
+Pre-existing research notes and edits are preserved; no staging or commit.
+
+**2026-10-16 supplied Gemini response audited (research only):** owner supplied
+the full response and11 cited URLs. Added claim/source audit to the
+[trigger rationale](scanpath-trigger-justification-2026-10-16.md). Useful direct
+precedents: Lallé et al. chart outlines triggered by reading pre-mapped reference
+text; Jensen et al. fading position highlights after typography changes. Neither
+used the supplied erratic-switching/fatigue/departure trigger explanation.
+AAAI2017 supports aggregate complexity/subjective effort, Ma2023 scanpath networks
+and comprehension associations; neither supplies exact loop thresholds. MDPI2025
+is industrial-poster interpretation. Frontiers/PMC ML links duplicate one review,
+not four validated reading states. Keep concrete visual hypotheses, qualify
+complete chains, and retain independent discoveries above the audit. UArts PDF
+and restricted review remain access limits. No app/device/protocol changes.
+
+**2026-10-16 independent pattern search (research only):** owner says the five
+provided example labels are not the search boundary. Added an independently
+located ordered-pattern register near the top of the
+[trigger rationale](scanpath-trigger-justification-2026-10-16.md): undersweep
+correction, candidate-line search, whole-sentence rereading, older-reader delayed
+ambiguity rereading, topic-structure returns, second-pass text-picture integration,
+scanning/reading/decision states, and anchor-search-confirm. Each row links primary
+evidence for meaning and a proposed purely visual response; successful strategies
+are not called deficits. Concrete additions: line-entry notch, sentence band,
+structure-return markers, paired text/graphic outlines. Exact thresholds and
+older-adult phone transfer remain unvalidated. Sources and retrieval limits are
+retained in the register. No app/device/protocol/build/staging/commit change.
+
+**2026-10-16 visual-form scope correction:** owner rejects the suggested context
+cards/summaries as the wrong aid category. Focus on gaze-triggered perceptual
+changes to existing text: magnification, contrast, arrows, underlines/rulers and
+related visual presentation. Do not substitute summaries, explanations or
+semantic navigation features for visual assistance. Preserve the central
+pattern -> evidenced process/problem -> matched visual-response requirement.
+Earlier additional-candidate recommendations below are superseded in scope;
+their primary evidence is retained, not accepted as a feature shortlist.
+
+**2026-10-16 additional trigger–aid candidates (research only):** owner asks for
+other scanpaths/reading observations and visual forms. Added an extension to
+the [trigger rationale](scanpath-trigger-justification-2026-10-16.md): referential
+reprocessing -> paired context/reference cue; visual-quality-related effort ->
+gaze-selected high-contrast lens offer; sparse text–graphic integration -> paired
+signaling; overlooked gloss -> visual callout; skimming profile -> optional
+section map. Source-tested relationships are separated from proposed rules.
+Scheiter2019 adaptive multimedia had null/moderated/adverse subgroup results;
+Révész2023 increased attention without superior word recognition. Reference
+problems do not necessarily cause a literal gaze return to the antecedent.
+Gaze patterns alone do not distinguish visual from lexical effort; no automatic
+size/contrast/spacing rule or clinical inference is established. No runtime,
+device/camera/collection/build, staging or commit change.
+
+**2026-10-16 trigger-justification clarification (research only):** owner stresses
+that the central project task is defending **scanpath -> independently evidenced
+problem/process -> specifically matched visual response**, not generic cue
+efficacy or replacing adaptation with an always-on/manual mode. New primary
+evidence: W23 candidate-line searching/line-start confirmation motivates a
+transition-local line-search trigger; Hiraoka2016 unknown-word labels and
+Stites/Federmeier/Stine-Morrow2013 older-reader later ambiguity rereading motivate
+lexical hesitation/return candidates. Whole-sentence reanalysis paths(MV11) and
+probe-linked attention patterns(Frank2015/Bixler2016) are distinct possible focus
+targets, neither equivalent to current physical-line ABAB/unavailability counts.
+Known departure/re-entry remains the bookmark chain. Relationship evidence can
+justify a hypothesis without a universal diagnostic cutoff; online thresholds
+and matched aid benefit remain separate empirical questions. The corrected
+[trigger rationale](scanpath-trigger-justification-2026-10-16.md) takes priority
+over the earlier general aid-review recommendations for this question. No app,
+protocol, device/camera/collection/build, staging or commit change.
+
+**2026-10-16 visual-aid rule research (design review only):** owner asks for
+study-defensible rules for the four current aids, especially line highlighting,
+and other gaze-based aids; confirms older adults are primary while accepting
+broader-population evidence. Clean source review confirms current V4 guide is
+supported-line following at fixed adaptive strength, not a long-residence trigger;
+sentence context already exists. Literature supports navigation/resumption
+precedents, not exact NewsMead phone thresholds or difficulty doses. SwitchBack
+adds a direct front-camera phone/news resumption precedent, with younger sample,
+landscape/sequential-reading assumptions and marginal overall interaction before
+the significant distraction-subset comparison. Current focus counts reported
+unavailability/recovery, including technical failures, rather than all tracked
+look-aways. ABAB/font-tier/3-in-30s rules remain exploratory. Recommendations:
+validate line guidance/bookmark first, preserve opt-in word offers, compare a
+gaze-following context spotlight and independently test adaptive focus. V26's
+18–75 age range is eligibility; reported sample bins only extend through40–60,
+so it is not older-adult validation. Primary URLs, current rules, alternatives,
+proposed checks and transfer limits: [dated review](gaze-visual-aid-rule-review-2026-10-16.md).
+No runtime/protocol change, build/device/camera/collection, staging or commit.
 
 **2026-10-16 measurement V3 region adjustment (software/device checks passed):** owner requests
 return to `measurement/scanpath-pilot` and explicitly selects the original

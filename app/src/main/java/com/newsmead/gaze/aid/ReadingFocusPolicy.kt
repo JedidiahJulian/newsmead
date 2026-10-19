@@ -2,6 +2,13 @@ package com.newsmead.gaze.aid
 
 import com.newsmead.gaze.scanpath.ScanpathConfig
 
+/** Online broad rereading prefix supplied by the aid-local stabilized-location detector. */
+data class ReadingAidRereadEvidence(
+    val evidenceId: String, val visits: List<ReadingAidContinuationEvidence>,
+    val firstLine: Int, val lastLine: Int, val confirmedDeliveryMs: Double,
+    val measuredDistinguishability: Boolean = false
+)
+
 /** Presence, supported line visits and display anchors have separate lifetimes. No attention diagnosis. */
 internal class ReadingFocusPolicy(
     private val config: ReadingAidPolicyConfig,
@@ -15,7 +22,8 @@ internal class ReadingFocusPolicy(
         val firstDelivery: Double, var lastDelivery: Double, var count: Int)
     private data class Demand(val initialStrength: Double, var recoveryMs: Double, val activatedMs: Double,
         val episodes: List<ReadingAidFocusEpisode> = emptyList(),
-        val alternations: List<ReadingAidFocusAlternation> = emptyList())
+        val alternations: List<ReadingAidFocusAlternation> = emptyList(),
+        val reread: ReadingAidRereadEvidence? = null)
     private val episodes = mutableListOf<ReadingAidFocusEpisode>()
     private val alternations = mutableListOf<ReadingAidFocusAlternation>()
     private val visits = mutableListOf<ReadingAidContinuationEvidence>()
@@ -37,6 +45,10 @@ internal class ReadingFocusPolicy(
     private var lastPresenceDelivery = Double.NEGATIVE_INFINITY
     private var interruptionDemand: Demand? = null
     private var alternationDemand: Demand? = null
+    private var rereadDemand: Demand? = null
+    private var lastReread: ReadingAidRereadEvidence? = null
+    private var recoveryTail: ReadingAidContinuationEvidence? = null
+    private var recoveryEpoch: Pair<Long, String>? = null
     private var serial = 0L
     private var textSizeDp = 22.0
     private var typography = ReadingFocusTypography.STANDARD
@@ -45,6 +57,7 @@ internal class ReadingFocusPolicy(
 
     fun reset() {
         episodes.clear(); alternations.clear(); interruptionDemand = null; alternationDemand = null
+        rereadDemand = null; lastReread = null
         pause()
         lastNow = Double.NEGATIVE_INFINITY; lastDelivery = Double.NEGATIVE_INFINITY
         lastInputCapture = Double.NEGATIVE_INFINITY; witnessesExpired = false
@@ -53,6 +66,7 @@ internal class ReadingFocusPolicy(
     /** Same-article operational pause: retain completed summaries, discard pending evidence and anchors. */
     fun pause() {
         source = null; sourceEpoch = null; loss = null; presence = null; armed = false
+        recoveryTail = null; recoveryEpoch = null
         lastCapture = null; lastSupportedCapture = Double.NEGATIVE_INFINITY
         lastSupportedDelivery = Double.NEGATIVE_INFINITY; lastPresenceDelivery = Double.NEGATIVE_INFINITY
         breakLineSequence()
@@ -63,8 +77,13 @@ internal class ReadingFocusPolicy(
         observedLine = null; observedSegment = null; observedLineQualified = false
     }
     fun interruptReading() { lastCapture = null }
+    /** Row indices in a reread witness cannot survive text reflow. */
+    fun invalidateReread() { rereadDemand = null; lastReread = null; recoveryTail = null; recoveryEpoch = null }
+    private fun breakRecoverySupport() {
+        if (config.evidenceAlignedV5) { recoveryTail = null; recoveryEpoch = null }
+    }
 
-    val hasDemand: Boolean get() = listOfNotNull(interruptionDemand, alternationDemand).any {
+    val hasDemand: Boolean get() = listOfNotNull(interruptionDemand, alternationDemand, rereadDemand).any {
         it.initialStrength > 0 && it.recoveryMs < config.focusRecoveryHoldMs + config.focusRecoveryFadeMs
     }
 
@@ -86,18 +105,26 @@ internal class ReadingFocusPolicy(
         if (alternationDemand?.let { c.nowMs - it.activatedMs > config.focusInterruptionWindowMs } == true) {
             alternationDemand = null; witnessesExpired = true
         }
-        val s = c.presentationSample ?: run { presence = null; interruptReading(); breakLineSequence(); return }
+        if (rereadDemand?.let { c.nowMs - it.activatedMs > config.focusInterruptionWindowMs } == true) {
+            rereadDemand = null; witnessesExpired = true
+        }
+        val s = c.presentationSample ?: run {
+            presence = null; interruptReading(); breakRecoverySupport(); breakLineSequence(); return
+        }
         val d = s.deliveryMs; val t = s.captureMs
         val clocks = d?.isFinite() == true && d >= 0 && d <= c.nowMs && d >= lastDelivery &&
             (t == null || (t.isFinite() && t >= 0 && t <= d))
         if (!clocks || s.exclusion == "invalid_clock") { reset(); return }
-        if (c.nowMs - d!! > config.maxEvidenceAgeMs) { interruptReading(); return }
+        if (c.nowMs - d!! > config.maxEvidenceAgeMs) {
+            interruptReading(); breakRecoverySupport(); return
+        }
         val freshDelivery = d > lastDelivery
         lastDelivery = d
         if (s.geometrySnapshotId != c.geometrySnapshotId) { pause(); return }
         val missing = s.exclusion in setOf("no_face", "invalid_crops", "eye_area", "stale",
             "invalid_prediction", "coordinate_unavailable")
         if (missing) {
+            breakRecoverySupport()
             interruptReading(); presence = null; breakLineSequence()
             if (!freshDelivery) return
             val pending = loss
@@ -112,6 +139,7 @@ internal class ReadingFocusPolicy(
             return
         }
         if (s.exclusion == "blink" || s.exclusion == "eye_state_unavailable") {
+            breakRecoverySupport()
             // Eye closure is not evidence of looking away. It must not extend a
             // preceding brief tracking glitch into a qualifying >=500 ms loss.
             val pending = loss
@@ -124,11 +152,13 @@ internal class ReadingFocusPolicy(
         // Repeated timer/context callbacks are neutral; they cannot add samples or break a live visit.
         if (!freshDelivery || t == lastInputCapture) return
         if (t != null && t < lastInputCapture) {
-            presence = null; interruptReading(); breakLineSequence(); return
+            presence = null; interruptReading(); breakRecoverySupport(); breakLineSequence(); return
         }
+        val extractionOnly = config.evidenceAlignedV5 && s.exclusion in setOf(
+            "unassigned_line", "unassigned_word", "ambiguous_line", "ambiguous_word")
         val tracked = selected && t != null && t > lastInputCapture &&
             c.nowMs - t in 0.0..config.maxEvidenceAgeMs &&
-            (s.exclusion == null || s.exclusion == "outside_visible_text")
+            (s.exclusion == null || s.exclusion == "outside_visible_text" || extractionOnly)
         val pending = loss
         if (pending != null && pending.firstRecoveryDelivery == null && tracked && freshDelivery &&
             t!! > maxOf(pending.source?.lastCaptureMs ?: Double.NEGATIVE_INFINITY,
@@ -141,6 +171,11 @@ internal class ReadingFocusPolicy(
         // Deliberately independent of sample.eligible, mapped line/word, dispersion and fixation establishment.
         val inside = tracked && g?.snapshotId == c.geometrySnapshotId && article != null &&
             s.processingX!! in article.left..article.right && s.processingY!! in article.top..article.bottom
+        if (config.evidenceAlignedV5 && (!selected || t == null ||
+                c.nowMs - t !in 0.0..config.maxEvidenceAgeMs ||
+                article == null || g?.snapshotId != c.geometrySnapshotId ||
+                s.processingX!! !in article.left..article.right || s.processingY!! !in article.top..article.bottom ||
+                recoveryTail?.let { t - it.lastCaptureMs > 250.0 } == true)) breakRecoverySupport()
         if (!inside) { presence = null; interruptReading(); breakLineSequence(); return }
         if (!freshDelivery || t!! <= lastInputCapture) return
         if (lastInputCapture.isFinite() && t - lastInputCapture > detector.maxSampleGapMs) {
@@ -168,15 +203,16 @@ internal class ReadingFocusPolicy(
                 episodes.add(episode); if (episodes.size > 512) episodes.removeAt(0)
                 onEpisode(episode)
                 if (episodes.size >= config.focusInterruptionMinEpisodes)
-                    interruptionDemand = Demand(strength(episodes.size - config.focusInterruptionMinEpisodes + 1),
-                        0.0, d, episodes = episodes.toList())
+                    interruptionDemand = refresh(interruptionDemand,
+                        Demand(strength(episodes.size - config.focusInterruptionMinEpisodes + 1),
+                            0.0, d, episodes = episodes.toList()))
                 loss = null
                 lastCapture = t
                 return
             }
         }
         val previous = lastCapture
-        if (previous != null && t > previous && t - previous <= detector.maxSampleGapMs && loss == null &&
+        if (!config.evidenceAlignedV5 && previous != null && t > previous && t - previous <= detector.maxSampleGapMs && loss == null &&
             s.eligible && c.validLiveInput) {
             interruptionDemand?.let { it.recoveryMs += t - previous }
             alternationDemand?.let { it.recoveryMs += t - previous }
@@ -187,9 +223,14 @@ internal class ReadingFocusPolicy(
     fun support(value: ReadingAidContinuationEvidence, c: ReadingAidContext,
                 preferences: ReaderAidPreferences = ReaderAidPreferences()): ReadingAidFocusEvidence? {
         selectTypography(c.focusTextSizeDp)
+        if (config.evidenceAlignedV5 && !validSupport(value, c)) {
+            recoveryTail = null; recoveryEpoch = null
+            return currentEvidence(c, preferences)
+        }
         if (value.lastCaptureMs < lastSupportedCapture ||
             (value.lastCaptureMs == lastSupportedCapture && value.line != source?.line)) return null
         if (value.lastCaptureMs > lastSupportedCapture && value.evidenceAvailableMs > lastSupportedDelivery) {
+            if (config.evidenceAlignedV5) recover(value, c)
             lastSupportedCapture = value.lastCaptureMs; lastSupportedDelivery = value.evidenceAvailableMs
             source = value; sourceEpoch = c.generation to c.geometrySnapshotId
             // Established source support can arm a future loss, but never completes a pending return.
@@ -197,6 +238,54 @@ internal class ReadingFocusPolicy(
             observeVisit(value, c)
         }
         return currentEvidence(c, preferences)
+    }
+
+    private fun validSupport(v: ReadingAidContinuationEvidence, c: ReadingAidContext) =
+        c.validLiveInput && c.focusInputAllowed && c.nowMs.isFinite() &&
+            listOf(v.firstCaptureMs, v.lastCaptureMs, v.evidenceAvailableMs).all { it.isFinite() && it >= 0 } &&
+            v.firstCaptureMs <= v.lastCaptureMs && v.lastCaptureMs <= v.evidenceAvailableMs &&
+            c.nowMs - v.evidenceAvailableMs in 0.0..config.maxEvidenceAgeMs &&
+            c.nowMs - v.lastCaptureMs in 0.0..config.maxEvidenceAgeMs && v.line in 0 until c.lineCount
+
+    /** Only fresh, disjoint supported capture tails pay down a response. */
+    private fun recover(v: ReadingAidContinuationEvidence, c: ReadingAidContext) {
+        val prior = recoveryTail
+        val epoch = c.generation to c.geometrySnapshotId
+        if (prior != null && recoveryEpoch == epoch && prior.segment == v.segment &&
+            v.lastCaptureMs - prior.lastCaptureMs in 0.0..250.0 && loss == null) {
+            val start = maxOf(prior.lastCaptureMs, v.firstCaptureMs)
+            val credit = (v.lastCaptureMs - start).coerceAtLeast(0.0)
+            listOfNotNull(interruptionDemand, alternationDemand, rereadDemand).forEach {
+                // A newly confirmed response cannot receive time preceding its confirmation.
+                it.recoveryMs += minOf(credit, (v.lastCaptureMs - it.activatedMs).coerceAtLeast(0.0))
+            }
+        }
+        recoveryTail = v; recoveryEpoch = epoch
+    }
+
+    private fun refresh(previous: Demand?, next: Demand): Demand =
+        if (config.evidenceAlignedV5 && previous != null &&
+            previous.recoveryMs < config.focusRecoveryHoldMs + config.focusRecoveryFadeMs &&
+            next.activatedMs - previous.activatedMs <= config.focusInterruptionWindowMs) next.copy(
+            initialStrength = maxOf(previous.initialStrength, next.initialStrength),
+            recoveryMs = previous.recoveryMs, activatedMs = previous.activatedMs) else next
+
+    fun reread(e: ReadingAidRereadEvidence, c: ReadingAidContext): ReadingAidFocusEvidence? {
+        if (!config.evidenceAlignedV5) return currentEvidence(c)
+        selectTypography(c.focusTextSizeDp)
+        if (e.visits.size != 5 || e.firstLine !in 0 until c.lineCount ||
+            e.lastLine !in e.firstLine until c.lineCount || !e.confirmedDeliveryMs.isFinite() ||
+            c.nowMs - e.confirmedDeliveryMs !in 0.0..config.maxEvidenceAgeMs ||
+            e.visits.any { !validSupport(it, c.copy(nowMs = it.evidenceAvailableMs)) } ||
+            e.visits.last().evidenceAvailableMs > e.confirmedDeliveryMs) return currentEvidence(c)
+        val prior = lastReread
+        if (prior?.evidenceId == e.evidenceId || (prior != null &&
+                e.visits.first().firstCaptureMs <= prior.visits.last().lastCaptureMs)) return currentEvidence(c)
+        val count = if (prior != null && e.confirmedDeliveryMs - prior.confirmedDeliveryMs <=
+            config.focusInterruptionWindowMs) 2 else 1
+        lastReread = e
+        rereadDemand = refresh(rereadDemand, Demand(strength(count), 0.0, e.confirmedDeliveryMs, reread = e))
+        return currentEvidence(c)
     }
 
     private fun observeVisit(value: ReadingAidContinuationEvidence, c: ReadingAidContext) {
@@ -229,8 +318,9 @@ internal class ReadingFocusPolicy(
             c.geometrySnapshotId, c.generation, value.evidenceAvailableMs)
         alternations.add(alternation); if (alternations.size > 512) alternations.removeAt(0)
         if (alternations.size >= typography.requiredAlternations)
-            alternationDemand = Demand(strength(alternations.size - typography.requiredAlternations + 1),
-                0.0, value.evidenceAvailableMs, alternations = alternations.toList())
+            alternationDemand = refresh(alternationDemand,
+                Demand(strength(alternations.size - typography.requiredAlternations + 1),
+                    0.0, value.evidenceAvailableMs, alternations = alternations.toList()))
         // Each strength-increasing sequence needs four new, nonoverlapping visits.
         visits.clear()
     }
@@ -247,6 +337,9 @@ internal class ReadingFocusPolicy(
         breakLineSequence()
         alternations.clear()
         alternationDemand = null
+        if (config.evidenceAlignedV5) {
+            rereadDemand = null; lastReread = null; recoveryTail = null; recoveryEpoch = null
+        }
     }
 
     fun currentEvidence(c: ReadingAidContext,
@@ -260,18 +353,20 @@ internal class ReadingFocusPolicy(
                 focusRecoveryFactor(it.recoveryMs, config.focusRecoveryHoldMs, config.focusRecoveryFadeMs)
         } ?: 0.0
         val a = effective(interruptionDemand); val b = effective(alternationDemand)
-        if (maxOf(a, b) <= 0) return null
+        val r = effective(rereadDemand)
+        if (maxOf(a, b, r) <= 0) return null
         val interruption = a > b || (a == b &&
             (interruptionDemand?.recoveryMs ?: Double.POSITIVE_INFINITY) <=
             (alternationDemand?.recoveryMs ?: Double.POSITIVE_INFINITY))
-        val demand = (if (interruption) interruptionDemand else alternationDemand)!!
+        val rereading = r > maxOf(a, b)
+        val demand = (if (rereading) rereadDemand else if (interruption) interruptionDemand else alternationDemand)!!
         return ReadingAidFocusEvidence(demand.episodes, initialStrength = demand.initialStrength,
             observedRecoveryMs = demand.recoveryMs, recoveryFadeMs = config.focusRecoveryFadeMs,
             windowMs = config.focusInterruptionWindowMs, support = value,
-            ruleId = if (interruption) "A4_RETURN_PRESENCE_FOCUS_V2" else "A4_FONT_SCALED_LINE_VISITS_V3",
+            ruleId = if (rereading) "A4_BROAD_REREADING_V5" else if (interruption) "A4_RETURN_PRESENCE_FOCUS_V2" else "A4_FONT_SCALED_LINE_VISITS_V3",
             recoveryHoldMs = config.focusRecoveryHoldMs, alternations = demand.alternations,
             textSizeDp = textSizeDp, requiredAlternations = typography.requiredAlternations,
-            minimumLineVisitMs = maxOf(detector.minFixationMs, typography.extraMinVisitMs))
+            minimumLineVisitMs = maxOf(detector.minFixationMs, typography.extraMinVisitMs), reread = demand.reread)
     }
 
     fun diagnostics(now: Double): Map<String, Any> = mapOf(

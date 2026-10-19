@@ -89,15 +89,31 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
         records.addLast(JSONObject().put("sequence", ++sequence).put("kind", kind)
             .put("elapsed_ms", nowMs).put("detail", detail))
     }
-    fun decision(value: ReadingAidDecision) = record("decision", value.nowMs, JSONObject()
+    fun decision(value: ReadingAidDecision) {
+        // Aid-local stabilized support is distinct from finalized engine fixations.
+        // Retain it with the action rather than reporting missing engine facts.
+        value.action?.takeIf { it.configId == "EVIDENCE_ALIGNED_V5" }?.let { a ->
+            val e = a.focusEvidence
+            val supports = a.continuationEvidence + listOfNotNull(a.bookmarkEvidence?.source,
+                a.bookmarkEvidence?.departureSupport, e?.support) +
+                (e?.reread?.visits ?: emptyList()) + (e?.alternations?.flatMap { it.visits } ?: emptyList()) +
+                (e?.episodes?.flatMap { listOfNotNull(it.source, it.recovery) } ?: emptyList())
+            supports.forEach { s -> remember(a.anchor.generation.toInt(), s.evidenceId,
+                JSONObject().put("kind", "aid_local_stabilized_support_not_finalized_fixation")
+                    .put("segment", s.segment).put("line", s.line).put("first_capture_ms", s.firstCaptureMs)
+                    .put("last_capture_ms", s.lastCaptureMs).put("evidence_available_ms", s.evidenceAvailableMs)) }
+        }
+        record("decision", value.nowMs, JSONObject()
         .put("status", value.status.name).put("reason", value.reason)
         .put("rule_id", value.ruleId ?: JSONObject.NULL).put("sources", JSONArray(value.sourceIds))
         .put("event_ids", JSONArray(value.eventIds)).put("input", liveContext)
         .put("support", support(value.action?.anchor?.generation ?: liveContext.optLong("generation"),
             value.eventIds + (value.action?.evidenceIds ?: emptyList())))
         .put("action", value.action?.let(::action) ?: JSONObject.NULL))
+    }
     fun render(value: ReadingAidAction, drawn: Boolean, reason: String, nowMs: Double) =
         record("render", nowMs, JSONObject().put("action_id", value.id).put("drawn_proxy", drawn)
+            .put("effective_guide_opacity", value.guideEvidence?.opacityAt(nowMs) ?: JSONObject.NULL)
             .put("reason", reason).put("presentation_phase", when {
                 reason.startsWith("definition_offer_") -> "lookup_offer"
                 reason.startsWith("definition_") -> "definition_panel"
@@ -133,6 +149,16 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
         .put("bookmark_evidence", a.bookmarkEvidenceJson())
         .put("focus_evidence", a.focusEvidenceJson())
         .put("guide_range", a.guideRangeJson())
+        .put("word_confidence_provenance", a.wordConfidence ?: JSONObject.NULL)
+        .put("guide_support", a.guideEvidence?.let { g -> JSONObject()
+            .put("bounds_meaning", "internal_support_uncertainty_not_displayed_range")
+            .put("first_line", g.firstLine).put("last_line", g.lastLine)
+            .put("uncertainty_measured", g.measuredUncertainty).put("uncertainty_provenance", g.uncertaintyProvenance)
+            .put("target_opacity", g.opacity).put("last_supported_delivery_ms", g.lastSupportedDeliveryMs)
+            .put("presentation_started_ms", g.presentationStartedMs).put("entry_ms", g.entryMs)
+            .put("loss_grace_ms", g.lossGraceMs).put("exit_ms", g.exitMs)
+            .put("search_support_ids", JSONArray(g.searchEvidenceIds))
+        } ?: JSONObject.NULL)
         .put("rule_id", a.ruleId).put("sources", JSONArray(a.sourceIds))
         .put("evidence_relationship", a.evidenceRelationship).put("experimental", a.experimental)
 

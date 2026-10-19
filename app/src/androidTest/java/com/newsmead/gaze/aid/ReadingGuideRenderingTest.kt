@@ -30,7 +30,8 @@ class ReadingGuideRenderingTest {
             scenario.onActivity { activity ->
                 val root = activity.findViewById<ViewGroup>(R.id.replayRoot)
                 val body = activity.findViewById<TextView>(R.id.replayBody)
-                val overlay = (0 until root.childCount).map(root::getChildAt).filterIsInstance<ReadingAidOverlayView>().single()
+                val viewport = activity.findViewById<ViewGroup>(R.id.replayViewport)
+                val overlay = (0 until viewport.childCount).map(viewport::getChildAt).filterIsInstance<ReadingAidOverlayView>().single()
                 val geometry = ScanpathTextGeometryReader().read(body)!!.forEngine("guide-render")
                 val line = geometry.lines.indexOfFirst { it.endUtf16 > it.startUtf16 }
                 val text = body.text.toString()
@@ -74,7 +75,8 @@ class ReadingGuideRenderingTest {
             scenario.onActivity { activity ->
                 val root = activity.findViewById<ViewGroup>(R.id.replayRoot)
                 val body = activity.findViewById<TextView>(R.id.replayBody)
-                val overlay = (0 until root.childCount).map(root::getChildAt).filterIsInstance<ReadingAidOverlayView>().single()
+                val viewport = activity.findViewById<ViewGroup>(R.id.replayViewport)
+                val overlay = (0 until viewport.childCount).map(viewport::getChildAt).filterIsInstance<ReadingAidOverlayView>().single()
                 val g = ScanpathTextGeometryReader().read(body)!!.forEngine("range-expiry")
                 val range = ReadingGuideResolver().resolve(body.text.toString(), g, 0)!!
                 val receipts = mutableListOf<Boolean>()

@@ -7,7 +7,7 @@ import com.newsmead.gaze.scanpath.ScanpathSample
 enum class ReadingAidType { CURRENT_LINE, CURRENT_SENTENCE, NEXT_LINE_START, READING_BOOKMARK, WORD_MAGNIFIER, FOCUS_REGION, WORD_DEFINITION }
 enum class ReadingGuideStyle { LINE, SENTENCE }
 enum class ReadingFocusStyle { FADE_TEXT, DARK_SURROUNDINGS }
-enum class ReadingGuideUnit { SENTENCE, PARAGRAPH }
+enum class ReadingGuideUnit { SENTENCE, PARAGRAPH, READING_BAND, LINE }
 /** Original text offsets, separate from word assignment. */
 data class ReadingGuideRange(val startUtf16: Int, val endUtf16: Int, val unit: ReadingGuideUnit)
 
@@ -47,8 +47,25 @@ data class ReadingAidAction(
     val bookmarkEvidence: ReadingAidBookmarkEvidence? = null,
     val guideRange: ReadingGuideRange? = null,
     val focusEvidence: ReadingAidFocusEvidence? = null,
-    val focusStyle: ReadingFocusStyle? = null
+    val focusStyle: ReadingFocusStyle? = null,
+    val guideEvidence: ReadingAidGuideEvidence? = null,
+    val wordConfidence: String? = null
 )
+
+/** Presentation timing is wall time; support duration is fresh capture time. */
+data class ReadingAidGuideEvidence(
+    val firstLine: Int, val lastLine: Int, val uncertaintyProvenance: String,
+    val measuredUncertainty: Boolean, val lastSupportedDeliveryMs: Double,
+    val presentationStartedMs: Double, val opacity: Double,
+    val searchEvidenceIds: List<String> = emptyList(),
+    val entryMs: Double = 150.0, val lossGraceMs: Double = 750.0, val exitMs: Double = 300.0
+) {
+    fun opacityAt(nowMs: Double): Double {
+        val entry = ((nowMs - presentationStartedMs) / entryMs).coerceIn(0.0, 1.0)
+        val exit = (1.0 - (nowMs - lastSupportedDeliveryMs - lossGraceMs).coerceAtLeast(0.0) / exitMs).coerceIn(0.0, 1.0)
+        return opacity * minOf(entry, exit)
+    }
+}
 
 /** A supported reading location and the later observable departure; no attention diagnosis. */
 data class ReadingAidBookmarkEvidence(
@@ -116,7 +133,10 @@ data class ReadingAidContext(
     val guideRange: ReadingGuideRange? = null,
     val focusInputAllowed: Boolean = true,
     /** Rendered font pixels divided by display density; includes Android font scaling. */
-    val focusTextSizeDp: Double = 22.0
+    val focusTextSizeDp: Double = 22.0,
+    /** Screen pixels, supplied only by a separately measured calibration/validation result. */
+    val locationUncertainty: ReadingLocationUncertainty? = null,
+    val targetWordBounds: com.newsmead.gaze.scanpath.ScanpathRect? = null
 ) {
     /** Presentation projection only; rawSample still contains the actual selected screen point. */
     val presentationSample: ScanpathSample? get() {
@@ -161,7 +181,8 @@ data class ReadingAidPolicyConfig(
     val focusTrackingGraceMs: Double = 1000.0,
     val focusReturnPresenceMs: Double = 100.0,
     val focusReturnMinSamples: Int = 3,
-    val focusAlternationWindowMs: Double = 8000.0
+    val focusAlternationWindowMs: Double = 8000.0,
+    val evidenceAlignedV5: Boolean = false
 ) {
     init {
         require(configId.isNotBlank() && conditionId.isNotBlank())
@@ -188,6 +209,9 @@ data class ReadingAidPolicyConfig(
     companion object {
         // Two initial focus strengths for the current short-article prototype.
         const val FOCUS_STRENGTH_STEP = 0.5
+        fun evidenceAlignedPrototype() = ReadingAidPolicyConfig("EVIDENCE_ALIGNED_V5", "EXPERIMENTAL_EVIDENCE_ALIGNED_V5",
+            true, wordAidType = ReadingAidType.WORD_DEFINITION, lineStartAidType = ReadingAidType.READING_BOOKMARK,
+            definitionMinObservedMs = 1000.0, evidenceAlignedV5 = true)
         fun definitionPrototype() = ReadingAidPolicyConfig("DEFINITION_PROFILE_V4", "EXPERIMENTAL_DEFINITION_V4",
             true, wordAidType = ReadingAidType.WORD_DEFINITION, lineStartAidType = ReadingAidType.READING_BOOKMARK,
             focusContextRadiusLines = 2)
@@ -245,7 +269,8 @@ data class ReadingAidFocusEvidence(
     val alternations: List<ReadingAidFocusAlternation> = emptyList(),
     val textSizeDp: Double = 22.0,
     val requiredAlternations: Int = 1,
-    val minimumLineVisitMs: Double = 0.0
+    val minimumLineVisitMs: Double = 0.0,
+    val reread: ReadingAidRereadEvidence? = null
 ) {
     val episodeCount: Int get() = episodes.size
     val cycleCount: Int get() = cycleEventIds.size + alternations.size

@@ -31,8 +31,15 @@ class ReadingAidPolicy(
     private var markerLanding: ContinuationSupport? = null
     private var lastContinuationCapture = Double.NEGATIVE_INFINITY
     private var continuationFloor = Double.NEGATIVE_INFINITY
-    private val bookmark = ReadingBookmarkPolicy(bookmarkDetectorConfig)
-    private val focus = ReadingFocusPolicy(config, bookmarkDetectorConfig, onFocusEpisode)
+    private val supportDetector = if (config.evidenceAlignedV5) bookmarkDetectorConfig.copy(
+        maxSampleGapMs = 250.0, maxTransitionGapMs = 250.0) else bookmarkDetectorConfig
+    private val bookmark = ReadingBookmarkPolicy(supportDetector,
+        if (config.evidenceAlignedV5) ReadingBookmarkPersistenceConfig() else null)
+    private val focus = ReadingFocusPolicy(config, supportDetector, onFocusEpisode)
+    private val location = ReadingLocationSupport(allowMappingOnlyWordResidence = true)
+    private var guideSearchId: String? = null
+    private var guideSearchUntil = Double.NEGATIVE_INFINITY
+    private var bookmarkPreciseSupport: ReadingAidContinuationEvidence? = null
 
     private data class ContinuationSupport(val evidence: ReadingAidContinuationEvidence,
         val fraction: Double) {
@@ -73,6 +80,7 @@ class ReadingAidPolicy(
 
     fun reset(context: ReadingAidContext, preserveCompletedFocus: Boolean = false): List<ReadingAidDecision> {
         val out = mutableListOf<ReadingAidDecision>()
+        if (config.evidenceAlignedV5 && epoch?.second != context.geometrySnapshotId) focus.invalidateReread()
         val keepFocus = preserveCompletedFocus && currentGuideProfile() && epoch?.first == context.generation
         if (keepFocus) focus.pause()
         clearAll(context.nowMs, "explicit_reset", out)
@@ -87,6 +95,8 @@ class ReadingAidPolicy(
     fun onEvent(event: ScanpathEvent, latestFinalizedFixation: ScanpathFixation?,
                 context: ReadingAidContext): List<ReadingAidDecision> {
         val out = prepare(context).toMutableList()
+        // V5 consumes selected fresh samples in prepare; finalized events remain descriptive.
+        if (config.evidenceAlignedV5) return out
         if (event.eventId in seenEvents) return out
         seenEvents.add(event.eventId)
         if (event.patternId == "P13") {
@@ -211,6 +221,7 @@ class ReadingAidPolicy(
 
     fun onObservation(candidate: ScanpathCandidateEvidence?, context: ReadingAidContext): List<ReadingAidDecision> {
         val out = prepare(context).toMutableList()
+        if (config.evidenceAlignedV5) return out
         if (!valid(context)) return out
         if (candidate != null && segment != null && candidate.segment != segment) {
             clearDynamic(context.nowMs, "segment_changed", out, retainFocus(context))
@@ -249,7 +260,7 @@ class ReadingAidPolicy(
         return out
     }
 
-    private fun currentGuideProfile() = config.configId == "DEFINITION_PROFILE_V4"
+    private fun currentGuideProfile() = config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5
 
     /** Range and physical source line must agree; word assignment and horizontal gaze are unused. */
     private fun guideRangeValid(c: ReadingAidContext): Boolean {
@@ -486,7 +497,7 @@ class ReadingAidPolicy(
         }
         val strength = e.initialStrength * e.recoveryFactor
         val supports = e.episodes.flatMap { listOfNotNull(it.source, it.recovery) } +
-            e.alternations.flatMap { it.visits } + e.support
+            e.alternations.flatMap { it.visits } + (e.reread?.visits ?: emptyList()) + e.support
         val presence = e.episodes.mapNotNull { it.presenceRecovery }
         choose(ReadingAidType.FOCUS_REGION, anchor(c, e.support.line), strength,
             (supports.map { it.firstCaptureMs } + presence.map { it.firstCaptureMs }).minOrNull()!!,
@@ -494,8 +505,9 @@ class ReadingAidPolicy(
             maxOf(e.support.evidenceAvailableMs, presence.maxOfOrNull { it.confirmedDeliveryMs } ?: 0.0,
                 e.alternations.maxOfOrNull { it.confirmedDeliveryMs } ?: 0.0), e.cycleEventIds,
             e.episodes.map { it.episodeId } + supports.map { it.evidenceId },
-            e.ruleId, listOf("EB15", "N23", "S14"),
-            "Observable interruption/line-alternation assistance; trigger, frequency dose and phone benefit are experimental, without an attention diagnosis.",
+            e.ruleId, if (e.reread != null) listOf("MV11", "S14") else listOf("EB15", "N23", "S14"),
+            if (e.reread != null) "MV11 whole-sentence rereading association under manipulated syntax; online coarse rereading prefix, focus response and timing remain pilot choices."
+            else "Observable interruption/line-alternation assistance; trigger, frequency dose and phone benefit are experimental, without an attention diagnosis.",
             c, out, focusEvidence = e)
     }
 
@@ -534,7 +546,141 @@ class ReadingAidPolicy(
         focus.currentEvidence(c, preferences) != null &&
         active[ReadingAidType.FOCUS_REGION]?.let { fullyVisible(it.anchor.line, c) } == true
 
+    /** V5 supports aids from a separate stabilized location stream; extractor events stay descriptive. */
+    private fun prepareV5(c: ReadingAidContext): List<ReadingAidDecision> {
+        val out = mutableListOf<ReadingAidDecision>()
+        val next = c.generation to c.geometrySnapshotId
+        if (epoch != null && epoch != next) {
+            val sameArticle = epoch!!.first == next.first
+            focus.invalidateReread()
+            if (sameArticle) focus.pause()
+            clearAll(c.nowMs, "generation_or_geometry_changed", out)
+            resetEvidence(preserveFocus = sameArticle)
+            seenEvents.clear()
+        }
+        epoch = next
+        if (!config.automaticRulesEnabled || !preferences.enabled || preferences.maxStrength == 0.0 ||
+            (!preferences.adaptiveStrength && preferences.manualStrength == 0.0) ||
+            !c.bookmarkInputAllowed || !c.focusInputAllowed || !continuationGeometryValid(c)) {
+            clearAll(c.nowMs, "operational_or_geometry_boundary", out)
+            location.reset(); bookmark.reset(); bookmarkPreciseSupport = null
+            if (!preferences.enabled || preferences.maxStrength == 0.0 ||
+                (!preferences.adaptiveStrength && preferences.manualStrength == 0.0)) focus.reset() else focus.pause()
+            return out
+        }
+        val update = location.update(c, c.locationUncertainty, c.targetWordBounds)
+        val visit = update.current
+        val mapperSample = c.presentationSample
+        val bookmarkMapperUsable = c.validLiveInput && mapperSample?.eligible == true && mapperSample.exclusion == null
+        if (update.fresh && !bookmarkMapperUsable) {
+            bookmarkPreciseSupport = null
+            bookmark.interruptTransition()
+        }
+        val supported = c.copy(targetLine = visit?.band?.representativeLine ?: c.targetLine,
+            validLiveInput = update.fresh || visit != null)
+        if (cFocusAllowed(c)) focus.input(supported) else {
+            focus.reset(); clear(ReadingAidType.FOCUS_REGION, c.nowMs, "reader_disabled_focus", out, false)
+        }
+        if (allowed(ReadingAidType.READING_BOOKMARK))
+            applyBookmark(bookmark.input(supported, config.maxEvidenceAgeMs, config.bookmarkTrackingLossMs), supported, out)
+        else { bookmark.reset(); bookmarkPreciseSupport = null
+            clear(ReadingAidType.READING_BOOKMARK, c.nowMs, "reader_disabled_bookmark", out, false) }
+        if (update.fresh && visit != null) {
+            val value = visit.continuation()
+            // The single-line bookmark requires agreement with the exact line mapper;
+            // coarse nearest-row support alone must not silently become a precise marker.
+            if (allowed(ReadingAidType.READING_BOOKMARK) && bookmarkMapperUsable && mapperSample?.line == value.line) {
+                val prior = bookmarkPreciseSupport
+                val preciseId = "bookmark:${value.evidenceId}"
+                val sameVisit = prior != null && prior.evidenceId == preciseId && prior.segment == value.segment &&
+                    value.lastCaptureMs - prior.lastCaptureMs in 0.0..supportDetector.maxSampleGapMs
+                // An accepted interval starts at its first accepted observation; a long
+                // coarse visit cannot backfill time across rejected mapper observations.
+                val precise = value.copy(evidenceId = preciseId,
+                    firstCaptureMs = if (sameVisit) prior!!.firstCaptureMs else value.lastCaptureMs)
+                bookmarkPreciseSupport = precise
+                applyBookmark(bookmark.support(precise, supported), supported, out)
+            } else if (allowed(ReadingAidType.READING_BOOKMARK)) {
+                bookmarkPreciseSupport = null
+                bookmark.interruptTransition()
+                if (bookmark.savedLine != value.line) bookmark.withholdUncertainSource()
+            }
+            if (cFocusAllowed(c)) {
+                focus.support(value, supported, preferences)
+                update.reread?.let { r ->
+                    focus.reread(ReadingAidRereadEvidence("reread:${r.visits.last().id}",
+                        r.visits.map { it.continuation() }, r.visits.minOf { it.band.firstLine },
+                        r.visits.maxOf { it.band.lastLine }, value.evidenceAvailableMs,
+                        r.measuredDistinguishability), supported)
+                }
+            }
+            chooseSupportedGuide(visit, update.searchWitnesses, supported, out)
+        }
+        update.wordResidence?.let { word ->
+            if (allowed(ReadingAidType.WORD_DEFINITION)) {
+                val value = ReadingAidContinuationEvidence("word:${word.startUtf16}:${word.firstCaptureMs}",
+                    visit?.segment ?: 0, word.line, word.firstCaptureMs, word.lastCaptureMs, word.evidenceAvailableMs)
+                choose(ReadingAidType.WORD_DEFINITION, anchor(c, word.line, word.startUtf16, word.endUtf16),
+                    1.0, word.firstCaptureMs, word.lastCaptureMs, word.evidenceAvailableMs,
+                    emptyList(), listOf(value.evidenceId), "A5_FRESH_WORD_RESIDENCE_V5", listOf("H16"),
+                    "H16 word-gaze features predicted self-reported word knowledge in a small desktop L2 sample; 1000 ms, exact phone mapping and lookup benefit are unvalidated pilot choices.",
+                    c, out, continuationEvidence = listOf(value), wordConfidence = word.confidenceProvenance)
+            }
+        }
+        if (cFocusAllowed(c)) {
+            if (focus.displaySupported(c.nowMs)) applyFocus(focus.currentEvidence(supported, preferences), supported, out)
+            else clear(ReadingAidType.FOCUS_REGION, c.nowMs, "no_fresh_focus_support", out, false)
+        }
+        for ((type, action) in active.toMap()) {
+            if (!allowed(type)) clear(type, c.nowMs, "reader_disabled_aid", out, false)
+            else if (c.nowMs >= action.expiresMs) expire(type, c.nowMs, out)
+        }
+        return out
+    }
+
+    private fun ReadingSupportedVisit.continuation() = ReadingAidContinuationEvidence(id, segment,
+        band.representativeLine, firstCaptureMs, lastCaptureMs, evidenceAvailableMs)
+
+    private fun chooseSupportedGuide(visit: ReadingSupportedVisit, search: List<ReadingSupportedVisit>,
+        c: ReadingAidContext, out: MutableList<ReadingAidDecision>) {
+        if (!preferences.lineGuide) return
+        val g = c.geometry ?: return
+        val sentence = preferences.guideStyle == ReadingGuideStyle.SENTENCE
+        val type = if (sentence) ReadingAidType.CURRENT_SENTENCE else ReadingAidType.CURRENT_LINE
+        val row = g.lines[visit.band.representativeLine]
+        val lineRange = ReadingGuideRange(row.startUtf16, row.endUtf16, ReadingGuideUnit.LINE)
+        // Owner-selected single-line presentation; uncertainty remains explicit in guideEvidence.
+        // The separate sentence preference still selects text context when available.
+        val range = if (sentence) c.guideRange ?: lineRange else lineRange
+        if (range.endUtf16 <= range.startUtf16) return
+        clear(if (sentence) ReadingAidType.CURRENT_LINE else ReadingAidType.CURRENT_SENTENCE,
+            c.nowMs, "guide_style_changed", out, false)
+        val prior = active[type]
+        val started = prior?.guideEvidence?.presentationStartedMs ?: c.nowMs
+        // This is a support-time ramp, never a probability of difficulty.
+        val searchId = search.takeIf { it.isNotEmpty() }?.joinToString("|") { it.id }
+        if (searchId != null && searchId != guideSearchId) {
+            guideSearchId = searchId; guideSearchUntil = c.nowMs + 1500.0
+        }
+        val emphasisedSearch = search.isNotEmpty() && c.nowMs < guideSearchUntil
+        val opacity = if (emphasisedSearch) .19 else .08 + .05 *
+            ((visit.lastCaptureMs - visit.firstCaptureMs) / 1500.0).coerceIn(0.0, 1.0)
+        val cappedOpacity = minOf(opacity, .19 * preferences.maxStrength,
+            if (preferences.adaptiveStrength) .19 else .19 * preferences.manualStrength)
+        val evidence = ReadingAidGuideEvidence(visit.band.firstLine, visit.band.lastLine,
+            visit.band.provenance, visit.band.measured, visit.evidenceAvailableMs, started,
+            cappedOpacity, search.map { it.id })
+        choose(type, anchor(c, visit.band.representativeLine), cappedOpacity / .19,
+            visit.firstCaptureMs, visit.lastCaptureMs, visit.evidenceAvailableMs,
+            emptyList(), (search.map { it.id } + visit.id).distinct(),
+            if (!emphasisedSearch) "A1_SUPPORTED_LOCATION_GUIDE_V5" else "A1_MEASURED_SEPARATE_SEARCH_V5",
+            listOf("W23"), "W23 measured line searching and proposed line support; this guide is available for supported ordinary reading. Phone selection, gray opacity and all timing remain pilot choices.",
+            c, out, continuationEvidence = (search + visit).distinctBy { it.id }.map { it.continuation() },
+            guideRange = range, guideEvidence = evidence)
+    }
+
     private fun prepare(c: ReadingAidContext): List<ReadingAidDecision> {
+        if (config.evidenceAlignedV5) return prepareV5(c)
         val out = mutableListOf<ReadingAidDecision>()
         val next = c.generation to c.geometrySnapshotId
         if (epoch != null && epoch != next) {
@@ -656,7 +802,9 @@ class ReadingAidPolicy(
                        continuationEvidence: List<ReadingAidContinuationEvidence> = emptyList(),
                        bookmarkEvidence: ReadingAidBookmarkEvidence? = null,
                        guideRange: ReadingGuideRange? = null,
-                       focusEvidence: ReadingAidFocusEvidence? = null) {
+                       focusEvidence: ReadingAidFocusEvidence? = null,
+                       guideEvidence: ReadingAidGuideEvidence? = null,
+                       wordConfidence: String? = null) {
         if (!allowed(type) || preferences.maxStrength == 0.0 ||
             (!preferences.adaptiveStrength && preferences.manualStrength == 0.0)) return
         if (type != ReadingAidType.READING_BOOKMARK && !(currentGuideProfile() && type == ReadingAidType.FOCUS_REGION) && c.nowMs < (cooldownUntil[type] ?: Double.NEGATIVE_INFINITY)) {
@@ -674,7 +822,9 @@ class ReadingAidPolicy(
         if ((type == ReadingAidType.WORD_MAGNIFIER ||
                 (type == ReadingAidType.WORD_DEFINITION && !currentGuideProfile())) && active.containsKey(ReadingAidType.FOCUS_REGION))
             clear(ReadingAidType.FOCUS_REGION, c.nowMs, "word_magnifier_priority", out)
-        val strength = if (type in listOf(ReadingAidType.NEXT_LINE_START, ReadingAidType.READING_BOOKMARK)) 1.0
+        val strength = if (guideEvidence != null) min(preferences.maxStrength,
+            if (preferences.adaptiveStrength) targetStrength else preferences.manualStrength)
+            else if (type in listOf(ReadingAidType.NEXT_LINE_START, ReadingAidType.READING_BOOKMARK)) 1.0
             else if (focusEvidence != null) min(preferences.maxStrength,
                 if (preferences.adaptiveStrength) focusEvidence.initialStrength else preferences.manualStrength) *
                 focusEvidence.recoveryFactor
@@ -687,7 +837,8 @@ class ReadingAidPolicy(
             (old.anchor == anchor || (type == ReadingAidType.CURRENT_SENTENCE &&
                 old.anchor.generation == anchor.generation &&
                 old.anchor.geometrySnapshotId == anchor.geometrySnapshotId &&
-                old.guideRange == guideRange)) && old.focusEvidence == focusEvidence) return
+                old.guideRange == guideRange)) && old.focusEvidence == focusEvidence &&
+            old.guideEvidence == guideEvidence) return
         if (old != null) clear(type, c.nowMs, "replaced", out, applyCooldown = false)
         val action = ReadingAidAction("aid:${++serial}", type,
             when (type) {
@@ -703,9 +854,12 @@ class ReadingAidPolicy(
             if (type == ReadingAidType.WORD_MAGNIFIER) 1.0 +
                 (config.maxMagnificationScale - 1.0) * strength else null,
             if (type == ReadingAidType.FOCUS_REGION) config.focusContextRadiusLines else null,
-            c.nowMs, if (type == ReadingAidType.READING_BOOKMARK || focusEvidence != null) Double.MAX_VALUE else c.nowMs + config.aidTtlMs, events, evidence,
+            guideEvidence?.presentationStartedMs ?: c.nowMs,
+            if (type == ReadingAidType.READING_BOOKMARK || focusEvidence != null) Double.MAX_VALUE
+            else if (guideEvidence != null) guideEvidence.lastSupportedDeliveryMs + guideEvidence.lossGraceMs + guideEvidence.exitMs
+            else c.nowMs + config.aidTtlMs, events, evidence,
             first, last, available, rule, sources, relationship, true, config.configId, continuationEvidence, bookmarkEvidence, guideRange, focusEvidence,
-            focusStyle = focusStyle)
+            focusStyle = focusStyle, guideEvidence = guideEvidence, wordConfidence = wordConfidence)
         active[type] = action
         out.add(ReadingAidDecision(ReadingAidDecisionStatus.CHOSEN, action, "rule_matched", c.nowMs,
             events, rule, sources))
@@ -764,6 +918,9 @@ class ReadingAidPolicy(
     }
 
     private fun resetEvidence(preserveBookmark: Boolean = false, preserveFocus: Boolean = false) {
+        if (config.evidenceAlignedV5) location.reset()
+        bookmarkPreciseSupport = null
+        guideSearchId = null; guideSearchUntil = Double.NEGATIVE_INFINITY
         if (preserveFocus) focus.interruptReading() else focus.reset()
         if (!preserveBookmark) bookmark.reset() else bookmark.interruptTransition()
         wordVisit = null; cycle = null; lineResidence = null; segment = null

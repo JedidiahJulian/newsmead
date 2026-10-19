@@ -1270,7 +1270,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         stopScanpathSession("provider_replaced")
         scanpathCounts.clear()
         val aids = readingAidOverlay?.let { ArticleReadingAidRuntime(binding.tvArticleText,
-            binding.readingAidWordDock, it, config = ReadingAidPolicyConfig.definitionPrototype()
+            binding.readingAidWordDock, it, config = ReadingAidPolicyConfig.evidenceAlignedPrototype()
                 .copy(conditionId = "SMOOTHED_ARTICLE_CONTENT_AIDS_V11"),
             preferences = aidPreferences, definitionPopup = definitionPopup,
             coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED, blinkFilterEnabled = true,

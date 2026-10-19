@@ -217,7 +217,7 @@ class ScanpathPilotActivity : AppCompatActivity() {
         val condition = if (reading) settings.readingCondition else PilotReadingCondition.NO_AIDS
         val prefs = if (condition == PilotReadingCondition.NO_AIDS) settings.preferences.copy(enabled = false) else settings.preferences
         runtime = ArticleReadingAidRuntime(binding.pilotBody, binding.pilotWordDock, overlay,
-            ReadingAidPolicyConfig.definitionPrototype().copy(conditionId = "SMOOTHED_PILOT_DEFINITION_${condition.name}_V10"), prefs,
+            ReadingAidPolicyConfig.evidenceAlignedPrototype().copy(conditionId = "SMOOTHED_PILOT_EVIDENCE_${condition.name}_V11"), prefs,
             if (synthetic) ReadingAidInputSource.SYNTHETIC_REPLAY else ReadingAidInputSource.LIVE_MGAZENET,
             onDecision = { d -> log?.decision(d); if (d.status == ReadingAidDecisionStatus.CHOSEN) d.action?.let { chosen.add(it.aidType.name) } },
             onRenderReceipt = { a, visible, reason, at -> log?.render(a, visible, reason, at); if (visible) drawn.add(a.aidType.name) },

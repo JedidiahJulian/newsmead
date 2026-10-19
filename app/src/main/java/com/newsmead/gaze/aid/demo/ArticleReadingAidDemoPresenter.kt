@@ -14,6 +14,9 @@ import com.newsmead.gaze.aid.ReadingAidOverlayView
 import com.newsmead.gaze.aid.ReadingAidType
 import com.newsmead.gaze.aid.ReadingGuideResolver
 import com.newsmead.gaze.aid.ReadingGuideStyle
+import com.newsmead.gaze.aid.ReadingGuideRange
+import com.newsmead.gaze.aid.ReadingGuideUnit
+import com.newsmead.gaze.aid.ReadingAidGuideEvidence
 import com.newsmead.gaze.aid.ReadingFocusAppearance
 import com.newsmead.gaze.aid.ReadingFocusStyle
 import com.newsmead.gaze.scanpath.ScanpathGeometry
@@ -111,8 +114,13 @@ internal class ArticleReadingAidDemoPresenter(
         val at = SystemClock.elapsedRealtimeNanos() / 1e6
         val selectedType = if (stage.type == ReadingAidType.CURRENT_LINE && guideStyle == ReadingGuideStyle.SENTENCE)
             ReadingAidType.CURRENT_SENTENCE else stage.type
+        val firstGuideLine = line
+        val lastGuideLine = line
         val guideRange = if (selectedType == ReadingAidType.CURRENT_SENTENCE)
-            ReadingGuideResolver().resolve(originalBody, geometry, line) else null
+            ReadingGuideResolver().resolve(originalBody, geometry, line)
+        else if (selectedType == ReadingAidType.CURRENT_LINE) ReadingGuideRange(
+            geometry!!.lines[firstGuideLine].startUtf16, geometry!!.lines[lastGuideLine].endUtf16,
+            ReadingGuideUnit.LINE) else null
         val type = selectedType?.takeUnless {
             (it == ReadingAidType.FOCUS_REGION && !focusAvailable) ||
                 (it == ReadingAidType.CURRENT_SENTENCE && guideRange == null)
@@ -133,8 +141,11 @@ internal class ArticleReadingAidDemoPresenter(
                 wordEnd.takeIf { it >= 0 && (type == ReadingAidType.WORD_DEFINITION || type == ReadingAidType.WORD_MAGNIFIER) }), stage.strength, null,
                 if (it == ReadingAidType.FOCUS_REGION) 2 else null,
                 at, at + ReadingAidDemoPlan.STAGE_MS, emptyList(), emptyList(), at, at, at,
-                "DEMO_BUTTON_OR_TIMER", emptyList(), "Manufactured presentation; no detector evidence", true, "DEMO_GUIDE_V2",
+                "DEMO_BUTTON_OR_TIMER", emptyList(), "Manufactured presentation; no detector evidence", true, "DEMO_EVIDENCE_ALIGNED_V5",
                 guideRange = guideRange,
+                guideEvidence = if (type == ReadingAidType.CURRENT_LINE || type == ReadingAidType.CURRENT_SENTENCE)
+                    ReadingAidGuideEvidence(firstGuideLine, lastGuideLine, "manufactured_single_line_preview_not_measurement", false,
+                        at + ReadingAidDemoPlan.STAGE_MS, at, .08) else null,
                 focusStyle = focusStyle.takeIf { type == ReadingAidType.FOCUS_REGION })
         }
         overlay.setActions(body, geometry, generation, listOfNotNull(activeAction))

@@ -22,9 +22,9 @@ object ScanpathReplayScenarios {
             setOf("P08"), setOf("CURRENT_LINE", "NEXT_LINE_START")),
         ReplayScenario("continuation_skip", "Unexpected skip", "Beginning-to-end source progress, followed by a nonadjacent later-line landing.",
             setOf("P06"), setOf("CURRENT_LINE", "NEXT_LINE_START")),
-        ReplayScenario("bookmark_return", "Bookmark after a backward jump", "Stable source line, earlier-line landing, then return to the saved source line.",
+        ReplayScenario("bookmark_return", "Backward jump without departure", "Stable source line, earlier-line landing, then return. Current assistance should not create a bookmark from this alone; older profiles retain their comparison trigger.",
             setOf("P08"), setOf("CURRENT_LINE", "READING_BOOKMARK")),
-        ReplayScenario("bookmark_skip", "Bookmark after a forward jump", "Stable source line, nonadjacent later-line landing, then return to the saved source line.",
+        ReplayScenario("bookmark_skip", "Forward jump without departure", "Stable source line, nonadjacent later-line landing, then return. Current assistance should not create a bookmark from this alone; older profiles retain their comparison trigger.",
             setOf("P06"), setOf("CURRENT_LINE", "READING_BOOKMARK")),
         ReplayScenario("bookmark_lookaway", "Bookmark after looking away", "Stable reading line, sustained coordinates outside the article, then return to the saved line.",
             setOf("P13"), setOf("CURRENT_LINE", "READING_BOOKMARK")),
@@ -37,6 +37,8 @@ object ScanpathReplayScenarios {
         ReplayScenario("interruption_place_search", "Return while searching for place", "Three no-face gaps followed by moving coordinates across visible lines; article presence activates focus before a final stable hold.",
             setOf("P13"), setOf("CURRENT_LINE", "FOCUS_REGION")),
         ReplayScenario("line_alternation", "Supported line alternation", "Four supported A–B–A–B visits over more than two seconds, ending during the ongoing fourth visit; Controls select focus.",
+            setOf("P08"), setOf("CURRENT_LINE", "FOCUS_REGION")),
+        ReplayScenario("broad_reread", "Broad passage rereading", "Stabilized A → later B → A → next row → continued forward rereading. Online prefix; no difficulty diagnosis.",
             setOf("P08"), setOf("CURRENT_LINE", "FOCUS_REGION")),
         ReplayScenario("word_refixations", "Word refixations and residence", "Separated positions inside one wide word, followed by ongoing observed residence.",
             setOf("P04", "P12"), setOf("CURRENT_LINE", "WORD_MAGNIFIER")),
@@ -178,9 +180,9 @@ object ScanpathReplayScenarios {
                         ?: impossible("need one fully visible source line")
                     hold(center(source))
                     val outside = (v.left + v.right) / 2 to v.top - max(2.0, geometry.lineHeightPx)
-                    for (dt in 0..300 step 50)
+                    for (dt in 0..650 step 50)
                         out.add(ReplayPoint(time + dt, outside.first, outside.second, false))
-                    time += 350
+                    time += 700
                     hold(center(source), 350)
                 } else {
                     val pair = visibleRows.keys.firstNotNullOfOrNull { source ->
@@ -220,6 +222,17 @@ object ScanpathReplayScenarios {
                     time += 350
                 }
                 hold(center(path.first), 350)
+            }
+            "broad_reread" -> {
+                val rows = usable.groupBy { it.line }.filter { (line, _) ->
+                    val row = geometry.lines[line]
+                    geometry.textOriginY + row.top >= v.top && geometry.textOriginY + row.bottom <= v.bottom
+                }.toSortedMap()
+                val group = rows.keys.toList().windowed(4).firstOrNull { it.last() - it.first() == 3 }
+                    ?: impossible("need four consecutive fully visible rows for broad rereading")
+                listOf(group[0], group[3], group[0], group[1], group[2]).forEach {
+                    hold(center(rows.getValue(it).first()), 600)
+                }
             }
             "line_alternation" -> {
                 val visible = usable.filter { w ->

@@ -98,7 +98,11 @@ class ReadingAidOverlayView(
             it.anchor.generation == generation && it.anchor.geometrySnapshotId == before?.snapshotId }
         if (!translationCompatible || (!previousFocusActive && focusHold?.let { it.untilMs > now } != true) ||
             (nextStyle != null && nextStyle != focusOnset.style)) clearFocusScrollHold()
-        if (freshFocus != null) { focusHold = null; heldReceipts.clear(); focusOnset.select(nextStyle) }
+        if (freshFocus != null) {
+            focusHold = null; heldReceipts.clear()
+            focusOnset.animateAllStyles = freshFocus.configId in setOf("EVIDENCE_ALIGNED_V5", "DEMO_EVIDENCE_ALIGNED_V5")
+            focusOnset.select(nextStyle)
+        }
         else if (translationCompatible && allowFocusScrollHold && ReadingFocusMotion.translated(before!!, snapshot!!)) {
             val existing = focusHold?.takeIf { it.untilMs > now }
             val source = existing?.source ?: lastFocus?.takeIf {
@@ -153,6 +157,12 @@ class ReadingAidOverlayView(
             if (top >= bottom) { receipt(action, false, "anchor_not_visible", now); continue }
             val left = visible.left.toFloat() - origin[0]
             val right = visible.right.toFloat() - origin[0]
+            if (isBackgroundGuide(action) && action.guideEvidence?.let {
+                    (255 * it.opacityAt(now)).roundToInt() <= 0 } == true) {
+                animateGuide(action, view, now)
+                receipt(action, false, "guide_animation_alpha_zero", now)
+                continue
+            }
             when (action.aidType) {
                 ReadingAidType.CURRENT_LINE -> {
                     if (action.aidFormId != "CURRENT_LINE_HIGHLIGHT_GRAY_V1") {
@@ -162,10 +172,11 @@ class ReadingAidOverlayView(
                     } else if (!guideSpanDrawEligible(action)) {
                         receipt(action, false, "guide_background_unavailable", now); continue
                     }
+                    animateGuide(action, view, now)
                 }
                 ReadingAidType.CURRENT_SENTENCE -> if (!guideSpanDrawEligible(action)) {
                     receipt(action, false, "guide_background_unavailable", now); continue
-                }
+                } else animateGuide(action, view, now)
                 ReadingAidType.NEXT_LINE_START, ReadingAidType.READING_BOOKMARK -> {
                     paint.color = Color.argb(LineStartMarkerAppearance.ALPHA, 44, 128, 220)
                     val textStart = (g.textOriginX + row.left - origin[0]).toFloat()
@@ -202,9 +213,14 @@ class ReadingAidOverlayView(
                     if (appearance == null) {
                         receipt(action, false, focus.withheldReason!!, now); continue
                     }
-                    val target = ReadingFocusMotion.Band(appearance.clearTop, appearance.clearBottom)
-                    val band = if (v4) focusMotion.move(target,
-                        ReadingFocusMotion.Band(top, bottom), now) else target
+                    // Keep the entire reread passage plus a neighbouring row clear, even
+                    // during movement. Offscreen passage rows do not expand the viewport.
+                    val target = ReadingFocusContext.protect(
+                        ReadingFocusMotion.Band(appearance.clearTop, appearance.clearBottom), g,
+                        action.focusEvidence?.reread, appearance.viewport.top, appearance.viewport.bottom)
+                    val anchorBand = ReadingFocusContext.protect(ReadingFocusMotion.Band(top, bottom), g,
+                        action.focusEvidence?.reread, appearance.viewport.top, appearance.viewport.bottom)
+                    val band = if (v4) focusMotion.move(target, anchorBand, now) else target
                     val style = action.focusStyle ?: ReadingFocusStyle.FADE_TEXT
                     if (v4) { presentingFocus = true; focusOnset.select(style) }
                     val alpha = if (v4) (appearance.alpha * focusOnset.fraction(now)).roundToInt() else appearance.alpha
@@ -246,7 +262,9 @@ class ReadingAidOverlayView(
                 if (appearance != null) {
                     // Presentation stays in screen space while the article passes through it.
                     // The nearby row above is only an availability check, never a gaze anchor.
-                    val band = ReadingFocusMotion.fitPinnedBand(hold.band,
+                    val pinned = ReadingFocusMotion.fitPinnedBand(hold.band,
+                        appearance.viewport.top, appearance.viewport.bottom)
+                    val band = ReadingFocusContext.protect(pinned, g, hold.source.focusEvidence?.reread,
                         appearance.viewport.top, appearance.viewport.bottom)
                     val shadedHeight = (band.top - appearance.viewport.top) +
                         (appearance.viewport.bottom - band.bottom)
@@ -327,7 +345,11 @@ class ReadingAidOverlayView(
         // Appearance spans leave text, UTF-16 offsets, font metrics and wrapping intact.
         // Convert the buffer once; subsequent updates add/remove only our own span.
         if (view.text !is Spannable) view.setText(SpannableString(view.text), TextView.BufferType.SPANNABLE)
-        val span = GuideBackgroundSpan(Color.argb((80 * action.strength.coerceIn(0.0, 1.0)).toInt(), 128, 128, 128)) {
+        val span = GuideBackgroundSpan({
+            val alpha = action.guideEvidence?.let { (255 * it.opacityAt(presentationClockMs())).roundToInt() }
+                ?: (80 * action.strength.coerceIn(0.0, 1.0)).toInt()
+            Color.argb(alpha, 128, 128, 128)
+        }) {
             guideSpanDrawEligible(action)
         }
         guideSpan = span
@@ -353,10 +375,18 @@ class ReadingAidOverlayView(
             abs(textLocation[1] + view.totalPaddingTop - view.scrollY - g.textOriginY) < 1
     }
 
-    private class GuideBackgroundSpan(private val color: Int, private val eligible: () -> Boolean) :
+    private fun animateGuide(action: ReadingAidAction, view: TextView, now: Double) {
+        val e = action.guideEvidence ?: return
+        if (now - e.presentationStartedMs < e.entryMs || now > e.lastSupportedDeliveryMs + e.lossGraceMs) {
+            view.postInvalidateOnAnimation()
+            postInvalidateOnAnimation()
+        } else postInvalidateDelayed((e.lastSupportedDeliveryMs + e.lossGraceMs - now).toLong().coerceAtLeast(1L))
+    }
+
+    private class GuideBackgroundSpan(private val color: () -> Int, private val eligible: () -> Boolean) :
         CharacterStyle(), UpdateAppearance {
         override fun updateDrawState(paint: TextPaint) {
-            if (eligible()) paint.bgColor = color
+            if (eligible()) paint.bgColor = color()
         }
     }
 

@@ -76,6 +76,42 @@ class ReadingAidDemoActivityTest {
                 originalText = a.findViewById<TextView>(R.id.replayBody).text.toString()
                 a.stepDemo(3)
                 assertEquals(3, a.demoStageIndex)
+                assertNull("Definition requires accepting its lookup offer", a.findViewById<View>(R.id.definitionWord))
+                assertNotNull(a.findViewById<View>(R.id.readingAidLookupOffer))
+            }
+            // The offer becomes actionable after layout/pre-draw; never wait on the main thread.
+            val deadline = SystemClock.elapsedRealtime() + 2000
+            var offerReady = false
+            while (!offerReady && SystemClock.elapsedRealtime() < deadline) {
+                idle()
+                scenario.onActivity { a ->
+                    val offer = a.findViewById<View>(R.id.readingAidLookupOffer)
+                    offerReady = offer != null && offer.isShown && offer.width > 0 && offer.height > 0
+                }
+                if (!offerReady) Thread.sleep(25)
+            }
+            assertTrue("Demo lookup offer did not lay out within 2 seconds", offerReady)
+            idle()
+            scenario.onActivity { a ->
+                assertTrue(a.findViewById<View>(R.id.readingAidLookupOffer).performClick())
+            }
+            // Allow posted popup rendering and dictionary completion before checking the contents.
+            var definitionReady = false
+            while (!definitionReady && SystemClock.elapsedRealtime() < deadline) {
+                idle()
+                scenario.onActivity { a ->
+                    val word = a.findViewById<TextView>(R.id.definitionWord)?.text?.toString()
+                    val entry = word?.let(OfflineWordDefinitions::lookup)
+                    definitionReady = entry != null &&
+                        a.findViewById<TextView>(R.id.definitionMeaning)?.text?.toString() == entry.meanings &&
+                        a.findViewById<TextView>(R.id.definitionSource)?.text?.contains(entry.attribution) == true
+                }
+                if (!definitionReady) Thread.sleep(25)
+            }
+            assertTrue("Accepted lookup did not publish its offline definition within 2 seconds", definitionReady)
+            scenario.onActivity { a ->
+                assertEquals(3, a.demoStageIndex)
+                assertNull(a.findViewById<View>(R.id.readingAidLookupOffer))
                 val word = a.findViewById<TextView>(R.id.definitionWord).text.toString()
                 val entry = checkNotNull(OfflineWordDefinitions.lookup(word))
                 assertTrue("Popup uses a real source word", originalText.contains(word))

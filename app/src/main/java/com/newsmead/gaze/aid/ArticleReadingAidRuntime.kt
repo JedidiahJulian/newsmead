@@ -39,6 +39,8 @@ class ArticleReadingAidRuntime(
     private val onDefinitionOffer: (ReadingAidAction, String, Double) -> Unit = { _, _, _ -> },
     private val blinkFilterEnabled: Boolean = false,
     private val motionCompensatedAids: Boolean = false,
+    /** Optional separately measured screen-pixel error bound for this calibration/device. */
+    private val measuredLocationUncertainty: ReadingLocationUncertainty? = null,
 ) {
     val scanpathConfig = ScanpathConfig(returnSweepStartFraction = 0.25, returnSweepEndFraction = 0.75,
         wordResidenceMs = config.wordMinObservedMs, lineResidenceMs = config.lineMinObservedMs,
@@ -200,7 +202,9 @@ class ArticleReadingAidRuntime(
                 ?: sample.processingX,
             rawSample = sample, bookmarkInputAllowed = interpretationAllowed,
             guideRange = if (valid) guideResolver.resolve(body.text.toString(), snapshot, sample.line) else null,
-            focusInputAllowed = interpretationAllowed, focusTextSizeDp = renderedFontDp())
+            focusInputAllowed = interpretationAllowed, focusTextSizeDp = renderedFontDp(),
+            locationUncertainty = measuredLocationUncertainty,
+            targetWordBounds = wordBounds(sample.line, sample.wordStartUtf16, sample.wordEndUtf16))
         if (valid) definitionPopup?.observeReadingTarget(generation.toLong(), sample.wordStartUtf16, sample.wordEndUtf16)
         val dismissed = dismissedDefinitionAnchor
         if (valid && dismissed != null && (dismissed.generation != generation.toLong() ||
@@ -215,7 +219,7 @@ class ArticleReadingAidRuntime(
                 .put("processing_y_px", sample.processingY?.takeIf { it.isFinite() } ?: JSONObject.NULL)
                 .put("exclusion", sample.exclusion).put("article_eligible", false))
         // Clear before an invalid observation can flush the earlier candidate and its events.
-        if (!valid) decisions(policy.onObservation(null, context))
+        if (!valid || config.evidenceAlignedV5) decisions(policy.onObservation(null, context))
     }
 
     fun fixation(generation: Int, value: ScanpathFixation) {
@@ -311,6 +315,20 @@ class ArticleReadingAidRuntime(
     }
     private fun renderedFontDp(): Double =
         body.textSize.toDouble() / body.resources.displayMetrics.density.toDouble()
+
+    /** Layout measurement occurs at input, never from an appearance-span draw callback. */
+    private fun wordBounds(line: Int?, start: Int?, end: Int?): com.newsmead.gaze.scanpath.ScanpathRect? {
+        val g = snapshot ?: return null
+        val layout = body.layout ?: return null
+        if (line == null || start == null || end == null || start < 0 || end <= start ||
+            end > body.text.length || line !in g.lines.indices ||
+            layout.getLineForOffset(start) != line || layout.getLineForOffset(end - 1) != line) return null
+        val a = layout.getPrimaryHorizontal(start).toDouble() + g.textOriginX
+        val b = layout.getPrimaryHorizontal(end).toDouble() + g.textOriginX
+        val row = g.lines[line]
+        return com.newsmead.gaze.scanpath.ScanpathRect(minOf(a, b), g.textOriginY + row.top,
+            maxOf(a, b), g.textOriginY + row.bottom)
+    }
     fun activeActions(): List<ReadingAidAction> = policy.activeActions()
 
     private fun decisions(values: List<ReadingAidDecision>) {
@@ -318,7 +336,7 @@ class ArticleReadingAidRuntime(
         values.forEach { trace.decision(it); onDecision(it) }
         recordFocusStatus()
         val actions = if (closed || suspended || consulting || !renderAids) emptyList() else policy.activeActions()
-        overlay.allowFocusScrollHold = config.configId == "DEFINITION_PROFILE_V4" && renderAids &&
+        overlay.allowFocusScrollHold = (config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5) && renderAids &&
             !closed && !suspended && !consulting && preferences.enabled && preferences.focusRegion &&
             preferences.maxStrength > 0.0 && (preferences.adaptiveStrength || preferences.manualStrength > 0.0)
         overlay.setActions(body, snapshot, context.generation, actions)
@@ -396,11 +414,17 @@ class ArticleReadingAidRuntime(
             .put("cycle_window_ms", config.cycleWindowMs)
             .put("aid_ttl_ms", config.aidTtlMs).put("cooldown_ms", config.cooldownMs)
             .put("max_evidence_age_ms", config.maxEvidenceAgeMs).put("min_adaptive_strength", config.minAdaptiveStrength)
-            .put("guide_selector_version", "TEXT_LINE_CONTEXT_V1")
-            .put("guide_ambiguity_fallback", "containing_paragraph_or_abstain")
-            .put("guide_color_rgb", if (config.configId == "DEFINITION_PROFILE_V4") "#808080" else "#F4D35E")
-            .put("guide_alpha_scale", 80)
-            .put("guide_layer", if (config.configId == "DEFINITION_PROFILE_V4") "text_background_span" else "canvas_overlay")
+            .put("guide_selector_version", if (config.evidenceAlignedV5) "STABILIZED_SINGLE_LINE_V5" else "TEXT_LINE_CONTEXT_V1")
+            .put("guide_ambiguity_fallback", if (config.evidenceAlignedV5) "single_stabilized_estimated_row_unvalidated" else "containing_paragraph_or_abstain")
+            .put("guide_measured_uncertainty_available", context.locationUncertainty != null)
+            .put("guide_color_rgb", if (config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5) "#808080" else "#F4D35E")
+            .put("guide_alpha_scale", if (config.evidenceAlignedV5) 255 else 80)
+            .put("guide_opacities", if (config.evidenceAlignedV5) org.json.JSONArray(listOf(.08, .13, .19)) else JSONObject.NULL)
+            .put("guide_entry_ms", if (config.evidenceAlignedV5) 150 else JSONObject.NULL)
+            .put("guide_loss_grace_ms", if (config.evidenceAlignedV5) 750 else JSONObject.NULL)
+            .put("guide_exit_ms", if (config.evidenceAlignedV5) 300 else JSONObject.NULL)
+            .put("word_confidence_basis", if (config.evidenceAlignedV5) "consistent_exact_mapping_and_word_bounds_not_validated_gaze_accuracy" else "extractor_prefix")
+            .put("guide_layer", if (config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5) "text_background_span" else "canvas_overlay")
             .put("max_magnification_scale", config.maxMagnificationScale).put("focus_context_radius_lines", config.focusContextRadiusLines)
             .put("continuation_start_fraction", config.continuationStartFraction)
             .put("continuation_end_fraction", config.continuationEndFraction)
@@ -410,15 +434,23 @@ class ArticleReadingAidRuntime(
                 "A2_LAST_READ_LINE_BOOKMARK_V2" else "A2_CONTINUATION_MISMATCH_V1")
             .put("line_start_marker_form", if (config.lineStartAidType == ReadingAidType.READING_BOOKMARK)
                 "LAST_READ_LINE_BOOKMARK_V1" else LineStartMarkerAppearance.FORM_ID)
-            .put("bookmark_outside_min_ms", scanpathConfig.minFixationMs)
+            .put("bookmark_outside_min_ms", if (config.evidenceAlignedV5) config.bookmarkTrackingLossMs else scanpathConfig.minFixationMs)
             .put("bookmark_outside_min_samples", scanpathConfig.minFixationSamples)
-            .put("bookmark_outside_max_gap_ms", scanpathConfig.maxSampleGapMs)
+            .put("bookmark_outside_max_gap_ms", if (config.evidenceAlignedV5) 250.0 else scanpathConfig.maxSampleGapMs)
             .put("bookmark_expiry_mode", "until_supported_reading_or_invalidation")
+            .put("bookmark_min_visible_ms", if (config.evidenceAlignedV5) 1500 else JSONObject.NULL)
+            .put("bookmark_return_support_ms", if (config.evidenceAlignedV5) 1000 else JSONObject.NULL)
+            .put("bookmark_elsewhere_support_ms", if (config.evidenceAlignedV5) 1500 else JSONObject.NULL)
+            .put("bookmark_max_age_ms", if (config.evidenceAlignedV5) 30000 else JSONObject.NULL)
             .put("bookmark_outside_geometry", "outside_visible_article_rect")
             .put("bookmark_tracking_loss_ms", config.bookmarkTrackingLossMs)
             .put("bookmark_tracking_loss_time_basis", "delivery_elapsed_time")
             .put("bookmark_tracking_loss_interpretation", "unavailable_gaze_not_attention_diagnosis")
-            .put("focus_rule_version", "FONT_AWARE_LINE_VISITS_V5_UNCHANGED_RETURN_PRESENCE")
+            .put("bookmark_line_jump_trigger", !config.evidenceAlignedV5)
+            .put("bookmark_source_requires_mapper_agreement", config.evidenceAlignedV5)
+            .put("focus_rule_version", if (config.evidenceAlignedV5) "BROAD_REREAD_PLUS_MIGRATION_ROUTES_V5" else "FONT_AWARE_LINE_VISITS_V5_UNCHANGED_RETURN_PRESENCE")
+            .put("focus_broad_reread_order", if (config.evidenceAlignedV5) "A_B_A_C_D:B>A;A<C<D<=B" else JSONObject.NULL)
+            .put("focus_broad_reread_window_ms", if (config.evidenceAlignedV5) 15000 else JSONObject.NULL)
             .put("focus_font_rule_version", ReadingFocusTypography.VERSION)
             .put("focus_text_size_dp", renderedFontDp())
             .put("focus_font_size_basis", "rendered_font_pixels_divided_by_display_density_including_system_font_scale")
@@ -437,7 +469,7 @@ class ArticleReadingAidRuntime(
             .put("focus_interruption_count_unit", "qualified_loss_and_confirmed_article_presence_return")
             .put("focus_return_presence_ms", config.focusReturnPresenceMs)
             .put("focus_return_min_samples", config.focusReturnMinSamples)
-            .put("focus_return_max_gap_ms", scanpathConfig.maxSampleGapMs)
+            .put("focus_return_max_gap_ms", if (config.evidenceAlignedV5) 250.0 else scanpathConfig.maxSampleGapMs)
             .put("focus_return_requires_line_or_word", false)
             .put("focus_base_strength", ReadingAidPolicyConfig.FOCUS_STRENGTH_STEP)
             .put("focus_strength_per_extra_episode", ReadingAidPolicyConfig.FOCUS_STRENGTH_STEP)
@@ -449,13 +481,13 @@ class ArticleReadingAidRuntime(
             .put("focus_alternation_count_unit", "four_nonoverlapping_supported_line_visits_including_ongoing_fourth")
             .put("focus_clear_window_max_viewport_fraction", JSONObject.NULL)
             .put("focus_clear_window_lines", 2 * config.focusContextRadiusLines + 1)
-            .put("focus_clear_window_min_lines", if (config.configId == "DEFINITION_PROFILE_V4") 4 else JSONObject.NULL)
-            .put("focus_clear_window_mode", if (config.configId == "DEFINITION_PROFILE_V4")
+            .put("focus_clear_window_min_lines", if (config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5) 4 else JSONObject.NULL)
+            .put("focus_clear_window_mode", if (config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5)
                 "five_preferred_four_if_five_leaves_no_surroundings" else "legacy_centered_radius")
-            .put("focus_veil_horizontal_bounds", if (config.configId == "DEFINITION_PROFILE_V4")
+            .put("focus_veil_horizontal_bounds", if (config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5)
                 "full_visible_overlay_width" else "visible_text_bounds")
-            .put("focus_form", if (config.configId == "DEFINITION_PROFILE_V4") "CONTEXT_FOCUS_REGION_V4" else "CONTEXT_FOCUS_REGION_V1")
-            .put("focus_mask_color", if (config.configId == "DEFINITION_PROFILE_V4") "per_action_focus_style" else "#000000")
+            .put("focus_form", if (config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5) "CONTEXT_FOCUS_REGION_V4" else "CONTEXT_FOCUS_REGION_V1")
+            .put("focus_mask_color", if (config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5) "per_action_focus_style" else "#000000")
             .put("focus_appearance_selector_version", "FOCUS_MASK_STYLE_V4_VISIBLE_SURROUNDINGS")
             .put("focus_max_surrounding_opacity", ReadingFocusAppearance.MAX_SURROUNDING_OPACITY)
             .put("focus_dark_onset_ms", ReadingFocusOnset.ONSET_MS)
@@ -475,7 +507,8 @@ class ArticleReadingAidRuntime(
             .put("focus_motion_ms", ReadingFocusMotion.TRANSITION_MS)
             .put("focus_scroll_presentation_grace_ms", ReadingFocusMotion.SCROLL_HOLD_MS)
             .put("focus_scroll_position_basis", "viewport_hold_during_translation_not_new_gaze_evidence")
-            .put("focus_steady_reading_time_basis", "eligible_ordered_capture_deltas_within_max_sample_gap")
+            .put("focus_steady_reading_time_basis", if (config.evidenceAlignedV5) "fresh_stabilized_supported_capture_tails_max_gap_250ms" else "eligible_ordered_capture_deltas_within_max_sample_gap")
+            .put("focus_all_styles_onset_ms", if (config.evidenceAlignedV5) ReadingFocusOnset.ONSET_MS else JSONObject.NULL)
             .put("focus_interpretation", "experimental_support_rule_not_distraction_probability")
             .put("line_start_marker_width_dp", LineStartMarkerAppearance.WIDTH_DP.toDouble())
             .put("line_start_marker_alpha", LineStartMarkerAppearance.ALPHA)
