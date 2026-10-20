@@ -2,6 +2,7 @@
     <item name="readingAidMenuEnabled" type="id" />
     <item name="readingAidMenuGuide" type="id" />
     <item name="readingAidMenuLine" type="id" />
+    <item name="readingAidMenuThreeLine" type="id" />
     <item name="readingAidMenuSentence" type="id" />
     <item name="readingAidMenuBookmark" type="id" />
     <item name="readingAidMenuDefinitions" type="id" />

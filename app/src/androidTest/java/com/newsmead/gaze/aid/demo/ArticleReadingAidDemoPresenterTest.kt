@@ -123,6 +123,27 @@ class ArticleReadingAidDemoPresenterTest {
         assertTrue(marker.evidenceIds.isEmpty())
     }
 
+    @Test fun threeLinePreviewUsesAvailableNeighborsAndKeepsSourceText() = fixture(guideStyle = ReadingGuideStyle.THREE_LINE) { body, presenter, _ ->
+        val original = body.text.toString()
+        presenter.start(); presenter.step(1)
+        val action = presenter.activeAction!!
+        assertEquals(ReadingAidType.CURRENT_LINE, action.aidType)
+        assertEquals("CURRENT_THREE_LINE_GUIDE_GRAY_V1", action.aidFormId)
+        val range = action.guideRange!!
+        assertEquals(com.newsmead.gaze.aid.ReadingGuideUnit.READING_BAND, range.unit)
+        val layout = body.layout
+        assertEquals(layout.getLineStart(maxOf(0, action.anchor.line - 1)), range.startUtf16)
+        assertEquals(layout.getLineEnd(minOf(layout.lineCount - 1, action.anchor.line + 1)), range.endUtf16)
+        val band = action.guideEvidence!!.threeLine!!
+        assertEquals(com.newsmead.gaze.aid.ReadingGuideDirection.BALANCED, band.direction)
+        assertEquals(.09, action.guideEvidence!!.opacity, .000001)
+        assertEquals(.09, band.aboveOpacity, .000001)
+        assertEquals(.09, band.belowOpacity, .000001)
+        assertEquals(original, body.text.toString())
+        assertNull(action.anchor.wordStartUtf16)
+        assertTrue(action.evidenceIds.isEmpty())
+    }
+
     @Test fun sentencePreviewUsesContextRangeWithoutWordAnchor() = fixture(guideStyle = ReadingGuideStyle.SENTENCE) { body, presenter, _ ->
         val original = body.text.toString()
         presenter.start(); presenter.step(1)

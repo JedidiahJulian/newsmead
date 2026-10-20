@@ -3,15 +3,20 @@ package com.newsmead.gaze.aid
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.drawable.ColorDrawable
 import android.os.SystemClock
+import android.text.Layout
 import android.text.Spannable
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.TextPaint
+import android.text.TextWatcher
+import android.text.Editable
 import android.text.style.CharacterStyle
 import android.text.style.UpdateAppearance
 import android.util.AttributeSet
@@ -40,6 +45,31 @@ class ReadingAidOverlayView(
     private var generation = -1L
     private var actions = emptyList<ReadingAidAction>()
     private var guideSpan: GuideBackgroundSpan? = null
+    private var lineBackground: ReadingLineGuideBackground? = null
+    private var lineAction: ReadingAidAction? = null
+    private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private data class GradientKey(val start: Double, val end: Double, val color: Int,
+        val fadeTop: Boolean, val fadeBottom: Boolean, val fadeFraction: Float)
+    private val gradients = mutableMapOf<GradientKey, Shader>()
+    private var threeLineValidatedRows: List<com.newsmead.gaze.scanpath.ScanpathLine>? = null
+    private var guideTextChanged = false
+    private var guideInvalidatedRows: List<com.newsmead.gaze.scanpath.ScanpathLine>? = null
+    private var guideDrawShape: List<Any?>? = null
+    private val guideTextWatcher = object : TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+            guideTextChanged = true
+            guideInvalidatedRows = geometry?.lines
+            threeLineValidatedLayout = null
+            threeLineMotion.clear()
+        }
+        override fun afterTextChanged(s: Editable?) = Unit
+    }
+    private val threeLineMotion = ReadingThreeLineGuideMotion()
+    private var threeLineDrawn = false
+    private var threeLineValidatedLayout: Layout? = null
+    internal var lineGuideLayoutValidationCount = 0
+        private set
     private val receipts = mutableSetOf<String>()
     var onRender: (ReadingAidAction, Boolean, String, Double) -> Unit = { _, _, _, _ -> }
     var onFocusScrollRender: (ReadingAidAction, String, Double, Double, Double) -> Unit = { _, _, _, _, _ -> }
@@ -70,6 +100,8 @@ class ReadingAidOverlayView(
 
     override fun onDetachedFromWindow() {
         clearFocusScrollHold()
+        clearGuideSpan()
+        threeLineMotion.clear()
         super.onDetachedFromWindow()
     }
 
@@ -78,17 +110,33 @@ class ReadingAidOverlayView(
         view.lineSpacingMultiplier, view.totalPaddingLeft, view.totalPaddingRight,
         view.totalPaddingTop, view.totalPaddingBottom, view.layout?.width, view.layout)
 
+    private fun drawShape(view: TextView): List<Any?> = listOf(view.text, view.width,
+        view.textSize, view.textScaleX, view.typeface, view.letterSpacing, view.lineSpacingExtra,
+        view.lineSpacingMultiplier, view.totalPaddingLeft, view.totalPaddingRight,
+        view.totalPaddingTop, view.totalPaddingBottom, view.layout?.width)
+
     init { isClickable = false; isFocusable = false }
 
     fun setActions(textView: TextView, snapshot: ScanpathGeometry?, epoch: Long,
                    value: List<ReadingAidAction>) {
-        if (body === textView && geometry === snapshot && generation == epoch && actions == value) return
+        if (body === textView && geometry === snapshot && generation == epoch && actions == value) {
+            if (lineAction != null) ensureLineBackground(textView)
+            return
+        }
         val now = presentationClockMs()
         val nextShape = shape(textView)
         val before = geometry
         val translationCompatible = body === textView && generation == epoch &&
             before != null && snapshot != null && bodyShape == nextShape &&
             ReadingFocusMotion.compatibleTranslation(before, snapshot)
+        val oldLineStyle = actions.firstOrNull(::isAnimatedLineGuide)?.aidFormId
+        val newLineStyle = value.firstOrNull(::isAnimatedLineGuide)?.aidFormId
+        // An equivalent Layout replacement while converting the text buffer is harmless.
+        // Actual reflow changes the body shape or physical row metrics and resets motion.
+        val threeLineCompatible = body === textView && generation == epoch && before != null && snapshot != null &&
+            bodyShape?.dropLast(1) == nextShape.dropLast(1) &&
+            ReadingFocusMotion.compatibleTranslation(before, snapshot)
+        if (!threeLineCompatible || oldLineStyle != newLineStyle) threeLineMotion.clear()
         val freshFocus = value.firstOrNull { it.aidType == ReadingAidType.FOCUS_REGION &&
             it.aidFormId == "CONTEXT_FOCUS_REGION_V4" && it.expiresMs > now &&
             it.anchor.generation == epoch && it.anchor.geometrySnapshotId == snapshot?.snapshotId }
@@ -165,7 +213,14 @@ class ReadingAidOverlayView(
             }
             when (action.aidType) {
                 ReadingAidType.CURRENT_LINE -> {
-                    if (action.aidFormId != "CURRENT_LINE_HIGHLIGHT_GRAY_V1") {
+                    if (isAnimatedLineGuide(action)) {
+                        if (!threeLineBackgroundDrawEligible(action)) {
+                            receipt(action, false, "guide_background_unavailable", now); continue
+                        }
+                        if (!threeLineDrawn) receipt(action, false, "guide_background_not_drawn", now)
+                        // Positive receipts originate only from the actual text-background callback.
+                        continue
+                    } else if (action.aidFormId != "CURRENT_LINE_HIGHLIGHT_GRAY_V1") {
                         paint.color = Color.argb((80 * action.strength).toInt(), 244, 211, 94)
                         canvas.drawRoundRect(RectF(left, top.toFloat() - origin[1], right,
                             bottom.toFloat() - origin[1]), dp(4f), dp(4f), paint)
@@ -313,7 +368,8 @@ class ReadingAidOverlayView(
     private fun articleBackground(view: TextView): Int {
         var ancestor: View? = view
         while (ancestor != null) {
-            val background = ancestor.background as? ColorDrawable
+            val drawable = ancestor.background
+            val background = (if (drawable is ReadingLineGuideBackground) drawable.base else drawable) as? ColorDrawable
             if (background != null && Color.alpha(background.color) == 255) return background.color
             ancestor = ancestor.parent as? View
         }
@@ -324,34 +380,107 @@ class ReadingAidOverlayView(
 
     private fun isBackgroundGuide(action: ReadingAidAction) =
         action.aidType == ReadingAidType.CURRENT_SENTENCE ||
-            action.aidFormId == "CURRENT_LINE_HIGHLIGHT_GRAY_V1"
+            action.aidFormId == "CURRENT_LINE_HIGHLIGHT_GRAY_V1" || isThreeLineGuide(action)
+
+    private fun isThreeLineGuide(action: ReadingAidAction) =
+        action.aidType == ReadingAidType.CURRENT_LINE && action.aidFormId == "CURRENT_THREE_LINE_GUIDE_GRAY_V1"
+
+    private fun isAnimatedLineGuide(action: ReadingAidAction) = isThreeLineGuide(action) ||
+        (action.aidType == ReadingAidType.CURRENT_LINE &&
+            action.aidFormId == "CURRENT_LINE_HIGHLIGHT_GRAY_V1" && action.guideEvidence != null)
+
+    private fun lineGuideTarget(action: ReadingAidAction): ReadingThreeLineGuideMotion.Appearance? {
+        val g = geometry ?: return null
+        val e = action.guideEvidence ?: return null
+        if (!isThreeLineGuide(action)) return ReadingThreeLineGuideMotion.singleLineTarget(g.lines, action.anchor.line, e.opacity)
+        val three = e.threeLine ?: return null
+        return ReadingThreeLineGuideMotion.target(g.lines, action.anchor.line,
+            three.aboveOpacity, e.opacity, three.belowOpacity, three.direction)
+    }
+
+    private fun clearLineBackground() {
+        val view = body
+        val wrapper = lineBackground
+        if (wrapper != null) {
+            wrapper.release()
+            if (view?.background === wrapper) {
+                val left = view.paddingLeft; val top = view.paddingTop
+                val right = view.paddingRight; val bottom = view.paddingBottom
+                view.background = wrapper.base
+                view.setPadding(left, top, right, bottom)
+            }
+            view?.removeTextChangedListener(guideTextWatcher)
+        }
+        lineBackground = null
+        lineAction = null
+        threeLineDrawn = false
+        threeLineValidatedLayout = null
+        threeLineValidatedRows = null
+        guideDrawShape = null
+        guideTextChanged = false
+        guideInvalidatedRows = null
+        gradients.clear()
+    }
+
+    private fun ensureLineBackground(view: TextView) {
+        if (lineBackground != null && view.background === lineBackground) return
+        lineBackground?.release()
+        view.removeTextChangedListener(guideTextWatcher)
+        val wrapper = ReadingLineGuideBackground(view.background) { canvas ->
+            lineAction?.let { drawThreeLineBackground(canvas, view, it) }
+        }
+        lineBackground = wrapper
+        // A Drawable must preserve the body's current padding, including an external theme update.
+        val left = view.paddingLeft; val top = view.paddingTop
+        val right = view.paddingRight; val bottom = view.paddingBottom
+        view.background = wrapper
+        view.setPadding(left, top, right, bottom)
+        wrapper.attach()
+        view.addTextChangedListener(guideTextWatcher)
+    }
 
     private fun clearGuideSpan() {
         guideSpan?.let { (body?.text as? Spannable)?.removeSpan(it) }
         guideSpan = null
+        clearLineBackground()
     }
 
     private fun updateGuideSpan() {
-        clearGuideSpan()
         val view = body ?: return
-        val g = geometry ?: return
-        val action = actions.firstOrNull(::isBackgroundGuide) ?: return
+        val g = geometry
+        val action = actions.firstOrNull(::isBackgroundGuide)
+        if (action != null && g != null && isAnimatedLineGuide(action)) {
+            guideSpan?.let { (view.text as? Spannable)?.removeSpan(it) }
+            guideSpan = null
+            val evidence = action.guideEvidence ?: return
+            if (!action.strength.isFinite() || action.strength <= 0) { clearLineBackground(); return }
+            val target = lineGuideTarget(action) ?: run { clearLineBackground(); return }
+            ensureLineBackground(view)
+            lineAction = action
+            if (guideInvalidatedRows !== g.lines)
+                guideTextChanged = false
+            guideDrawShape = drawShape(view)
+            threeLineDrawn = false
+            threeLineMotion.move(target, presentationClockMs(),
+                evidence.threeLine?.transitionMs ?: ReadingThreeLineGuideMotion.TRANSITION_MS,
+                animateOpacity = isThreeLineGuide(action))
+            lineBackground?.invalidateSelf()
+            return
+        }
+        clearGuideSpan()
+        if (g == null || action == null) return
         val row = g.lines.getOrNull(action.anchor.line) ?: return
         val start = action.guideRange?.startUtf16 ?: row.startUtf16
         val end = action.guideRange?.endUtf16 ?: row.endUtf16
         if (start < 0 || end <= start || end > view.text.length ||
             (action.aidType == ReadingAidType.CURRENT_SENTENCE && action.guideRange == null) ||
             !action.strength.isFinite() || action.strength <= 0) return
-        // Appearance spans leave text, UTF-16 offsets, font metrics and wrapping intact.
-        // Convert the buffer once; subsequent updates add/remove only our own span.
         if (view.text !is Spannable) view.setText(SpannableString(view.text), TextView.BufferType.SPANNABLE)
         val span = GuideBackgroundSpan({
             val alpha = action.guideEvidence?.let { (255 * it.opacityAt(presentationClockMs())).roundToInt() }
                 ?: (80 * action.strength.coerceIn(0.0, 1.0)).toInt()
             Color.argb(alpha, 128, 128, 128)
-        }) {
-            guideSpanDrawEligible(action)
-        }
+        }) { guideSpanDrawEligible(action) }
         guideSpan = span
         (view.text as Spannable).setSpan(span, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         view.invalidate()
@@ -377,10 +506,114 @@ class ReadingAidOverlayView(
 
     private fun animateGuide(action: ReadingAidAction, view: TextView, now: Double) {
         val e = action.guideEvidence ?: return
-        if (now - e.presentationStartedMs < e.entryMs || now > e.lastSupportedDeliveryMs + e.lossGraceMs) {
+        if (isAnimatedLineGuide(action)) return
+        if ((isAnimatedLineGuide(action) && threeLineMotion.isMoving(now)) ||
+            now - e.presentationStartedMs < e.entryMs || now > e.lastSupportedDeliveryMs + e.lossGraceMs) {
             view.postInvalidateOnAnimation()
             postInvalidateOnAnimation()
         } else postInvalidateDelayed((e.lastSupportedDeliveryMs + e.lossGraceMs - now).toLong().coerceAtLeast(1L))
+    }
+
+    private fun threeLineBackgroundDrawEligible(action: ReadingAidAction): Boolean {
+        val view = body ?: return false
+        val g = geometry ?: return false
+        val wrapper = lineBackground ?: return false
+        if (view.background !== wrapper || lineAction !== action) return false
+        val layout = view.layout ?: return false
+        if (guideTextChanged || guideDrawShape != drawShape(view) || layout.lineCount != g.lines.size) {
+            threeLineMotion.clear()
+            return false
+        }
+        if (action.expiresMs <= presentationClockMs() || action.anchor.generation != generation ||
+            action.anchor.geometrySnapshotId != g.snapshotId || actions.none { it.id == action.id } ||
+            !view.getVisibleRectOnScreen(visible)) return false
+        // Snapshot IDs change with captures/scrolling. Validate row metrics only when
+        // the Layout or immutable row list changes, including equal-count reflows.
+        if (threeLineValidatedLayout !== layout || threeLineValidatedRows !== g.lines) {
+            lineGuideLayoutValidationCount++
+            if (!geometryMatchesLayout(view, g)) { threeLineMotion.clear(); return false }
+            threeLineValidatedLayout = layout
+            threeLineValidatedRows = g.lines
+        }
+        view.getLocationOnScreen(textLocation)
+        return abs(textLocation[0] + view.totalPaddingLeft - view.scrollX - g.textOriginX) < 1 &&
+            abs(textLocation[1] + view.totalPaddingTop - view.scrollY - g.textOriginY) < 1
+    }
+
+    private fun drawThreeLineBackground(canvas: Canvas, view: TextView, action: ReadingAidAction) {
+        if (!threeLineBackgroundDrawEligible(action)) return
+        val evidence = action.guideEvidence ?: return
+        val g = geometry ?: return
+        val layout = view.layout ?: return
+        val now = presentationClockMs()
+        val target = lineGuideTarget(action) ?: return
+        val band = threeLineMotion.move(target, now,
+            evidence.threeLine?.transitionMs ?: ReadingThreeLineGuideMotion.TRANSITION_MS,
+            animateOpacity = isThreeLineGuide(action)).capped(evidence.opacityAt(now))
+        val top = maxOf(band.top, visible.top - g.textOriginY)
+        val bottom = minOf(band.bottom, visible.bottom - g.textOriginY)
+        val x1 = maxOf(0.0, visible.left - g.textOriginX).toFloat()
+        val x2 = minOf(layout.width.toDouble(), visible.right - g.textOriginX).toFloat()
+        val e = action.guideEvidence ?: return
+        val remaining = action.expiresMs - now
+        if (remaining > 0) {
+            val animating = threeLineMotion.isMoving(now) || now - e.presentationStartedMs < e.entryMs ||
+                now > e.lastSupportedDeliveryMs + e.lossGraceMs
+            val delay = if (animating) 16L else
+                (e.lastSupportedDeliveryMs + e.lossGraceMs - now).toLong().coerceAtLeast(1L)
+            lineBackground?.requestNextDraw(minOf(delay, remaining.toLong().coerceAtLeast(1L)))
+        }
+        if (top >= bottom || x1 >= x2 || (255 * band.centreOpacity).roundToInt() <= 0) return
+        val saved = canvas.save()
+        // View.draw compensates its background for internal scrolling. The band's
+        // coordinates are Layout coordinates, so restore the text padding/scroll offset.
+        canvas.translate((view.totalPaddingLeft - view.scrollX).toFloat(),
+            (view.totalPaddingTop - view.scrollY).toFloat())
+        canvas.clipRect(x1, top.toFloat(), x2, bottom.toFloat())
+        if (gradients.size > 12) gradients.clear()
+        var drawn = false
+        fun section(start: Double, end: Double, alpha: Double, fadeTop: Boolean = false,
+                    fadeBottom: Boolean = false, fadeFraction: Float = .12f) {
+            val a = (255 * alpha).roundToInt()
+            if (start >= end || end <= top || start >= bottom || a <= 0) return
+            val sectionTop = maxOf(start, top).toFloat()
+            val sectionBottom = minOf(end, bottom).toFloat()
+            val fadeSpan = fadeFraction * (end - start)
+            val peakFraction = minOf(
+                if (fadeTop) ((sectionBottom - start) / fadeSpan).coerceIn(0.0, 1.0) else 1.0,
+                if (fadeBottom) ((end - sectionTop) / fadeSpan).coerceIn(0.0, 1.0) else 1.0)
+            if ((a * peakFraction).roundToInt() <= 0) return
+            // Paint alpha also modulates shader alpha. Keep gradient stops opaque
+            // at their plateau and apply the requested opacity exactly once here.
+            val color = Color.rgb(128, 128, 128)
+            val transparent = Color.argb(0, 128, 128, 128)
+            backgroundPaint.color = color
+            backgroundPaint.alpha = a
+            val key = GradientKey(start, end, color, fadeTop, fadeBottom, fadeFraction)
+            backgroundPaint.shader = if (!fadeTop && !fadeBottom) null else gradients.getOrPut(key) { when {
+                fadeTop && fadeBottom -> LinearGradient(0f, start.toFloat(), 0f, end.toFloat(),
+                    intArrayOf(transparent, color, color, transparent),
+                    floatArrayOf(0f, fadeFraction, 1f - fadeFraction, 1f), Shader.TileMode.CLAMP)
+                fadeTop -> LinearGradient(0f, start.toFloat(), 0f, end.toFloat(),
+                    intArrayOf(transparent, color, color), floatArrayOf(0f, fadeFraction, 1f), Shader.TileMode.CLAMP)
+                fadeBottom -> LinearGradient(0f, start.toFloat(), 0f, end.toFloat(),
+                    intArrayOf(color, color, transparent), floatArrayOf(0f, 1f - fadeFraction, 1f), Shader.TileMode.CLAMP)
+                else -> error("A gradient requires a fading edge")
+            } }
+            if (!canvas.quickReject(x1, sectionTop, x2, sectionBottom, Canvas.EdgeType.AA)) {
+                canvas.drawRect(x1, sectionTop, x2, sectionBottom, backgroundPaint)
+                drawn = true
+            }
+        }
+        // One fill avoids row stripes and fractional-pixel seams while the band moves.
+        section(band.top, band.bottom, band.centreOpacity, fadeTop = true, fadeBottom = true,
+            fadeFraction = if (isThreeLineGuide(action)) ReadingLineGuideAppearance.THREE_EDGE_FADE_FRACTION else .12f)
+        canvas.restoreToCount(saved)
+        if (drawn) {
+            threeLineDrawn = true
+            receipt(action, true, if (isThreeLineGuide(action)) "three_line_text_background_draw" else "single_line_text_background_draw", now)
+        }
+
     }
 
     private class GuideBackgroundSpan(private val color: () -> Int, private val eligible: () -> Boolean) :

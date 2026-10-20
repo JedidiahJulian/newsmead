@@ -201,7 +201,10 @@ class ArticleReadingAidRuntime(
             targetX = sample.motionCompensation?.let { it.contentX + (snapshot?.textOriginX ?: 0.0) }
                 ?: sample.processingX,
             rawSample = sample, bookmarkInputAllowed = interpretationAllowed,
-            guideRange = if (valid) guideResolver.resolve(body.text.toString(), snapshot, sample.line) else null,
+            // Sentence segmentation/row validation has no role in line guides or disabled guides.
+            guideRange = if (valid && preferences.enabled && preferences.lineGuide &&
+                preferences.guideStyle == ReadingGuideStyle.SENTENCE)
+                guideResolver.resolve(body.text.toString(), snapshot, sample.line) else null,
             focusInputAllowed = interpretationAllowed, focusTextSizeDp = renderedFontDp(),
             locationUncertainty = measuredLocationUncertainty,
             targetWordBounds = wordBounds(sample.line, sample.wordStartUtf16, sample.wordEndUtf16))
@@ -415,17 +418,36 @@ class ArticleReadingAidRuntime(
             .put("cycle_window_ms", config.cycleWindowMs)
             .put("aid_ttl_ms", config.aidTtlMs).put("cooldown_ms", config.cooldownMs)
             .put("max_evidence_age_ms", config.maxEvidenceAgeMs).put("min_adaptive_strength", config.minAdaptiveStrength)
-            .put("guide_selector_version", if (config.evidenceAlignedV5) "STABILIZED_SINGLE_LINE_V5" else "TEXT_LINE_CONTEXT_V1")
+            .put("guide_selector_version", if (config.evidenceAlignedV5) "SUPPORTED_LOCATION_WITH_DIRECTIONAL_BAND_V7" else "TEXT_LINE_CONTEXT_V1")
             .put("guide_ambiguity_fallback", if (config.evidenceAlignedV5) "single_stabilized_estimated_row_unvalidated" else "containing_paragraph_or_abstain")
             .put("guide_measured_uncertainty_available", context.locationUncertainty != null)
             .put("guide_color_rgb", if (config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5) "#808080" else "#F4D35E")
             .put("guide_alpha_scale", if (config.evidenceAlignedV5) 255 else 80)
             .put("guide_opacities", if (config.evidenceAlignedV5) org.json.JSONArray(listOf(.08, .13, .19)) else JSONObject.NULL)
+            .put("three_line_guide_targets", if (config.evidenceAlignedV5) JSONObject()
+                .put("balanced", org.json.JSONArray(List(3) { ReadingLineGuideAppearance.THREE_CENTER_OPACITY }))
+                .put("down", org.json.JSONArray(List(3) { ReadingLineGuideAppearance.THREE_CENTER_OPACITY }))
+                .put("up", org.json.JSONArray(List(3) { ReadingLineGuideAppearance.THREE_CENTER_OPACITY }))
+                .put("presentation", "uniform_continuous_band_direction_controls_position")
+                .put("requested_gaze_row_slot", JSONObject().put("DOWN", "first").put("BALANCED", "middle").put("UP", "last"))
+                .put("settle_supported_capture_ms", ReadingLineGuideAppearance.SETTLE_SUPPORTED_MS)
+                .put("outer_edge_fade_fraction", ReadingLineGuideAppearance.THREE_EDGE_FADE_FRACTION.toDouble())
+                .put("transition_ms", 250).put("direction_changes_required", 2)
+                .put("direction_basis", "distinct_supported_content_rows_not_screen_motion")
+                .put("reader_caps_apply_proportionally", true) else JSONObject.NULL)
+            .put("gray_line_guide_motion_version", if (config.evidenceAlignedV5) "UNIFORM_DIRECTIONAL_BAND_MOTION_V5" else JSONObject.NULL)
+            .put("gray_line_guide_position_transition_ms", if (config.evidenceAlignedV5) ReadingLineGuideAppearance.TRANSITION_MS else JSONObject.NULL)
             .put("guide_entry_ms", if (config.evidenceAlignedV5) 150 else JSONObject.NULL)
             .put("guide_loss_grace_ms", if (config.evidenceAlignedV5) 750 else JSONObject.NULL)
             .put("guide_exit_ms", if (config.evidenceAlignedV5) 300 else JSONObject.NULL)
             .put("word_confidence_basis", if (config.evidenceAlignedV5) "consistent_exact_mapping_and_word_bounds_not_validated_gaze_accuracy" else "extractor_prefix")
-            .put("guide_layer", if (config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5) "text_background_span" else "canvas_overlay")
+            .put("guide_layer", when {
+                config.evidenceAlignedV5 && preferences.guideStyle != ReadingGuideStyle.SENTENCE -> "stable_body_background_drawable"
+                config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5 -> "text_background_span"
+                else -> "canvas_overlay"
+            })
+            .put("gray_line_layout_validation", if (config.evidenceAlignedV5) "cached_layout_and_physical_row_identity" else JSONObject.NULL)
+            .put("sentence_resolution", "enabled_selected_sentence_mode_only")
             .put("max_magnification_scale", config.maxMagnificationScale).put("focus_context_radius_lines", config.focusContextRadiusLines)
             .put("continuation_start_fraction", config.continuationStartFraction)
             .put("continuation_end_fraction", config.continuationEndFraction)

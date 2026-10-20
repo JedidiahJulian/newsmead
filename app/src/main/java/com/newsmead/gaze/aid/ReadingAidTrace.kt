@@ -164,6 +164,21 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
             .put("presentation_started_ms", g.presentationStartedMs).put("entry_ms", g.entryMs)
             .put("loss_grace_ms", g.lossGraceMs).put("exit_ms", g.exitMs)
             .put("search_support_ids", JSONArray(g.searchEvidenceIds))
+            .put("three_line_presentation", g.threeLine?.let { band -> JSONObject()
+                .put("direction", band.direction.name)
+                .put("direction_basis", "two_consecutive_supported_content_row_changes_not_screen_motion")
+                .put("presentation", "uniform_continuous_band_direction_controls_position")
+                .put("requested_gaze_row_slot", when (band.direction) {
+                    ReadingGuideDirection.DOWN -> "first"
+                    ReadingGuideDirection.UP -> "last"
+                    ReadingGuideDirection.BALANCED -> "middle"
+                })
+                .put("settle_supported_capture_ms", ReadingLineGuideAppearance.SETTLE_SUPPORTED_MS)
+                .put("above_target_opacity", band.aboveOpacity).put("center_target_opacity", g.opacity)
+                .put("below_target_opacity", band.belowOpacity).put("transition_ms", band.transitionMs)
+                .put("direction_support_ids", JSONArray(band.directionSupport.map { it.evidenceId }))
+                .put("width_meaning", "reader_selected_three_rows_not_measured_uncertainty_coverage")
+            } ?: JSONObject.NULL)
         } ?: JSONObject.NULL)
         .put("rule_id", a.ruleId).put("sources", JSONArray(a.sourceIds))
         .put("evidence_relationship", a.evidenceRelationship).put("experimental", a.experimental)

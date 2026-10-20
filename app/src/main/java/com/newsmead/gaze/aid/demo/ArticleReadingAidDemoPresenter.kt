@@ -17,6 +17,8 @@ import com.newsmead.gaze.aid.ReadingGuideStyle
 import com.newsmead.gaze.aid.ReadingGuideRange
 import com.newsmead.gaze.aid.ReadingGuideUnit
 import com.newsmead.gaze.aid.ReadingAidGuideEvidence
+import com.newsmead.gaze.aid.ReadingGuideDirection
+import com.newsmead.gaze.aid.ReadingLineGuideAppearance
 import com.newsmead.gaze.aid.ReadingFocusAppearance
 import com.newsmead.gaze.aid.ReadingFocusStyle
 import com.newsmead.gaze.scanpath.ScanpathGeometry
@@ -114,13 +116,14 @@ internal class ArticleReadingAidDemoPresenter(
         val at = SystemClock.elapsedRealtimeNanos() / 1e6
         val selectedType = if (stage.type == ReadingAidType.CURRENT_LINE && guideStyle == ReadingGuideStyle.SENTENCE)
             ReadingAidType.CURRENT_SENTENCE else stage.type
-        val firstGuideLine = line
-        val lastGuideLine = line
+        val threeLine = selectedType == ReadingAidType.CURRENT_LINE && guideStyle == ReadingGuideStyle.THREE_LINE
+        val firstGuideLine = if (threeLine) maxOf(0, line - 1) else line
+        val lastGuideLine = if (threeLine) minOf(geometry!!.lines.lastIndex, line + 1) else line
         val guideRange = if (selectedType == ReadingAidType.CURRENT_SENTENCE)
             ReadingGuideResolver().resolve(originalBody, geometry, line)
         else if (selectedType == ReadingAidType.CURRENT_LINE) ReadingGuideRange(
             geometry!!.lines[firstGuideLine].startUtf16, geometry!!.lines[lastGuideLine].endUtf16,
-            ReadingGuideUnit.LINE) else null
+            if (threeLine) ReadingGuideUnit.READING_BAND else ReadingGuideUnit.LINE) else null
         val type = selectedType?.takeUnless {
             (it == ReadingAidType.FOCUS_REGION && !focusAvailable) ||
                 (it == ReadingAidType.CURRENT_SENTENCE && guideRange == null)
@@ -128,7 +131,7 @@ internal class ArticleReadingAidDemoPresenter(
         val targetLine = if (type == ReadingAidType.NEXT_LINE_START) line + 1 else line
         activeAction = type?.let {
             ReadingAidAction("ARTICLE_DEMO:${++serial}", it, when (it) {
-                ReadingAidType.CURRENT_LINE -> "CURRENT_LINE_HIGHLIGHT_GRAY_V1"
+                ReadingAidType.CURRENT_LINE -> if (threeLine) "CURRENT_THREE_LINE_GUIDE_GRAY_V1" else "CURRENT_LINE_HIGHLIGHT_GRAY_V1"
                 ReadingAidType.CURRENT_SENTENCE -> "CURRENT_SENTENCE_CONTEXT_HIGHLIGHT_V1"
                 ReadingAidType.NEXT_LINE_START -> LineStartMarkerAppearance.FORM_ID
                 ReadingAidType.READING_BOOKMARK -> LineStartMarkerAppearance.BOOKMARK_FORM_ID
@@ -144,15 +147,18 @@ internal class ArticleReadingAidDemoPresenter(
                 "DEMO_BUTTON_OR_TIMER", emptyList(), "Manufactured presentation; no detector evidence", true, "DEMO_EVIDENCE_ALIGNED_V5",
                 guideRange = guideRange,
                 guideEvidence = if (type == ReadingAidType.CURRENT_LINE || type == ReadingAidType.CURRENT_SENTENCE)
-                    ReadingAidGuideEvidence(firstGuideLine, lastGuideLine, "manufactured_single_line_preview_not_measurement", false,
-                        at + ReadingAidDemoPlan.STAGE_MS, at, .08) else null,
+                    ReadingAidGuideEvidence(firstGuideLine, lastGuideLine, "manufactured_guide_preview_not_measurement", false,
+                        at + ReadingAidDemoPlan.STAGE_MS, at,
+                        if (threeLine) ReadingLineGuideAppearance.THREE_CENTER_OPACITY else .08,
+                        threeLine = if (threeLine) ReadingLineGuideAppearance.threeLine(ReadingGuideDirection.BALANCED,
+                            ReadingLineGuideAppearance.THREE_CENTER_OPACITY) else null) else null,
                 focusStyle = focusStyle.takeIf { type == ReadingAidType.FOCUS_REGION })
         }
         overlay.setActions(body, geometry, generation, listOfNotNull(activeAction))
         renderWord(activeAction?.takeIf { it.aidType == ReadingAidType.WORD_DEFINITION })
         val label = body.context.getString(when (selectedType) {
             null -> R.string.scanpath_demo_baseline
-            ReadingAidType.CURRENT_LINE -> R.string.scanpath_demo_line
+            ReadingAidType.CURRENT_LINE -> if (threeLine) R.string.reading_aid_menu_three_line else R.string.scanpath_demo_line
             ReadingAidType.CURRENT_SENTENCE -> R.string.reading_aid_menu_sentence
             ReadingAidType.NEXT_LINE_START -> R.string.scanpath_demo_start
             ReadingAidType.READING_BOOKMARK -> R.string.scanpath_demo_start

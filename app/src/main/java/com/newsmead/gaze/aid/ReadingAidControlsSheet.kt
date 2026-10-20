@@ -44,12 +44,23 @@ object ReadingAidControlsSheet {
             this.id = id; setText(label); minHeight = dp(48); styles.addView(this); children.add(this)
         }
         val line = radio(R.id.readingAidMenuLine, R.string.reading_aid_menu_line)
+        val threeLine = radio(R.id.readingAidMenuThreeLine, R.string.reading_aid_menu_three_line)
         val sentence = radio(R.id.readingAidMenuSentence, R.string.reading_aid_menu_sentence)
-        styles.check(if (prefs.guideStyle == ReadingGuideStyle.LINE) line.id else sentence.id)
+        styles.check(when (prefs.guideStyle) {
+            ReadingGuideStyle.LINE -> line.id
+            ReadingGuideStyle.THREE_LINE -> threeLine.id
+            ReadingGuideStyle.SENTENCE -> sentence.id
+        })
         styles.setOnCheckedChangeListener { _, id ->
-            change(prefs.copy(guideStyle = if (id == line.id) ReadingGuideStyle.LINE else ReadingGuideStyle.SENTENCE))
+            val style = when (id) {
+                line.id -> ReadingGuideStyle.LINE
+                threeLine.id -> ReadingGuideStyle.THREE_LINE
+                sentence.id -> ReadingGuideStyle.SENTENCE
+                else -> return@setOnCheckedChangeListener
+            }
+            change(prefs.copy(guideStyle = style))
         }
-        text(R.string.reading_aid_menu_sentence_help)
+        val guideHelp = text(R.string.reading_aid_menu_sentence_help)
         val opacity = text(R.string.reading_aid_menu_opacity)
         toggle(R.id.readingAidMenuBookmark, R.string.reading_aid_menu_bookmark, prefs.lineStartCue) { prefs.copy(lineStartCue = it) }
         toggle(R.id.readingAidMenuDefinitions, R.string.reading_aid_menu_definitions, prefs.wordDefinition) { prefs.copy(wordDefinition = it) }
@@ -110,11 +121,21 @@ object ReadingAidControlsSheet {
         }
         panel.addView(advanced)
         refresh = {
-            val strength = minOf(prefs.maxStrength, if (prefs.adaptiveStrength) 0.25 else prefs.manualStrength)
-            val alpha = if (prefs.enabled && prefs.lineGuide) (80 * strength).toInt() else 0
-            opacity.text = context.getString(R.string.reading_aid_menu_opacity, alpha / 255.0 * 100)
+            val limit = if (prefs.enabled && prefs.lineGuide)
+                .19 * minOf(prefs.maxStrength, if (prefs.adaptiveStrength) 1.0 else prefs.manualStrength) else 0.0
+            if (prefs.guideStyle == ReadingGuideStyle.THREE_LINE) {
+                val center = minOf(ReadingLineGuideAppearance.THREE_CENTER_OPACITY, limit)
+                opacity.text = context.getString(R.string.reading_aid_menu_three_line_opacity, center * 100)
+                guideHelp.setText(R.string.reading_aid_menu_three_line_help)
+            } else {
+                opacity.text = context.getString(R.string.reading_aid_menu_guide_targets,
+                    minOf(.08, limit) * 100, minOf(.13, limit) * 100, minOf(.19, limit) * 100)
+                guideHelp.setText(if (prefs.guideStyle == ReadingGuideStyle.SENTENCE)
+                    R.string.reading_aid_menu_sentence_help else R.string.reading_aid_menu_line_help)
+            }
             children.forEach { it.isEnabled = prefs.enabled }
             line.isEnabled = prefs.enabled && prefs.lineGuide
+            threeLine.isEnabled = prefs.enabled && prefs.lineGuide
             sentence.isEnabled = prefs.enabled && prefs.lineGuide
             focusStyles.isEnabled = prefs.enabled && prefs.focusRegion
             fadeText.isEnabled = prefs.enabled && prefs.focusRegion

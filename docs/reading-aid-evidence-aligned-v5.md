@@ -4,9 +4,10 @@ Implemented for the user's 2026-10-19 proposal. Profile: `EVIDENCE_ALIGNED_V5`.
 Article, Scanpath pilot and Scanpath replay select this profile. Earlier profiles
 remain available to deterministic tests; the frozen scanpath extractor is unchanged.
 
-Owner correction: the visible line guide and blue bookmark must both remain
-**single-line**. The earlier automatic three-row display was rejected. Bookmark
-activation from within-article row jumps is removed from this profile.
+The default line guide and blue bookmark remain **single-line**. The earlier
+automatic widening was rejected. On 2026-10-20 the owner separately approved an
+explicit **Three-line guide** menu option; this optional presentation is described
+below. Bookmark activation from within-article row jumps remains removed.
 
 ## Flow
 
@@ -41,7 +42,7 @@ flowchart TD
   missing coordinates, eye closure or an operational pause breaks pending support.
 - No beginning/end fraction of a line is required. Ordinary supported reading
   receives the guide without a difficulty classification.
-- The visible line guide highlights **one stabilized estimated row**. It never
+- The default line guide highlights **one stabilized estimated row**. It never
   expands automatically into a neighbouring-row band. A single displayed row is
   the owner's chosen presentation, not a claim of validated row accuracy.
 - A supplied measured error radius defines internal row uncertainty. **Current
@@ -57,6 +58,233 @@ flowchart TD
 - Reader strength caps apply. The separately selected sentence option retains
   its text-context behaviour; the default line option stays one row. Background
   spans preserve glyph color and wrapping.
+
+### Optional three-line guide — 2026-10-20
+
+Select **Reading aids → Three-line guide**. The same controls/runtime are used in
+Article, Scanpath pilot and Replay. Single line and Sentence context remain
+independent selectable alternatives; choosing this presentation does not alter
+scanpath extraction, word assignment, focus rules or the single-line bookmark.
+
+The supported estimated row occupies the first, middle or last band row as below.
+The three-row target is a reader-selected visual footprint,
+not a measured confidence interval or a guarantee of gaze accuracy.
+
+| Supported direction | Example with gaze supported on L5 | Gaze row position | Uniform gray opacity |
+|---|---|---|---:|
+| Balanced / settled / unconfirmed | L4-L6 | Middle | 9% |
+| Downward | L5-L7 | First | 9% |
+| Upward | L3-L5 | Last | 9% |
+
+This supersedes the stepped 9/13/9, 8/13/10 and 10/13/8% presentation. The owner
+confirmed the separate double-alpha correction restored visibility, then found
+the row stripes distracting and requested directional band position. One fill
+now covers the whole band at 9%, with no internal row-color boundaries. These
+settings reflect a reader-requested UI trial, not a validated optimum or benefit.
+
+- Infer position direction after **two consecutive same-direction distinct
+  supported row changes**. A first reversal returns to balanced. Repeated callbacks
+  and same-row updates do not create a change. Missing/operational segments,
+  layout/article changes and guide-style changes reset this history. This is an
+  appearance heuristic, not a classification of normal or difficult reading.
+- Recenter after **900ms of fresh supported residence on the same row after its
+  confirmation**. Wall time, missing gaze and duplicate callbacks cannot add this
+  support. Retain movement history so continued progression can resume direction;
+  a new visit resets the settling residence basis. The 900ms value is a trial
+  presentation setting, not a research-established threshold.
+- Use content-row order rather than screen-Y motion, so scrolling alone does not
+  change reading direction. Keep the existing selected calibrated/smoothed point
+  and location-support gate; no extra dwell or smoothing is applied to measurements.
+- Interpolate actual body-coordinate row boundaries and opacity targets over
+  **250ms** with eased motion. Retarget from the current displayed state; repeated
+  identical targets do not restart the transition. Font/spacing reflow invalidates
+  old positions. A moving edge may pass across a partial fourth row; it does not
+  add a second old/new band. Only the outer top and bottom edges fade, each over
+  6% of the whole band height (about 18% of a row for equal-height rows).
+- Reader strength limits scale the whole band using the existing
+  gray-guide opacity cap. This option keeps the 9% uniform target rather than the
+  single-line 8→13% residence ramp or 19% search emphasis. A reduced cap applies
+  immediately even while a position/direction transition is running.
+- Retain the existing **150ms entry, 750ms tracking-loss grace and 300ms exit**.
+  Backgrounds are drawn behind text without changing glyph color, text offsets,
+  font metrics or wrapping. At article edges, show only existing neighbors rather
+  than shifting the supported anchor to manufacture three rows.
+- Trace form: `CURRENT_THREE_LINE_GUIDE_GRAY_V1`. `guideRange` is the target visible
+  three-row text range; `guide_support.first_line/last_line` still describe internal
+  uncertainty. Direction support IDs retain their individual capture clocks;
+  action capture bounds describe the current supported location. Actual positive
+  render receipts require a nonzero text-background draw, not overlay eligibility.
+  The article demo supplies balanced manufactured appearance only.
+
+Independent source review found no actionable issue. All 21 focused motion/policy
+JVM tests passed, and both APKs built on the first bounded attempt. Evidence:
+`output/guide-directional-band-check-01/summary.json` and `build.log`.
+App SHA-256: `50492bd5f1c82c83e6aa350fbc0d41e011114fdf16ca799917550808dba005c9`.
+Owner approved the A56 update/native checks. Installed the matching app/test APKs
+with `-r -t`, preserving app data and calibration. All six camera-free native
+tests passed: four rendering tests, the Three-line menu check and balanced demo
+preview. The Replay fixtures passed all
+135 quantitative pixel samples across light/dark/sepia, including uniform fill,
+all three directional placements, internal boundaries during fractional movement,
+reader caps and retained Single-line opacities. On white, each requested band row
+rendered #f4f4f4. Visually inspected DOWN, BALANCED and UP light previews: the
+band is continuous and its position follows the requested anchor slot.
+Evidence also includes `a56-rendering.log` and `previews/` (12 synthetic PNGs
+and `samples.json`) in the checkpoint folder. Synthetic previews originate in
+app cache `guide-directional-band/`. No camera, calibration or private capture
+was started. Software-Canvas native results do not validate natural-reading
+benefit, live gaze accuracy or hardware frame pacing. Configuration version:
+`UNIFORM_DIRECTIONAL_BAND_MOTION_V5`. Prior validation below is historical;
+it does not establish the usability of this new presentation.
+
+[Niklaus et al., CHI2023](https://research.adobe.com/publication/digital-reading-rulers-evaluating-inclusively-designed-rulers-for-readers-with-dyslexia-and-without/)
+evaluated digital reading rulers with 91 crowdsourced readers with dyslexia and
+86 without. The publication supports investigating rulers and reader preferences;
+it does **not** validate these three-line targets, direction rule, 250ms transition
+or automatic phone mapping. They are prototype settings. Software checks below
+can establish implementation behavior, not gaze accuracy or reading benefit.
+
+Historical initial verification: source review found and resolved an eligibility gate that would
+reject THREE_LINE actions. No remaining actionable source issue. **303 focused
+aid/replay tests across 31 suites passed**, zero failures/errors/skips. Both debug
+APKs built; the focused whitespace check passed. Evidence:
+`output/three-line-guide-check-01/summary.json` and `build.log`. App APK SHA-256:
+`c384e9d3fe12af931d9138946ec4549c31169df4768b742723a5da7bcca9ddf1`.
+Native renderer/menu/demo checks compiled but did not run. No phone install,
+camera activity, staging or commit. Live appearance and reading benefit remain
+unverified by these software checks.
+
+### Single-line smoothing and three-line visibility correction
+
+Both V5/demo gray line modes use the same 250ms eased body-coordinate movement. Single
+line keeps one physical-row footprint at rest and its 8→13% residence targets
+(19% only with the existing measured search witness). Three-line mode uses the
+more visible targets above. Row coverage is explicit; neither changes detected
+reading location, uncertainty, the selected gaze stream or focus/bookmark rules.
+
+Position and alpha transition clocks are separate so fresh residence-opacity
+updates cannot restart position movement. Retarget from the current interpolated
+state; apply new reader caps immediately. Existing 150ms entry, 750ms tracking-loss
+grace and 300ms exit remain. Layout/font/style changes invalidate old geometry;
+scroll translation reprojects content coordinates. Sentence and legacy rendering
+paths are retained. Shared presentation targets now come from
+`ReadingLineGuideAppearance.kt`; configuration version
+`SHARED_SINGLE_THREE_LINE_MOTION_V2` identifies this change.
+
+Independent source review found no actionable issue. **306 focused aid/replay
+tests across 31 suites passed**, zero failures/errors/skips. Both debug APKs built
+and the focused whitespace check passed. Evidence:
+`output/line-guide-visibility-motion-check-01/summary.json` and `build.log`.
+App APK SHA-256:
+`2fee5e9482edd815d4bdf92e05a94cd51021fa34a76293287ab742b67f666d52`.
+Native bitmap fixtures cover stronger side rows, both animated footprints and
+single-line motion despite opacity refreshes; they compiled but device execution
+remains pending. Live phone visibility and the cause of the reported appearance
+are not established by these software checks.
+No device install, camera activity, staging or commit has been performed for this
+correction. The default remains Single line; choose Three-line guide explicitly
+to inspect its wider footprint.
+
+### Actual drawn opacity — 2026-10-20 correction
+
+Owner reports that the visibility problem also occurs in Replay. The faded
+guide sections applied alpha twice: the Paint color and the LinearGradient
+plateau both contained the requested alpha. The shader alpha is modulated by
+Paint alpha. Thus nominal Single-line 8% became about 0.6%, and a Three-line 9%
+neighbor about 0.8%; its solid 13% center was unaffected. The old native tests
+accepted any nonzero pixel difference and did not establish the intended opacity.
+
+The correction keeps gradient plateaus opaque gray and applies the target alpha
+once through Paint.alpha; only the outer fade changes shader alpha. Gray RGB is
+preserved at transparent endpoints. No change to numerical presentation targets,
+timing, support eligibility or motion is needed. Configuration version:
+`SINGLE_ALPHA_BACKGROUND_MOTION_V4`.
+
+The new native Replay check compares rendered RGB with independent alpha
+compositing calculations, within two channel levels. It covers 99 row/case
+combinations across light, dark and sepia backgrounds; Single-line 8/13/19%
+including half entry/exit; all three directional row targets and reader caps.
+It saves synthetic preview PNGs and numeric samples in app cache `guide-opacity/`.
+Independent source review found no actionable issue. All 19 focused motion/policy
+JVM tests passed and both APKs built. Continued the owner's approved A56
+camera-free rendering verification with data/calibration preserved: **all four
+native tests passed**, including all 99 quantitative row/case checks. On white,
+the Single-line 8/13/19% plateaus yielded #f5f5f5/#efefef/#e7e7e7, and balanced
+Three-line 9/13/9% yielded #f4f4f4/#efefef/#f4f4f4. Saved Replay previews show the
+one-row and three-row footprints. These software-Canvas checks on the phone
+assess rendering correctness, not gaze accuracy, hardware frame pacing, human
+benefit or the cause of the separately reported FPS drop.
+Evidence: `output/guide-alpha-check-01/summary.json`, `build.log`,
+`a56-rendering.log` and `previews/` (six synthetic PNGs and `samples.json`).
+App APK SHA-256: `44f9c29616a68e074ea777956276191adcea7ba1ed45c9100ba67e0cc64a6efa`.
+
+### Rendering regression and gaze-dependent lag — 2026-10-20
+
+The owner subsequently reported no visible Single line, only one apparent row in
+Three-line mode, and callback FPS dropping from about 30 to 6–10 on the top
+recommended article. The slowdown persisted with Reading guide disabled, followed
+the top position after feed refresh, and occurred while looking at the phone.
+Increasing neighbor opacity alone did not establish or resolve that report.
+
+Source inspection identified avoidable work in the animated renderer: a full-body
+LineBackgroundSpan was removed/readded every accepted update, each physical-row
+draw copied the article text and checked geometry, and validation caches reset on
+every update. These costs are real source properties; they do not prove the cause
+of the reported camera/model or UI slowdown.
+
+The localized replacement uses a stable body-background Drawable for animated
+Single line and Three-line modes. It draws the original background, one clipped
+guide band, and then lets TextView draw its glyphs. Animated guide updates preserve
+the text object and Layout. Existing motion/opacity rules remain, paint and
+gradients are reused, row validation is cached by Layout and immutable row-list
+identity, and drawable invalidation schedules one cancellable next redraw. Source
+text changes and reflow withhold stale geometry; clear/detach/body/theme changes
+restore or adopt the proper background and preserve padding. Sentence/legacy spans
+and bookmark/focus behavior remain separate. Android's background-before-content
+ordering and background scroll handling are documented in the
+[AOSP View implementation](https://android.googlesource.com/platform/frameworks/base/+/8360153/core/java/android/view/View.java);
+the old per-row span behavior is visible in
+[AOSP Layout](https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/text/Layout.java).
+
+Runtime now resolves sentence ranges only when Sentence mode and the reading
+guide are enabled, avoiding unused text segmentation/row validation in single-line,
+three-line and guide-off modes. Configuration version:
+`STABLE_SINGLE_DRAW_BACKGROUND_MOTION_V3`. This does not disable gaze processing,
+alter calibration or change scanpath measurements to mask the FPS drop.
+
+Read-only inspection of existing A56 `MGazeNetPerf` numeric messages found
+face-present windows with localizer about 71–80ms and gaze-model inference about
+62–103ms in one provider, versus about 24–31ms and 26–30ms in another instance of
+the same process. No-face windows were about 28–31ms with no model inference.
+The stages run in a pipeline; summing stage means does not give delivered FPS.
+These logs are not paired article-labelled comparisons, UI frame timings or proof
+of a particular cause. No camera, gaze collection or calibration was started.
+
+Independent source review found no actionable issue. The first bounded run built
+the app but stopped compiling the test APK at fixture line155: a local `val text`
+shadowed TextView.text. Corrected to `this.text = body.text`; the app source is
+unchanged by this test-only correction. JVM tests did not execute in that attempt.
+No retry without owner approval under AGENTS.md. Evidence:
+`output/guide-renderer-regression-check-01/summary.json` and `build.log`.
+New native fixtures
+check long-text text/Layout/background identity reuse, drawable callback invalidation,
+padding, parent/internal scrolling, clipped pixels, theme/body changes and visible
+one/three-row footprints.
+
+Owner-approved retry and A56 verification: **306 focused JVM tests across 31 suites
+passed**, zero failures/errors/skips; both debug APKs built. Updated the app/test
+APKs on SM-A566B using `adb install -r -t`, without clearing data or changing
+calibration. **All three camera-free native rendering tests passed**: row coverage,
+behind-glyph drawing/motion/caps/reflow; long-text text/Layout/background reuse,
+scroll/padding clipping and restoration; drawable invalidation/cancellation.
+These pixel checks use software Canvas bitmaps on the actual device. They do not
+measure live gaze FPS, hardware frame pacing or natural-reading visibility.
+The reported gaze-dependent throughput drop remains unresolved.
+
+Current evidence: `output/guide-renderer-regression-check-02/summary.json`,
+`build.log` and `a56-rendering.log`. App SHA-256:
+`f9e6833596c2e87f5b384cb897af4bcac0998bb709453bac1ca6a807bb8bb2fe`.
+No camera start, recording, calibration, staging or commit in this verification.
 
 ### Word offer
 

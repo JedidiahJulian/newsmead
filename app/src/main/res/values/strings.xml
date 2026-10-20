@@ -382,7 +382,12 @@
     <string name="article_options">Article options</string>
     <string name="reading_aid_menu_opacity">Guide opacity: %1$.1f%%</string>
     <string name="reading_aid_menu_guide">Reading guide</string>
-    <string name="reading_aid_menu_line">Line</string>
+    <string name="reading_aid_menu_line">Single line</string>
+    <string name="reading_aid_menu_three_line">Three-line guide</string>
+    <string name="reading_aid_menu_line_help">Follow one supported estimated reading line.</string>
+    <string name="reading_aid_menu_three_line_help">A continuous band extends below when reading down, above when reading up, and centers when reading settles.</string>
+    <string name="reading_aid_menu_three_line_opacity">Whole band: %1$.1f%% gray</string>
+    <string name="reading_aid_menu_guide_targets">Guide targets: %1$.1f–%2$.1f%%; temporary search emphasis up to %3$.1f%%</string>
     <string name="reading_aid_menu_sentence">Sentence context</string>
     <string name="reading_aid_menu_sentence_help">May include nearby sentences when needed.</string>
     <string name="reading_aid_menu_bookmark">Reading bookmark</string>

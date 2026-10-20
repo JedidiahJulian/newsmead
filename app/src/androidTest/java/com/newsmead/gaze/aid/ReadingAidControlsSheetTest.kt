@@ -16,6 +16,33 @@ import java.util.concurrent.atomic.AtomicInteger
 /** Real menu widgets on the camera-free replay activity. */
 @RunWith(AndroidJUnit4::class)
 class ReadingAidControlsSheetTest {
+    @Test fun threeLineChoiceIsExclusiveAndSurvivesMenuReopening() {
+        ActivityScenario.launch(ScanpathReplayActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                var value = ReaderAidPreferences(focusRegion = false, wordDefinition = false)
+                val menu = ReadingAidControlsSheet.show(activity, value, { value = it })
+                try {
+                    val three = menu.findViewById<MaterialRadioButton>(R.id.readingAidMenuThreeLine)!!
+                    three.performClick()
+                    assertEquals(ReadingGuideStyle.THREE_LINE, value.guideStyle)
+                    assertTrue(three.isChecked)
+                    assertFalse(menu.findViewById<MaterialRadioButton>(R.id.readingAidMenuLine)!!.isChecked)
+                    assertFalse(menu.findViewById<MaterialRadioButton>(R.id.readingAidMenuSentence)!!.isChecked)
+                    val guide = menu.findViewById<SwitchMaterial>(R.id.readingAidMenuGuide)!!
+                    guide.performClick()
+                    assertFalse(three.isEnabled)
+                    guide.performClick()
+                    assertTrue(three.isEnabled); assertTrue(three.isChecked)
+                    assertFalse(value.focusRegion); assertFalse(value.wordDefinition)
+                } finally { menu.dismiss() }
+                val reopened = ReadingAidControlsSheet.show(activity, value, { value = it })
+                try {
+                    assertTrue(reopened.findViewById<MaterialRadioButton>(R.id.readingAidMenuThreeLine)!!.isChecked)
+                } finally { reopened.dismiss() }
+            }
+        }
+    }
+
     @Test fun masterRestoresIndependentChoicesAndGuideSelectionIsExclusive() {
         ActivityScenario.launch(ScanpathReplayActivity::class.java).use { scenario ->
             val dismissed = AtomicInteger()

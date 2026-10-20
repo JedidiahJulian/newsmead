@@ -5,7 +5,18 @@ import com.newsmead.gaze.scanpath.ScanpathSample
 
 /** Pure policy values. Text offsets are UTF-16; all times are capture/delivery milliseconds. */
 enum class ReadingAidType { CURRENT_LINE, CURRENT_SENTENCE, NEXT_LINE_START, READING_BOOKMARK, WORD_MAGNIFIER, FOCUS_REGION, WORD_DEFINITION }
-enum class ReadingGuideStyle { LINE, SENTENCE }
+enum class ReadingGuideStyle { LINE, THREE_LINE, SENTENCE }
+
+enum class ReadingGuideDirection { BALANCED, DOWN, UP }
+
+/** Direction positions a uniform band; side values describe above/below the supported row, not confidence. */
+data class ReadingThreeLineGuideEvidence(
+    val direction: ReadingGuideDirection,
+    val aboveOpacity: Double,
+    val belowOpacity: Double,
+    val transitionMs: Double = 250.0,
+    val directionSupport: List<ReadingAidContinuationEvidence> = emptyList()
+)
 enum class ReadingFocusStyle { FADE_TEXT, DARK_SURROUNDINGS }
 enum class ReadingGuideUnit { SENTENCE, PARAGRAPH, READING_BAND, LINE }
 /** Original text offsets, separate from word assignment. */
@@ -58,7 +69,8 @@ data class ReadingAidGuideEvidence(
     val measuredUncertainty: Boolean, val lastSupportedDeliveryMs: Double,
     val presentationStartedMs: Double, val opacity: Double,
     val searchEvidenceIds: List<String> = emptyList(),
-    val entryMs: Double = 150.0, val lossGraceMs: Double = 750.0, val exitMs: Double = 300.0
+    val entryMs: Double = 150.0, val lossGraceMs: Double = 750.0, val exitMs: Double = 300.0,
+    val threeLine: ReadingThreeLineGuideEvidence? = null
 ) {
     fun opacityAt(nowMs: Double): Double {
         val entry = ((nowMs - presentationStartedMs) / entryMs).coerceIn(0.0, 1.0)

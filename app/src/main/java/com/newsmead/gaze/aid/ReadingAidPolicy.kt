@@ -40,6 +40,7 @@ class ReadingAidPolicy(
         allowMappingOnlyWordResidence = true)
     private var guideSearchId: String? = null
     private var guideSearchUntil = Double.NEGATIVE_INFINITY
+    private val guideDirection = ReadingGuideDirectionTracker()
     private var bookmarkPreciseSupport: ReadingAidContinuationEvidence? = null
 
     private data class ContinuationSupport(val evidence: ReadingAidContinuationEvidence,
@@ -61,8 +62,16 @@ class ReadingAidPolicy(
     fun activeActions(): List<ReadingAidAction> = active.values.sortedBy { it.aidType.name }
 
     fun updatePreferences(value: ReaderAidPreferences, context: ReadingAidContext): List<ReadingAidDecision> {
+        val guideChanged = value.guideStyle != preferences.guideStyle ||
+            value.lineGuide != preferences.lineGuide || value.enabled != preferences.enabled
         preferences = value
-        val out = prepare(context).toMutableList()
+        val out = mutableListOf<ReadingAidDecision>()
+        if (guideChanged) {
+            guideDirection.reset()
+            clear(ReadingAidType.CURRENT_LINE, context.nowMs, "guide_style_changed", out, false)
+            clear(ReadingAidType.CURRENT_SENTENCE, context.nowMs, "guide_style_changed", out, false)
+        }
+        out.addAll(prepare(context))
         if (!allowed(ReadingAidType.NEXT_LINE_START) || value.maxStrength == 0.0 ||
             (!value.adaptiveStrength && value.manualStrength == 0.0)) { resetContinuation(); bookmark.reset() }
         for ((type, action) in active.toMap()) {
@@ -565,7 +574,7 @@ class ReadingAidPolicy(
             (!preferences.adaptiveStrength && preferences.manualStrength == 0.0) ||
             !c.bookmarkInputAllowed || !c.focusInputAllowed || !continuationGeometryValid(c)) {
             clearAll(c.nowMs, "operational_or_geometry_boundary", out)
-            location.reset(); bookmark.reset(); bookmarkPreciseSupport = null
+            location.reset(); guideDirection.reset(); bookmark.reset(); bookmarkPreciseSupport = null
             if (!preferences.enabled || preferences.maxStrength == 0.0 ||
                 (!preferences.adaptiveStrength && preferences.manualStrength == 0.0)) focus.reset() else focus.pause()
             return out
@@ -649,12 +658,21 @@ class ReadingAidPolicy(
         if (!preferences.lineGuide) return
         val g = c.geometry ?: return
         val sentence = preferences.guideStyle == ReadingGuideStyle.SENTENCE
+        val threeLine = preferences.guideStyle == ReadingGuideStyle.THREE_LINE
         val type = if (sentence) ReadingAidType.CURRENT_SENTENCE else ReadingAidType.CURRENT_LINE
-        val row = g.lines[visit.band.representativeLine]
+        val line = visit.band.representativeLine
+        val direction = if (threeLine) guideDirection.observe(visit) else null
+        val visibleRows = ReadingLineGuideAppearance.rows(line, g.lines.lastIndex,
+            direction?.direction ?: ReadingGuideDirection.BALANCED)
+        val row = g.lines[line]
         val lineRange = ReadingGuideRange(row.startUtf16, row.endUtf16, ReadingGuideUnit.LINE)
-        // Owner-selected single-line presentation; uncertainty remains explicit in guideEvidence.
-        // The separate sentence preference still selects text context when available.
-        val range = if (sentence) c.guideRange ?: lineRange else lineRange
+        // Visible neighbours are a reader-selected presentation, not measured error bounds.
+        val range = when {
+            sentence -> c.guideRange ?: lineRange
+            threeLine -> ReadingGuideRange(g.lines[visibleRows.first].startUtf16,
+                g.lines[visibleRows.last].endUtf16, ReadingGuideUnit.READING_BAND)
+            else -> lineRange
+        }
         if (range.endUtf16 <= range.startUtf16) return
         clear(if (sentence) ReadingAidType.CURRENT_LINE else ReadingAidType.CURRENT_SENTENCE,
             c.nowMs, "guide_style_changed", out, false)
@@ -665,20 +683,28 @@ class ReadingAidPolicy(
         if (searchId != null && searchId != guideSearchId) {
             guideSearchId = searchId; guideSearchUntil = c.nowMs + 1500.0
         }
-        val emphasisedSearch = search.isNotEmpty() && c.nowMs < guideSearchUntil
-        val opacity = if (emphasisedSearch) .19 else .08 + .05 *
+        val emphasisedSearch = !threeLine && search.isNotEmpty() && c.nowMs < guideSearchUntil
+        val opacity = if (threeLine) ReadingLineGuideAppearance.THREE_CENTER_OPACITY else if (emphasisedSearch) .19 else .08 + .05 *
             ((visit.lastCaptureMs - visit.firstCaptureMs) / 1500.0).coerceIn(0.0, 1.0)
         val cappedOpacity = minOf(opacity, .19 * preferences.maxStrength,
             if (preferences.adaptiveStrength) .19 else .19 * preferences.manualStrength)
+        val directionSupport = direction?.visits?.map { it.continuation() } ?: emptyList()
+        val bandEvidence = direction?.let {
+            ReadingLineGuideAppearance.threeLine(it.direction, cappedOpacity, directionSupport)
+        }
         val evidence = ReadingAidGuideEvidence(visit.band.firstLine, visit.band.lastLine,
             visit.band.provenance, visit.band.measured, visit.evidenceAvailableMs, started,
-            cappedOpacity, search.map { it.id })
+            cappedOpacity, search.map { it.id }, threeLine = bandEvidence)
         choose(type, anchor(c, visit.band.representativeLine), cappedOpacity / .19,
             visit.firstCaptureMs, visit.lastCaptureMs, visit.evidenceAvailableMs,
-            emptyList(), (search.map { it.id } + visit.id).distinct(),
-            if (!emphasisedSearch) "A1_SUPPORTED_LOCATION_GUIDE_V5" else "A1_MEASURED_SEPARATE_SEARCH_V5",
-            listOf("W23"), "W23 measured line searching and proposed line support; this guide is available for supported ordinary reading. Phone selection, gray opacity and all timing remain pilot choices.",
-            c, out, continuationEvidence = (search + visit).distinctBy { it.id }.map { it.continuation() },
+            emptyList(), (search.map { it.id } + visit.id + directionSupport.map { it.evidenceId }).distinct(),
+            if (threeLine) "A1_SUPPORTED_THREE_LINE_GUIDE_V1"
+                else if (!emphasisedSearch) "A1_SUPPORTED_LOCATION_GUIDE_V5" else "A1_MEASURED_SEPARATE_SEARCH_V5",
+            if (threeLine) listOf("W23", "N23") else listOf("W23"),
+            if (threeLine) "Reading ruler and line-search research motivates testing guides; three-line width, directional emphasis, phone selection and presentation timings are unvalidated pilot choices."
+                else "W23 measured line searching and proposed line support; this guide is available for supported ordinary reading. Phone selection, gray opacity and all timing remain pilot choices.",
+            c, out, continuationEvidence = ((search + visit).map { it.continuation() } + directionSupport)
+                .distinctBy { it.evidenceId },
             guideRange = range, guideEvidence = evidence)
     }
 
@@ -785,7 +811,7 @@ class ReadingAidPolicy(
 
     private fun allowed(type: ReadingAidType): Boolean = preferences.enabled && when (type) {
         ReadingAidType.CURRENT_LINE -> preferences.lineGuide &&
-            (!currentGuideProfile() || preferences.guideStyle == ReadingGuideStyle.LINE)
+            (!currentGuideProfile() || preferences.guideStyle != ReadingGuideStyle.SENTENCE)
         ReadingAidType.CURRENT_SENTENCE -> preferences.lineGuide && currentGuideProfile() &&
             preferences.guideStyle == ReadingGuideStyle.SENTENCE
         ReadingAidType.NEXT_LINE_START, ReadingAidType.READING_BOOKMARK -> preferences.lineStartCue
@@ -845,7 +871,8 @@ class ReadingAidPolicy(
         if (old != null) clear(type, c.nowMs, "replaced", out, applyCooldown = false)
         val action = ReadingAidAction("aid:${++serial}", type,
             when (type) {
-                ReadingAidType.CURRENT_LINE -> if (currentGuideProfile()) "CURRENT_LINE_HIGHLIGHT_GRAY_V1"
+                ReadingAidType.CURRENT_LINE -> if (guideEvidence?.threeLine != null) "CURRENT_THREE_LINE_GUIDE_GRAY_V1"
+                    else if (currentGuideProfile()) "CURRENT_LINE_HIGHLIGHT_GRAY_V1"
                     else "CURRENT_LINE_HIGHLIGHT_V1"
                 ReadingAidType.CURRENT_SENTENCE -> "CURRENT_SENTENCE_CONTEXT_HIGHLIGHT_V1"
                 ReadingAidType.NEXT_LINE_START -> "CONTINUATION_LINE_START_CUE_V1"
@@ -924,6 +951,7 @@ class ReadingAidPolicy(
         if (config.evidenceAlignedV5) location.reset()
         bookmarkPreciseSupport = null
         guideSearchId = null; guideSearchUntil = Double.NEGATIVE_INFINITY
+        guideDirection.reset()
         if (preserveFocus) focus.interruptReading() else focus.reset()
         if (!preserveBookmark) bookmark.reset() else bookmark.interruptTransition()
         wordVisit = null; cycle = null; lineResidence = null; segment = null
