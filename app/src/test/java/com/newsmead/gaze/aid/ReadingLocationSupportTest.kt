@@ -52,6 +52,55 @@ class ReadingLocationSupportTest {
         assertFalse(tick.fresh); assertEquals(v, tick.current)
     }
 
+    @Test fun ongoingVisitRetainsFirstConfirmationClocksSeparatelyFromOnsetAndAvailability() {
+        val h = ReadingLocationSupport()
+        assertNull(h.update(context(0.0, 4, delivery = 25.0), measured).current)
+        assertNull(h.update(context(100.0, 4, delivery = 130.0), measured).current)
+        val confirmed = h.update(context(200.0, 4, delivery = 240.0), measured).current!!
+        assertEquals(0.0, confirmed.firstCaptureMs, 0.0)
+        assertEquals(200.0, confirmed.firstConfirmedCaptureMs, 0.0)
+        assertEquals(240.0, confirmed.firstConfirmedDeliveryMs, 0.0)
+        var ongoing = confirmed
+        for (t in listOf(300.0, 400.0, 500.0)) {
+            ongoing = h.update(context(t, 4, delivery = t + 60.0), measured).current!!
+            assertEquals(confirmed.id, ongoing.id)
+            assertEquals(0.0, ongoing.firstCaptureMs, 0.0)
+            assertEquals(200.0, ongoing.firstConfirmedCaptureMs, 0.0)
+            assertEquals(240.0, ongoing.firstConfirmedDeliveryMs, 0.0)
+            assertEquals(t, ongoing.lastCaptureMs, 0.0)
+            assertEquals(t + 60.0, ongoing.evidenceAvailableMs, 0.0)
+        }
+        assertTrue(ongoing.evidenceAvailableMs > ongoing.firstConfirmedDeliveryMs)
+    }
+
+    @Test fun medianAgreementCannotBackdateResidenceToADisagreeingSelectedPoint() {
+        val h = ReadingLocationSupport()
+        visit(h, 0.0, 4, null)
+        // The median remains on 4 at 450 while the selected point is already on 7.
+        assertNull(h.update(context(450.0, 7)).current)
+        assertNull(h.update(context(500.0, 7)).current)
+        assertNull(h.update(context(550.0, 7)).current)
+        assertNull(h.update(context(600.0, 7)).current)
+        val v = h.update(context(650.0, 7)).current!!
+        assertEquals(7, v.band.representativeLine)
+        assertEquals(500.0, v.firstCaptureMs, 0.0)
+        assertEquals(150.0, v.lastCaptureMs - v.firstCaptureMs, 0.0)
+    }
+
+    @Test fun missingGapAndLayoutBoundariesDiscardIncompleteBroadPattern() {
+        for (boundary in listOf("missing", "gap", "layout")) {
+            val h = ReadingLocationSupport()
+            listOf(4, 7, 4, 5).forEachIndexed { i, row -> visit(h, i * 500.0, row, null) }
+            when (boundary) {
+                "missing" -> h.update(context(1950.0, 5, "no_face"))
+                "gap" -> Unit // Last valid capture was 1900; next starts at 2200.
+                else -> h.update(context(1950.0, 5,
+                    frame = geometry.copy(snapshotId = "changed")))
+            }
+            assertNull("Boundary $boundary", visit(h, 2200.0, 6, null).reread)
+        }
+    }
+
     @Test fun longGapAndBlinkBreakContiguousSupport() {
         val h = ReadingLocationSupport()
         val first = visit(h, 0.0, 4).current!!
@@ -103,6 +152,30 @@ class ReadingLocationSupportTest {
         assertNotNull(result.reread)
         assertFalse(result.reread!!.measuredDistinguishability)
         assertTrue(result.searchWitnesses.isEmpty())
+    }
+
+    @Test fun ordinaryFirstPassRowsDoNotPreventBroadRereading() {
+        for (u in listOf(measured, null)) {
+            val h = ReadingLocationSupport()
+            val route = listOf(4, 5, 6, 7, 4, 5, 6)
+            val results = route.mapIndexed { i, row -> visit(h, i * 500.0, row, u) }
+            assertTrue(results.dropLast(1).all { it.reread == null })
+            assertEquals(route, results.last().reread!!.visits.map { it.band.representativeLine })
+        }
+    }
+
+    @Test fun briefUnsettledExcursionDoesNotInsertAnotherVisitToTheSameRow() {
+        val h = ReadingLocationSupport()
+        visit(h, 0.0, 4, null); visit(h, 500.0, 7, null)
+        val before = visit(h, 1000.0, 4, null).current!!
+        assertNull(h.update(context(1500.0, 5)).current)
+        val after = visit(h, 1600.0, 4, null).current!!
+        assertNotEquals(before.id, after.id)
+        assertTrue(after.firstCaptureMs >= 1500.0) // Unsettled time cannot extend the earlier support.
+        visit(h, 2100.0, 5, null)
+        val reread = visit(h, 2600.0, 6, null).reread!!
+        assertEquals(listOf(4, 7, 4, 5, 6), reread.visits.map { it.band.representativeLine })
+        assertEquals(after.id, reread.visits[2].id)
     }
 
     @Test fun adjacentNoiseAndOvershootingFrontierCannotBecomeReread() {

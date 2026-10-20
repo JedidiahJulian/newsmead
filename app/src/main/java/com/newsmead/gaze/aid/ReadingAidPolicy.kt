@@ -36,7 +36,8 @@ class ReadingAidPolicy(
     private val bookmark = ReadingBookmarkPolicy(supportDetector,
         if (config.evidenceAlignedV5) ReadingBookmarkPersistenceConfig() else null)
     private val focus = ReadingFocusPolicy(config, supportDetector, onFocusEpisode)
-    private val location = ReadingLocationSupport(allowMappingOnlyWordResidence = true)
+    private val location = ReadingLocationSupport(rereadWindowMs = config.focusRereadWindowMs,
+        allowMappingOnlyWordResidence = true)
     private var guideSearchId: String? = null
     private var guideSearchUntil = Double.NEGATIVE_INFINITY
     private var bookmarkPreciseSupport: ReadingAidContinuationEvidence? = null
@@ -497,14 +498,15 @@ class ReadingAidPolicy(
         }
         val strength = e.initialStrength * e.recoveryFactor
         val supports = e.episodes.flatMap { listOfNotNull(it.source, it.recovery) } +
-            e.alternations.flatMap { it.visits } + (e.reread?.visits ?: emptyList()) + e.support
+            e.alternations.flatMap { it.visits } + e.rereads.flatMap { it.visits } +
+                (e.reread?.visits ?: emptyList()) + e.support
         val presence = e.episodes.mapNotNull { it.presenceRecovery }
         choose(ReadingAidType.FOCUS_REGION, anchor(c, e.support.line), strength,
             (supports.map { it.firstCaptureMs } + presence.map { it.firstCaptureMs }).minOrNull()!!,
             (supports.map { it.lastCaptureMs } + presence.map { it.lastCaptureMs }).maxOrNull()!!,
             maxOf(e.support.evidenceAvailableMs, presence.maxOfOrNull { it.confirmedDeliveryMs } ?: 0.0,
                 e.alternations.maxOfOrNull { it.confirmedDeliveryMs } ?: 0.0), e.cycleEventIds,
-            e.episodes.map { it.episodeId } + supports.map { it.evidenceId },
+            e.qualifiedEpisodes.map { it.id } + e.episodes.map { it.episodeId } + supports.map { it.evidenceId },
             e.ruleId, if (e.reread != null) listOf("MV11", "S14") else listOf("EB15", "N23", "S14"),
             if (e.reread != null) "MV11 whole-sentence rereading association under manipulated syntax; online coarse rereading prefix, focus response and timing remain pilot choices."
             else "Observable interruption/line-alternation assistance; trigger, frequency dose and phone benefit are experimental, without an attention diagnosis.",
@@ -606,11 +608,11 @@ class ReadingAidPolicy(
                 if (bookmark.savedLine != value.line) bookmark.withholdUncertainSource()
             }
             if (cFocusAllowed(c)) {
-                focus.support(value, supported, preferences)
+                focus.support(value, supported, preferences, visit.band)
                 update.reread?.let { r ->
                     focus.reread(ReadingAidRereadEvidence("reread:${r.visits.last().id}",
-                        r.visits.map { it.continuation() }, r.visits.minOf { it.band.firstLine },
-                        r.visits.maxOf { it.band.lastLine }, value.evidenceAvailableMs,
+                        r.visits.map { it.continuation() }, r.visits.minOf { it.band.representativeLine },
+                        r.visits.maxOf { it.band.representativeLine }, value.evidenceAvailableMs,
                         r.measuredDistinguishability), supported)
                 }
             }
@@ -639,7 +641,8 @@ class ReadingAidPolicy(
     }
 
     private fun ReadingSupportedVisit.continuation() = ReadingAidContinuationEvidence(id, segment,
-        band.representativeLine, firstCaptureMs, lastCaptureMs, evidenceAvailableMs)
+        band.representativeLine, firstCaptureMs, lastCaptureMs, evidenceAvailableMs,
+        firstConfirmedCaptureMs, firstConfirmedDeliveryMs)
 
     private fun chooseSupportedGuide(visit: ReadingSupportedVisit, search: List<ReadingSupportedVisit>,
         c: ReadingAidContext, out: MutableList<ReadingAidDecision>) {

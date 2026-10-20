@@ -96,12 +96,18 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
             val e = a.focusEvidence
             val supports = a.continuationEvidence + listOfNotNull(a.bookmarkEvidence?.source,
                 a.bookmarkEvidence?.departureSupport, e?.support) +
+                (e?.rereads?.flatMap { it.visits } ?: emptyList()) +
                 (e?.reread?.visits ?: emptyList()) + (e?.alternations?.flatMap { it.visits } ?: emptyList()) +
                 (e?.episodes?.flatMap { listOfNotNull(it.source, it.recovery) } ?: emptyList())
             supports.forEach { s -> remember(a.anchor.generation.toInt(), s.evidenceId,
                 JSONObject().put("kind", "aid_local_stabilized_support_not_finalized_fixation")
                     .put("segment", s.segment).put("line", s.line).put("first_capture_ms", s.firstCaptureMs)
-                    .put("last_capture_ms", s.lastCaptureMs).put("evidence_available_ms", s.evidenceAvailableMs)) }
+                    .put("last_capture_ms", s.lastCaptureMs).put("evidence_available_ms", s.evidenceAvailableMs)
+                    .put("candidate_onset_capture_ms", s.firstCaptureMs)
+                    .put("first_confirmed_capture_ms", s.firstConfirmedCaptureMs ?: JSONObject.NULL)
+                    .put("first_confirmed_delivery_ms", s.firstConfirmedDeliveryMs ?: JSONObject.NULL)) }
+            e?.qualifiedEpisodes?.forEach { q -> remember(a.anchor.generation.toInt(), q.id,
+                q.focusQualificationJson().put("kind", "qualified_focus_assistance_episode")) }
         }
         record("decision", value.nowMs, JSONObject()
         .put("status", value.status.name).put("reason", value.reason)

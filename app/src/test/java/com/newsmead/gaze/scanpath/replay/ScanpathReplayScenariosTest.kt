@@ -17,6 +17,14 @@ class ScanpathReplayScenariosTest {
             ScanpathRect(90.0 + i % 4 * 100, 120.0 + line * 40,
                 170.0 + i % 4 * 100, 140.0 + line * 40))
     }
+    private val currentFourRowScenarioIds = setOf("broad_reread", "v5_line_alternation")
+    private val currentScenarioIds = currentFourRowScenarioIds + "v5_adjacent_alternation"
+    private val fourRowGeometry = geometry.copy(visibleRectScreen = geometry.visibleRectScreen.copy(bottom = 360.0),
+        lines = (0..5).map { ScanpathLine(it * 20, it * 20 + 19, 0.0, 400.0,
+            it * 40.0, it * 40.0 + 20) })
+    private val fourRowWords = (0..23).map { i -> ReplayWord(WordRange(i * 5, i * 5 + 4), i / 4,
+        ScanpathRect(90.0 + i % 4 * 100, 120.0 + i / 4 * 40,
+            170.0 + i % 4 * 100, 140.0 + i / 4 * 40)) }
     private class Result {
         val events = mutableListOf<ScanpathEvent>()
         val decisions = mutableListOf<ReadingAidDecision>()
@@ -30,13 +38,14 @@ class ScanpathReplayScenariosTest {
                     continuationStrengthProbe: Boolean = false,
                     fixtureGeometry: ScanpathGeometry = geometry,
                     fixtureWords: List<ReplayWord> = words,
+                    focusTextSizeDp: Double = 22.0,
                     currentBookmarkProfile: Boolean = id.startsWith("bookmark_") ||
                         id in setOf("repeated_interruptions", "brief_interruptions",
                             "interruption_place_search", "line_alternation")): Result {
         val geometry = fixtureGeometry
         val words = fixtureWords
         val result = Result()
-        val profile = if (id == "broad_reread") ReadingAidPolicyConfig.evidenceAlignedPrototype()
+        val profile = if (id in currentScenarioIds) ReadingAidPolicyConfig.evidenceAlignedPrototype()
             else if (currentBookmarkProfile) ReadingAidPolicyConfig.definitionPrototype()
             else ReadingAidPolicyConfig.experimentalPrototype()
         val policy = ReadingAidPolicy(profile, ReaderAidPreferences(focusRegion = focus,
@@ -72,7 +81,7 @@ class ScanpathReplayScenariosTest {
             assertTrue(!point.eligible || word != null)
             val capture = 10000 + point.offsetMs
             val delivery = capture + 10
-            val selectedReplay = id in setOf("interruption_place_search", "line_alternation")
+            val selectedReplay = id in currentScenarioIds || id in setOf("interruption_place_search", "line_alternation")
             val sample = ScanpathSample(capture, delivery,
                 if (selectedReplay) null else x, if (selectedReplay) null else y, line,
                 word?.range?.startUtf16, word?.range?.endUtf16, geometry.snapshotId, point.eligible,
@@ -82,7 +91,7 @@ class ScanpathReplayScenariosTest {
             result.samples.add(sample)
             context = ReadingAidContext(0, geometry.snapshotId, geometry.lines.size, line,
                 word?.range?.startUtf16, word?.range?.endUtf16, delivery, capture, delivery, point.eligible,
-                geometry, x, rawSample = sample)
+                geometry, x, rawSample = sample, focusTextSizeDp = focusTextSizeDp)
             if (!point.eligible) result.decisions.addAll(policy.onObservation(null, context))
             val accepted = engine.onSample(sample)
             val candidate = if (accepted) engine.currentCandidateEvidence() else null
@@ -95,7 +104,7 @@ class ScanpathReplayScenariosTest {
 
     @Test fun everyScenarioProducesItsDeclaredPatternsAndAidsFromSelectedCoordinates() {
         // The historical three-row fixture cannot contain the new four-row V5 route.
-        ScanpathReplayScenarios.scenarios.filter { it.id != "broad_reread" }.forEach { scenario ->
+        ScanpathReplayScenarios.scenarios.filter { it.id !in currentFourRowScenarioIds }.forEach { scenario ->
             val points = ScanpathReplayScenarios.build(scenario.id, geometry, words)
             assertTrue(points.first().offsetMs >= 200)
             assertTrue(points.zipWithNext().all { (a, b) -> b.offsetMs - a.offsetMs in 1.0..50.0 })
@@ -104,21 +113,37 @@ class ScanpathReplayScenariosTest {
                 result.events.map { it.patternId }.toSet().containsAll(scenario.expectedPatternIds))
             assertTrue("${scenario.id}: aids ${result.actions.map { it.aidType }}",
                 result.actions.map { it.aidType.name }.toSet().containsAll(scenario.expectedAidTypes))
-            assertTrue(result.actions.all { it.lastCaptureMs <= it.evidenceAvailableMs && it.evidenceAvailableMs <= it.onsetMs })
+            result.decisions.filter { it.status == ReadingAidDecisionStatus.CHOSEN }.forEach { decision ->
+                val action = checkNotNull(decision.action)
+                val detail = "${scenario.id}: ${action.aidType} ${action.id}"
+                assertTrue(detail, action.lastCaptureMs <= action.evidenceAvailableMs)
+                assertTrue(detail, action.evidenceAvailableMs <= decision.nowMs)
+                val guide = action.guideEvidence
+                if (guide == null) assertTrue(detail, action.evidenceAvailableMs <= action.onsetMs)
+                else {
+                    // Refreshed guide evidence retains its earlier presentation entry clock.
+                    assertEquals(detail, guide.presentationStartedMs, action.onsetMs, 0.0)
+                    assertTrue(detail, action.onsetMs <= guide.lastSupportedDeliveryMs)
+                    assertEquals(detail, guide.lastSupportedDeliveryMs, action.evidenceAvailableMs, 0.0)
+                }
+            }
         }
     }
 
     @Test fun broadRereadScenarioRunsThroughCurrentLocationAndFocusPolicy() {
-        val g = geometry.copy(visibleRectScreen = geometry.visibleRectScreen.copy(bottom = 360.0),
-            lines = (0..5).map { ScanpathLine(it * 20, it * 20 + 19, 0.0, 400.0,
-                it * 40.0, it * 40.0 + 20) })
-        val w = (0..23).map { i -> ReplayWord(WordRange(i * 5, i * 5 + 4), i / 4,
-            ScanpathRect(90.0 + i % 4 * 100, 120.0 + i / 4 * 40,
-                170.0 + i % 4 * 100, 140.0 + i / 4 * 40)) }
+        val g = fourRowGeometry
+        val w = fourRowWords
         val result = run("broad_reread", fixtureGeometry = g, fixtureWords = w)
         val focus = result.actions.first { it.aidType == ReadingAidType.FOCUS_REGION }
         assertEquals("A4_BROAD_REREADING_V5", focus.ruleId)
-        assertEquals(listOf(0, 3, 0, 1, 2), focus.focusEvidence!!.reread!!.visits.map { it.line })
+        assertEquals(listOf(0, 1, 2, 3, 0, 1, 2), focus.focusEvidence!!.reread!!.visits.map { it.line })
+        val witnesses = focus.focusEvidence!!.rereads
+        assertEquals(1, witnesses.size)
+        assertEquals(0.5, focus.strength, 0.0001)
+        assertEquals(1, focus.focusEvidence!!.qualifiedEpisodes.size)
+        assertTrue(witnesses.single().visits.last().lastCaptureMs - witnesses.single().visits.first().firstCaptureMs <= 15000.0)
+        assertTrue(result.actions.filter { it.aidType == ReadingAidType.FOCUS_REGION }.all {
+            it.focusEvidence!!.qualifiedEpisodes.size == 1 && it.strength <= 0.5 })
         assertTrue(result.events.any { it.patternId == "P08" })
         val dx = 100.0; val dy = 200.0
         val shiftedGeometry = g.copy(textOriginX = g.textOriginX + dx, textOriginY = g.textOriginY + dy,
@@ -128,6 +153,56 @@ class ScanpathReplayScenariosTest {
         assertEquals(ScanpathReplayScenarios.build("broad_reread", g, w).map {
             it.copy(x = it.x?.plus(dx), y = it.y?.plus(dy)) },
             ScanpathReplayScenarios.build("broad_reread", shiftedGeometry, shiftedWords))
+    }
+
+    @Test fun currentAlternationSeparatesAnchorsAndRejectsAdjacentRows() {
+        val script = ScanpathReplayScenarios.build("v5_line_alternation", fourRowGeometry, fourRowWords)
+        // Stop the fourth visit at 200 ms: median transition plus fresh residence is incomplete.
+        val visits = script.fold(mutableListOf<MutableList<ReplayPoint>>()) { groups, point ->
+            if (groups.lastOrNull()?.last()?.let { it.x == point.x && it.y == point.y } != true)
+                groups.add(mutableListOf())
+            groups.last().add(point)
+            groups
+        }
+        assertEquals(12, visits.size)
+        val earlyScript = visits.take(3).flatten() + visits[3].takeWhile {
+            it.offsetMs - visits[3].first().offsetMs <= 200.0 }
+        val early = run("v5_line_alternation", scriptedPoints = earlyScript,
+            fixtureGeometry = fourRowGeometry, fixtureWords = fourRowWords)
+        assertTrue(early.actions.none { it.aidType == ReadingAidType.FOCUS_REGION })
+        val supported = run("v5_line_alternation", fixtureGeometry = fourRowGeometry, fixtureWords = fourRowWords)
+        val focus = supported.actions.first { it.aidType == ReadingAidType.FOCUS_REGION }
+        assertEquals(0.5, focus.strength, 0.0001)
+        assertEquals(listOf(0, 3, 0, 3), focus.focusEvidence!!.alternations.single().visits.map { it.line })
+        assertEquals(1, focus.focusEvidence!!.qualifiedEpisodes.size)
+        assertTrue(supported.actions.any { it.aidType == ReadingAidType.FOCUS_REGION && it.strength == 1.0 &&
+            it.focusEvidence!!.qualifiedEpisodes.size == 2 })
+        listOf(22.0 to 1, 18.0 to 2, 16.0 to 3).forEach { (fontDp, required) ->
+            val positive = run("v5_line_alternation", fixtureGeometry = fourRowGeometry,
+                fixtureWords = fourRowWords, focusTextSizeDp = fontDp)
+            val first = positive.actions.first { it.aidType == ReadingAidType.FOCUS_REGION }
+            assertEquals(0.5, first.strength, 0.0001)
+            assertEquals(required, first.focusEvidence!!.alternations.size)
+            assertEquals(1, first.focusEvidence!!.qualifiedEpisodes.size)
+            val adjacent = run("v5_adjacent_alternation", fixtureGeometry = fourRowGeometry,
+                fixtureWords = fourRowWords, focusTextSizeDp = fontDp)
+            assertTrue(adjacent.events.any { it.patternId == "P08" })
+            assertTrue(adjacent.actions.none { it.aidType == ReadingAidType.FOCUS_REGION })
+        }
+    }
+
+    @Test fun currentFourRowScenariosTranslateCoordinatesWithoutChangingSourceOrTime() {
+        val dx = 100.0; val dy = 200.0
+        fun translate(r: ScanpathRect) = ScanpathRect(r.left + dx, r.top + dy, r.right + dx, r.bottom + dy)
+        val moved = fourRowGeometry.copy(textOriginX = fourRowGeometry.textOriginX + dx,
+            textOriginY = fourRowGeometry.textOriginY + dy, visibleRectScreen = translate(fourRowGeometry.visibleRectScreen))
+        val movedWords = fourRowWords.map { it.copy(bounds = translate(it.bounds)) }
+        currentScenarioIds.forEach { id ->
+            val original = ScanpathReplayScenarios.build(id, fourRowGeometry, fourRowWords)
+            assertTrue(original.all { it.eligible && it.sourceReason == null })
+            assertEquals(original.map { it.copy(x = it.x?.plus(dx), y = it.y?.plus(dy)) },
+                ScanpathReplayScenarios.build(id, moved, movedWords))
+        }
     }
 
     @Test fun normalSweepIsObservedWithoutContinuationCue() {
@@ -481,6 +556,8 @@ class ScanpathReplayScenariosTest {
         rejects("navigation", w = words.take(2), detail = "four consecutive")
         rejects("line_cycle", w = words.take(4), detail = "adjacent")
         rejects("line_alternation", w = words.take(4), detail = "adjacent fully visible")
+        rejects("v5_line_alternation", detail = "four fully visible")
+        rejects("broad_reread", detail = "four consecutive fully visible")
         rejects("interruption_place_search", w = words.take(8), detail = "two separated physical search lines")
         rejects("line_alternation", geometry.copy(visibleRectScreen = geometry.visibleRectScreen.copy(bottom = 170.0)),
             detail = "fully visible")
@@ -496,7 +573,7 @@ class ScanpathReplayScenariosTest {
         val moved = geometry.copy(textOriginX = geometry.textOriginX + dx, textOriginY = geometry.textOriginY + dy,
             visibleRectScreen = translate(geometry.visibleRectScreen))
         val movedWords = words.map { it.copy(bounds = translate(it.bounds)) }
-        ScanpathReplayScenarios.scenarios.filter { it.id != "broad_reread" }.forEach { scenario ->
+        ScanpathReplayScenarios.scenarios.filter { it.id !in currentFourRowScenarioIds }.forEach { scenario ->
             val original = ScanpathReplayScenarios.build(scenario.id, geometry, words)
             val shifted = ScanpathReplayScenarios.build(scenario.id, moved, movedWords)
             assertEquals(original.map { it.copy(x = it.x?.plus(dx), y = it.y?.plus(dy)) }, shifted)

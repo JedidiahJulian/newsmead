@@ -38,8 +38,12 @@ object ScanpathReplayScenarios {
             setOf("P13"), setOf("CURRENT_LINE", "FOCUS_REGION")),
         ReplayScenario("line_alternation", "Supported line alternation", "Four supported A–B–A–B visits over more than two seconds, ending during the ongoing fourth visit; Controls select focus.",
             setOf("P08"), setOf("CURRENT_LINE", "FOCUS_REGION")),
-        ReplayScenario("broad_reread", "Broad passage rereading", "Stabilized A → later B → A → next row → continued forward rereading. Online prefix; no difficulty diagnosis.",
+        ReplayScenario("broad_reread", "Broad passage rereading", "One normal forward passage, a broad return, and two adjacent forward rereading steps within 15 seconds. No difficulty diagnosis.",
             setOf("P08"), setOf("CURRENT_LINE", "FOCUS_REGION")),
+        ReplayScenario("v5_line_alternation", "Separated line alternation (current)", "Three independent supported A-B-A-B sequences cover current font tiers; anchors are at least three physical rows apart. Requires four visible rows. No difficulty diagnosis.",
+            setOf("P08"), setOf("CURRENT_LINE", "FOCUS_REGION")),
+        ReplayScenario("v5_adjacent_alternation", "Adjacent line alternation (current negative)", "Three supported adjacent A-B-A-B sequences cover current font tiers; overlapping uncertainty bands must withhold current focus.",
+            setOf("P08"), setOf("CURRENT_LINE")),
         ReplayScenario("word_refixations", "Word refixations and residence", "Separated positions inside one wide word, followed by ongoing observed residence.",
             setOf("P04", "P12"), setOf("CURRENT_LINE", "WORD_MAGNIFIER")),
         ReplayScenario("line_cycle", "Line cycle and residence", "A–B–A–B lines, then word advances on B with recent residence and slow frontier progression; Controls select focus.",
@@ -230,25 +234,33 @@ object ScanpathReplayScenarios {
                 }.toSortedMap()
                 val group = rows.keys.toList().windowed(4).firstOrNull { it.last() - it.first() == 3 }
                     ?: impossible("need four consecutive fully visible rows for broad rereading")
-                listOf(group[0], group[3], group[0], group[1], group[2]).forEach {
+                listOf(group[0], group[1], group[2], group[3], group[0], group[1], group[2]).forEach {
                     hold(center(rows.getValue(it).first()), 600)
                 }
             }
-            "line_alternation" -> {
+            "line_alternation", "v5_line_alternation", "v5_adjacent_alternation" -> {
                 val visible = usable.filter { w ->
                     val row = geometry.lines[w.line]
                     geometry.textOriginX + row.left >= v.left && geometry.textOriginX + row.right <= v.right &&
                         geometry.textOriginY + row.top >= v.top && geometry.textOriginY + row.bottom <= v.bottom
                 }
+                val lineDistance = if (id == "v5_line_alternation") 3 else 1
                 val pair = visible.firstNotNullOfOrNull { a ->
-                    visible.firstOrNull { b -> b.line == a.line + 1 && separated(center(a), center(b)) }
+                    visible.firstOrNull { b -> b.line == a.line + lineDistance && separated(center(a), center(b)) &&
+                        (a.line..b.line).all { line -> visible.any { it.line == line } } }
                         ?.let { a to it }
-                } ?: impossible("need adjacent fully visible physical lines with separated word centers")
-                hold(center(pair.first), 750)
-                hold(center(pair.second), 750)
-                hold(center(pair.first), 750)
-                // Establish the fourth visit without finalizing it or flushing the engine.
-                hold(center(pair.second), 200)
+                } ?: impossible(if (lineDistance == 3) "need four fully visible physical rows with separated anchors"
+                    else "need adjacent fully visible physical lines with separated word centers")
+                // Screen geometry has no font dp/density. Three disjoint witnesses
+                // cover the retained 1/2/3 typography tiers without guessing a tier.
+                repeat(if (id == "line_alternation") 1 else 3) {
+                    hold(center(pair.first), 750)
+                    hold(center(pair.second), 750)
+                    hold(center(pair.first), 750)
+                    // V5 needs a fresh 150 ms residence after the median crosses to B.
+                    // Allow transition time while preserving the legacy comparison.
+                    hold(center(pair.second), if (id == "line_alternation") 200 else 350)
+                }
             }
             "word_refixations" -> {
                 val w = usable.filter { it.bounds.right - it.bounds.left >= 3 * threshold }

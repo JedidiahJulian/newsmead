@@ -29,7 +29,9 @@ data class ReadingSupportedRowBand(
 data class ReadingSupportedVisit(
     val id: String, val segment: Int, val generation: Long, val geometrySnapshotId: String,
     val band: ReadingSupportedRowBand, val firstCaptureMs: Double, val lastCaptureMs: Double,
-    val evidenceAvailableMs: Double
+    val evidenceAvailableMs: Double,
+    val firstConfirmedCaptureMs: Double = lastCaptureMs,
+    val firstConfirmedDeliveryMs: Double = evidenceAvailableMs
 )
 
 data class ReadingSupportedReread(
@@ -71,6 +73,7 @@ class ReadingLocationSupport(
     private var lastNow = Double.NEGATIVE_INFINITY
     private var candidate: ReadingSupportedRowBand? = null
     private var candidateFirst = 0.0
+    private var candidateAligned = false
     private var current: ReadingSupportedVisit? = null
     private var segment = 0
     private var serial = 0L
@@ -80,7 +83,7 @@ class ReadingLocationSupport(
 
     /** Operational/missing boundaries reset duration, while an unresolved word remains suppressed. */
     fun interrupt() {
-        points.clear(); visits.clear(); candidate = null; current = null; word = null
+        points.clear(); visits.clear(); candidate = null; candidateAligned = false; current = null; word = null
         lastCapture = Double.NEGATIVE_INFINITY; segment++
     }
 
@@ -155,17 +158,23 @@ class ReadingLocationSupport(
             if (rows.isEmpty()) { interrupt(); return ReadingLocationUpdate(null, false) }
             ReadingSupportedRowBand(rows.first(), rows.last(), representative, true, uncertainty.provenance, top, bottom)
         }
-        if (candidate?.let { sameBand(it, band) } != true || rawLine != representative) {
+        val aligned = rawLine == representative
+        if (candidate?.let { sameBand(it, band) } != true || !aligned || !candidateAligned) {
             candidate = band; candidateFirst = t
         }
+        candidateAligned = aligned
         var reread: ReadingSupportedReread? = null
         if (rawLine == representative && t - candidateFirst >= minDwellMs) {
             val previous = current
             if (previous == null || !sameBand(previous.band, band)) {
                 current = ReadingSupportedVisit("location:${++serial}", segment, c.generation, c.geometrySnapshotId,
                     band, candidateFirst, t, d)
+                // Re-establishing the same row after unsettled samples is not a
+                // new movement. Replace its support, without bridging the gap.
+                if (visits.lastOrNull()?.band?.representativeLine == band.representativeLine) visits.removeLast()
                 visits.addLast(current!!)
-                while (visits.size > 5) visits.removeFirst()
+                while (visits.size > 128 || (visits.size > 1 &&
+                        t - visits.first().firstCaptureMs > rereadWindowMs)) visits.removeFirst()
                 reread = detectReread()
             } else {
                 current = previous.copy(band = band, lastCaptureMs = t, evidenceAvailableMs = d)
@@ -190,15 +199,30 @@ class ReadingLocationSupport(
             a.measured == b.measured && a.provenance == b.provenance
 
     private fun detectReread(): ReadingSupportedReread? {
-        if (visits.size != 5) return null
-        val v = visits.toList(); val a = v[0].band; val b = v[1].band; val r = v[2].band
-        val c = v[3].band; val d = v[4].band
-        if (v.last().lastCaptureMs - v.first().firstCaptureMs > rereadWindowMs ||
-            a.lastLine >= b.firstLine || !a.overlaps(r) || r.lastLine >= b.firstLine ||
-            r.representativeLine >= c.representativeLine || c.representativeLine >= d.representativeLine ||
-            d.representativeLine > b.representativeLine) return null
-        val movements = listOf(a to b, b to r, r to c, c to d)
-        return ReadingSupportedReread(v, movements.all { (from, to) -> from.measurablyDistinctFrom(to) })
+        if (visits.size < 5) return null
+        val v = visits.toList()
+        // First-pass forward rows may occur between A and B. After the broad
+        // return, require at least two actual forward row changes within B.
+        for (returned in v.lastIndex - 2 downTo 2) {
+            val b = v[returned - 1].band
+            val r = v[returned].band
+            val tail = v.subList(returned, v.size)
+            if (r.lastLine >= b.firstLine || v.last().band.representativeLine > b.representativeLine ||
+                tail.zipWithNext().any { (from, to) ->
+                    from.band.representativeLine >= to.band.representativeLine }) continue
+            for (start in returned - 2 downTo 0) {
+                val a = v[start].band
+                if (a.lastLine >= b.firstLine || !a.overlaps(r)) continue
+                val firstPass = v.subList(start, returned)
+                if (firstPass.zipWithNext().any { (from, to) ->
+                        from.band.representativeLine >= to.band.representativeLine }) continue
+                val witness = v.subList(start, v.size)
+                if (witness.last().lastCaptureMs - witness.first().firstCaptureMs > rereadWindowMs) continue
+                return ReadingSupportedReread(witness, witness.zipWithNext().all { (from, to) ->
+                    from.band.measurablyDistinctFrom(to.band) })
+            }
+        }
+        return null
     }
 
     private fun detectSearch(): List<ReadingSupportedVisit> {

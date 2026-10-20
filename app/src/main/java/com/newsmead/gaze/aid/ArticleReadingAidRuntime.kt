@@ -330,6 +330,7 @@ class ArticleReadingAidRuntime(
             maxOf(a, b), g.textOriginY + row.bottom)
     }
     fun activeActions(): List<ReadingAidAction> = policy.activeActions()
+    fun focusDiagnostics(): Map<String, Any> = policy.focusDiagnostics(context.nowMs)
 
     private fun decisions(values: List<ReadingAidDecision>) {
         trace.context(context)
@@ -448,9 +449,17 @@ class ArticleReadingAidRuntime(
             .put("bookmark_tracking_loss_interpretation", "unavailable_gaze_not_attention_diagnosis")
             .put("bookmark_line_jump_trigger", !config.evidenceAlignedV5)
             .put("bookmark_source_requires_mapper_agreement", config.evidenceAlignedV5)
-            .put("focus_rule_version", if (config.evidenceAlignedV5) "BROAD_REREAD_PLUS_MIGRATION_ROUTES_V5" else "FONT_AWARE_LINE_VISITS_V5_UNCHANGED_RETURN_PRESENCE")
-            .put("focus_broad_reread_order", if (config.evidenceAlignedV5) "A_B_A_C_D:B>A;A<C<D<=B" else JSONObject.NULL)
+            .put("focus_rule_version", if (config.evidenceAlignedV5) "SUPPORTED_INDEPENDENT_FOCUS_EPISODES_V8" else "FONT_AWARE_LINE_VISITS_V5_UNCHANGED_RETURN_PRESENCE")
+            .put("focus_broad_reread_order", if (config.evidenceAlignedV5) "A_forward_to_B_return_A_forward_C_D:B>A;A<C<D<=B" else JSONObject.NULL)
             .put("focus_broad_reread_window_ms", if (config.evidenceAlignedV5) 15000 else JSONObject.NULL)
+            .put("focus_broad_reread_min_sequences", if (config.evidenceAlignedV5) config.focusRereadMinSequences else JSONObject.NULL)
+            .put("focus_broad_reread_repeat_window_ms", if (config.evidenceAlignedV5) config.focusRereadWindowMs else JSONObject.NULL)
+            .put("focus_broad_reread_repeat_time_basis", if (config.evidenceAlignedV5)
+                "first_sequence_first_capture_to_latest_sequence_last_capture" else JSONObject.NULL)
+            .put("focus_line_anchor_separation", if (config.evidenceAlignedV5)
+                "measured_nonoverlap_or_coarse_neighbor_guard_accuracy_unknown" else JSONObject.NULL)
+            .put("focus_strength_credit", if (config.evidenceAlignedV5)
+                "globally_disjoint_complete_episodes_while_response_active" else JSONObject.NULL)
             .put("focus_font_rule_version", ReadingFocusTypography.VERSION)
             .put("focus_text_size_dp", renderedFontDp())
             .put("focus_font_size_basis", "rendered_font_pixels_divided_by_display_density_including_system_font_scale")

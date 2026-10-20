@@ -81,15 +81,66 @@ class ReadingAidEvidenceV5Test {
         assertNull(s.action(ReadingAidType.WORD_DEFINITION))
     }
 
-    @Test fun fiveVisitBroadRereadActivatesDistinctRouteWithoutExactWordIndex() {
+    @Test fun oneCompleteBroadRereadActivatesDistinctRouteWithoutExactWordIndex() {
         val s = Session()
-        listOf(4, 7, 4, 5, 6).forEach { s.hold(it) }
+        listOf(4, 7, 4, 5).forEach { s.hold(it) }
+        assertNull("The second forward reread step is still missing", s.action(ReadingAidType.FOCUS_REGION))
+        s.hold(6)
         val focus = s.action(ReadingAidType.FOCUS_REGION)!!
         assertEquals("A4_BROAD_REREADING_V5", focus.ruleId)
         assertEquals(listOf(4, 7, 4, 5, 6), focus.focusEvidence!!.reread!!.visits.map { it.line })
         assertEquals(.5, focus.strength, .0001)
+        assertEquals(1, focus.focusEvidence!!.rereads.size)
+        assertEquals(1, focus.focusEvidence!!.requiredRereadSequences)
+        assertEquals(15000.0, focus.focusEvidence!!.rereadWindowMs, 0.0)
         assertTrue(focus.focusEvidence!!.reread!!.firstLine <= 4)
         assertTrue(focus.focusEvidence!!.reread!!.lastLine >= 7)
+    }
+
+    @Test fun ordinaryForwardPassageWithBroadReturnCanActivateFocus() {
+        val s = Session()
+        val route = listOf(4, 5, 6, 7, 4, 5, 6)
+        route.dropLast(1).forEach { s.hold(it) }
+        assertNull(s.action(ReadingAidType.FOCUS_REGION))
+        s.hold(route.last())
+        val focus = s.action(ReadingAidType.FOCUS_REGION)!!
+        assertEquals("A4_BROAD_REREADING_V5", focus.ruleId)
+        assertEquals(1, focus.focusEvidence!!.rereads.size)
+        assertTrue(focus.focusEvidence!!.rereads.all { r -> r.visits.map { it.line } == route })
+        assertEquals(4, focus.focusEvidence!!.reread!!.firstLine)
+        assertEquals(7, focus.focusEvidence!!.reread!!.lastLine)
+    }
+
+    @Test fun selectedSampleBroadPrefixWorksAtFiveFifteenAndThirtyHz() {
+        for (hz in listOf(5, 15, 30)) {
+            val s = Session()
+            for (row in listOf(4, 5, 6, 7, 4, 5, 6)) {
+                repeat(hz) {
+                    s.time += 1000.0 / hz
+                    s.latest = context(s.time, row)
+                    s.policy.onObservation(null, s.latest!!)
+                }
+            }
+            val focus = s.action(ReadingAidType.FOCUS_REGION)
+            assertNotNull("Sampling rate $hz Hz", focus)
+            assertEquals(.5, focus!!.strength, .0001)
+            assertEquals(1, focus.focusEvidence!!.rereads.size)
+            assertEquals(listOf(4, 5, 6, 7, 4, 5, 6),
+                focus.focusEvidence!!.reread!!.visits.map { it.line })
+        }
+    }
+
+    @Test fun unknownAdjacentAlternationsStayOffWhileBroadAnchorsActivate() {
+        for (other in listOf(5, 6, 7)) {
+            val s = Session()
+            listOf(4, other, 4, other).forEach { s.hold(it) }
+            if (other < 7) assertNull(s.action(ReadingAidType.FOCUS_REGION))
+            else {
+                val focus = s.action(ReadingAidType.FOCUS_REGION)!!
+                assertEquals("A4_FONT_SCALED_LINE_VISITS_V3", focus.ruleId)
+                assertEquals(.5, focus.strength, .0001)
+            }
+        }
     }
 
     @Test fun slowPhoneInputRetainsInterruptionRecoveryAndRepeatedRevisitRoutes() {
@@ -99,6 +150,13 @@ class ReadingAidEvidenceV5Test {
             interrupted.hold(4, 800, 200)
         }
         assertEquals("A4_RETURN_PRESENCE_FOCUS_V2", interrupted.action(ReadingAidType.FOCUS_REGION)!!.ruleId)
+        repeat(3) { additional ->
+            repeat(4) { interrupted.sample(4, 200, "no_face") }
+            interrupted.hold(4, 800, 200)
+            val e = interrupted.action(ReadingAidType.FOCUS_REGION)!!.focusEvidence!!
+            assertEquals(if (additional < 2) .5 else 1.0, e.initialStrength, 0.0)
+            assertEquals(if (additional < 2) 1 else 2, e.qualifiedEpisodes.size)
+        }
         val revisits = Session()
         listOf(4, 7, 4, 7).forEach { revisits.hold(it, 800, 200) }
         assertEquals("A4_FONT_SCALED_LINE_VISITS_V3", revisits.action(ReadingAidType.FOCUS_REGION)!!.ruleId)

@@ -60,6 +60,9 @@ class ScanpathReplayActivity : AppCompatActivity() {
     private val drawnAids = linkedSetOf<String>()
     private var lastChoice = ""
     private var latestReason = ""
+    private var focusDetectorStatus = "collecting candidate evidence"
+    private var focusRequestStatus = "none"
+    private var focusRenderStatus = "no receipt"
     var lastResult: ScanpathReplayResult? = null
         private set
     val isReplaying get() = running || preparing
@@ -207,6 +210,9 @@ class ScanpathReplayActivity : AppCompatActivity() {
         ordinal = 0
         patternCounts.clear(); chosenAids.clear(); drawnAids.clear()
         lastChoice = ""; latestReason = ""; pendingStop = null
+        focusDetectorStatus = "collecting candidate evidence"
+        focusRequestStatus = "none"
+        focusRenderStatus = "no receipt"
         plannedFrame = geometry
         originElapsedMs = ceil(now())
         runtime = ArticleReadingAidRuntime(binding.replayBody, binding.replayWordDock, overlay,
@@ -220,10 +226,26 @@ class ScanpathReplayActivity : AppCompatActivity() {
                             com.newsmead.gaze.aid.ReadingAidType.READING_BOOKMARK))
                         "${d.action.aidType.name} fixed visibility" else "${d.action.aidType.name} ${(d.action.strength * 100).toInt()}%"
                 }
+                if (d.action?.aidType == ReadingAidType.FOCUS_REGION) {
+                    when (d.status) {
+                        ReadingAidDecisionStatus.CHOSEN -> {
+                            focusRequestStatus = "FOCUS_REGION ${(d.action.strength * 100).toInt()}%"
+                            focusRenderStatus = "awaiting receipt"
+                        }
+                        ReadingAidDecisionStatus.CLEARED, ReadingAidDecisionStatus.EXPIRED ->
+                            focusRequestStatus = "none (${d.reason})"
+                        else -> Unit
+                    }
+                }
                 latestReason = d.reason
             }, onRenderReceipt = { a, drawn, reason, at ->
                 log?.render(a, drawn, reason, at)
                 if (drawn) drawnAids.add(a.aidType.name)
+                if (a.aidType == ReadingAidType.FOCUS_REGION) {
+                    // Preserve the actual renderer reason, including focus_no_dimmed_area.
+                    focusRenderStatus = "${if (drawn) "drawn" else "withheld"}: $reason"
+                    if (running) updateReplayStatus()
+                }
             }, definitionPopup = definitionPopup,
             onConsultationChanged = { active, at, reason ->
                 log?.append("definition_consultation", JSONObject().put("active", active)
@@ -295,10 +317,20 @@ class ScanpathReplayActivity : AppCompatActivity() {
                 else point.sourceReason ?: if (point.x?.isFinite() == true && point.y?.isFinite() == true) "coordinate" else "synthetic_loss", selectedX, selectedY,
                 null, null))
             ordinal++
-            binding.replayStatus.text = "${scenario.label}\nSamples $ordinal/${points.size} Â· ${patternCounts.keys.joinToString(" ")}\n" +
-                "Aid: ${lastChoice.ifBlank { "none" }}\n${latestReason.ifBlank { "collecting candidate evidence" }}"
+            updateReplayStatus()
             postNext(startToken)
         }, delay)
+    }
+
+    private fun updateReplayStatus() {
+        runtime?.focusDiagnostics()?.let { diagnostics ->
+            focusDetectorStatus = "episodes=${diagnostics["qualified_focus_episode_count"] ?: 0}, " +
+                "demand=${diagnostics["has_demand"] ?: false}: ${diagnostics["reason"] ?: "collecting candidate evidence"}"
+        }
+        binding.replayStatus.text = "${scenario.label}\nSamples $ordinal/${points.size} · ${patternCounts.keys.joinToString(" ")}\n" +
+            "Aid: ${lastChoice.ifBlank { "none" }}\n" +
+            "Focus detector: $focusDetectorStatus\nFocus requested: $focusRequestStatus\nFocus render: $focusRenderStatus\n" +
+            latestReason.ifBlank { "collecting candidate evidence" }
     }
 
     fun stopReplay(reason: String) {
@@ -320,6 +352,8 @@ class ScanpathReplayActivity : AppCompatActivity() {
                 binding.replayStatus.text = getString(R.string.scanpath_demo_stopped, reason)
             }
         }
+        val focusStateAtStop = "Focus detector: $focusDetectorStatus\n" +
+            "Focus requested: $focusRequestStatus\nFocus render: $focusRenderStatus"
         runtime?.suspend(reason)
         session?.close(reason)
         runtime?.close(reason)
@@ -357,7 +391,8 @@ class ScanpathReplayActivity : AppCompatActivity() {
             lastResult = ScanpathReplayResult(scenario.id, reason, ordinal, patternCounts.keys.toSet(), chosenAids.toSet(),
                 drawnAids.toSet(), expectations.first, enabledExpected, recorder.file, recorder.failure)
             binding.replayStatus.text = "${scenario.label}: $reason\nPatterns ${patternCounts.keys.joinToString(" ")}\n" +
-                "Chosen ${chosenAids.joinToString(" ")}\nDraw receipts ${drawnAids.joinToString(" ")}"
+                "Chosen ${chosenAids.joinToString(" ")}\nDraw receipts ${drawnAids.joinToString(" ")}\n" +
+                focusStateAtStop
         } else if (hadRun) binding.replayStatus.text = getString(R.string.scanpath_replay_stopped)
         log = null
         if (::binding.isInitialized) {
@@ -376,7 +411,8 @@ class ScanpathReplayActivity : AppCompatActivity() {
             }
         }.toSet()
         val currentAids = if (scenario.id in setOf("bookmark_return", "bookmark_skip", "continuation_return", "continuation_skip"))
-            legacyAids - "READING_BOOKMARK" else legacyAids
+            legacyAids - "READING_BOOKMARK" else if (scenario.id in setOf("line_alternation", "line_cycle"))
+            legacyAids - "FOCUS_REGION" else legacyAids
         val definitionsEnabled = readerPreferences.enabled && readerPreferences.wordDefinition &&
             readerPreferences.maxStrength > 0 &&
             (readerPreferences.adaptiveStrength || readerPreferences.manualStrength > 0)

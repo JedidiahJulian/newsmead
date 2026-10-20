@@ -84,7 +84,9 @@ data class ReadingAidBookmarkEvidence(
 /** Separate source/landing support bounds; candidate IDs do not imply finalized fixations. */
 data class ReadingAidContinuationEvidence(
     val evidenceId: String, val segment: Int, val line: Int,
-    val firstCaptureMs: Double, val lastCaptureMs: Double, val evidenceAvailableMs: Double
+    val firstCaptureMs: Double, val lastCaptureMs: Double, val evidenceAvailableMs: Double,
+    val firstConfirmedCaptureMs: Double? = null,
+    val firstConfirmedDeliveryMs: Double? = null
 )
 
 data class ReadingAidDecision(
@@ -182,7 +184,9 @@ data class ReadingAidPolicyConfig(
     val focusReturnPresenceMs: Double = 100.0,
     val focusReturnMinSamples: Int = 3,
     val focusAlternationWindowMs: Double = 8000.0,
-    val evidenceAlignedV5: Boolean = false
+    val evidenceAlignedV5: Boolean = false,
+    val focusRereadMinSequences: Int = 1,
+    val focusRereadWindowMs: Double = 15000.0
 ) {
     init {
         require(configId.isNotBlank() && conditionId.isNotBlank())
@@ -194,6 +198,8 @@ data class ReadingAidPolicyConfig(
             continuationEndFraction <= 1)
         require(continuationWindowMs.isFinite() && continuationWindowMs > 0)
         require(focusInterruptionMinEpisodes >= 1)
+        require(focusRereadMinSequences >= 1)
+        require(focusRereadWindowMs.isFinite() && focusRereadWindowMs > 0)
         require(focusReturnPresenceMs.isFinite() && focusReturnPresenceMs > 0 && focusReturnMinSamples >= 2)
         require(focusAlternationWindowMs.isFinite() && focusAlternationWindowMs > 0)
         require(listOf(focusInterruptionWindowMs, focusLossMinMs, focusRecoveryFadeMs).all { it.isFinite() && it > 0 })
@@ -252,7 +258,19 @@ data class ReadingAidArticlePresence(
 /** Aid-specific supported visits; this is not a finalized P11 scanpath event. */
 data class ReadingAidFocusAlternation(
     val evidenceId: String, val visits: List<ReadingAidContinuationEvidence>,
-    val geometrySnapshotId: String, val generation: Long, val confirmedDeliveryMs: Double
+    val geometrySnapshotId: String, val generation: Long, val confirmedDeliveryMs: Double,
+    val anchorBands: List<ReadingSupportedRowBand> = emptyList()
+)
+
+/** Complete, independently credited focus episode. These are not difficulty probabilities. */
+data class ReadingAidFocusQualification(
+    val id: String, val routeId: String,
+    val firstObservedMs: Double, val lastCaptureMs: Double, val confirmedDeliveryMs: Double,
+    val episodes: List<ReadingAidFocusEpisode> = emptyList(),
+    val alternations: List<ReadingAidFocusAlternation> = emptyList(),
+    val rereads: List<ReadingAidRereadEvidence> = emptyList(),
+    val spatialProvenance: String = "not_spatial_route",
+    val timeBasis: String = "fresh_supported_capture_intervals"
 )
 
 data class ReadingAidFocusEvidence(
@@ -270,7 +288,11 @@ data class ReadingAidFocusEvidence(
     val textSizeDp: Double = 22.0,
     val requiredAlternations: Int = 1,
     val minimumLineVisitMs: Double = 0.0,
-    val reread: ReadingAidRereadEvidence? = null
+    val reread: ReadingAidRereadEvidence? = null,
+    val rereads: List<ReadingAidRereadEvidence> = emptyList(),
+    val requiredRereadSequences: Int = 1,
+    val rereadWindowMs: Double = 15000.0,
+    val qualifiedEpisodes: List<ReadingAidFocusQualification> = emptyList()
 ) {
     val episodeCount: Int get() = episodes.size
     val cycleCount: Int get() = cycleEventIds.size + alternations.size

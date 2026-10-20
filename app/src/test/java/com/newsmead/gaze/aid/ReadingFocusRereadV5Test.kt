@@ -6,7 +6,7 @@ import org.junit.Test
 
 /** Synthetic controller contracts; these do not establish gaze accuracy or reader benefit. */
 class ReadingFocusRereadV5Test {
-    private val config = ReadingAidPolicyConfig.definitionPrototype().copy(evidenceAlignedV5 = true)
+    private val config = ReadingAidPolicyConfig.evidenceAlignedPrototype()
     private val geometry = ScanpathGeometry("g", 0.0, 0.0,
         ScanpathRect(0.0, 0.0, 100.0, 240.0), 20.0,
         (0..11).map { ScanpathLine(it * 10, it * 10 + 9, 0.0, 100.0, it * 20.0, it * 20.0 + 20.0) })
@@ -42,7 +42,7 @@ class ReadingFocusRereadV5Test {
         p.support(support(13000.0, first = 12000.0), context(13000.0))
         val e = p.reread(witness("r2", 12000.0), context(13000.0))!!
         assertEquals(0.0, e.observedRecoveryMs, 0.0)
-        assertTrue(e.initialStrength > 0.0)
+        assertEquals(.5, e.initialStrength, 0.0)
     }
 
     @Test fun broadRereadingIsOptInAndKeepsItsCompleteRangeAndWitness() {
@@ -85,12 +85,16 @@ class ReadingFocusRereadV5Test {
             val time = if (boundary == "gap") 1400.0 else 1200.0
             val ctx = if (boundary == "epoch") context(time, generation = 2, geometryId = "g2") else context(time)
             if (boundary == "pause" || boundary == "epoch") {
-                assertTrue(p.hasDemand)
+                if (boundary == "pause") assertTrue(p.hasDemand)
                 assertNull(p.currentEvidence(ctx))
             }
             val segment = if (boundary == "segment") 2 else 1
-            val e = p.support(support(time, segment = segment), ctx)!!
-            assertEquals("Boundary $boundary", 100.0, e.observedRecoveryMs, 0.0)
+            val e = p.support(support(time, segment = segment), ctx)
+            if (boundary == "epoch") {
+                assertNull("New layout invalidates row witnesses", e)
+                continue
+            }
+            assertEquals("Boundary $boundary", 100.0, e!!.observedRecoveryMs, 0.0)
             assertEquals("A4_BROAD_REREADING_V5", e.ruleId)
         }
     }
@@ -168,28 +172,27 @@ class ReadingFocusRereadV5Test {
         p.support(support(900.0, first = 880.0), context(900.0))
         assertEquals("A4_RETURN_PRESENCE_FOCUS_V2", p.currentEvidence(context(900.0))!!.ruleId)
         p.support(support(1900.0), context(1900.0))
-        p.reread(witness("r1", 900.0), context(1900.0))
-        p.support(support(3000.0), context(3000.0))
-        val reread = p.reread(witness("r2", 2000.0), context(3000.0))!!
+        val reread = p.reread(witness("r1", 900.0), context(1900.0))!!
         assertEquals("A4_BROAD_REREADING_V5", reread.ruleId)
         // Font changes invalidate line-based witnesses while presence episodes remain valid.
-        val retained = p.currentEvidence(context(3000.0).copy(focusTextSizeDp = 30.0))!!
+        val retained = p.currentEvidence(context(1900.0).copy(focusTextSizeDp = 30.0))!!
         assertEquals("A4_RETURN_PRESENCE_FOCUS_V2", retained.ruleId)
         assertEquals(1, retained.episodes.size)
         assertNull(retained.reread)
     }
 
-    @Test fun alternationStillActivatesAndV5RefreshKeepsItsSupportedRecovery() {
-        for (v5 in listOf(false, true)) {
+    @Test fun legacyAdjacentAlternationActivationAndRefreshRemainUnchanged() {
+        for (v5 in listOf(false)) {
             val p = policy(v5)
-            for ((i, line) in listOf(4, 5, 4, 5).withIndex()) {
+            val other = if (v5) 7 else 5
+            for ((i, line) in listOf(4, other, 4, other).withIndex()) {
                 val t = 100.0 * (i + 1)
                 p.support(support(t, first = t - 20.0, line = line), context(t))
             }
             assertEquals("A4_FONT_SCALED_LINE_VISITS_V3", p.currentEvidence(context(400.0))!!.ruleId)
-            p.support(support(500.0, first = 380.0, line = 5), context(500.0))
+            p.support(support(500.0, first = 380.0, line = other), context(500.0))
             val recovery = p.currentEvidence(context(500.0))!!.observedRecoveryMs
-            for ((i, line) in listOf(4, 5, 4, 5).withIndex()) {
+            for ((i, line) in listOf(4, other, 4, other).withIndex()) {
                 val t = 600.0 + 100.0 * i
                 p.support(support(t, first = t - 20.0, line = line), context(t))
             }

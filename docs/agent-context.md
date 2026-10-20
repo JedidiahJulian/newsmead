@@ -1,4 +1,4 @@
-# Agent context — updated 2026-10-19
+# Agent context — updated 2026-10-20
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,150 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-10-20 supported independent focus episodes — implemented and software-verified:**
+owner approved the revised proposal below. V5 now accepts one supported broad
+rereading episode within 15 seconds, including intermediate first-pass rows.
+It retains the existing 150ms support stage and selected calibrated/smoothed
+coordinates, separates candidate-onset and first-confirmation clocks, and excludes
+unsettled/missing time. ABAB requires separated anchor bands as well as the
+existing font-dependent repetition count; the unknown-error fallback requires
+at least three rows between anchors. Adjacent forward reread steps remain valid.
+A shared, bounded qualification ledger gives initial 50% focus and permits 100%
+only after a fresh complete qualified episode while the response is active.
+Witnesses cannot be reused across routes or overlapping suffixes. Interruption
+activation still requires three loss/return episodes within 30 seconds; escalation
+requires three more fresh episodes, not one extra return. Tracking loss remains
+unavailability, not a diagnosis of distraction. Font/layout changes invalidate row
+evidence; refreshes preserve onset/recovery progress. Existing styles, reader caps,
+context protection and supported-reading hold/fade are retained.
+Trace version: `SUPPORTED_INDEPENDENT_FOCUS_EPISODES_V8`. Replay includes current
+separated-anchor and adjacent-anchor negative examples and separately reports
+detector demand, requested focus and actual render/withheld status.
+Independent source review found no actionable issue. First bounded run built both
+APKs and passed 285/287 focused tests across 29 suites. Two Replay checks failed:
+a refreshed guide retains its original presentation onset while fresh evidence
+advances, invalidating the old generic timestamp assertion; and the new fourth
+ABAB visit ended before median transition plus fresh support could finish.
+Corrections separate evidence/presentation assertions and provide sufficient
+current-only Replay residence plus three independent blocks to cover all font
+tiers. Tests now explicitly cover 22/18/16dp tiers and an incomplete first-block
+prefix. Legacy timing remains unchanged. Independent review found no actionable
+issue in those corrections. The owner approved the retry: **all 287 focused tests
+across 29 suites passed**, zero failures/errors/skips, and both debug APKs built.
+Current evidence: `output/focus-supported-episodes-check-02/summary.json` and
+`build.log`; the earlier failed run remains in `focus-supported-episodes-check-01`.
+Current app APK SHA-256:
+`2f3b2342c373ebcd3319350394fbc120ad675255d4b5c29f6c1abad0e8898e8c`.
+Focused whitespace check passed. No phone install, camera activity, staging or
+commit. Existing article-header and camera/FPS edits are preserved. Numerical
+settings remain pilot choices; software checks do not establish human benefit,
+real gaze accuracy or live phone appearance.
+
+**Earlier proposal checkpoint — superseded by implementation above:** owner requested
+a concrete better design after critique. Proposed: reuse existing selected stream
+and 150ms location-residence stage (not another filter or blanket300ms), with
+250ms max-gap and existing missing/duplicate protections. Keep candidate onset
+and confirmation clocks separate; speed is logged, not a reason to tighten a
+threshold automatically. Require spatial separation for diagnostic anchors:
+frontier versus earlier-return region, or ABAB's two anchors. Adjacent forward
+reread steps remain allowed. Measured uncertainty is preferred; current ±1row
+unknown-error fallback implies a coarse >=3row anchor separation, explicitly not
+validated accuracy. Applying that to ABAB reduces its current adjacent-row
+sensitivity; font-aware repetition rules remain during migration.
+One coherent first-pass/broad-return/two-forward-step witness within15s proposes
+initial50% focus. Existing interruption activation remains3 separate completed
+unavailability/recovery episodes in30s. Higher100% is a trial response to a fresh
+complete independently qualified focus episode while active, with globally
+disjoint capture witnesses across routes; extending the original episode or
+double-labelled evidence cannot increase strength. Stronger-dose benefit is
+unvalidated. Preserve fade-text60/85% or dark40/60% target opacity, reader caps,
+400ms onset and existing supported-reading recovery/fade; these are current
+presentation settings, not scientific cutoffs. Keep5rows or needed reread context
+clear and distinguish detection/action/visible-render states in Replay.
+Independent logical review found no fatal flaw after anchor-only separation and
+global witness-disjointness were specified. Evidence/limits and concrete examples
+are in the revised-proposal section of `docs/reading-aid-evidence-aligned-v5.md`.
+No app source changes, builds, installs or camera activity occurred during that
+proposal-only review; subsequent implementation is recorded above.
+
+**2026-10-20 preimplementation challenge of switch confirmation:** owner explicitly
+requested scrutiny before implementing a replacement. No source changes, build,
+device actions, staging or commit in this review. Independent adversarial review
+and bounded primary-source research support retaining candidate/supported location
+states, but do NOT establish adaptive speed-based confirmation as the best method.
+Key issues: true brief rereads and noise can share selected coordinates; agreeing
+smoothed samples are correlated and cannot establish spatial accuracy; confirmation
+delays change intervals measured between confirmations; counts depend on frame
+rate; existing One-Euro + median + residence stages already add delay. Capture
+candidate onset and confirmation separately, preserve missingness/geometry/content
+coordinates, and compare one fixed support criterion with an adaptive experimental
+variant before selecting it. No blanket 300ms or replacement trigger is approved.
+Rereading association is not an individual diagnosis or evidence for stronger
+focus. Primary CHI2023 reading-ruler evidence supports investigating line emphasis,
+not this automatic phone trigger or its strength schedule. Moving-window/trailing-
+mask experiments do not validate an assistive focus window. Context and reader
+controls remain essential. Details/source URLs are saved in the preimplementation
+review section of `docs/reading-aid-evidence-aligned-v5.md`. Earlier follow-up
+source edits below still await execution checks; no new implementation in this review.
+
+**Earlier 2026-10-20 live-focus follow-up — historical investigation:**
+owner reports no focus in a normal article on the latest Android Studio build;
+Replay has not been checked on the phone. Source review identified a detector
+restriction: only five consecutive supported visits could match, excluding a
+normal first pass such as L4→L5→L6→L7 followed by L4→L5→L6. Current unbuilt edits
+accept monotonic intermediate first-pass rows, retain a bounded 15-second history,
+and coalesce same-row requalification without bridging unsettled support time.
+Focus witnesses can contain more than five visits. Protected passage bounds use
+the representative visited rows before adding neighbouring context, avoiding a
+second expansion of the unknown-error fallback. Replay now uses ordinary forward
+passes. Regression tests are saved; independent source review found no actionable
+issue, but these follow-up edits have not been built or executed yet.
+Owner then suggested replacing three whole sequences with a stricter filter for
+very fast individual row switches. They rejected the proposed blanket 300ms
+per-location residence rule and requested a better approach that judges each
+individual switch. No replacement trigger has been agreed or implemented;
+current config remains three. Next design should distinguish candidate versus
+confirmed line changes and treat rapid candidate reversals as ambiguous evidence,
+while allowing normal first-pass intermediate rows. Do not silently implement
+the rejected 300ms rule or retain three repetitions as the owner's settled choice.
+Neither the cause of the live failure nor phone appearance has been established.
+No device actions or private-log access. Do not repeat the scout's withdrawn
+inference that ordinary blink/no-face exclusions call focus.pause: the runtime's
+interpretationAllowed deliberately admits those reasons.
+
+**Earlier 2026-10-20 stricter broad-rereading focus gate — superseded:** owner selected three complete
+nonoverlapping five-visit sequences within 30,000ms. The whole interval from the
+first sequence's first capture through the latest sequence's last capture must
+fit. Third sequence activates at 50%; a fourth in the rolling window may reach
+100%, subject to reader caps. Duplicate/relabelled or shared captures cannot add
+counts. Operational pause, font change, layout invalidation and article/generation
+changes discard pending counts. Existing unavailable/recovery and ABAB routes,
+focus styles, supported-reading hold/fade and onset behaviour are unchanged.
+Replay's broad-reread scenario now supplies three full sequences. Traces retain
+all counted witnesses plus the count, required count and capture-span window.
+These are pilot settings; repetition does not establish gaze accuracy or difficulty.
+Independent source review found no actionable issue. All 275 focused aid/replay
+tests across 28 suites passed (zero failures/errors/skips); both APKs built.
+Evidence: `output/focus-reread-gate-check-02/summary.json` and `build.log`.
+Current app APK SHA-256:
+`2fd8af906c377c9e310c6b6abc18b1ca36f229ef9f3736e002108b07e1575ea7`.
+Initial build attempt stopped at a sandbox-denied Gradle cache lock before
+compilation; owner approved the successful retry with cache access. No device
+install, camera activity, staging or commit. Existing header/camera work preserved.
+
+**2026-10-20 article header scrolling:** the top action toolbar now collapses
+on downward nested scrolling and returns on upward scrolling. Gaze auto-scroll
+start also collapses it. Theme/font/reading-aid footer controls remain fixed;
+the article viewport ends above that footer. Demo controls remain accessible.
+The outer ConstraintLayout is retained for existing gaze/aid overlay parameters.
+Changed `fragment_article.xml`, two header hooks in `ArticleFragment.kt`, and
+added `ArticleHeaderScrollTest.kt`. Independent camera/FPS edits were preserved.
+Both debug APKs built successfully; the two new attached-layout tests compiled
+but were not run on a phone. XML parsing, focused whitespace checks and source
+review passed. Build evidence: `output/article-header-scroll-check-01/build.log`.
+Header-task APK SHA-256: `0bbad7ad7df038c363ad6f2623e9402020a4e4dd9eab2857a1c21e1fbcabd14c`.
+No device install, camera activity, staging or commit for this header task.
 
 **2026-10-19 new explicit implementation request — current direction:** user
 supplied a four-aid proposal and authorized its implementation after the rollback
@@ -33,7 +177,7 @@ Correction verified: 271 aid/replay tests across 28 suites passed (zero failures
 errors or skips), both APK tasks succeeded, focused whitespace check passed and
 independent source review found no remaining actionable issue. Results:
 `output/aid-single-line-bookmark-check-01/summary.json` and `build.log`.
-Current app APK SHA-256:
+Historical single-line correction APK SHA-256:
 `3009eeafb1e310206ed2e3dc6b9b22cacb1464bf6cfa3afa9adcebb366b00117`.
 No phone install/camera capture was performed for this correction. These checks
 establish software behaviour, not real gaze accuracy or human reading benefit.
