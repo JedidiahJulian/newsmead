@@ -1,0 +1,3 @@
+# Keep the synthetic package's byte hash stable on Windows checkouts.
+*.json text eol=lf
+*.jsonl text eol=lf

@@ -1,0 +1,31 @@
+{
+  "schema_version": "0.1.0-draft",
+  "study_id": "SYNTHETIC-STUDY",
+  "participant_id": "SYNTHETIC-P01",
+  "installation_id": "SYNTHETIC-INSTALL",
+  "session_id": "SYNTHETIC-VISIT",
+  "clock_domain_id": "SYNTHETIC-BOOT",
+  "status": "finalized",
+  "record_count": 34,
+  "highest_persisted_seq": 34,
+  "session_end_record_id": "synthetic-r034",
+  "content_complete": false,
+  "dropped_records_known": 1,
+  "loss_record_ids": [
+    "synthetic-r024"
+  ],
+  "unknown_tail": false,
+  "chunks": [
+    {
+      "file": "example-session.jsonl",
+      "first_seq": 1,
+      "last_seq": 34,
+      "record_count": 34,
+      "byte_count": 27978,
+      "sha256": "9eca22cc03145eda86f9355c0c1f4bca4e56fbdda6b0619fa90f4e9bffb0cb1b",
+      "closure": "closed"
+    }
+  ],
+  "artifacts": [],
+  "recovery": null
+}

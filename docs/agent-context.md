@@ -1,4 +1,4 @@
-# Agent context — updated 2026-10-20
+# Agent context — updated 2026-10-27
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,62 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-10-27 proposed thesis-scope and Firebase Spark update — design only:**
+Added [thesis-project-scope.md](thesis-project-scope.md) from the prior scope
+discussion and the user's report of access to the existing Firebase project on
+Spark. The working study is a staged, descriptive feasibility/acceptability
+study on participants' own compatible Android phones, with supervised setup and
+reading first and any home phase conditional on readiness. It does not test
+reading efficacy or validate gaze-derived difficulty labels. The initial
+collection route is local session packages plus researcher-controlled export;
+cloud sync is deferred. Spark supports Firestore within shared project quotas
+but does not provide Cloud Storage. The package schema, IDs and hashes remain
+backend-neutral so a later adapter can be added without rewriting analytical
+records. Added a proposed researcher-export and local analysis workflow to
+Section 6 of the framework: validate original packages, derive versioned tables,
+and use local Python/Jupyter with optional DuckDB SQL; Colab is deferred for raw
+records unless institutionally approved. Updated the Firebase mapping in
+[study-data-framework.md](study-data-framework.md) and linked the new scope from
+[thesis-memory.md](thesis-memory.md). No Firebase settings, live uploads,
+collector, participant protocol or app code were changed; participant count,
+duration, eligibility, retention and readiness criteria remain open.
+
+**2026-10-22 proposed feasibility collection framework — design only:**
+Added [study-data-framework.md](study-data-framework.md), draft record/manifest
+schemas and a 34-record synthetic example in `docs/study-data/`. It maps current
+V5 observations, support revisions, evaluations including gating/nonactivation,
+decisions, presentation episodes, controls, losses and local package recovery.
+Keep descriptive P01–P13 outputs versioned/exploratory; a complete catalogue
+rewrite is not a prerequisite for this proposed collection phase. Recovery
+metadata separates original/recovery clock domains and permits an unknown end.
+`python tools/gaze/check_study_data_example.py` passes schema/example consistency,
+manifest byte/hash/count checks and six deliberately corrupted variants; these
+are fixture checks, not runtime/human validation. No live collector, Firebase
+connection, phone collection or participant-protocol change was implemented.
+Own-phone/self-selected home use is proposed; duration, deployment settings,
+retention and participant-readiness decisions remain open. Existing app edits
+and the earlier measurement protocols are preserved.
+
+**2026-10-21 scanpath explanation deck updated:**
+Preserved the seven-slide template and original PPTX. Delivered
+`outputs/scanpath-system/Scanpath_System_Insert_Template_Revision_2026-10-21.pptx`.
+The deck follows current source and `docs/reading-aid-evidence-aligned-v5.md`:
+selected calibrated/smoothed gaze, ordinary-reading guide with uniform directional
+three-line placement, accepted word-lookup offers after 1,000 ms supported residence,
+qualified focus routes and persistent last-supported-line bookmarks. Primary studies
+appear beside claims, with full references, populations/hardware and transfer limits
+in speaker notes. Included the original von der Malsburg & Vasishth (2011) Fig. 6,
+journal p. 120, plus native synthetic guide/lookup previews. Exact phone thresholds
+and scanpath-conditioned aid benefit remain unvalidated pilot choices. The deck
+does not claim difficulty diagnosis or treat tracking loss as inattention.
+Content source review found no actionable issue; all seven final slides were
+rendered and visually inspected. Package/layout/font checks and reimport passed;
+seven DOI hyperlinks match their labels and all seven notes are retained. This does
+not establish native PowerPoint execution or human reading benefit. Private build,
+source extraction, renders and receipt: `output/scanpath-deck-update-2026-10-21/`.
+Final SHA-256: `32877836e79132b37e39d38cc16b9eed38d0ef130681cbcc0462409b0118d59e`.
+No app/device changes or staging/commits were part of this deck task.
 
 **2026-10-20 positional three-line band — software and A56 camera-free checks passed:**
 Owner confirms the alpha fix works, but rejects stepped row opacity as distracting.

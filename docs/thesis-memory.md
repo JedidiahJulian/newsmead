@@ -1,5 +1,14 @@
 # NewsMead Thesis Memory
 
+## Current scope checkpoint — 2026-10-27
+
+The current **proposed** feasibility scope is in
+[thesis-project-scope.md](thesis-project-scope.md). It refines the older thesis
+framing below and is still subject to ethics/committee review and collection
+readiness decisions. When the older manuscript model conflicts with that scope,
+use the scope document; the legacy model is not evidence that its four levels or
+claims are implemented or validated.
+
 ## Thesis Core
 
 The thesis is a gaze-driven adaptive reading interface for older adults. The system extends the NewsMead Android news-reading app and turns it into a research prototype for sustained digital reading support.

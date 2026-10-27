@@ -1,0 +1,305 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0-draft"
+    },
+    "study_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "participant_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "installation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "clock_domain_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "finalized",
+        "recovered_incomplete",
+        "partial"
+      ]
+    },
+    "record_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "highest_persisted_seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "session_end_record_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "content_complete": {
+      "type": "boolean"
+    },
+    "dropped_records_known": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "loss_record_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "unknown_tail": {
+      "type": "boolean"
+    },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "first_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "last_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "record_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "byte_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "closure": {
+            "enum": [
+              "closed",
+              "valid_prefix_recovered"
+            ]
+          }
+        },
+        "required": [
+          "file",
+          "first_seq",
+          "last_seq",
+          "record_count",
+          "byte_count",
+          "sha256",
+          "closure"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "byte_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "file",
+          "byte_count",
+          "sha256"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "recovery": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "original_clock_domain_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "recovered_in_clock_domain_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "recovered_elapsed_ms": {
+              "type": "number",
+              "minimum": 0
+            },
+            "recovered_utc": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "last_known_original_elapsed_ms": {
+              "type": "number",
+              "minimum": 0
+            },
+            "last_known_seq": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "actual_end_original_elapsed_ms": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "original_clock_domain_id",
+            "recovered_in_clock_domain_id",
+            "recovered_elapsed_ms",
+            "recovered_utc",
+            "last_known_original_elapsed_ms",
+            "last_known_seq",
+            "actual_end_original_elapsed_ms",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "study_id",
+    "participant_id",
+    "installation_id",
+    "session_id",
+    "clock_domain_id",
+    "status",
+    "record_count",
+    "highest_persisted_seq",
+    "session_end_record_id",
+    "content_complete",
+    "dropped_records_known",
+    "loss_record_ids",
+    "unknown_tail",
+    "chunks",
+    "artifacts",
+    "recovery"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StabiliRead proposed local study package manifest, draft 0.1",
+  "description": "Finalization means verified package integrity, not complete observation coverage. Recovery metadata never appends a new-clock footer to the original event stream.",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "recovered_incomplete"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "recovery": {
+            "type": "object"
+          },
+          "session_end_record_id": {
+            "type": "null"
+          },
+          "content_complete": {
+            "const": false
+          },
+          "unknown_tail": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "finalized"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "recovery": {
+            "type": "null"
+          },
+          "session_end_record_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unknown_tail": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "content_complete": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "dropped_records_known": {
+            "const": 0
+          },
+          "loss_record_ids": {
+            "maxItems": 0
+          },
+          "unknown_tail": {
+            "const": false
+          }
+        }
+      }
+    }
+  ]
+}
