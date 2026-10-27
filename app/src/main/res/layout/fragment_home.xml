@@ -68,6 +68,17 @@
                     app:layout_constraintTop_toBottomOf="@+id/tvHome" />
 
                 <Button
+                    android:id="@+id/btnReadingBaseline"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="8dp"
+                    android:text="@string/home_reading_baseline"
+                    android:textSize="16sp"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/btnGazeCalibration" />
+
+                <Button
                     android:id="@+id/btnScanpathReplay"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -76,7 +87,7 @@
                     android:textSize="16sp"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/btnGazeCalibration" />
+                    app:layout_constraintTop_toBottomOf="@id/btnReadingBaseline" />
 
                 <Button
                     android:id="@+id/btnScanpathPilot"

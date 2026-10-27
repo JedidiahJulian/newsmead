@@ -52,6 +52,13 @@ import com.newsmead.gaze.GazeTargetStabilizer
 import com.newsmead.gaze.LineAoiMapper
 import com.newsmead.gaze.ReadingStateInferencer
 import com.newsmead.gaze.ReadingMeasurementLog
+import com.newsmead.gaze.ParticipantReadingBaseline
+import com.newsmead.gaze.ReadingFeaturePipeline
+import com.newsmead.gaze.mahalanobis.MahalanobisConfig
+import com.newsmead.gaze.mahalanobis.MahalanobisScore
+import com.newsmead.gaze.mahalanobis.MahalanobisScorer
+import com.newsmead.gaze.reading.ArticleReadingSession
+import com.newsmead.gaze.reading.ReadingCoordinateStream
 import com.newsmead.gaze.ScaffoldLevel
 import com.newsmead.gaze.ScaffoldUpdate
 import com.newsmead.gaze.TextTarget
@@ -118,6 +125,31 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var lastAoiLogMs = 0L
     private var readingMeasurement: ReadingMeasurementLog? = null
     private var scanpathSession: ArticleScanpathSession? = null
+    private var mahalanobisReadingSession: ArticleReadingSession? = null
+    private var mahalanobisConfig = MahalanobisConfig()
+    private val mahalanobisHandler = Handler(Looper.getMainLooper())
+    private var readingFeatures: ReadingFeaturePipeline? = null
+    private var mahalanobisScorer: MahalanobisScorer? = null
+    private var activeMahalanobisBaseline: ParticipantReadingBaseline.Entry? = null
+    private var activeBaselineFingerprint: String? = null
+    private var mahalanobisLineCount = 0
+    var latestMahalanobisScore: MahalanobisScore? = null
+        private set
+    private val mahalanobisTick = object : Runnable {
+        override fun run() {
+            val pipeline = readingFeatures ?: return
+            pipeline.tick(SystemClock.elapsedRealtime())?.let { vector ->
+                val current = ParticipantReadingBaseline.current(activeBaselineFingerprint)
+                val scorer = if (current != null && current === activeMahalanobisBaseline)
+                    mahalanobisScorer else MahalanobisScorer(null)
+                latestMahalanobisScore = scorer?.score(vector)
+                latestMahalanobisScore?.let { score ->
+                    Log.d("MahalanobisScore", "status=${score.status} MD2=${score.md2} MD=${score.md}")
+                }
+            }
+            mahalanobisHandler.postDelayed(this, mahalanobisConfig.updateIntervalMs)
+        }
+    }
     private var readingAidRuntime: ArticleReadingAidRuntime? = null
     private var readingAidOverlay: ReadingAidOverlayView? = null
     private var definitionPopup: ReadingAidDefinitionPopup? = null
@@ -142,6 +174,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private val scanpathGeometryListener = ViewTreeObserver.OnPreDrawListener {
         articleAutoScroll?.onPreDraw()
         scanpathSession?.checkGeometry()
+        mahalanobisReadingSession?.checkGeometry()
         readingAidRuntime?.tick()
         true
     }
@@ -704,6 +737,11 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         super.onResume()
         articleAutoScroll?.setEnabled(aidPreferences.enabled && aidPreferences.autoScroll)
         scanpathSession?.resume()
+        mahalanobisReadingSession?.resume()
+        if (readingFeatures != null) {
+            mahalanobisHandler.removeCallbacks(mahalanobisTick)
+            mahalanobisHandler.postDelayed(mahalanobisTick, mahalanobisConfig.updateIntervalMs)
+        }
         if (!readerControlGate.active) readingAidRuntime?.resume()
         if (!demoCameraSuppressed && !scanpathAidsEnabled && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE && scaffoldController != null) {
             startScaffoldDemoCycle()
@@ -759,6 +797,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         finishReadingMeasurement("screen_paused", restore = false)
         readingAidRuntime?.suspend("screen_paused")
         scanpathSession?.pause("screen_paused")
+        mahalanobisReadingSession?.pause("screen_paused")
+        mahalanobisHandler.removeCallbacks(mahalanobisTick)
+        readingFeatures?.breakContinuity()
         super.onPause()
     }
 
@@ -1313,6 +1354,13 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true,
             rejectBlinks = true, preferStableFrameRate = preferStableFrameRate)
         stopScanpathSession("provider_replaced")
+        activeBaselineFingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint()
+        activeMahalanobisBaseline = ParticipantReadingBaseline.current(activeBaselineFingerprint)
+        mahalanobisConfig = activeMahalanobisBaseline?.profile?.config ?: MahalanobisConfig()
+        readingFeatures = ReadingFeaturePipeline(mahalanobisConfig)
+        mahalanobisScorer = MahalanobisScorer(activeMahalanobisBaseline?.profile)
+        latestMahalanobisScore = null
+        mahalanobisLineCount = 0
         scanpathCounts.clear()
         val aids = readingAidOverlay?.let { ArticleReadingAidRuntime(binding.tvArticleText,
             binding.readingAidWordDock, it, config = ReadingAidPolicyConfig.evidenceAlignedPrototype()
@@ -1323,6 +1371,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             onConsultationChanged = { active, at, reason ->
                 articleAutoScroll?.interrupt("definition_consultation")
                 scanpathSession?.setConsultation(active, at, reason)
+                mahalanobisReadingSession?.setConsultation(active, at, reason)
             }) }
         readingAidRuntime = aids
         articleAutoScroll?.let { auto -> aids?.autoScrollEvent("configuration",
@@ -1339,8 +1388,28 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             onCandidate = { generation, candidate -> aids?.candidate(generation, candidate) },
             onFixation = { generation, fixation -> aids?.fixation(generation, fixation) })
         scanpathSession = liveScanpath
+        val liveReadingFeatures = ArticleReadingSession(binding.tvArticleText,
+            coordinateStream = ReadingCoordinateStream.ARTICLE_SMOOTHED,
+            motionCompensatedAids = false,
+            onGeometry = { _, geometry -> mahalanobisLineCount = geometry?.lines?.size ?: 0 },
+            onInput = { _, sample ->
+                sample.captureMs?.takeIf { it.isFinite() && it >= 0 && it < Long.MAX_VALUE.toDouble() }
+                    ?.let { capture -> readingFeatures?.sample(sample.line, mahalanobisLineCount,
+                        sample.eligible, capture.toLong()) }
+            },
+            onBoundary = { reason ->
+                when (reason) {
+                    "invalid_sample", "non_monotonic_capture" -> Unit
+                    "reading_scroll" -> readingFeatures?.breakContinuity()
+                    else -> readingFeatures?.boundary()
+                }
+            })
+        mahalanobisReadingSession = liveReadingFeatures
+        mahalanobisHandler.removeCallbacks(mahalanobisTick)
+        mahalanobisHandler.postDelayed(mahalanobisTick, mahalanobisConfig.updateIntervalMs)
         binding.root.viewTreeObserver.addOnPreDrawListener(scanpathGeometryListener)
         liveScanpath.checkGeometry()
+        liveReadingFeatures.checkGeometry()
         Log.i("Scanpath", "live stream=${liveScanpath.coordinateStream.id} engine=${ScanpathEngine.EXTRACTOR_VERSION} " +
             "classifier=${ScanpathEngine.CLASSIFIER_VERSION}; independent experimental aids=${aids != null}")
         provider.onFps = { fps -> gazeOverlay?.setFps(fps) }
@@ -1363,6 +1432,15 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                         observation.copy(reason = autoScrollExclusion)
                     else -> observation
                 })
+                if (mahalanobisReadingSession === liveReadingFeatures) {
+                    liveReadingFeatures.record(when {
+                        controlsExcluded || readingMeasurement != null ||
+                            (::textToSpeech.isInitialized && textToSpeech.isSpeaking) ->
+                            observation.copy(reason = "reader_controls")
+                        autoScrollExclusion != null -> observation.copy(reason = autoScrollExclusion)
+                        else -> observation
+                    })
+                }
                 articleAutoScroll?.onObservation(if (controlsExcluded)
                     observation.copy(reason = "reader_controls") else observation)
             }
@@ -1397,6 +1475,16 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     private fun stopScanpathSession(reason: String) {
+        mahalanobisHandler.removeCallbacks(mahalanobisTick)
+        val featureSession = mahalanobisReadingSession
+        mahalanobisReadingSession = null
+        featureSession?.close(reason)
+        readingFeatures = null
+        mahalanobisScorer = null
+        activeMahalanobisBaseline = null
+        activeBaselineFingerprint = null
+        latestMahalanobisScore = null
+        mahalanobisLineCount = 0
         dismissReaderControls()
         val session = scanpathSession ?: return
         scanpathSession = null
@@ -1519,6 +1607,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             onBoundary = { moving, at, detail ->
                 if (moving) binding.articleHeaderAppBar.setExpanded(false, true)
                 scanpathSession?.autoScrollMotion(moving, detail.optString("reason"))
+                mahalanobisReadingSession?.autoScrollMotion(moving, detail.optString("reason"))
                 readingAidRuntime?.autoScrollBoundary(moving, at, detail)
                 if (scanpathSession?.motionCompensatedAids != true)
                     scanpathSession?.boundary(if (moving) "auto_scroll_start" else "auto_scroll_end")
