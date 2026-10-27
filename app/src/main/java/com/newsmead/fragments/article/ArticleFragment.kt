@@ -107,6 +107,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var gazeRestartNotBeforeMs = 0L
     private var calibrationRestartPending = false
     private var resumeGazeAfterStop = false
+    private var cameraPolicyChangePending = false
+    private var cameraPolicyChangeGeneration = 0
     private var rsiInferencer: ReadingStateInferencer? = null
     private var targetStabilizer: GazeTargetStabilizer? = null
     private var stabilityEstimator: WindowedStabilityEstimator? = null
@@ -712,12 +714,16 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             gazeRestartNotBeforeMs = SystemClock.elapsedRealtime() + GAZE_RESTART_DELAY_MS
         }
         resumeArticleGazeWhenReady()
+        if (readingMeasurement == null &&
+            (gazeProvider as? MgazeNetGazeProvider)?.preferStableFrameRate == false) {
+            restartArticleCameraPolicy(preferStableFrameRate = true)
+        }
     }
 
     /** Retain pending work across backgrounding; only dispatch against the current visible view. */
     private fun resumeArticleGazeWhenReady() {
         if (!StudyConfig.GAZE_ENABLED || !articleBodyReady || !isResumed ||
-            launchedCalibration || demoCameraSuppressed || gazeProvider != null) return
+            launchedCalibration || demoCameraSuppressed || cameraPolicyChangePending || gazeProvider != null) return
         val remainingDelay = (gazeRestartNotBeforeMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
         if (remainingDelay > 0L) {
             val resumeView = binding.root
@@ -740,6 +746,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     override fun onPause() {
+        // A delayed camera close must not start a requested recording after leaving.
+        cameraPolicyChangeGeneration++
         articleAutoScroll?.interrupt("screen_paused")
         dismissReaderControls()
         // Keep a pending source-offset restore for this view's next pre-draw.
@@ -800,6 +808,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     private fun showGazeDiagnosticsMenu() {
+        if (cameraPolicyChangePending) return
         if (readingMeasurement != null) {
             finishReadingMeasurement("manual_stop")
             return
@@ -858,6 +867,15 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             return
         }
         val fingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint() ?: return
+        if ((gazeProvider as? MgazeNetGazeProvider)?.preferStableFrameRate == true) {
+            // Close completely before creating the schema-1 recording. Its acquisition
+            // policy stays at the original camera default and receives no old callbacks.
+            restartArticleCameraPolicy(preferStableFrameRate = false) {
+                startReadingMeasurement()
+                if (readingMeasurement == null) restartArticleCameraPolicy(preferStableFrameRate = true)
+            }
+            return
+        }
         articleAutoScroll?.pauseByReader("diagnostic_recording")
         readingAidRuntime?.suspend("diagnostic_recording")
         lateinit var session: ReadingMeasurementLog
@@ -900,6 +918,32 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         if (restore && isResumed) readingAidRuntime?.resume()
         if (!scanpathAidsEnabled && restore && isResumed && StudyConfig.SCAFFOLD_MODE == StudyConfig.ScaffoldMode.DEMO_CYCLE) {
             startScaffoldDemoCycle()
+        }
+        if (restore && isResumed) restartArticleCameraPolicy(preferStableFrameRate = true)
+    }
+
+    /** Serialize policy changes behind camera close; only the current resumed view may restart. */
+    private fun restartArticleCameraPolicy(preferStableFrameRate: Boolean, onStarted: () -> Unit = {}) {
+        val current = gazeProvider as? MgazeNetGazeProvider ?: return
+        val sink = articleGazeSink ?: return
+        val articleView = binding.root
+        val generation = ++cameraPolicyChangeGeneration
+        cameraPolicyChangePending = true
+        resumeGazeAfterStop = true
+        stopScanpathSession("camera_frame_rate_changed")
+        gazeProvider = null
+        current.stopAndThen {
+            cameraPolicyChangePending = false
+            if (view !== articleView || generation != cameraPolicyChangeGeneration ||
+                !isAdded || !isResumed || launchedCalibration || demoCameraSuppressed || gazeProvider != null) {
+                resumeArticleGazeWhenReady()
+            } else {
+                attachLiveGaze(sink, preferStableFrameRate)
+                if (gazeProvider != null) {
+                    resumeGazeAfterStop = false
+                    onStarted()
+                }
+            }
         }
     }
 
@@ -1259,14 +1303,15 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
      * the saved 13-point calibration. In live mode, do not silently substitute
      * touch input; missing/invalid calibration must be fixed before reading.
      */
-    private fun attachLiveGaze(onGaze: GazeProvider.OnGaze) {
+    private fun attachLiveGaze(onGaze: GazeProvider.OnGaze, preferStableFrameRate: Boolean = true) {
         if (demoCameraSuppressed) return
         val issue = MgazeNetCalibrationStore(requireContext()).compatibilityIssue(binding.root)
         if (issue != null) {
             Toast.makeText(context, issue, Toast.LENGTH_LONG).show()
             return
         }
-        val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true, rejectBlinks = true)
+        val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true,
+            rejectBlinks = true, preferStableFrameRate = preferStableFrameRate)
         stopScanpathSession("provider_replaced")
         scanpathCounts.clear()
         val aids = readingAidOverlay?.let { ArticleReadingAidRuntime(binding.tvArticleText,
@@ -1367,7 +1412,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     /** Explicit render-only inspection of the loaded article; camera stays off afterward. */
     private fun startArticleDemo() {
-        if (!articleBodyReady || !isResumed || readingMeasurement != null || launchedCalibration) {
+        if (!articleBodyReady || !isResumed || readingMeasurement != null || launchedCalibration || cameraPolicyChangePending) {
             Toast.makeText(context, R.string.reading_measurement_unavailable, Toast.LENGTH_SHORT).show()
             return
         }
@@ -1472,6 +1517,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 else -> null
             } },
             onBoundary = { moving, at, detail ->
+                if (moving) binding.articleHeaderAppBar.setExpanded(false, true)
                 scanpathSession?.autoScrollMotion(moving, detail.optString("reason"))
                 readingAidRuntime?.autoScrollBoundary(moving, at, detail)
                 if (scanpathSession?.motionCompensatedAids != true)
@@ -1634,6 +1680,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         binding.nsvArticleText.setBackgroundColor(color)
         binding.bottomAppBar.setBackgroundColor(color)
         binding.clArticleTopBar.setBackgroundColor(color)
+        binding.articleHeaderAppBar.setBackgroundColor(color)
         // Change the color of the Recommended Articles RecyclerView (background)
         adapter.changeBackgroundColor(color)
     }

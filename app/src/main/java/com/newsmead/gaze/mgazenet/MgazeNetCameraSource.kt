@@ -2,11 +2,14 @@ package com.newsmead.gaze.mgazenet
 
 import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CaptureRequest
 import android.os.SystemClock
 import android.util.Log
+import android.util.Range
 import android.util.Size
 import androidx.annotation.OptIn
 import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -34,7 +37,8 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private val failed: (String) -> Unit,
     private val store: MgazeNetCalibrationStore,
     private val saved: CalibrationBundle.Artifact? = null,
-    private val eyelidTelemetryEnabled: Boolean = false) {
+    private val eyelidTelemetryEnabled: Boolean = false,
+    private val preferStableFrameRate: Boolean = false) {
     data class Frame(val captureMs: Double, val outputMs: Double, val features: FloatArray?,
         val leftArea: Double, val rightArea: Double, val prediction: FloatArray?, val reason: String,
         val cropSizes: List<List<Int>>?, val posture: MgazeNetPostureGate.Sample?,
@@ -62,6 +66,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private var signature: List<Int>? = null
     private var lastTimestamp = -1L
     private var delegateName = "GPU"
+    private var requestedFpsRange: Range<Int>? = null
     private val performanceLog = PerformanceLog()
     private val landmarkX = DoubleArray(478)
     private val landmarkY = DoubleArray(478)
@@ -96,11 +101,24 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
             if (stopped.get()) return@addListener
             try {
                 provider = future.get()
-                analysis = ImageAnalysis.Builder().setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                val analysisBuilder = ImageAnalysis.Builder().setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setResolutionSelector(ResolutionSelector.Builder().setResolutionStrategy(
                         ResolutionStrategy(Size(640,480),ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)).build())
-                    .build().also { it.setAnalyzer(cameraExecutor,::analyze) }
+                // Live article opt-in only. Keep calibration and frozen measurement defaults.
+                // Never request a range the selected front camera does not advertise.
+                if (preferStableFrameRate) {
+                    val cameraInfo = CameraSelector.DEFAULT_FRONT_CAMERA.filter(provider!!.availableCameraInfos).first()
+                    val ranges = Camera2CameraInfo.from(cameraInfo).getCameraCharacteristic(
+                        CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
+                    requestedFpsRange = ranges?.firstOrNull { it.lower == 30 && it.upper == 30 }
+                    requestedFpsRange?.let { range ->
+                        Camera2Interop.Extender(analysisBuilder).setCaptureRequestOption(
+                            CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, range)
+                    }
+                    Log.i(PERFORMANCE_TAG, "ae_target_fps_request=${requestedFpsRange ?: "default (fixed 30 unsupported)"}")
+                }
+                analysis = analysisBuilder.build().also { it.setAnalyzer(cameraExecutor,::analyze) }
                 val camera = provider!!.bindToLifecycle(owner,CameraSelector.DEFAULT_FRONT_CAMERA,analysis!!)
                 check(Camera2CameraInfo.from(camera.cameraInfo).getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE) ==
                     CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME) {
@@ -135,6 +153,9 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                     "camera_clock" to "REALTIME verified","output_clock" to "main_callback_delivery_elapsedRealtimeNanos",
                     
                     "android_sdk" to android.os.Build.VERSION.SDK_INT,"opencv" to org.opencv.core.Core.VERSION)
+                if (preferStableFrameRate) {
+                    metadata["camera_ae_target_fps_request"] = requestedFpsRange?.let { listOf(it.lower,it.upper) }
+                }
                 main.execute { if (!stopped.get()) ready(metadata) }
             } else check(signature == shape) { "Camera dimensions or orientation changed; new calibration required" }
             val videoMs = captureNs/1_000_000

@@ -7,167 +7,171 @@
     android:background="?primaryBackgroundColor"
     tools:context=".fragments.article.ArticleFragment">
 
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/clArticleTopBar"
+    <androidx.coordinatorlayout.widget.CoordinatorLayout
+        android:id="@+id/articleScrollingLayout"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
-
-        <ImageButton
-            android:id="@+id/btnArticleBack"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:background="@null"
-            android:src="@drawable/arrow_back_ios_nofill_weight400"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:tint="?secondaryIconColor" />
-        <ImageButton
-            android:id="@+id/btnRunGazeTest"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:background="@null"
-            android:contentDescription="@string/article_options"
-            android:padding="12dp"
-            android:src="@drawable/ic_dots"
-            app:layout_constraintBottom_toBottomOf="@+id/btnArticleBack"
-            app:layout_constraintStart_toEndOf="@+id/btnArticleBack"
-            app:layout_constraintTop_toTopOf="@+id/btnArticleBack"
-            app:tint="?secondaryIconColor" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnReadAloudArticle"
-            style="@style/ButtonSmall_LowEmphasis"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:minHeight="0dp"
-            android:text="@string/article_read_aloud_btn"
-            app:icon="@drawable/ic_text_to_speech"
-            app:iconPadding="4dp"
-            app:iconSize="20dp"
-            app:iconTint="?secondaryButtonIconColor"
-            app:layout_constrainedWidth="true"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@+id/btnTranslateArticle"
-            app:layout_constraintHorizontal_bias="1"
-            app:layout_constraintStart_toEndOf="@+id/btnRunGazeTest"
-            app:layout_constraintTop_toTopOf="parent" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnTranslateArticle"
-            style="@style/ButtonSmall_LowEmphasis"
-            android:layout_width="wrap_content"
-            android:layout_height="0dp"
-            android:layout_marginEnd="16dp"
-            android:minHeight="0dp"
-            android:paddingTop="12dp"
-            android:paddingBottom="12dp"
-            android:text="@string/article_translate_btn"
-            app:icon="@drawable/ic_translate"
-            app:iconPadding="4dp"
-            app:iconSize="20dp"
-            app:iconTint="?secondaryButtonIconColor"
-            app:layout_constraintBottom_toBottomOf="@+id/btnReadAloudArticle"
-            app:layout_constraintEnd_toStartOf="@+id/btnArticleShare"
-            app:layout_constraintTop_toTopOf="@+id/btnReadAloudArticle" />
-
-        <ImageButton
-            android:id="@+id/btnArticleShare"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:background="@null"
-            android:src="@drawable/share_nofill_weight400"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:tint="?secondaryIconColor" />
-
-    </androidx.constraintlayout.widget.ConstraintLayout>
-
-    <LinearLayout
-        android:id="@+id/articleAidDemoPanel"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingHorizontal="16dp"
-        android:visibility="gone"
-        android:background="?primaryBackgroundColor"
-        app:layout_constraintTop_toBottomOf="@id/clArticleTopBar"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/bottomAppBar"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <TextView
-            android:id="@+id/articleAidDemoStatus"
-            android:layout_width="match_parent"
-            android:layout_height="72dp"
-            android:maxLines="3"
-            android:ellipsize="end"
-            android:textColor="?primaryTextColor"
-            android:textSize="14sp" />
-
-        <LinearLayout
+        <com.google.android.material.appbar.AppBarLayout
+            android:id="@+id/articleHeaderAppBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
-            <Button
-                android:id="@+id/articleAidDemoPrevious"
-                style="@style/ButtonSmall_LowEmphasis"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:text="@string/scanpath_demo_previous" />
-            <Button
-                android:id="@+id/articleAidDemoNext"
-                style="@style/ButtonSmall_LowEmphasis"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:text="@string/scanpath_demo_next" />
-            <Button
-                android:id="@+id/articleAidDemoStop"
-                style="@style/ButtonSmall_LowEmphasis"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:text="@string/scanpath_replay_stop" />
-        </LinearLayout>
-    </LinearLayout>
+            android:background="?primaryBackgroundColor"
+            android:elevation="0dp"
+            android:stateListAnimator="@null"
+            app:liftOnScroll="false">
 
-    <com.newsmead.gaze.aid.ReadingAidWordView
-        android:id="@+id/readingAidWordDock"
-        android:layout_width="0dp"
-        android:layout_height="68dp"
-        android:paddingHorizontal="16dp"
-        android:gravity="center"
-        android:singleLine="true"
-        android:visibility="gone"
-        android:background="?primaryBackgroundColor"
-        android:textColor="?primaryTextColor"
-        app:layout_constraintTop_toBottomOf="@id/articleAidDemoPanel"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/clArticleTopBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                app:layout_scrollFlags="scroll|enterAlways|snap">
 
-    <androidx.coordinatorlayout.widget.CoordinatorLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/readingAidWordDock"
-        tools:context=".fragments.article.ArticleFragment">
+                <ImageButton
+                    android:id="@+id/btnArticleBack"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:background="@null"
+                    android:src="@drawable/arrow_back_ios_nofill_weight400"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:tint="?secondaryIconColor" />
+                <ImageButton
+                    android:id="@+id/btnRunGazeTest"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@null"
+                    android:contentDescription="@string/article_options"
+                    android:padding="12dp"
+                    android:src="@drawable/ic_dots"
+                    app:layout_constraintBottom_toBottomOf="@+id/btnArticleBack"
+                    app:layout_constraintStart_toEndOf="@+id/btnArticleBack"
+                    app:layout_constraintTop_toTopOf="@+id/btnArticleBack"
+                    app:tint="?secondaryIconColor" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnReadAloudArticle"
+                    style="@style/ButtonSmall_LowEmphasis"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:minHeight="0dp"
+                    android:text="@string/article_read_aloud_btn"
+                    app:icon="@drawable/ic_text_to_speech"
+                    app:iconPadding="4dp"
+                    app:iconSize="20dp"
+                    app:iconTint="?secondaryButtonIconColor"
+                    app:layout_constrainedWidth="true"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toStartOf="@+id/btnTranslateArticle"
+                    app:layout_constraintHorizontal_bias="1"
+                    app:layout_constraintStart_toEndOf="@+id/btnRunGazeTest"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnTranslateArticle"
+                    style="@style/ButtonSmall_LowEmphasis"
+                    android:layout_width="wrap_content"
+                    android:layout_height="0dp"
+                    android:layout_marginEnd="16dp"
+                    android:minHeight="0dp"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="12dp"
+                    android:text="@string/article_translate_btn"
+                    app:icon="@drawable/ic_translate"
+                    app:iconPadding="4dp"
+                    app:iconSize="20dp"
+                    app:iconTint="?secondaryButtonIconColor"
+                    app:layout_constraintBottom_toBottomOf="@+id/btnReadAloudArticle"
+                    app:layout_constraintEnd_toStartOf="@+id/btnArticleShare"
+                    app:layout_constraintTop_toTopOf="@+id/btnReadAloudArticle" />
+
+                <ImageButton
+                    android:id="@+id/btnArticleShare"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:background="@null"
+                    android:src="@drawable/share_nofill_weight400"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:tint="?secondaryIconColor" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <LinearLayout
+                android:id="@+id/articleAidDemoPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingHorizontal="16dp"
+                android:visibility="gone"
+                android:background="?primaryBackgroundColor">
+
+                <TextView
+                    android:id="@+id/articleAidDemoStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="72dp"
+                    android:maxLines="3"
+                    android:ellipsize="end"
+                    android:textColor="?primaryTextColor"
+                    android:textSize="14sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <Button
+                        android:id="@+id/articleAidDemoPrevious"
+                        style="@style/ButtonSmall_LowEmphasis"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:text="@string/scanpath_demo_previous" />
+                    <Button
+                        android:id="@+id/articleAidDemoNext"
+                        style="@style/ButtonSmall_LowEmphasis"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:text="@string/scanpath_demo_next" />
+                    <Button
+                        android:id="@+id/articleAidDemoStop"
+                        style="@style/ButtonSmall_LowEmphasis"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:text="@string/scanpath_replay_stop" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <com.newsmead.gaze.aid.ReadingAidWordView
+                android:id="@+id/readingAidWordDock"
+                android:layout_width="match_parent"
+                android:layout_height="68dp"
+                android:paddingHorizontal="16dp"
+                android:gravity="center"
+                android:singleLine="true"
+                android:visibility="gone"
+                android:background="?primaryBackgroundColor"
+                android:textColor="?primaryTextColor" />
+
+        </com.google.android.material.appbar.AppBarLayout>
 
         <com.newsmead.custom.LockableNestedScrollView
             android:id="@+id/nsvArticleText"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
+            app:layout_behavior="@string/appbar_scrolling_view_behavior"
             tools:context=".fragments.article.ArticleFragment">
 
             <LinearLayout
@@ -433,123 +437,122 @@
             android:layout_height="48dp"
             android:layout_gravity="bottom|end"
             android:layout_marginEnd="16dp"
-            android:layout_marginBottom="80dp"
+            android:layout_marginBottom="16dp"
             android:translationZ="12dp"
             android:visibility="gone"
             android:text="@string/article_auto_scroll_pause" />
 
-        <com.google.android.material.bottomappbar.BottomAppBar
-            android:id="@+id/bottomAppBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:paddingStart="0dp"
-            android:paddingEnd="0dp"
-            android:outlineProvider="bounds"
-            app:contentInsetStart="0dp"
-            app:contentInsetEnd="0dp"
-            app:contentInsetStartWithNavigation="0dp"
-            app:contentInsetEndWithActions="0dp"
-            app:backgroundTint="?primaryBackgroundColor"
-            app:hideOnScroll="false"
-            app:layout_anchorGravity="top"
-            app:layout_behavior="com.google.android.material.behavior.HideBottomViewOnScrollBehavior">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="64dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingHorizontal="8dp">
-
-                <LinearLayout
-                    android:layout_width="144dp"
-                    android:layout_height="match_parent"
-                    android:orientation="horizontal">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnArticleClrLight"
-                        style="@style/ArticleFooterControl"
-                        android:layout_width="48dp"
-                        android:layout_height="match_parent"
-                        android:text="@string/article_theme_light"
-                        app:icon="@drawable/circle_light"
-                        app:iconTint="@color/transparent"
-                        app:iconTintMode="add" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnArticleClrDark"
-                        style="@style/ArticleFooterControl"
-                        android:layout_width="48dp"
-                        android:layout_height="match_parent"
-                        android:text="@string/article_theme_dark"
-                        app:icon="@drawable/circle_black"
-                        app:iconTint="@color/transparent"
-                        app:iconTintMode="add" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnArticleClrSepia"
-                        style="@style/ArticleFooterControl"
-                        android:layout_width="48dp"
-                        android:layout_height="match_parent"
-                        android:text="@string/article_theme_sepia"
-                        app:icon="@drawable/circle_sepia"
-                        app:iconTint="@color/transparent"
-                        app:iconTintMode="add" />
-                </LinearLayout>
-
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1"
-                    android:minWidth="16dp" />
-
-                <LinearLayout
-                    android:layout_width="144dp"
-                    android:layout_height="match_parent"
-                    android:orientation="horizontal">
-
-                    <LinearLayout
-                        android:id="@+id/llArticleBottomButtons"
-                        android:layout_width="96dp"
-                        android:layout_height="match_parent"
-                        android:orientation="horizontal">
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnArticleTextSmaller"
-                            style="@style/ArticleFooterControl"
-                            android:layout_width="48dp"
-                            android:layout_height="match_parent"
-                            android:text="@string/article_text_smaller_caption"
-                            android:contentDescription="@string/article_text_smaller_btn"
-                            app:icon="@drawable/ic_article_text_smaller_circle"
-                            app:iconTint="?primaryTextColor" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnArticleTextLarger"
-                            style="@style/ArticleFooterControl"
-                            android:layout_width="48dp"
-                            android:layout_height="match_parent"
-                            android:text="@string/article_text_larger_caption"
-                            android:contentDescription="@string/article_text_larger_btn"
-                            app:icon="@drawable/ic_article_text_larger_circle"
-                            app:iconTint="?primaryTextColor" />
-                    </LinearLayout>
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnArticleReadingAids"
-                        style="@style/ArticleFooterControl"
-                        android:layout_width="48dp"
-                        android:layout_height="match_parent"
-                        android:text="@string/reading_aid_entry_short"
-                        android:contentDescription="@string/reading_aids_option"
-                        app:icon="@drawable/ic_article_aids_circle"
-                        app:iconTint="?primaryTextColor" />
-                </LinearLayout>
-            </LinearLayout>
-        </com.google.android.material.bottomappbar.BottomAppBar>
-
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
 
+    <com.google.android.material.bottomappbar.BottomAppBar
+        android:id="@+id/bottomAppBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp"
+        android:outlineProvider="bounds"
+        app:contentInsetStart="0dp"
+        app:contentInsetEnd="0dp"
+        app:contentInsetStartWithNavigation="0dp"
+        app:contentInsetEndWithActions="0dp"
+        app:backgroundTint="?primaryBackgroundColor"
+        app:hideOnScroll="false"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp">
+
+            <LinearLayout
+                android:layout_width="144dp"
+                android:layout_height="match_parent"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnArticleClrLight"
+                    style="@style/ArticleFooterControl"
+                    android:layout_width="48dp"
+                    android:layout_height="match_parent"
+                    android:text="@string/article_theme_light"
+                    app:icon="@drawable/circle_light"
+                    app:iconTint="@color/transparent"
+                    app:iconTintMode="add" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnArticleClrDark"
+                    style="@style/ArticleFooterControl"
+                    android:layout_width="48dp"
+                    android:layout_height="match_parent"
+                    android:text="@string/article_theme_dark"
+                    app:icon="@drawable/circle_black"
+                    app:iconTint="@color/transparent"
+                    app:iconTintMode="add" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnArticleClrSepia"
+                    style="@style/ArticleFooterControl"
+                    android:layout_width="48dp"
+                    android:layout_height="match_parent"
+                    android:text="@string/article_theme_sepia"
+                    app:icon="@drawable/circle_sepia"
+                    app:iconTint="@color/transparent"
+                    app:iconTintMode="add" />
+            </LinearLayout>
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"
+                android:minWidth="16dp" />
+
+            <LinearLayout
+                android:layout_width="144dp"
+                android:layout_height="match_parent"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:id="@+id/llArticleBottomButtons"
+                    android:layout_width="96dp"
+                    android:layout_height="match_parent"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnArticleTextSmaller"
+                        style="@style/ArticleFooterControl"
+                        android:layout_width="48dp"
+                        android:layout_height="match_parent"
+                        android:text="@string/article_text_smaller_caption"
+                        android:contentDescription="@string/article_text_smaller_btn"
+                        app:icon="@drawable/ic_article_text_smaller_circle"
+                        app:iconTint="?primaryTextColor" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnArticleTextLarger"
+                        style="@style/ArticleFooterControl"
+                        android:layout_width="48dp"
+                        android:layout_height="match_parent"
+                        android:text="@string/article_text_larger_caption"
+                        android:contentDescription="@string/article_text_larger_btn"
+                        app:icon="@drawable/ic_article_text_larger_circle"
+                        app:iconTint="?primaryTextColor" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnArticleReadingAids"
+                    style="@style/ArticleFooterControl"
+                    android:layout_width="48dp"
+                    android:layout_height="match_parent"
+                    android:text="@string/reading_aid_entry_short"
+                    android:contentDescription="@string/reading_aids_option"
+                    app:icon="@drawable/ic_article_aids_circle"
+                    app:iconTint="?primaryTextColor" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.bottomappbar.BottomAppBar>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

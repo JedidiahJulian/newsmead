@@ -48,6 +48,7 @@ class MgazeNetGazeProvider(
     private val view: View,
     private val smoothForReading: Boolean = false,
     private val rejectBlinks: Boolean = false,
+    internal val preferStableFrameRate: Boolean = false,
 ) : GazeProvider, DefaultLifecycleObserver {
     data class Observation(val captureMs: Double?, val deliveryElapsedNs: Long, val deliveryId: Long, val reason: String,
         val x: Float? = null, val y: Float? = null, val rawX: Float? = null, val rawY: Float? = null,
@@ -105,7 +106,8 @@ class MgazeNetGazeProvider(
                 fpsCount++
                 if (now-fpsStart >= 1000) { onFps?.invoke((fpsCount*1000/(now-fpsStart)).toFloat()); fpsStart=now; fpsCount=0 }
             }
-        }, failed = ::fail, store = store, saved = saved, eyelidTelemetryEnabled = rejectBlinks).also { it.start() }
+        }, failed = ::fail, store = store, saved = saved, eyelidTelemetryEnabled = rejectBlinks,
+            preferStableFrameRate = preferStableFrameRate).also { it.start() }
         handler.post(watchdog)
     }
     private val watchdog = object : Runnable {
