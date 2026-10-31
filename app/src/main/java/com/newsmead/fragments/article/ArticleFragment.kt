@@ -143,9 +143,6 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 val scorer = if (current != null && current === activeMahalanobisBaseline)
                     mahalanobisScorer else MahalanobisScorer(null)
                 latestMahalanobisScore = scorer?.score(vector)
-                latestMahalanobisScore?.let { score ->
-                    Log.d("MahalanobisScore", "status=${score.status} MD2=${score.md2} MD=${score.md}")
-                }
             }
             mahalanobisHandler.postDelayed(this, mahalanobisConfig.updateIntervalMs)
         }

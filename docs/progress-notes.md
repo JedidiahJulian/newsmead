@@ -1,5 +1,26 @@
 # NewsMead — Progress Notes
 
+## 2026-11-01 - Scanpath plus continuous Mahalanobis score
+
+`feature/scanpath-mahalanobis-score` now descends from the seven newer Scanpath
+commits at `origin/measurement/scanpath-pilot` and contains the in-memory,
+explicit-start participant reading baseline and R/D/F Mahalanobis score. Scanpath
+classification and aid wiring remain on their existing path; the score has no
+threshold, scaffold decision, fusion, or export. The integrated score uses
+calibrated, smoothed article coordinates and the same feature pipeline for the
+baseline and live article. The baseline is session and calibration bound.
+
+Focused review found that R/F event counts used tick arrival time while D used
+capture time. R/F now retain capture timestamps and count events in the same
+rolling interval as D; a delayed-delivery boundary fixture covers this change.
+The 655 gaze JVM tests pass, including Scanpath, aids, and Mahalanobis. The debug
+APK builds and `verifyMgazeNetDebugApk` passes its 32-bit library pins. The final
+full unit run completed 674 tests with one unrelated failure:
+`FirebaseTest.createAccount` fails at its `FirebaseAuth.getInstance()` call.
+These
+software checks do not establish gaze accuracy, participant validity, or device
+runtime behavior. No device install, camera collection, staging, or commit.
+
 ## 2026-10-15 - Softer Dark surroundings onset
 
 Owner corrects the rationale: avoid an overly strong immediate appearance change.

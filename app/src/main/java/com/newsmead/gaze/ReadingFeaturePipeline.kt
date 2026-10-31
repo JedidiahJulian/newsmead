@@ -13,10 +13,12 @@ class ReadingFeaturePipeline(val config: MahalanobisConfig = MahalanobisConfig()
     private var activeStartedAt: Long? = null
     private fun newInferencer() = ReadingStateInferencer(object : ReadingStateInferencer.Listener {
         override fun onLineSample(sample: ReadingStateInferencer.LineSample) = Unit
-        override fun onFixation(event: ReadingStateInferencer.FixationEvent) = rolling.fixation()
+        override fun onFixation(event: ReadingStateInferencer.FixationEvent) =
+            rolling.fixation(event.startedAtMs + event.durationMs)
         override fun onDwell(event: ReadingStateInferencer.DwellEvent) =
             rolling.dwell(event.startedAtMs, event.startedAtMs + event.durationMs)
-        override fun onRegression(event: ReadingStateInferencer.RegressionEvent) = rolling.regression()
+        override fun onRegression(event: ReadingStateInferencer.RegressionEvent) =
+            rolling.regression(event.timestampMs)
     })
     private var inferencer = newInferencer()
 

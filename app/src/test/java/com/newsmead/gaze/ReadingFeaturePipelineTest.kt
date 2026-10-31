@@ -7,6 +7,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReadingFeaturePipelineTest {
+    @Test fun delayedEventsUseCaptureTimeWhenRollingStartPassesThem() {
+        val rolling = RollingReadingFeatures(MahalanobisConfig(windowMs = 1000))
+        rolling.tick(0)
+        rolling.tick(500)
+        rolling.recordQuality(900, true)
+        rolling.tick(1000)
+        // These callbacks arrive after the tick, but their captures precede its time.
+        rolling.regression(400)
+        rolling.fixation(400)
+        rolling.recordQuality(1400, true)
+        val vector = rolling.tick(1500)!!
+        assertEquals(500L, vector.windowStartMs)
+        assertEquals(0.0, vector.values.regressionRatePerMinute, 1e-9)
+        assertEquals(0.0, vector.values.fixationRatePerMinute, 1e-9)
+    }
+
     @Test fun startupWithoutUsableTargetDoesNotCreateDwellBeforeFirstMappedLine() {
         val pipeline = ReadingFeaturePipeline(MahalanobisConfig(windowMs = 1000))
         pipeline.tick(0)
