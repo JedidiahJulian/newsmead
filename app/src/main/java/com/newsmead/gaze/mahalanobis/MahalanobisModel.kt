@@ -26,6 +26,8 @@ data class RdfFeatureVector(
     val values: RdfValues,
     val quality: FeatureQuality = FeatureQuality.VALID,
     val validFraction: Double = 1.0,
+    /** Fraction of the intended window spanned by usable observations. */
+    val observedCoverageFraction: Double = 1.0,
     val validSampleCount: Int? = null,
     val totalSampleCount: Int? = null,
 ) {
@@ -34,6 +36,8 @@ data class RdfFeatureVector(
         windowEndMs >= windowStartMs && windowEndMs - windowStartMs >= config.windowMs &&
         windowEndMs - windowStartMs - config.windowMs <= config.maxWindowOverhangMs &&
         validFraction.isFinite() && validFraction in config.minimumValidFraction..1.0 &&
+        observedCoverageFraction.isFinite() &&
+        observedCoverageFraction in config.minimumObservedCoverageFraction..1.0 &&
         ((validSampleCount == null && totalSampleCount == null) ||
             (validSampleCount != null && totalSampleCount != null && totalSampleCount > 0 &&
                 validSampleCount in 0..totalSampleCount &&
@@ -52,12 +56,19 @@ data class MahalanobisConfig(
     val lambda: Double = 1e-6,
     val maxGapMs: Long = 1_000,
     val minimumValidFraction: Double = 0.65,
+    /**
+     * Operational temporal-coverage gate. It is configurable and is not a
+     * validated reading-outcome threshold.
+     */
+    val minimumObservedCoverageFraction: Double = 0.65,
 ) {
     init {
         require(windowMs > 0 && updateIntervalMs > 0 && maxWindowOverhangMs >= 0)
         require(minimumBaselineDurationMs >= 0 && minimumRetainedWindows >= 2)
         require(lambda.isFinite() && lambda >= 0 && maxGapMs > 0)
         require(minimumValidFraction.isFinite() && minimumValidFraction in 0.0..1.0)
+        require(minimumObservedCoverageFraction.isFinite() &&
+            minimumObservedCoverageFraction in 0.0..1.0)
     }
 }
 

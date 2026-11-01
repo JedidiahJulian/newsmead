@@ -114,6 +114,11 @@ class MahalanobisCoreTest {
         }
         val partial = vector(profile.mean).copy(windowStartMs = 5_000)
         assertFalse(MahalanobisScorer(profile).score(partial).scoreAvailable)
+        val underObserved = vector(profile.mean).copy(observedCoverageFraction = 0.1)
+        val underObservedScore = MahalanobisScorer(profile).score(underObserved)
+        assertEquals(ScoreStatus.INVALID_WINDOW, underObservedScore.status)
+        assertFalse(underObservedScore.scoreAvailable)
+        assertNull(underObservedScore.md2)
     }
 
     @Test fun finalizedBaselineNeverChangesDuringSubsequentReading() {

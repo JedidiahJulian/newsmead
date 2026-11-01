@@ -59,12 +59,19 @@ class RollingReadingFeatures(private val config: MahalanobisConfig = Mahalanobis
             observedDwellMs += overlap(ongoingDwellStartMs, ongoingDwellEndMs)
         val validCount = quality.count { it.valid }
         val fraction = if (quality.isEmpty()) 0.0 else validCount.toDouble() / quality.size
+        val firstUsable = quality.firstOrNull { it.valid }?.at
+        val lastUsable = quality.lastOrNull { it.valid }?.at
+        val observedCoverageFraction = if (span > 0 && firstUsable != null && lastUsable != null) {
+            ((minOf(lastUsable, atMs) - maxOf(firstUsable, first)).coerceAtLeast(0L).toDouble() / span)
+                .coerceIn(0.0, 1.0)
+        } else 0.0
         val fresh = lastInput?.let { atMs - it in 0..config.maxGapMs } == true
         val state = when {
             span < config.windowMs -> FeatureQuality.INSUFFICIENT
             span > config.windowMs + config.maxWindowOverhangMs -> FeatureQuality.DISCONTINUITY
             discontinuityAt?.let { it > first } == true -> FeatureQuality.DISCONTINUITY
-            !fresh || quality.peekLast()?.valid != true || fraction < config.minimumValidFraction -> FeatureQuality.MISSING
+            !fresh || quality.peekLast()?.valid != true || fraction < config.minimumValidFraction ||
+                observedCoverageFraction < config.minimumObservedCoverageFraction -> FeatureQuality.MISSING
             else -> FeatureQuality.VALID
         }
         val values = if (span > 0) RdfValues(
@@ -72,7 +79,8 @@ class RollingReadingFeatures(private val config: MahalanobisConfig = Mahalanobis
             (observedDwellMs.toDouble() / span).coerceIn(0.0, 1.0),
             fixationEvents.count { it <= atMs } * 60_000.0 / span,
         ) else RdfValues(0.0, 0.0, 0.0)
-        return RdfFeatureVector(atMs, first, atMs, values, state, fraction, validCount, quality.size)
+        return RdfFeatureVector(atMs, first, atMs, values, state, fraction,
+            observedCoverageFraction, validCount, quality.size)
     }
 
     fun reset() {

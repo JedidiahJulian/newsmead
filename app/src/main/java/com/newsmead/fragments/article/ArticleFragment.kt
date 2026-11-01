@@ -55,6 +55,7 @@ import com.newsmead.gaze.ReadingMeasurementLog
 import com.newsmead.gaze.ParticipantReadingBaseline
 import com.newsmead.gaze.ReadingFeaturePipeline
 import com.newsmead.gaze.mahalanobis.MahalanobisConfig
+import com.newsmead.gaze.mahalanobis.MahalanobisDebugSnapshot
 import com.newsmead.gaze.mahalanobis.MahalanobisScore
 import com.newsmead.gaze.mahalanobis.MahalanobisScorer
 import com.newsmead.gaze.reading.ArticleReadingSession
@@ -135,14 +136,24 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var mahalanobisLineCount = 0
     var latestMahalanobisScore: MahalanobisScore? = null
         private set
+    var latestMahalanobisDebugSnapshot: MahalanobisDebugSnapshot? = null
+        private set
     private val mahalanobisTick = object : Runnable {
         override fun run() {
             val pipeline = readingFeatures ?: return
             pipeline.tick(SystemClock.elapsedRealtime())?.let { vector ->
                 val current = ParticipantReadingBaseline.current(activeBaselineFingerprint)
-                val scorer = if (current != null && current === activeMahalanobisBaseline)
-                    mahalanobisScorer else MahalanobisScorer(null)
-                latestMahalanobisScore = scorer?.score(vector)
+                val activeProfile = current?.profile.takeIf { current === activeMahalanobisBaseline }
+                val scorer = if (activeProfile != null) mahalanobisScorer else MahalanobisScorer(null)
+                val score = scorer?.score(vector)
+                latestMahalanobisScore = score
+                latestMahalanobisDebugSnapshot = score?.let {
+                    MahalanobisDebugSnapshot.from(it, activeProfile,
+                        ParticipantReadingBaseline.status(activeBaselineFingerprint), mahalanobisConfig)
+                }
+                latestMahalanobisDebugSnapshot?.let {
+                    AppLog.d(MAHALANOBIS_LOG_TAG, it.toDebugLog())
+                }
             }
             mahalanobisHandler.postDelayed(this, mahalanobisConfig.updateIntervalMs)
         }
@@ -1349,7 +1360,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             return
         }
         val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true,
-            rejectBlinks = true, preferStableFrameRate = preferStableFrameRate)
+            rejectBlinks = true, preferStableFrameRate = preferStableFrameRate,
+            maxOutputAgeMs = StudyConfig.READING_MAX_OUTPUT_AGE_MS,
+            watchdogMaxOutputAgeMs = MgazeNetGazeProvider.MAX_OUTPUT_AGE_MS)
         stopScanpathSession("provider_replaced")
         activeBaselineFingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint()
         activeMahalanobisBaseline = ParticipantReadingBaseline.current(activeBaselineFingerprint)
@@ -1357,6 +1370,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         readingFeatures = ReadingFeaturePipeline(mahalanobisConfig)
         mahalanobisScorer = MahalanobisScorer(activeMahalanobisBaseline?.profile)
         latestMahalanobisScore = null
+        latestMahalanobisDebugSnapshot = null
         mahalanobisLineCount = 0
         scanpathCounts.clear()
         val aids = readingAidOverlay?.let { ArticleReadingAidRuntime(binding.tvArticleText,
@@ -1418,16 +1432,28 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             // An old provider's terminal callback must not close a newer article stream.
             // Detect external movement before any gaze can be interpreted as self-scroll.
             if (scanpathSession === liveScanpath) articleAutoScroll?.onPreDraw()
+            // Mahalanobis baseline/live extraction uses the reading-mode allowance.
+            // Preserve Scanpath's established 500 ms freshness contract independently.
+            val scanpathObservation = observation.captureMs?.let { capture ->
+                val ageMs = observation.outputMs - capture
+                if (observation.reason == "coordinate" && ageMs.isFinite() &&
+                    ageMs > MgazeNetGazeProvider.MAX_OUTPUT_AGE_MS)
+                    observation.copy(reason = "stale", x = null, y = null)
+                else observation
+            } ?: observation
             val controlsExcluded = readerControlGate.excludes(observation.captureMs) ||
                 (observation.x != null && observation.y != null &&
                     readingAidEntryContains(observation.x, observation.y))
+            val scanpathControlsExcluded = readerControlGate.excludes(scanpathObservation.captureMs) ||
+                (scanpathObservation.x != null && scanpathObservation.y != null &&
+                    readingAidEntryContains(scanpathObservation.x, scanpathObservation.y))
             val autoScrollExclusion = articleAutoScroll?.exclusion(observation.captureMs)
             if (scanpathSession === liveScanpath) {
                 liveScanpath.record(when {
-                    controlsExcluded -> observation.copy(reason = "reader_controls")
+                    scanpathControlsExcluded -> scanpathObservation.copy(reason = "reader_controls")
                     autoScrollExclusion != null && !liveScanpath.motionCompensatedAids ->
-                        observation.copy(reason = autoScrollExclusion)
-                    else -> observation
+                        scanpathObservation.copy(reason = autoScrollExclusion)
+                    else -> scanpathObservation
                 })
                 if (mahalanobisReadingSession === liveReadingFeatures) {
                     liveReadingFeatures.record(when {
@@ -1438,8 +1464,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                         else -> observation
                     })
                 }
-                articleAutoScroll?.onObservation(if (controlsExcluded)
-                    observation.copy(reason = "reader_controls") else observation)
+                articleAutoScroll?.onObservation(if (scanpathControlsExcluded)
+                    scanpathObservation.copy(reason = "reader_controls") else scanpathObservation)
             }
             readingMeasurement?.record(observation)
             if (observation.reason != "coordinate") gazeOverlay?.clearGaze()
@@ -1481,6 +1507,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         activeMahalanobisBaseline = null
         activeBaselineFingerprint = null
         latestMahalanobisScore = null
+        latestMahalanobisDebugSnapshot = null
         mahalanobisLineCount = 0
         dismissReaderControls()
         val session = scanpathSession ?: return
@@ -1827,6 +1854,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     companion object {
+        private const val MAHALANOBIS_LOG_TAG = "Mahalanobis"
         private const val SCROLL_LOG_INTERVAL_MS = 250L
         /**
          * Delay before restarting live gaze after returning from the gaze

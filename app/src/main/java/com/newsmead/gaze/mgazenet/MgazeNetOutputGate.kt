@@ -1,7 +1,9 @@
 package com.newsmead.gaze.mgazenet
 
 /** Operational expiry only. Returns every raw finite prediction for observation, never replays it. */
-class MgazeNetOutputGate(private val width: Int, private val height: Int) {
+class MgazeNetOutputGate(private val width: Int, private val height: Int,
+    private val expiryMs: Double = EXPIRY_MS) {
+    init { require(expiryMs.isFinite() && expiryMs > 0.0) }
     data class Result(val reason: String, val rawX: Float?, val rawY: Float?) {
         val emitted get() = reason == "coordinate"
     }
@@ -11,7 +13,7 @@ class MgazeNetOutputGate(private val width: Int, private val height: Int) {
         val y = prediction?.takeIf { it.size == 2 }?.get(1)?.times(height)?.takeIf(Float::isFinite)
         val reason = when {
             !capture.isFinite() || !delivery.isFinite() || capture < 0 || delivery < capture || capture <= lastCapture -> "invalid_clock"
-            delivery-capture > EXPIRY_MS -> "stale"
+            delivery-capture > expiryMs -> "stale"
             !eligible -> sourceReason
             x == null || y == null -> "invalid_prediction"
             else -> "coordinate"

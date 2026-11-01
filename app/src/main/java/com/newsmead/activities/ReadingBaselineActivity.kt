@@ -178,6 +178,7 @@ class ReadingBaselineActivity : AppCompatActivity() {
         }
         fingerprint = calibration
         sessionId = ParticipantReadingBaseline.beginNewBaseline()
+        ParticipantReadingBaseline.markCollecting(sessionId, fingerprint)
         participant.clearFocus()
         (getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
             ?.hideSoftInputFromWindow(participant.windowToken, 0)
@@ -212,17 +213,21 @@ class ReadingBaselineActivity : AppCompatActivity() {
         adapter?.checkGeometry()
         pipeline.tick(startedAt)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val camera = MgazeNetGazeProvider(this, body, smoothForReading = true, rejectBlinks = true)
+        val camera = MgazeNetGazeProvider(this, body, smoothForReading = true, rejectBlinks = true,
+            maxOutputAgeMs = StudyConfig.READING_MAX_OUTPUT_AGE_MS)
         provider = camera
         camera.onObservation = { observation -> if (running && provider === camera) adapter?.record(observation) }
         camera.onFailure = { reason ->
-            if (provider === camera && !destroyed)
+            if (provider === camera && !destroyed) {
+                ParticipantReadingBaseline.abandonCollecting(sessionId, fingerprint)
                 stopCollection { status.text = "Baseline stopped: $reason. Press Start to retry." }
+            }
         }
         camera.setOnGaze { _, _ -> }
         updateButtons()
         handler.post(tick)
         runCatching { camera.start(this) }.onFailure { error ->
+            ParticipantReadingBaseline.abandonCollecting(sessionId, fingerprint)
             stopCollection { status.text = "Camera could not start: ${error.message}. Press Start to retry." }
         }
     }
@@ -244,12 +249,16 @@ class ReadingBaselineActivity : AppCompatActivity() {
         collectTick()
         stopCollection {
             val store = MgazeNetCalibrationStore(this)
-            if (!ParticipantReadingBaseline.isCurrentSession(sessionId) || store.fingerprint() != fingerprint || store.compatibilityIssue(root) != null)
+            if (!ParticipantReadingBaseline.isCurrentSession(sessionId) || store.fingerprint() != fingerprint || store.compatibilityIssue(root) != null) {
+                ParticipantReadingBaseline.abandonCollecting(sessionId, fingerprint)
                 status.text = "Baseline rejected: session or calibration changed. Press Start to retry."
-            else {
+            } else {
                 val fit = collector.freeze()
                 val profile = fit.profile
-                if (profile == null) status.text = "Baseline invalid: ${fit.status}. No profile saved. Press Start to retry."
+                if (profile == null) {
+                    ParticipantReadingBaseline.markInvalid(sessionId, fingerprint)
+                    status.text = "Baseline invalid: ${fit.status}. No profile saved. Press Start to retry."
+                }
                 else {
                     ParticipantReadingBaseline.freeze(ParticipantReadingBaseline.Entry(participantCode, sessionId, fingerprint, profile))
                     frozen = true
@@ -280,7 +289,10 @@ class ReadingBaselineActivity : AppCompatActivity() {
 
     override fun onPause() {
         resumed = false
-        if (running) stopCollection { status.text = "Baseline interrupted. Press Start to retry; paused time is excluded." }
+        if (running) {
+            ParticipantReadingBaseline.abandonCollecting(sessionId, fingerprint)
+            stopCollection { status.text = "Baseline interrupted. Press Start to retry; paused time is excluded." }
+        }
         super.onPause()
     }
 
@@ -288,6 +300,7 @@ class ReadingBaselineActivity : AppCompatActivity() {
         destroyed = true
         handler.removeCallbacksAndMessages(null)
         if (body.viewTreeObserver.isAlive) body.viewTreeObserver.removeOnPreDrawListener(preDraw)
+        ParticipantReadingBaseline.abandonCollecting(sessionId, fingerprint)
         stopCollection()
         super.onDestroy()
     }

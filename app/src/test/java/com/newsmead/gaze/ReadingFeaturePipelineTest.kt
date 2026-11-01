@@ -7,6 +7,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReadingFeaturePipelineTest {
+    @Test fun lateFirstObservationDoesNotValidateNominalWindowUntilCoverageAccumulates() {
+        val config = MahalanobisConfig(windowMs = 10_000, updateIntervalMs = 500,
+            minimumObservedCoverageFraction = 0.65)
+        val rolling = RollingReadingFeatures(config)
+        for (time in 0L..9_500L step 500L) rolling.tick(time)
+
+        rolling.recordQuality(9_900L, true)
+        val late = rolling.tick(10_000L)!!
+        assertEquals(FeatureQuality.MISSING, late.quality)
+        assertEquals(0.0, late.observedCoverageFraction, 0.0)
+        assertFalse(late.isUsable(config))
+
+        var accumulated = late
+        for (time in 10_000L..16_500L step 100L) {
+            rolling.recordQuality(time, true)
+            if (time > 10_000L && time % 500L == 0L) accumulated = rolling.tick(time)!!
+        }
+        assertEquals(FeatureQuality.VALID, accumulated.quality)
+        assertTrue(accumulated.observedCoverageFraction >= config.minimumObservedCoverageFraction)
+        assertTrue(accumulated.isUsable(config))
+    }
+
     @Test fun delayedEventsUseCaptureTimeWhenRollingStartPassesThem() {
         val rolling = RollingReadingFeatures(MahalanobisConfig(windowMs = 1000))
         rolling.tick(0)
