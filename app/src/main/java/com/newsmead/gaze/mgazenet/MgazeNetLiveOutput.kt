@@ -2,13 +2,12 @@ package com.newsmead.gaze.mgazenet
 
 /** Shared output for the reading dot, observations and aid input; no replay of a hidden point. */
 internal class MgazeNetLiveOutput(width: Int, height: Int,
-    private val smoothForReading: Boolean, private val rejectBlinks: Boolean,
-    outputExpiryMs: Double = MgazeNetOutputGate.EXPIRY_MS) {
+    private val smoothForReading: Boolean, private val rejectBlinks: Boolean) {
     data class Result(val reason: String, val rawX: Float?, val rawY: Float?,
         val x: Float?, val y: Float?) {
         val emitted get() = reason == "coordinate"
     }
-    private val outputGate = MgazeNetOutputGate(width, height, outputExpiryMs)
+    private val outputGate = MgazeNetOutputGate(width, height)
     private val blinkGate = MgazeNetBlinkGate()
     private val smoother = MgazeNetReadingSmoother()
 

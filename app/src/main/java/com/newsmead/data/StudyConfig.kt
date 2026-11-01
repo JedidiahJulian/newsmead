@@ -104,10 +104,6 @@ object StudyConfig {
     const val SCAFFOLD_ESCALATION_PERSISTENCE_MS = 1_500L
     const val SCAFFOLD_RECOVERY_PERSISTENCE_MS = 3_500L
 
-    // Reading-only operational freshness allowance observed on the A02 path.
-    // Calibration validation retains the provider's 500 ms default.
-    const val READING_MAX_OUTPUT_AGE_MS = 650.0
-
     /**
      * Blink filtering thresholds for the local MediaPipe gaze source. Openness is
      * the eye-aspect ratio: lower values mean the eyelids are closer together.

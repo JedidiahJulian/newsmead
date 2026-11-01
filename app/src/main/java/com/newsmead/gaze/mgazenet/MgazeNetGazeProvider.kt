@@ -49,8 +49,6 @@ class MgazeNetGazeProvider(
     private val smoothForReading: Boolean = false,
     private val rejectBlinks: Boolean = false,
     internal val preferStableFrameRate: Boolean = false,
-    private val maxOutputAgeMs: Double = MgazeNetOutputGate.EXPIRY_MS,
-    private val watchdogMaxOutputAgeMs: Double = maxOutputAgeMs,
 ) : GazeProvider, DefaultLifecycleObserver {
     data class Observation(val captureMs: Double?, val deliveryElapsedNs: Long, val deliveryId: Long, val reason: String,
         val x: Float? = null, val y: Float? = null, val rawX: Float? = null, val rawY: Float? = null,
@@ -76,10 +74,6 @@ class MgazeNetGazeProvider(
     private val displaySize = Point()
     private var liveOutput: MgazeNetLiveOutput? = null
     private val stopCompletions = MgazeNetStopCompletionQueue()
-    init {
-        require(maxOutputAgeMs.isFinite() && maxOutputAgeMs > 0.0)
-        require(watchdogMaxOutputAgeMs.isFinite() && watchdogMaxOutputAgeMs > 0.0)
-    }
     override fun setOnGaze(listener: GazeProvider.OnGaze) { this.listener = listener }
     override fun start(owner: LifecycleOwner) {
         check(source == null)
@@ -92,7 +86,7 @@ class MgazeNetGazeProvider(
         deliverySequence = 0L
         val identity = saved.identity
         val output = MgazeNetLiveOutput(identity.screenWidth, identity.screenHeight,
-            smoothForReading, rejectBlinks, maxOutputAgeMs)
+            smoothForReading, rejectBlinks)
         liveOutput = output
         source = MgazeNetCameraSource(context,owner,ready = {}, result = { frame ->
             val size = view.physicalDisplaySize(displaySize)
@@ -123,7 +117,7 @@ class MgazeNetGazeProvider(
             if (source == null) return
             val now = MgazeNetCameraSource.now()
             if (lastOutput < 0 && now - fpsStart > 20000) { fail("MGazeNet initialization timed out."); return }
-            if (fresh && now-lastCapture > watchdogMaxOutputAgeMs) {
+            if (fresh && now-lastCapture > MAX_OUTPUT_AGE_MS) {
                 fresh = false
                 liveOutput?.expire()
                 onObservation?.invoke(Observation(lastCapture,SystemClock.elapsedRealtimeNanos(),++deliverySequence,"stale",

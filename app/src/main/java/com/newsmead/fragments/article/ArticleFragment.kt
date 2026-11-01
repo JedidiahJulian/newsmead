@@ -1360,9 +1360,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             return
         }
         val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true,
-            rejectBlinks = true, preferStableFrameRate = preferStableFrameRate,
-            maxOutputAgeMs = StudyConfig.READING_MAX_OUTPUT_AGE_MS,
-            watchdogMaxOutputAgeMs = MgazeNetGazeProvider.MAX_OUTPUT_AGE_MS)
+            rejectBlinks = true, preferStableFrameRate = preferStableFrameRate)
         stopScanpathSession("provider_replaced")
         activeBaselineFingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint()
         activeMahalanobisBaseline = ParticipantReadingBaseline.current(activeBaselineFingerprint)
@@ -1432,28 +1430,16 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             // An old provider's terminal callback must not close a newer article stream.
             // Detect external movement before any gaze can be interpreted as self-scroll.
             if (scanpathSession === liveScanpath) articleAutoScroll?.onPreDraw()
-            // Mahalanobis baseline/live extraction uses the reading-mode allowance.
-            // Preserve Scanpath's established 500 ms freshness contract independently.
-            val scanpathObservation = observation.captureMs?.let { capture ->
-                val ageMs = observation.outputMs - capture
-                if (observation.reason == "coordinate" && ageMs.isFinite() &&
-                    ageMs > MgazeNetGazeProvider.MAX_OUTPUT_AGE_MS)
-                    observation.copy(reason = "stale", x = null, y = null)
-                else observation
-            } ?: observation
             val controlsExcluded = readerControlGate.excludes(observation.captureMs) ||
                 (observation.x != null && observation.y != null &&
                     readingAidEntryContains(observation.x, observation.y))
-            val scanpathControlsExcluded = readerControlGate.excludes(scanpathObservation.captureMs) ||
-                (scanpathObservation.x != null && scanpathObservation.y != null &&
-                    readingAidEntryContains(scanpathObservation.x, scanpathObservation.y))
             val autoScrollExclusion = articleAutoScroll?.exclusion(observation.captureMs)
             if (scanpathSession === liveScanpath) {
                 liveScanpath.record(when {
-                    scanpathControlsExcluded -> scanpathObservation.copy(reason = "reader_controls")
+                    controlsExcluded -> observation.copy(reason = "reader_controls")
                     autoScrollExclusion != null && !liveScanpath.motionCompensatedAids ->
-                        scanpathObservation.copy(reason = autoScrollExclusion)
-                    else -> scanpathObservation
+                        observation.copy(reason = autoScrollExclusion)
+                    else -> observation
                 })
                 if (mahalanobisReadingSession === liveReadingFeatures) {
                     liveReadingFeatures.record(when {
@@ -1464,8 +1450,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                         else -> observation
                     })
                 }
-                articleAutoScroll?.onObservation(if (scanpathControlsExcluded)
-                    scanpathObservation.copy(reason = "reader_controls") else scanpathObservation)
+                articleAutoScroll?.onObservation(if (controlsExcluded)
+                    observation.copy(reason = "reader_controls") else observation)
             }
             readingMeasurement?.record(observation)
             if (observation.reason != "coordinate") gazeOverlay?.clearGaze()
