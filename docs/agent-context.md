@@ -1,4 +1,4 @@
-# Agent context — updated 2026-10-27
+# Agent context — updated 2026-11-03
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,124 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-11-03 checkout location correction:**
+Owner requested that coordinate-MD work reside in the original checkout
+`C:/Users/USER/OneDrive/Desktop/newsmead` on branch
+`experiment/gaze-trajectory-mahalanobis`. The earlier separate-worktree path
+is obsolete. Existing original planning edits were preserved; no staging or commit.
+
+**2026-11-02 coordinate-MD core implemented; integration pending:**
+Owner approved proceeding with descriptive direct-coordinate MD. Added pure
+Python `tools/gaze/coordinate_mahalanobis.py` and Kotlin
+`gaze/trajectory/CoordinateMahalanobis.kt`, frozen separately fitted references,
+point MD/MD-squared and actual-bound observed-time summaries. Weighted population
+moments, sample-covariance sensitivity, scaled Cholesky, explicit stream/context/
+clock/missingness/loss gates and no MD-based deletion. Separate earlier reference
+input must be segmented to its declared bounds. Independent review found/fixed
+invalid-source clock poisoning and out-of-bounds reference delivery state.
+21 Python and 12 host Kotlin/JUnit tests passed, including shared synthetic JSON
+and correlated covariance; 35 synthetic error/cadence cases have reproducible
+receipt `output/coordinate-md-v1-checks/sensitivity.json`. These are software and
+prescribed numerical checks, not measured phone or older-adult validity. See
+[core and collection handoff](gaze-coordinate-md-core.md). Core version
+`coordinate_md_v1` is experimental; duration/coverage/conditioning gates are
+provisional. Study reference task and device overhead remain unresolved. No
+activity/provider/aids/RDF/filter/Firebase or frozen protocol changes, private
+data/device work, staging or commit. Historical plan-only entries below precede
+this implementation. Other branch owns study recording and integration.
+
+**2026-11-02 clarified objective: describe estimated gaze, not reading instability:**
+Owner explicitly removes reading instability from the new MD's measurement goal
+and requests research on existing practice. The rewritten
+[coordinate-MD plan](gaze-trajectory-mahalanobis-plan.md) supersedes the earlier
+H/V/movement direction below; that feature family is deferred. The bounded
+[primary-source/method review](gaze-coordinate-md-evidence.md) distinguishes MD
+calibration/filtering/classification precedents from descriptive spatial
+distribution, covariance ellipses and independent accuracy measurement. Proposed
+output is pointwise raw-coordinate distance from a separate frozen reference,
+with transparent spatial/quality context, no cognitive labels or MD-based removal.
+Self-fitted window mean MD-squared can normalize spread away: a four-point
+synthetic check confirms 1.5 despite shifted/wider clouds, versus 4.5/6.0 against
+a fixed reference. Receipt: `output/gaze-coordinate-md-research-2026-11-02/sanity.json`.
+This is mathematical evidence, not phone/human validation. One bounded researcher
+was used; no score implementation, runtime changes, private data or device work.
+Earlier same-day behavior-oriented recommendations are historical alternatives.
+
+**2026-11-02 error robustness and interpretation clarification:**
+Owner's motivation for the additional MD is inaccurate gaze and avoiding
+assumptions introduced by reading-event/engineered features. Direct coordinate MD
+is the proposed first simple benchmark; H/V/movement remains an alternative.
+Neither method automatically labels cognition; each has representation/reference
+assumptions. Prioritize offset/jitter/spike/drift/gain/cadence/missingness
+sensitivity before favoring a representation. Provider `coordinate` status is
+not accuracy, and shared-score agreement cannot establish it. The plan preserves
+numeric observations and treats reading-instability interpretation as unvalidated.
+No runtime implementation or device/private-data work in this clarification.
+
+**2026-11-02 representation clarification — decision still open:**
+Owner's original additional-MD idea was direct raw numerical gaze data, rather
+than the proposed H/V/movement vector. The vector in the experiment plan remains
+an alternative, not an approved feature set. Lead recommends low-level spatial /
+temporal descriptors as the more relevant starting hypothesis for behavior,
+with direct coordinate MD as a spatial comparator; no empirical superiority or
+reading-instability validity is established. Direct full-trajectory MD would also
+require an explicit alignment/dimension/missingness design. No implementation.
+
+**2026-11-02 gaze-trajectory Mahalanobis branch — plan only:**
+Owner explicitly assigns this chat the separate trajectory experiment before
+collection integration. Branch `experiment/gaze-trajectory-mahalanobis` starts
+at `3119cb9c6ccae4cbb7dcd7a45c1b1f56f2b1f535` in its own managed worktree.
+[Implementation plan](gaze-trajectory-mahalanobis-plan.md) proposes a small
+H/V/spatial-movement feature family without fixation/regression/dwell detectors,
+separate pre-smoothing/selected variants, actual shared window bounds,
+reference-only fitting and matched-estimator sensitivity analysis. Numerical gates
+are exploratory; no feature set or threshold is validated. Native R/D/F and all
+aid decisions remain unchanged; both distances are observational. Fair comparison
+requires explicit context/coverage/reference choices, not equal score magnitude.
+Pure Python reference and Kotlin core are proposed new-file work; the other
+workstream owns collection, existing activity integration and local export.
+The original checkout's uncommitted planning/framework edits were preserved there,
+not copied into this worktree. No score implementation, tests/device collection,
+private recording access, cloud change, staging or commit in this planning turn.
+
+**2026-11-02 direct source trace and local-only collection direction — design only:**
+Owner confirms initial study records stay local and are transferred afterward.
+[Pipeline source map and implementation seams](study-data-pipeline-source-map.md)
+traces source at `3119cb9c6ccae4cbb7dcd7a45c1b1f56f2b1f535`, including camera /
+provider, separate Scanpath/V5/MD paths, baseline, existing logs/export, lifecycle
+and offline tools. V5 is not a P01–P13-to-aid controller. Diagnostic recording
+changes aid/display/camera conditions and cannot be repurposed unchanged.
+Baseline uses 22dp/default camera policy versus adjustable sp/stable-FPS request
+in normal articles; current profile identity binds calibration, not typography.
+Usage-log elapsed time is session-relative; gaze elapsed is since boot. Provider
+terminal counters arrive asynchronously after logical reading close; the proposed
+collector must capture their old epoch independently and finalize after drain.
+Saving a research baseline artifact must not silently restore an active profile.
+Read and consulted **Review landed gaze metrics proposal (3)**: selected-stream
+consistency was accepted, while full collector details and final study dot setting
+remain proposed/open. No runtime/schema/device/Firebase changes or repeated tests.
+
+**2026-11-02 study-readiness review — planning only:**
+Current branch is `feature/scanpath-mahalanobis-score`; the 2026-11-01 source
+adds a separate calibration-bound, in-memory reading baseline and observational
+R/D/F Mahalanobis score (see `progress-notes.md`). Owner confirms older adults
+and wants both feasibility/acceptability and reading-benefit evidence; device
+route, numbers and duration remain open. MD must remain observational and must
+not influence aids. Owner also wants an exploratory gaze-trajectory measure that
+can reveal behavior missed by R/D/F; no second feature set/formula is adopted.
+[Readiness review and implementation plan](study-readiness-review-2026-11-02.md)
+records current source, evidence limits, proposed supervised on/off comparison,
+independent outcomes and local-recorder/export-first work packages. Earlier
+feasibility-only scope and v0.1 baseline deferral are historical where conflicting.
+Ordinary app usage logging already exists, but durable joint study collection,
+baseline/MD export, package recovery and a production importer are still missing.
+Scanpath's 125ms gap differs from V5 support's 250ms gap; do not infer a universal
+aid failure threshold from FPS. MD endpoint-span coverage is not valid-time union;
+overlapping windows and regularized covariance do not validate instability.
+The 34-record draft checker and 39+13 focused Python tests pass. One bounded
+engineer source audit was reused; no app/schema behavior, device, camera, Firebase,
+staging or commit change. The review does not establish human benefit/readiness.
 
 **2026-10-27 proposed thesis-scope and Firebase Spark update — design only:**
 Added [thesis-project-scope.md](thesis-project-scope.md) from the prior scope

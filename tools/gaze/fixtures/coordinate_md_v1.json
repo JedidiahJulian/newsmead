@@ -1,0 +1,35 @@
+{
+  "instrument": "newsmead_coordinate_md_input_v1",
+  "schema_version": 1,
+  "synthetic": true,
+  "context": {
+    "participant_id": "synthetic", "installation_id": "installation",
+    "calibration_id": "calibration", "model_id": "model",
+    "acquisition_id": "acquisition", "presentation_id": "presentation",
+    "clock_domain_id": "elapsed-clock", "screen_width_px": 1080, "screen_height_px": 1920,
+    "rotation_degrees": 0, "coordinate_stream": "calibrated_raw_v1"
+  },
+  "config": {"min_reference_coverage_ms": 0},
+  "reference_id": "synthetic-reference",
+  "reference_bounds": {"start_ms": 0, "end_ms": 400},
+  "reference_observations": [
+    {"provider_epoch_id":"provider","context_epoch_id":"stationary","delivery_id":1,"capture_ms":0,"delivery_ms":10,"x_px":100,"y_px":100},
+    {"provider_epoch_id":"provider","context_epoch_id":"stationary","delivery_id":2,"capture_ms":100,"delivery_ms":110,"x_px":100,"y_px":300},
+    {"provider_epoch_id":"provider","context_epoch_id":"stationary","delivery_id":3,"capture_ms":200,"delivery_ms":210,"x_px":300,"y_px":100},
+    {"provider_epoch_id":"provider","context_epoch_id":"stationary","delivery_id":4,"capture_ms":300,"delivery_ms":310,"x_px":300,"y_px":300},
+    {"provider_epoch_id":"provider","context_epoch_id":"stationary","delivery_id":5,"capture_ms":400,"delivery_ms":410,"x_px":100,"y_px":100}
+  ],
+  "evaluation_observations": [
+    {"provider_epoch_id":"provider","context_epoch_id":"stationary","delivery_id":6,"capture_ms":600,"delivery_ms":610,"x_px":500,"y_px":600},
+    {"provider_epoch_id":"provider","context_epoch_id":"stationary","delivery_id":7,"capture_ms":700,"delivery_ms":710,"x_px":200,"y_px":200},
+    {"provider_epoch_id":"provider","context_epoch_id":"stationary","delivery_id":8,"capture_ms":800,"delivery_ms":810,"x_px":300,"y_px":300}
+  ],
+  "boundaries": [], "losses": [],
+  "windows": [{"window_id":"synthetic-window","start_ms":600,"end_ms":800}],
+  "expected": {
+    "mean": [200,200], "covariance": [10000,0,10000],
+    "unweighted_sample_mean": [180,180], "unweighted_sample_covariance": [12000,2000,12000],
+    "reference_covered_ms": 400, "reference_weight_squared_sum_ms2": 35000,
+    "point_md2": [25,0,2], "mean_md2": 6.75, "coverage_fraction": 1
+  }
+}
