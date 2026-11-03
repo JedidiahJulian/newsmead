@@ -12,6 +12,21 @@ protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
 
+**2026-11-03 reading-baseline valid-window regression fixed in software:**
+The current scanpath/Mahalanobis branch had removed the baseline-specific 650 ms
+MGazeNet output-age allowance restored on `measurement/mahalanobis`, leaving the
+500 ms provider default. Slow but bounded reading coordinates could therefore be
+classified stale before reaching the feature pipeline: feature windows still
+increased the denominator while no window became usable. Restored the configurable
+output-age gate through `MgazeNetOutputGate`, `MgazeNetLiveOutput` and
+`MgazeNetGazeProvider`, and applied 650 ms only in `ReadingBaselineActivity` via
+`StudyConfig.READING_MAX_OUTPUT_AGE_MS`. The newer stable-frame-rate camera policy,
+blink recovery, capture timestamps, feature denominators and validity/coverage
+thresholds are unchanged. Focused output/live-output plus reading-feature tests
+passed; independent source review found no actionable issue. This establishes the
+software path, not live-device recovery or coordinate accuracy; no device/camera
+operation was performed.
+
 **2026-10-27 proposed thesis-scope and Firebase Spark update — design only:**
 Added [thesis-project-scope.md](thesis-project-scope.md) from the prior scope
 discussion and the user's report of access to the existing Firebase project on

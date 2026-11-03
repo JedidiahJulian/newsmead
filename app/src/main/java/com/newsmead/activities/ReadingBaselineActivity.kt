@@ -213,7 +213,8 @@ class ReadingBaselineActivity : AppCompatActivity() {
         adapter?.checkGeometry()
         pipeline.tick(startedAt)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val camera = MgazeNetGazeProvider(this, body, smoothForReading = true, rejectBlinks = true)
+        val camera = MgazeNetGazeProvider(this, body, smoothForReading = true, rejectBlinks = true,
+            maxOutputAgeMs = StudyConfig.READING_MAX_OUTPUT_AGE_MS)
         provider = camera
         camera.onObservation = { observation -> if (running && provider === camera) adapter?.record(observation) }
         camera.onFailure = { reason ->
