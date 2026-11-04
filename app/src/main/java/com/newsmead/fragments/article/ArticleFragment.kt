@@ -263,7 +263,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
 
         // Add to history
-        FirebaseHelper.addArticleToHistory(requireContext(), article)
+        FirebaseHelper.addArticleToHistory(article)
 
 
         articleForUsage = article

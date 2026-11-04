@@ -5,11 +5,12 @@ import android.content.Context
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FirebaseFirestoreSettings
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.Source
 import com.newsmead.models.Article
 import com.newsmead.models.SavedList
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -42,16 +43,10 @@ class FirebaseHelper {
         }
 
         fun getFirestoreInstance(): FirebaseFirestore {
-            // Make offline persistence
-            val firestore = FirebaseFirestore.getInstance()
-            val settings = FirebaseFirestoreSettings.Builder()
-                .setPersistenceEnabled(true)
-                .setCacheSizeBytes(FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED)
-                .build()
-
-            firestore.firestoreSettings = settings
-
-            return firestore
+            // Android Firestore persistence is enabled by default. Do not reassign
+            // settings after first use, and do not cache this client: logout terminates
+            // it before clearing persistence, so a later login needs a fresh instance.
+            return FirebaseFirestore.getInstance()
         }
 
         suspend fun getListsCollection(context: Context): ArrayList<SavedList>? = coroutineScope {
@@ -472,40 +467,44 @@ class FirebaseHelper {
             }
         }
 
-        suspend fun checkIfArticleSavedInLists(context: Context, articleId: String): List<String> = coroutineScope {
+        suspend fun checkIfArticleSavedInLists(context: Context, articleId: String): List<String> {
             if (currentUid == "null") {
                 Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
-                return@coroutineScope emptyList()
+                return emptyList()
             }
 
             val firestore = getFirestoreInstance()
             val userListsRef = firestore.collection("users").document(currentUid).collection("lists")
 
-            try {
-                // Use async to perform the nested query concurrently
-                val lists = userListsRef.get().await().documents
-                    .mapNotNull { listDocument ->
-                        async {
-                            val listId = listDocument.id
-                            val listRef = userListsRef.document(listId).collection("articles")
+            return try {
+                coroutineScope {
+                    // Use async to perform the nested query concurrently.
+                    userListsRef.get().await().documents
+                        .map { listDocument ->
+                            async {
+                                val listId = listDocument.id
+                                val listRef = userListsRef.document(listId).collection("articles")
 
-                            val articleExists = listRef
-                                .whereEqualTo("newsId", articleId)
-                                .get()
-                                .await()
-                                .documents
-                                .isNotEmpty()
+                                val articleExists = listRef
+                                    .whereEqualTo("newsId", articleId)
+                                    .get()
+                                    .await()
+                                    .documents
+                                    .isNotEmpty()
 
-                            if (articleExists) listId else null
+                                if (articleExists) listId else null
+                            }
                         }
-                    }
-                    .awaitAll()
-                    .filterNotNull()
-
-                return@coroutineScope lists
+                        .awaitAll()
+                        .filterNotNull()
+                }
             } catch (exception: Exception) {
-                // Handle failure
-                throw exception
+                if (exception is CancellationException) throw exception
+
+                // Saved-list state is optional while reading. Firestore permission,
+                // connectivity, or account failures must not crash the article screen.
+                Log.w("FirebaseHelper", "checkIfArticleSavedInLists:failure", exception)
+                emptyList()
             }
         }
 
@@ -807,56 +806,97 @@ class FirebaseHelper {
          * Note: History stores 50 articles max
          * @param article Article to add to history
          */
-        fun addArticleToHistory(requireContext: Context, article: Article) {
-            if (currentUid == "null") {
-                Toast.makeText(requireContext, "Please login to add to history", Toast.LENGTH_SHORT).show()
+        fun addArticleToHistory(article: Article) {
+            val uid = FirebaseAuth.getInstance().currentUser?.uid
+            if (uid == null) {
+                // History is optional and must never prevent an article from opening.
+                Log.d("FirebaseHelper", "Skipping history write because no user is signed in")
                 return
             }
 
-            // Get current date and time to store in history
-            val currentDateTime = System.currentTimeMillis()
+            try {
+                val userHistoryRef = getFirestoreInstance()
+                    .collection("users")
+                    .document(uid)
+                    .collection("history")
 
-            val userHistoryRef = getFirestoreInstance()
-                .collection("users")
-                .document(currentUid)
-                .collection("history")
-
-            // If article already exists in history, delete it
-            userHistoryRef.document(article.newsId).delete()
-
-            // Add article to history
-            Log.d("FirebaseHelper", "Adding article ${article.newsId} to history")
-            userHistoryRef.document(article.newsId).set(
-                hashMapOf(
-                    "newsId" to article.newsId,
-                    "title" to article.title,
-                    "imageURL" to article.imageURL,
-                    "source" to article.source,
-                    "sourceImage" to article.sourceImage,
-                    "readTime" to article.readTime,
-                    "body" to article.body,
-                    "date" to article.date,
-                    "category" to article.category,
-                    "url" to article.url,
-                    "viewed" to currentDateTime
+                // set() already replaces an existing entry, so a separate asynchronous
+                // delete only introduces a race in which the fresh entry can disappear.
+                Log.d("FirebaseHelper", "Adding article ${article.newsId} to history")
+                userHistoryRef.document(article.newsId).set(
+                    hashMapOf(
+                        "newsId" to article.newsId,
+                        "title" to article.title,
+                        "imageURL" to article.imageURL,
+                        "source" to article.source,
+                        "sourceImage" to article.sourceImage,
+                        "readTime" to article.readTime,
+                        "body" to article.body,
+                        "date" to article.date,
+                        "category" to article.category,
+                        "language" to article.language,
+                        "url" to article.url,
+                        "viewed" to System.currentTimeMillis()
+                    )
                 )
-            )
-                .addOnSuccessListener {
-                    // Handle Success
-                    // If history has more than 50 articles, delete the oldest one
-                    userHistoryRef.orderBy("viewed").limit(50).get()
-                        .addOnSuccessListener { documents ->
-                            if (documents.size() > 50) {
-                                // Delete oldest article
-                                val oldestArticle = documents.documents[0]
-                                userHistoryRef.document(oldestArticle.id).delete()
-                            }
-                        }
-                }
-                .addOnFailureListener {
-                    // Handle Failure
-                    Toast.makeText(requireContext, "Error adding article to history", Toast.LENGTH_SHORT).show()
-                }
+                    .addOnSuccessListener {
+                        trimArticleHistory(userHistoryRef.path)
+                    }
+                    .addOnFailureListener { exception ->
+                        // A history write is a secondary side effect. Keep the reader open
+                        // and log the actionable Firestore error instead of failing the UI.
+                        Log.e("FirebaseHelper", "Unable to add article ${article.newsId} to history", exception)
+                    }
+            } catch (exception: RuntimeException) {
+                // Firestore can throw synchronously for invalid paths or initialization.
+                // History remains best-effort so the primary article flow still succeeds.
+                Log.e("FirebaseHelper", "Unable to start history write for ${article.newsId}", exception)
+            }
         }
+
+        private fun trimArticleHistory(historyPath: String) {
+            try {
+                val historyRef = getFirestoreInstance().collection(historyPath)
+
+                // Retain the newest 50. The old limit(50)/size > 50 check could
+                // never be true, so history previously grew without bound.
+                historyRef.orderBy("viewed", Query.Direction.DESCENDING).get()
+                    .addOnSuccessListener { documents ->
+                        documents.documents.drop(HISTORY_LIMIT).forEach { candidate ->
+                            deleteHistoryCandidateIfUnchanged(
+                                documentPath = candidate.reference.path,
+                                viewed = candidate.getLong("viewed")
+                            )
+                        }
+                    }
+                    .addOnFailureListener { exception ->
+                        Log.w("FirebaseHelper", "Unable to trim article history", exception)
+                    }
+            } catch (exception: RuntimeException) {
+                // Logout can terminate Firestore while this best-effort callback runs.
+                Log.w("FirebaseHelper", "Unable to start article history trim", exception)
+            }
+        }
+
+        private fun deleteHistoryCandidateIfUnchanged(documentPath: String, viewed: Long?) {
+            if (viewed == null) return
+
+            try {
+                val firestore = getFirestoreInstance()
+                val candidateRef = firestore.document(documentPath)
+                firestore.runTransaction { transaction ->
+                    val current = transaction.get(candidateRef)
+                    if (current.getLong("viewed") == viewed) {
+                        transaction.delete(candidateRef)
+                    }
+                }.addOnFailureListener { exception ->
+                    Log.w("FirebaseHelper", "Unable to trim history entry", exception)
+                }
+            } catch (exception: RuntimeException) {
+                Log.w("FirebaseHelper", "Unable to start history entry trim", exception)
+            }
+        }
+
+        private const val HISTORY_LIMIT = 50
     }
 }
