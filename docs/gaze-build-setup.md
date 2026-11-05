@@ -7,8 +7,9 @@
    Android SDK Platform 34/build tools requested by the project.
 3. Sync Gradle, choose `app` / `debug`, select a compatible ARM Android phone,
    and press Run. Allow normal Gradle/SDK dependency downloads on first use.
-4. Home → **Calibrate eye tracker** opens A/B/C and **Start A/C confirmation**.
-   Opening these screens is idle; camera collection requires the task's Start.
+4. Home → **Calibrate eye tracker** → **Compare all three** starts the A/B/C guide.
+   Use **Continue comparison** for its tasks. The A/C-only guide is temporarily
+   disabled. Opening these screens is idle; capture requires the task's Start.
 
 No model folder copy, Python installation, model conversion or vendor-fetch step
 is needed. Models and both debug ARM runtimes are ordinary tracked Git files in

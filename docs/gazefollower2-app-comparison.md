@@ -111,6 +111,12 @@ based on the collected accuracy/performance evidence.
 
 ## Guided A/C confirmation
 
+**Temporarily disabled, 2026-11-05:** the owner requested one A/B/C group-testing
+flow. The A/C start button and automatic guide restoration are disabled. Saved
+A/C reports and the current legacy plan's export metadata remain available;
+an old saved plan cannot lock the A/B/C controls. The description below records
+the historical flow, not an available menu option.
+
 2026-11-05: after exploratory inspection of the owner's exported comparison, the
 owner approved repeating A/C with consistent setup and reversed order. **Start
 A/C confirmation** creates four blocks: round 1 **A → C**, round 2 **C → A**.

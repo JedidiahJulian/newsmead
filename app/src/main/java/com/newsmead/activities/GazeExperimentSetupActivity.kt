@@ -16,6 +16,10 @@ import java.util.*
 
 /** User-controlled experiment navigation. Opening/selecting never starts a camera. */
 class GazeExperimentSetupActivity : AppCompatActivity() {
+    private companion object {
+        // Keep the group pilot on A/B/C. Old A/C reports remain readable/exportable.
+        const val AC_CONFIRMATION_ENABLED = false
+    }
     private val prefs by lazy { getSharedPreferences("gaze-experiment-navigation-v1", MODE_PRIVATE) }
     private lateinit var content: LinearLayout
     private lateinit var status: TextView
@@ -26,7 +30,7 @@ class GazeExperimentSetupActivity : AppCompatActivity() {
     private lateinit var next: MaterialButton
     private lateinit var radios: RadioGroup
     private lateinit var compare: MaterialButton
-    private lateinit var compareAC: MaterialButton
+    private var compareAC: MaterialButton? = null
     private lateinit var historySelector: Spinner
     private lateinit var reportWarning: TextView
     private var historyKeys = emptyList<String>()
@@ -47,6 +51,7 @@ class GazeExperimentSetupActivity : AppCompatActivity() {
     private var launchingConfiguration: String? = null
     private var launchingCalibration = false
     private var confirmationPlan: ACConfirmationPlan? = null
+    private var legacyConfirmationPlan: ACConfirmationPlan? = null
     private var confirmationError: String? = null
     private var launchingConfirmationStep: String? = null
     private var pendingConfirmationBinding: Triple<String, String, String>? = null
@@ -68,7 +73,7 @@ class GazeExperimentSetupActivity : AppCompatActivity() {
         if (uri != null) {
             val id = exportingSession ?: sessionId()
             val scale = physicalScale
-            val planSnapshot = confirmationPlan?.takeIf { it.sessionId == id }?.toJson()
+            val planSnapshot = (confirmationPlan ?: legacyConfirmationPlan)?.takeIf { it.sessionId == id }?.toJson()
             exportingSession = null
             Thread {
                 val saved = runCatching {
@@ -88,9 +93,12 @@ class GazeExperimentSetupActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         if (!BuildConfig.GAZE_EXPERIMENT_ENABLED) { finish(); return }
         if (!ExperimentFlow.validSession(prefs.getString("session", "") ?: "")) newSession(false)
-        confirmationPlan = prefs.getString("acPlan", null)?.let { value -> runCatching {
+        legacyConfirmationPlan = prefs.getString("acPlan", null)?.let { value -> runCatching {
             ACConfirmationPlan.fromJson(JSONObject(value)).also { require(it.sessionId == sessionId()) }
-        }.onFailure { confirmationError = "Saved A/C setup could not be restored. Start a new A/C comparison." }.getOrNull() }
+        }.onFailure {
+            if (AC_CONFIRMATION_ENABLED) confirmationError = "Saved A/C setup could not be restored. Start a new A/C comparison."
+        }.getOrNull() }
+        confirmationPlan = legacyConfirmationPlan.takeIf { AC_CONFIRMATION_ENABLED }
         selected = GazeExperimentConfiguration.fromId(prefs.getString("selected", "A") ?: "A") ?: GazeExperimentConfiguration.CURRENT_SVR
         launchingConfiguration = savedInstanceState?.getString("launchingConfiguration")
         launchingCalibration = savedInstanceState?.getBoolean("launchingCalibration") ?: false
@@ -128,7 +136,7 @@ class GazeExperimentSetupActivity : AppCompatActivity() {
         calibrate = button("Calibrate selected") { openCalibration(selected) }
         validate = button("Validate selected") { openRun(selected, ExperimentFlow.VALIDATION) }
         reading = button("Reading test") { openRun(selected, ExperimentFlow.READING) }
-        compareAC = button("Start A/C confirmation") { createConfirmation() }
+        if (AC_CONFIRMATION_ENABLED) compareAC = button("Start A/C confirmation") { createConfirmation() }
         compare = button("Compare all three") { newSession(true); refresh() }
         next = button("Continue comparison") { continueGuided() }
         label("Saved results", 21f)
@@ -165,7 +173,7 @@ class GazeExperimentSetupActivity : AppCompatActivity() {
     }
     private fun sessionId() = prefs.getString("session", "")!!
     private fun newSession(guided: Boolean) {
-        confirmationPlan = null; confirmationError = null; pendingConfirmationBinding = null
+        confirmationPlan = null; legacyConfirmationPlan = null; confirmationError = null; pendingConfirmationBinding = null
         val index = prefs.getInt("nextOrder", 0)
         prefs.edit().putString("session", UUID.randomUUID().toString()).putBoolean("guided", guided)
             .putString("order", ExperimentFlow.order(index).joinToString(","))
@@ -223,8 +231,8 @@ class GazeExperimentSetupActivity : AppCompatActivity() {
         calibrate.isEnabled = !refreshing
         validate.isEnabled = available && !refreshing
         reading.isEnabled = !refreshing && completed(selected, ExperimentFlow.VALIDATION) != null
-        compareAC.isEnabled = !refreshing
-        compareAC.text = if (confirmationPlan == null) "Start A/C confirmation" else "Start new A/C confirmation"
+        compareAC?.isEnabled = !refreshing
+        compareAC?.text = if (confirmationPlan == null) "Start A/C confirmation" else "Start new A/C confirmation"
         compare.isEnabled = !refreshing
         compare.text = if (prefs.getBoolean("guided", false)) "Start new comparison" else "Compare all three"
         next.visibility = if (prefs.getBoolean("guided", false)) View.VISIBLE else View.GONE

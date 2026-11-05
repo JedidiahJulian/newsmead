@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.RadioButton
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -74,7 +75,7 @@ class ACConfirmationUiTest {
         assertTrue("Setup refresh exceeded 5 seconds", ready)
     }
 
-    @Test fun persistedPlanResumesFreshRoundOneAndDisablesManualRoutes() {
+    @Test fun savedACPlanDoesNotExposeOrResumeGuideAndLeavesABCUsable() {
         assumeTrue(BuildConfig.GAZE_EXPERIMENT_ENABLED)
         val prefs = context.getSharedPreferences("gaze-experiment-navigation-v1", 0)
         val original = prefs.all.toMap()
@@ -89,24 +90,14 @@ class ACConfirmationUiTest {
                     if (pass == 1) screen.recreate()
                     awaitRefresh(screen)
                     screen.onActivity { activity ->
-                        // In-memory existing fits prove that saved calibration availability cannot skip a fresh block.
-                        @Suppress("UNCHECKED_CAST")
-                        val fits = field(activity, "fingerprints") as MutableMap<String, String?>
-                        @Suppress("UNCHECKED_CAST")
-                        val collections = field(activity, "collections") as MutableMap<String, String?>
-                        @Suppress("UNCHECKED_CAST")
-                        val compatible = field(activity, "compatible") as MutableMap<String, Boolean>
-                        listOf("A", "C").forEach { fits[it] = "old-fit"; collections[it] = "old-collection"; compatible[it] = true }
-                        activity.javaClass.getDeclaredMethod("render").apply { isAccessible = true }.invoke(activity)
                         val root = activity.window.decorView
-                        listOf("Calibrate selected", "Validate selected", "Reading test").forEach {
-                            assertFalse(button(root, it).isEnabled)
-                        }
-                        val next = button(root, "Continue A/C - round 1, A: Fresh calibration")
-                        assertTrue(next.isEnabled)
-                        assertEquals(View.VISIBLE, next.visibility)
-                        assertEquals(plan.sessionId, (field(activity, "confirmationPlan") as ACConfirmationPlan).sessionId)
-                        assertEquals(plan.steps.map { it.id }, (field(activity, "confirmationPlan") as ACConfirmationPlan).steps.map { it.id })
+                        assertFalse(descendants(root).filterIsInstance<Button>().any { it.text.toString().contains("A/C") })
+                        assertTrue(button(root, "Compare all three").isEnabled)
+                        assertTrue(button(root, "Calibrate selected").isEnabled)
+                        assertTrue(descendants(root).filterIsInstance<RadioButton>().all { it.isEnabled })
+                        assertEquals(View.GONE, (field(activity, "next") as View).visibility)
+                        assertNull(field(activity, "confirmationPlan"))
+                        assertEquals(plan.toJson().toString(), (field(activity, "legacyConfirmationPlan") as ACConfirmationPlan).toJson().toString())
                     }
                 }
             }
