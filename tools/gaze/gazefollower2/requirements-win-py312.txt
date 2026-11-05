@@ -1,0 +1,6 @@
+# Explicit, workspace-local tooling only; never installed by app/build scripts.
+MNN==3.6.1
+numpy==1.26.4
+opencv-python==4.11.0.86
+onnx==1.17.0
+onnxruntime==1.20.1

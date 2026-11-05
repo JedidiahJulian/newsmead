@@ -1,4 +1,5 @@
 import java.security.MessageDigest
+import groovy.json.JsonSlurper
 
 plugins {
     id("com.android.application")
@@ -54,6 +55,53 @@ val verifyVendor by tasks.registering {
     }
 }
 tasks.named("preBuild").configure { dependsOn(verifyVendor) }
+
+// Explicit opt-in only. An ordinary benchmark build never packages a stale
+// candidate from an earlier build, and the NewsMead app does not depend on this.
+providers.gradleProperty("gazefollower2CandidateDir").orNull?.takeIf { it.isNotBlank() }?.let { path ->
+    val candidateDirectory = rootProject.file(path)
+    val generatedAssets = layout.buildDirectory.dir("generated/gazefollower2Assets")
+    val fixtureFiles = listOf("ramp", "clipped", "channels").flatMap { fixture ->
+        listOf("face", "left", "right", "rect").map { "${fixture}_${it}.f32" }
+    }
+    // No inputs/outputs: validation runs even when Sync would be NO-SOURCE or
+    // UP-TO-DATE. An explicitly requested missing candidate must fail closed.
+    val verifyGazeFollower2Candidate by tasks.registering {
+        doLast {
+            check(candidateDirectory.isDirectory) { "Candidate directory is missing: $candidateDirectory" }
+            fun hash(file: File) = MessageDigest.getInstance("SHA-256").digest(file.readBytes())
+                .joinToString("") { "%02x".format(it) }
+            check(hash(candidateDirectory.resolve("GazeNet_Next.mnn")) ==
+                "4547cc4685a7176aad75c50a25dc9a3368d1dd1fafe0d8ea5c32421af93a49b0") { "Unreviewed candidate model" }
+            check(hash(candidateDirectory.resolve("candidate.json")) ==
+                "e5a2ecbe665a8024fc601d875d8f58f63ff26c5ea14e69e36e0a1f5a7b9132c5") { "Unreviewed parity reference" }
+            val report = JsonSlurper().parse(candidateDirectory.resolve("candidate.json")) as Map<*, *>
+            check(report["outcome"] == "host_parity_passed")
+            val fixtures = report["fixtures"] as List<*>
+            fixtures.forEach { entry ->
+                val fixture = entry as Map<*, *>
+                listOf("face", "left", "right", "rect").forEach { name ->
+                    val tensor = fixture[name] as Map<*, *>
+                    val file = candidateDirectory.resolve(tensor["file"] as String)
+                    check(file.name in fixtureFiles && hash(file) == tensor["sha256"]) { "Altered synthetic fixture" }
+                    check(file.length() == (tensor["count"] as Number).toLong() * 4)
+                }
+            }
+            check(candidateDirectory.resolve("NOTICE.txt").isFile)
+            check(candidateDirectory.resolve("GazeFollower2-LICENSE.txt").isFile)
+        }
+    }
+    val prepareGazeFollower2Candidate by tasks.registering(Sync::class) {
+        dependsOn(verifyGazeFollower2Candidate)
+        from(candidateDirectory) {
+            include(fixtureFiles + listOf("GazeNet_Next.mnn", "candidate.json", "NOTICE.txt", "GazeFollower2-LICENSE.txt"))
+            into("gazefollower2")
+        }
+        into(generatedAssets)
+    }
+    android.sourceSets["main"].assets.srcDir(generatedAssets)
+    tasks.named("preBuild").configure { dependsOn(prepareGazeFollower2Candidate) }
+}
 
 dependencies {
     implementation("androidx.activity:activity-ktx:1.8.0")

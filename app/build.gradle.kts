@@ -20,6 +20,7 @@ plugins {
 }
 
 val localProperties = Properties()
+val gazeExperimentDirectory = providers.gradleProperty("gazefollower2CandidateDir").orNull?.takeIf { it.isNotBlank() }
 val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localPropertiesFile.inputStream().use { localProperties.load(it) }
@@ -35,6 +36,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.2"
+        buildConfigField("boolean", "GAZE_EXPERIMENT_ENABLED", (gazeExperimentDirectory != null).toString())
 
         // Frozen estimator baseline identity for the matched comparison harness.
         // The reference build applies the reviewed comparison patch to its exact
@@ -226,6 +228,38 @@ val prepareMgazeNetAssets by tasks.registering(Sync::class) {
 tasks.named("preBuild").configure {
     dependsOn(prepareMgazeNetAssets)
     dependsOn(verifyComparisonProtocolManifest)
+}
+
+// Only explicit experiment builds contain the reviewed candidate. Verification runs
+// even if the subsequent Sync has no source files or is up to date.
+gazeExperimentDirectory?.let { path ->
+    val candidate = rootProject.file(path)
+    val destination = layout.buildDirectory.dir("generated/gazeExperimentAssets")
+    val verifyGazeExperiment by tasks.registering {
+        doLast {
+            check(candidate.isDirectory) { "Candidate directory is missing: $candidate" }
+            val pins = mapOf(
+                "GazeNet_Next.mnn" to "4547cc4685a7176aad75c50a25dc9a3368d1dd1fafe0d8ea5c32421af93a49b0",
+                "candidate.json" to "e5a2ecbe665a8024fc601d875d8f58f63ff26c5ea14e69e36e0a1f5a7b9132c5")
+            pins.forEach { (name, expected) ->
+                val hash = MessageDigest.getInstance("SHA-256").digest(candidate.resolve(name).readBytes())
+                    .joinToString("") { "%02x".format(it) }
+                check(hash == expected) { "Unreviewed experiment asset: $name" }
+            }
+            check(candidate.resolve("GazeFollower2-LICENSE.txt").isFile)
+            check(candidate.resolve("NOTICE.txt").isFile)
+        }
+    }
+    val prepareGazeExperiment by tasks.registering(Sync::class) {
+        dependsOn(verifyGazeExperiment)
+        from(candidate) {
+            include("GazeNet_Next.mnn", "candidate.json", "GazeFollower2-LICENSE.txt", "NOTICE.txt")
+            into("gazefollower2")
+        }
+        into(destination)
+    }
+    android.sourceSets["main"].assets.srcDir(destination)
+    tasks.named("preBuild").configure { dependsOn(prepareGazeExperiment) }
 }
 
 // Verify the artifact, not just input directories (OpenCV also supplies libc++_shared).

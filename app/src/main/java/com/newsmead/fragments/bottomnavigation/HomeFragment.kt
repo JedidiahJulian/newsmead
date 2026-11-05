@@ -13,6 +13,8 @@ import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.newsmead.R
 import com.newsmead.activities.GazeCalibrationActivity
+import com.newsmead.activities.GazeExperimentSetupActivity
+import com.newsmead.BuildConfig
 import com.newsmead.activities.ReadingBaselineActivity
 import com.newsmead.activities.ScanpathReplayActivity
 import com.newsmead.activities.ScanpathPilotActivity
@@ -90,9 +92,10 @@ class HomeFragment : Fragment(), clickListener {
             Navigation.findNavController(requireView()).navigate(action)
         }
 
-        // Gaze calibration button - launches the 16-point calibration screen
+        // Explicit candidate builds offer the isolated comparison flow.
         this.viewBinding.btnGazeCalibration.setOnClickListener {
-            startActivity(Intent(requireContext(), GazeCalibrationActivity::class.java))
+            startActivity(Intent(requireContext(), if (BuildConfig.GAZE_EXPERIMENT_ENABLED)
+                GazeExperimentSetupActivity::class.java else GazeCalibrationActivity::class.java))
         }
         viewBinding.btnReadingBaseline.setOnClickListener {
             startActivity(Intent(requireContext(), ReadingBaselineActivity::class.java))

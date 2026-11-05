@@ -6,7 +6,14 @@ import com.taobao.android.mnn.MNNNetNative as Native
 import java.security.MessageDigest
 
 /** Thread confined, CPU only. No calibration files, screen coordinates or callbacks. */
-class MnnEstimator(context: Context, private val threads: Int = 4) : AutoCloseable {
+class MnnEstimator(context: Context, private val threads: Int = 4,
+                   private val spec: ModelSpec = ModelSpec("base.mnn", MODEL_SHA, "output_0")) : AutoCloseable {
+    data class ModelSpec(val assetPath: String, val sha256: String, val outputName: String,
+                         val requireBatchOneOutput: Boolean = false) {
+        init {
+            require(assetPath.isNotBlank() && sha256.matches(Regex("[a-f0-9]{64}")) && outputName.isNotBlank())
+        }
+    }
     private var net = 0L
     private val session: Long
     private val inputs: LongArray
@@ -15,8 +22,8 @@ class MnnEstimator(context: Context, private val threads: Int = 4) : AutoCloseab
 
     init {
         require(threads in 1..8)
-        val bytes = context.assets.open("base.mnn").use { it.readBytes() }
-        check(sha256(bytes) == MODEL_SHA) { "Model hash mismatch" }
+        val bytes = context.assets.open(spec.assetPath).use { it.readBytes() }
+        check(sha256(bytes) == spec.sha256) { "Model hash mismatch" }
         net = Native.nativeCreateNetFromBuffer(bytes)
         check(net != 0L) { "MNN model load failed" }
         try {
@@ -27,8 +34,13 @@ class MnnEstimator(context: Context, private val threads: Int = 4) : AutoCloseab
             }.toLongArray()
             val shapes = arrayOf(intArrayOf(1,3,224,224), intArrayOf(1,3,112,112), intArrayOf(1,3,112,112), intArrayOf(1,12))
             inputs.indices.forEach { check(Native.nativeTensorGetDimensions(inputs[it]).contentEquals(shapes[it])) { "Unexpected input layout" } }
-            output = Native.nativeGetSessionOutput(net, session, "output_0")
+            output = Native.nativeGetSessionOutput(net, session, spec.outputName)
             check(output != 0L && Native.nativeTensorGetData(output, null) == 258) { "Unexpected output shape" }
+            if (spec.requireBatchOneOutput) {
+                check(Native.nativeTensorGetDimensions(output).contentEquals(intArrayOf(1, 258))) {
+                    "Candidate output must have shape [1,258]"
+                }
+            }
         } catch (error: Throwable) { close(); throw error }
     }
 

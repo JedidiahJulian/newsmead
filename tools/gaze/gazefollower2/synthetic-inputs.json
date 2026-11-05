@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "generator": "tools/gaze/mgazenet/reference.py",
+  "generator_sha256": "e8375b5844c69c3052c52e271e12c9ebfe889fe61116e94bcf3c3cd34de404db",
+  "fixtures": {
+    "ramp": {
+      "face": {
+        "file": "ramp_face.f32",
+        "count": 150528,
+        "sha256": "2901e4b8e0589be261efb9dccc47022001fc88662b122bdf704e6aab0ef8d80d"
+      },
+      "left": {
+        "file": "ramp_left.f32",
+        "count": 37632,
+        "sha256": "9bf436393cd104707d2c7b06cfad6a5e5149114ef1223bdb7b4a9a2bb282c7a5"
+      },
+      "right": {
+        "file": "ramp_right.f32",
+        "count": 37632,
+        "sha256": "274379cdfe1e3eabee9f0e836bff847196004a2d075ed924919cbb27a881541b"
+      },
+      "rect": {
+        "file": "ramp_rect.f32",
+        "count": 12,
+        "sha256": "29030535c3c85556196a0d4d715a70dde260cd9dd7e7f2f5111552f71f0d2b8c"
+      }
+    },
+    "clipped": {
+      "face": {
+        "file": "clipped_face.f32",
+        "count": 150528,
+        "sha256": "76e0871f3e2b116d79d7812443171ddcff43a9e87a8bf9eecc5abed17b6dff41"
+      },
+      "left": {
+        "file": "clipped_left.f32",
+        "count": 37632,
+        "sha256": "c0db7b56fcc1f80dee5916ad5e476db3d92643d9047f9425bb46b3d7f929f26f"
+      },
+      "right": {
+        "file": "clipped_right.f32",
+        "count": 37632,
+        "sha256": "b7c76374ed0108b7f8a3fbcb4ba5dbea040b491c09ce0b240ae057046073e14a"
+      },
+      "rect": {
+        "file": "clipped_rect.f32",
+        "count": 12,
+        "sha256": "308c2c26bf7bbacb3ef77c0dd92cac789b95cf3774963fbbcec830c6e6d62555"
+      }
+    },
+    "channels": {
+      "face": {
+        "file": "channels_face.f32",
+        "count": 150528,
+        "sha256": "82bae6f0514e5b42f27cef644e3ce4ec0909738ff500bf24d5c400d00f0a0feb"
+      },
+      "left": {
+        "file": "channels_left.f32",
+        "count": 37632,
+        "sha256": "81f1aa753440427306ea9f4486b70ed296af561f94d3ae59333b7716eaa45d10"
+      },
+      "right": {
+        "file": "channels_right.f32",
+        "count": 37632,
+        "sha256": "6953d45e986a5a11e55a7c3ba2ef2b783cb562f0328d6c904c40b70fd3e8cc9a"
+      },
+      "rect": {
+        "file": "channels_rect.f32",
+        "count": 12,
+        "sha256": "cf7dac1808fe4604170eb68acda8cb1f16de4e7ac6c8f7b59150f81670ef373a"
+      }
+    }
+  }
+}

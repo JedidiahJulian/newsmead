@@ -8,11 +8,11 @@ import org.opencv.ml.SVM
 import java.io.File
 
 /** Thread-confined, pinned X/Y regressors. Only native trained models are serialized. */
-class SvrCalibration private constructor(private val x: SVM, private val y: SVM) : AutoCloseable {
+class SvrCalibration private constructor(private val x: SVM, private val y: SVM) : CalibrationRegressor {
     constructor() : this(create(), create())
     private val row = Mat(1,258,CvType.CV_32F)
-    var trained = false; private set
-    fun fit(features: Array<FloatArray>, labels: Array<FloatArray>) {
+    override var trained = false; private set
+    override fun fit(features: Array<FloatArray>, labels: Array<FloatArray>) {
         trained = false
         require(features.isNotEmpty() && features.size == labels.size)
         require(features.all { it.size == 258 && it.all(Float::isFinite) })
@@ -27,7 +27,7 @@ class SvrCalibration private constructor(private val x: SVM, private val y: SVM)
             trained = true
         } finally { samples.release(); lx.release(); ly.release() }
     }
-    fun predict(features: FloatArray): FloatArray {
+    override fun predict(features: FloatArray): FloatArray {
         check(trained); require(features.size == 258 && features.all(Float::isFinite))
         row.put(0,0,features)
         return floatArrayOf(x.predict(row),y.predict(row)).also { check(it.all(Float::isFinite)) }

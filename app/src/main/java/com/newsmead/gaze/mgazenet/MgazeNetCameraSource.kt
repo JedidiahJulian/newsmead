@@ -51,6 +51,9 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private val cameraExecutor = Executors.newSingleThreadExecutor()
     private val worker = Executors.newSingleThreadExecutor()
     private val stopped = AtomicBoolean(false)
+    // All registrations and completion dispatch are on main, including error-driven close.
+    private val closeCallbacks = mutableListOf<(Map<String,Any?>) -> Unit>()
+    private var closeCounts: Map<String,Any?>? = null
     private val failedOnce = AtomicBoolean(false)
     private val drops = AtomicLong()
     private val arrivals = AtomicLong()
@@ -60,7 +63,11 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private var landmarker: FaceLandmarker? = null
     private var preprocessors: List<Preprocessor> = emptyList()
     private val availablePreprocessors = ArrayBlockingQueue<Preprocessor>(PREPROCESSOR_SLOT_COUNT)
-    private var svr: SvrCalibration? = null
+    private var svr: CalibrationRegressor? = null
+    private var companionRegressor: CalibrationRegressor? = null
+    private var calibrationCollectionId: String? = null
+    private var pairFitted = false
+    private val configuration = store.configuration
     private val frames = CameraFrames()
     @Volatile private var clockReady = false
     private var signature: List<Int>? = null
@@ -78,10 +85,12 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 check(org.opencv.android.OpenCVLoader.initLocal())
                 check(CalibrationIdentity.hash(context.assets.open("face_landmarker.task").use { it.readBytes() }) == CalibrationIdentity.LOCALIZER)
                 store.verifyNativePersistence()
-                model = MnnEstimator(context)
+                model = MnnEstimator(context, configuration = configuration)
                 preprocessors = List(PREPROCESSOR_SLOT_COUNT) { Preprocessor() }
                 preprocessors.forEach { availablePreprocessors.add(it) }
-                svr = saved?.let { store.load(it) } ?: SvrCalibration()
+                svr = saved?.let { store.loadRegressor(it) } ?: if (configuration == GazeExperimentConfiguration.NEXT_RIDGE) RidgeCalibration() else SvrCalibration()
+                if (saved == null && configuration?.isNext == true) companionRegressor =
+                    if (configuration == GazeExperimentConfiguration.NEXT_RIDGE) SvrCalibration() else RidgeCalibration()
                 fun localizer(delegate: Delegate) = FaceLandmarker.createFromOptions(context,
                     FaceLandmarker.FaceLandmarkerOptions.builder().setBaseOptions(BaseOptions.builder()
                         .setModelAssetPath("face_landmarker.task").setDelegate(delegate).build())
@@ -144,7 +153,10 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 signature = shape
                 val metadata = linkedMapOf<String,Any?>(
                     "acquisition" to acquisition,
-                    "model_sha256" to MnnEstimator.MODEL_SHA,"runtime" to MnnEstimator.RUNTIME,
+                    "experiment_configuration" to configuration?.id,
+                    "mapping_id" to (configuration?.mappingId ?: CalibrationIdentity.SVR),
+                    "calibration_collection_id" to saved?.calibrationCollectionId,
+                    "model_sha256" to (configuration?.modelSha ?: MnnEstimator.MODEL_SHA),"runtime" to MnnEstimator.RUNTIME,
                     "face_landmarker_sha256" to "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
                     "localizer" to "Tasks 0.10.29 VIDEO one-face detection=.1 tracking=.1 presence=.5",
                     "delegate" to delegateName,"camera_source_shape_rotation" to shape,
@@ -237,7 +249,15 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     }
     fun fit(features: Array<FloatArray>, labels: Array<FloatArray>, complete: (Boolean) -> Unit) {
         worker.execute {
-            val success = try { if (stopped.get()) false else { svr!!.fit(features,labels); true } }
+            pairFitted = false; calibrationCollectionId = null
+            val success = try { if (stopped.get()) false else {
+                check(saved == null)
+                svr!!.fit(features,labels)
+                companionRegressor?.fit(features,labels)
+                pairFitted = configuration?.isNext != true || companionRegressor?.trained == true
+                calibrationCollectionId = java.util.UUID.randomUUID().toString()
+                true
+            } }
                 catch (_: Throwable) { false }
                 finally { features.forEach { it.fill(0f) }; labels.forEach { it.fill(0f) } }
             main.execute { if (!stopped.get()) complete(success) }
@@ -245,8 +265,19 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     }
     fun save(identity: CalibrationIdentity, complete: (Boolean) -> Unit) {
         worker.execute {
-            val success = try { if (stopped.get()) false else { store.save(identity,svr!!) { !stopped.get() }; true } }
+            val success = try { if (stopped.get()) false else { store.save(identity,svr!! as SvrCalibration) { !stopped.get() }; true } }
                 catch (_: Throwable) { false }
+            main.execute { if (!stopped.get()) complete(success) }
+        }
+    }
+    /** Explicit experiment save; Next mappings commit as one generation after a shared fit. */
+    fun saveExperiment(identity: CalibrationIdentity, complete: (Boolean) -> Unit) {
+        worker.execute {
+            val success = try {
+                check(configuration != null && pairFitted && !stopped.get())
+                store.saveExperiment(identity,svr!!,companionRegressor,checkNotNull(calibrationCollectionId)) { !stopped.get() }
+                true
+            } catch (_: Throwable) { false }
             main.execute { if (!stopped.get()) complete(success) }
         }
     }
@@ -267,6 +298,8 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     }
     /** Called on main. Drain analyzer submissions before releasing worker-owned resources. */
     fun close(complete: (Map<String,Any?>) -> Unit) {
+        closeCounts?.let { complete(it); return }
+        closeCallbacks.add(complete)
         if (!stopped.compareAndSet(false,true)) return
         pauseCapture()
         cameraExecutor.shutdown()
@@ -277,14 +310,19 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 try {
                     listOf<() -> Unit>({ landmarker?.close() },{ model?.close() },
                         { preprocessors.forEach { it.close() }; preprocessors = emptyList(); availablePreprocessors.clear() },
-                        { svr?.close() },{ frames.close() }).forEach { close ->
+                        { svr?.close() },{ companionRegressor?.close() },{ frames.close() }).forEach { close ->
                         runCatching { close() }.exceptionOrNull()?.let { errors.add(it.toString()) }
                     }
                 }
                 finally {
                     worker.shutdown()
-                    main.execute { complete(mapOf("analyzer_arrivals" to arrivals.get(),"observed_busy_drops" to drops.get(),
-                        "cameraX_undelivered_frames" to "not_observable","resource_close_errors" to errors)) }
+                    main.execute {
+                        val counts = mapOf("analyzer_arrivals" to arrivals.get(),"observed_busy_drops" to drops.get(),
+                            "cameraX_undelivered_frames" to "not_observable","resource_close_errors" to errors)
+                        closeCounts = counts
+                        val callbacks = closeCallbacks.toList(); closeCallbacks.clear()
+                        callbacks.forEach { it(counts) }
+                    }
                 }
             }
         }.start()

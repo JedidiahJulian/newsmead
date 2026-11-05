@@ -44,6 +44,12 @@
         <activity
             android:name=".activities.GazeTestActivity"
             android:exported="true" />
+        <activity android:name=".activities.GazeExperimentSetupActivity"
+            android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".activities.GazeExperimentCalibrationActivity"
+            android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".activities.GazeExperimentRunActivity"
+            android:exported="false" android:screenOrientation="portrait" />
         <activity
             android:name=".activities.ReadingValidationActivity"
             android:exported="true" />

@@ -49,6 +49,7 @@ class MgazeNetGazeProvider(
     private val smoothForReading: Boolean = false,
     private val rejectBlinks: Boolean = false,
     internal val preferStableFrameRate: Boolean = false,
+    val configuration: GazeExperimentConfiguration? = null,
 ) : GazeProvider, DefaultLifecycleObserver {
     data class Observation(val captureMs: Double?, val deliveryElapsedNs: Long, val deliveryId: Long, val reason: String,
         val x: Float? = null, val y: Float? = null, val rawX: Float? = null, val rawY: Float? = null,
@@ -66,6 +67,7 @@ class MgazeNetGazeProvider(
     private var lastOutput = -1.0
     private var fresh = false
     var onObservation: ((Observation) -> Unit)? = null
+    var onSourceMetadata: ((Map<String, Any?>) -> Unit)? = null
     var onFailure: ((String) -> Unit)? = null
     var onFps: ((Float) -> Unit)? = null
     private var fpsStart = 0.0
@@ -77,7 +79,7 @@ class MgazeNetGazeProvider(
     override fun setOnGaze(listener: GazeProvider.OnGaze) { this.listener = listener }
     override fun start(owner: LifecycleOwner) {
         check(source == null)
-        val store = MgazeNetCalibrationStore(context)
+        val store = MgazeNetCalibrationStore(context, configuration)
         val saved = try { store.snapshot(view) } catch (_: Exception) {
             onFailure?.invoke("A fresh MGazeNet calibration is required."); return
         }
@@ -88,7 +90,7 @@ class MgazeNetGazeProvider(
         val output = MgazeNetLiveOutput(identity.screenWidth, identity.screenHeight,
             smoothForReading, rejectBlinks)
         liveOutput = output
-        source = MgazeNetCameraSource(context,owner,ready = {}, result = { frame ->
+        source = MgazeNetCameraSource(context,owner,ready = { onSourceMetadata?.invoke(it) }, result = { frame ->
             val size = view.physicalDisplaySize(displaySize)
             if (size.x != identity.screenWidth || size.y != identity.screenHeight || view.display.rotation != identity.rotation) {
                 fail("Screen geometry changed; recalibrate.")

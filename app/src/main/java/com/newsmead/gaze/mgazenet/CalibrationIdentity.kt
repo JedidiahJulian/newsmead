@@ -7,6 +7,7 @@ import java.security.MessageDigest
 data class CalibrationIdentity(
     val device: String, val screenWidth: Int, val screenHeight: Int,
     val rotation: Int, val viewport: GazeCoordinateFrame, val acquisition: String = "unbound",
+    val configuration: GazeExperimentConfiguration? = null,
 ) {
     init {
         require(device.matches(Regex("[a-f0-9]{64}")))
@@ -19,12 +20,13 @@ data class CalibrationIdentity(
     val targets get() = TARGET_FRACTIONS.map { (x, y) ->
         viewport.toScreen(x * viewport.width, y * viewport.height)
     }
-    fun canonical(): String = listOf(VERSION, MODEL, LOCALIZER, PIPELINE, SVR, COORDINATES,
+    fun canonical(): String = listOf(if (configuration == null) VERSION else EXPERIMENT_VERSION, configuration?.modelSha ?: MODEL, LOCALIZER, PIPELINE, configuration?.mappingId ?: SVR, COORDINATES,
         device, screenWidth, screenHeight, rotation, viewport.originX, viewport.originY,
         viewport.width, viewport.height,
-        targets.joinToString(";") { "${it.x},${it.y}" },acquisition).joinToString("\n")
+        targets.joinToString(";") { "${it.x},${it.y}" },acquisition).let { if (configuration == null) it else it + configuration.id }.joinToString("\n")
 
     companion object {
+        const val EXPERIMENT_VERSION = "newsmead_gaze_experiment_v1"
         const val VERSION = "newsmead_mgazenet_calibration_v2"
         const val MODEL = "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96"
         const val LOCALIZER = "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
@@ -51,9 +53,10 @@ data class CalibrationIdentity(
             .joinToString("") { "%02x".format(it.toInt() and 255) }
         fun parse(text: String): CalibrationIdentity {
             val p = text.split('\n')
-            require(p.size == 16)
+            require(p.size == 16 || p.size == 17)
+            val configuration = if (p.size == 17) requireNotNull(GazeExperimentConfiguration.fromId(p[16])) else null
             val value = CalibrationIdentity(p[6],p[7].toInt(),p[8].toInt(),p[9].toInt(),
-                GazeCoordinateFrame(p[10].toInt(),p[11].toInt(),p[12].toInt(),p[13].toInt()),p[15])
+                GazeCoordinateFrame(p[10].toInt(),p[11].toInt(),p[12].toInt(),p[13].toInt()),p[15],configuration)
             require(value.canonical() == text) { "Incompatible MGazeNet identity or target geometry" }
             return value
         }
