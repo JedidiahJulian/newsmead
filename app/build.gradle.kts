@@ -19,6 +19,28 @@ plugins {
     id("kotlin-kapt")
 }
 
+val mgazeNetDirectory = rootProject.file("third_party/gaze/mgazenet")
+val faceLandmarker = rootProject.file("app/src/main/assets/face_landmarker.task")
+val faceLandmarkerSha256 = "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
+val mgazeNetPins = mapOf(
+    "assets/base.mnn" to "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96",
+    "assets/vendor-manifest.json" to "56d075aa1b36b574ecb359da741f56c51a39635165bed8f64a1f77ec2275b063",
+    "assets/notices/GazeFollower-CC-BY-NC-SA-4.0.txt" to "9e502ba75fd0fd30cea5497b438a4bc12f07f02bc932a7a6041fd6a18b8f46a0",
+    "assets/notices/MNN-Apache-2.0.txt" to "a830d59c4f98d110e0540d0581efada06192ba6e798434307d1794b07a290302",
+    "jniLibs/arm64-v8a/libMNN.so" to "c91fb9e65ef45477406583cf374978c61713318893f6af473aecdafed4c17f60",
+    "jniLibs/arm64-v8a/libmnncore.so" to "075cbfac452b1a4b601a5e9d74134b800cf13e34a998aee3d1367571c2007bd9",
+    "jniLibs/arm64-v8a/libc++_shared.so" to "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970",
+    "jniLibs/armeabi-v7a/libMNN.so" to "3504fe856a208ead295536ff8398dcdd210e5cd7fc51d7cd34a9e1fcf084c2f7",
+    "jniLibs/armeabi-v7a/libmnncore.so" to "966aa04af136c8c99fe84309bc845e16478cee215a2b717b829635bfc20b1f9c",
+    "jniLibs/armeabi-v7a/libc++_shared.so" to "4df8b2e81690dd1393a94f65c18b41e5b91494b10b21415823a94ab6bb81018a",
+)
+val gazeExperimentPins = mapOf(
+    "GazeNet_Next.mnn" to "4547cc4685a7176aad75c50a25dc9a3368d1dd1fafe0d8ea5c32421af93a49b0",
+    "candidate.json" to "e5a2ecbe665a8024fc601d875d8f58f63ff26c5ea14e69e36e0a1f5a7b9132c5",
+    "NOTICE.txt" to "1ce8acc97a4c9afeae0eddcca2fe5d8368079a68dfcc03754cdbe4f4a4d099f1",
+    "GazeFollower2-LICENSE.txt" to "846fe2d3b8891afd3552f7a221d1c745a8f190c90e0d6a20ccd8bc723e45353c",
+)
+
 val localProperties = Properties()
 val gazeExperimentDirectory = providers.gradleProperty("gazefollower2CandidateDir").orNull?.takeIf { it.isNotBlank() }
 val localPropertiesFile = rootProject.file("local.properties")
@@ -96,7 +118,7 @@ android {
 
     sourceSets["main"].apply {
         assets.srcDir(layout.buildDirectory.dir("generated/mgazenetAssets"))
-        jniLibs.srcDir(rootProject.file("mgazenet-benchmark/vendor/jniLibs"))
+        jniLibs.srcDir(mgazeNetDirectory.resolve("jniLibs"))
     }
     // Preserve shrinking; extract the pinned native libraries with AGP 8.3.
     packaging { jniLibs { useLegacyPackaging = true } }
@@ -180,29 +202,17 @@ dependencies {
 
 val verifyVendor by tasks.registering {
     doLast {
-        check(rootProject.file("mgazenet-benchmark/vendor/assets/base.mnn").isFile) {
-            "Run tools/gaze/mgazenet/fetch_vendor.py explicitly before building NewsMead."
-        }
-        val pins = mapOf(
-            "assets/base.mnn" to "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96",
-            "assets/face_landmarker.task" to "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
-            "jniLibs/arm64-v8a/libMNN.so" to "c91fb9e65ef45477406583cf374978c61713318893f6af473aecdafed4c17f60",
-            "jniLibs/arm64-v8a/libmnncore.so" to "075cbfac452b1a4b601a5e9d74134b800cf13e34a998aee3d1367571c2007bd9",
-            "jniLibs/arm64-v8a/libc++_shared.so" to "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970",
-            "jniLibs/armeabi-v7a/libMNN.so" to "3504fe856a208ead295536ff8398dcdd210e5cd7fc51d7cd34a9e1fcf084c2f7",
-            "jniLibs/armeabi-v7a/libmnncore.so" to "966aa04af136c8c99fe84309bc845e16478cee215a2b717b829635bfc20b1f9c",
-            "jniLibs/armeabi-v7a/libc++_shared.so" to "4df8b2e81690dd1393a94f65c18b41e5b91494b10b21415823a94ab6bb81018a"
-        )
-        pins.forEach { (path, expected) ->
-            val hash = MessageDigest.getInstance("SHA-256").digest(rootProject.file("mgazenet-benchmark/vendor/$path").readBytes())
+        mgazeNetPins.forEach { (path, expected) ->
+            val source = mgazeNetDirectory.resolve(path)
+            check(source.isFile) { "Missing tracked MGazeNet input: $source" }
+            val hash = MessageDigest.getInstance("SHA-256").digest(source.readBytes())
                 .joinToString("") { "%02x".format(it) }
             check(hash == expected) { "Vendor hash mismatch: $path" }
         }
-        check(MessageDigest.getInstance("SHA-256").digest(file("src/main/assets/face_landmarker.task").readBytes())
-            .joinToString("") { "%02x".format(it) } == pins.getValue("assets/face_landmarker.task"))
-        check(rootProject.file("mgazenet-benchmark/vendor/assets/vendor-manifest.json").isFile)
-        check(rootProject.file("mgazenet-benchmark/vendor/assets/notices/GazeFollower-CC-BY-NC-SA-4.0.txt").isFile)
-        check(rootProject.file("mgazenet-benchmark/vendor/assets/notices/MNN-Apache-2.0.txt").isFile)
+        check(MessageDigest.getInstance("SHA-256").digest(faceLandmarker.readBytes())
+            .joinToString("") { "%02x".format(it) } == faceLandmarkerSha256) {
+            "Face landmarker hash mismatch: $faceLandmarker"
+        }
     }
 }
 val verifyComparisonProtocolManifest by tasks.registering {
@@ -220,7 +230,7 @@ val verifyComparisonProtocolManifest by tasks.registering {
 
 val prepareMgazeNetAssets by tasks.registering(Sync::class) {
     dependsOn(verifyVendor)
-    from(rootProject.file("mgazenet-benchmark/vendor/assets")) {
+    from(mgazeNetDirectory.resolve("assets")) {
         include("base.mnn", "vendor-manifest.json", "notices/**")
     }
     into(layout.buildDirectory.dir("generated/mgazenetAssets"))
@@ -230,7 +240,7 @@ tasks.named("preBuild").configure {
     dependsOn(verifyComparisonProtocolManifest)
 }
 
-// Only explicit experiment builds contain the reviewed candidate. Verification runs
+// The configured candidate is included unless the property is explicitly empty. Verification runs
 // even if the subsequent Sync has no source files or is up to date.
 gazeExperimentDirectory?.let { path ->
     val candidate = rootProject.file(path)
@@ -238,16 +248,13 @@ gazeExperimentDirectory?.let { path ->
     val verifyGazeExperiment by tasks.registering {
         doLast {
             check(candidate.isDirectory) { "Candidate directory is missing: $candidate" }
-            val pins = mapOf(
-                "GazeNet_Next.mnn" to "4547cc4685a7176aad75c50a25dc9a3368d1dd1fafe0d8ea5c32421af93a49b0",
-                "candidate.json" to "e5a2ecbe665a8024fc601d875d8f58f63ff26c5ea14e69e36e0a1f5a7b9132c5")
-            pins.forEach { (name, expected) ->
-                val hash = MessageDigest.getInstance("SHA-256").digest(candidate.resolve(name).readBytes())
+            gazeExperimentPins.forEach { (name, expected) ->
+                val source = candidate.resolve(name)
+                check(source.isFile) { "Missing experiment asset: $source" }
+                val hash = MessageDigest.getInstance("SHA-256").digest(source.readBytes())
                     .joinToString("") { "%02x".format(it) }
                 check(hash == expected) { "Unreviewed experiment asset: $name" }
             }
-            check(candidate.resolve("GazeFollower2-LICENSE.txt").isFile)
-            check(candidate.resolve("NOTICE.txt").isFile)
         }
     }
     val prepareGazeExperiment by tasks.registering(Sync::class) {
@@ -266,16 +273,12 @@ gazeExperimentDirectory?.let { path ->
 tasks.register("verifyMgazeNetDebugApk") {
     dependsOn("assembleDebug")
     doLast {
-        val pins = mapOf(
-            "assets/base.mnn" to "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96",
-            "assets/face_landmarker.task" to "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
-            "lib/arm64-v8a/libMNN.so" to "c91fb9e65ef45477406583cf374978c61713318893f6af473aecdafed4c17f60",
-            "lib/arm64-v8a/libmnncore.so" to "075cbfac452b1a4b601a5e9d74134b800cf13e34a998aee3d1367571c2007bd9",
-            "lib/arm64-v8a/libc++_shared.so" to "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970",
-            "lib/armeabi-v7a/libMNN.so" to "3504fe856a208ead295536ff8398dcdd210e5cd7fc51d7cd34a9e1fcf084c2f7",
-            "lib/armeabi-v7a/libmnncore.so" to "966aa04af136c8c99fe84309bc845e16478cee215a2b717b829635bfc20b1f9c",
-            "lib/armeabi-v7a/libc++_shared.so" to "4df8b2e81690dd1393a94f65c18b41e5b91494b10b21415823a94ab6bb81018a"
-        )
+        val pins = mgazeNetPins.mapKeys { (path, _) -> path.replaceFirst("jniLibs/", "lib/") } + mapOf(
+            "assets/face_landmarker.task" to faceLandmarkerSha256,
+            "assets/notices/NewsMead-MGazeNet-attribution.txt" to "4bdc9ad30439efca14bdb5f6b961d142627b56f4abc0fb9ce0b7273601fbd7a0",
+        ) + if (gazeExperimentDirectory != null) {
+            gazeExperimentPins.mapKeys { (name, _) -> "assets/gazefollower2/$name" }
+        } else emptyMap()
         ZipFile(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile).use { apk ->
             pins.forEach { (path,expected) ->
                 val entry = checkNotNull(apk.getEntry(path)) { "Missing pinned APK entry: $path" }
@@ -283,8 +286,10 @@ tasks.register("verifyMgazeNetDebugApk") {
                     .joinToString("") { "%02x".format(it) }
                 check(hash == expected) { "Packaged MGazeNet hash mismatch: $path" }
             }
-            listOf("GazeFollower-CC-BY-NC-SA-4.0.txt","MNN-Apache-2.0.txt","NewsMead-MGazeNet-attribution.txt").forEach {
-                check(apk.getEntry("assets/notices/$it") != null)
+            if (gazeExperimentDirectory == null) {
+                check(apk.entries().asSequence().none { it.name.startsWith("assets/gazefollower2/") }) {
+                    "Baseline-only APK contains candidate assets."
+                }
             }
         }
     }

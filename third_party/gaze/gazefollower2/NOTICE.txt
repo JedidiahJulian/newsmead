@@ -1,0 +1,4 @@
+GazeNet_Next by the GazeFollower team, CC BY-NC-SA 4.0.
+https://github.com/GanchengZhu/GazeFollower2/tree/5befceb1a6e1297e094331a5c114b7d0173e7c14
+Converted to MNN 3.6.1 FP32, batch one, for NewsMead synthetic research checks.
+Model hash and conversion evidence: candidate.json. Not an accuracy validation.

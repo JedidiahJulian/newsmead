@@ -1,5 +1,9 @@
 # NewsMead Gaze-Driven Reading Prototype
 
+On `experiment/gazefollower2-native`, follow the [Android Studio setup](docs/gaze-build-setup.md)
+for the current A/B/C comparison and A/C guide. Verified models and both ARM
+runtimes are tracked in `third_party/gaze`; Run needs no model copying or Python.
+
 NewsMead is an Android news-reading application repurposed as a thesis research prototype for gaze-driven adaptive reading. The current study build runs offline, bypasses the production login flow, estimates gaze from the phone front camera, maps gaze to article text lines, and derives a Reading State Index (RSI) from line-level reading behavior.
 
 This README is written as a manual and study guide for understanding the implementation. It explains what was built, why each decision was made, how calibration works, how MediaPipe and the bundled model are used, how the logs should be interpreted, and how RSI is deduced from the logs.

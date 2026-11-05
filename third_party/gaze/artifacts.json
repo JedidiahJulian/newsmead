@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Byte-exact distribution inputs for the reviewed NewsMead native research build; no participant data.",
+  "originalGazeFollowerRevision": "553920edcb7998c029828677f50f6d8eb4a16249",
+  "gazeFollower2Revision": "5befceb1a6e1297e094331a5c114b7d0173e7c14",
+  "mnnVersion": "3.6.1",
+  "files": {
+    "third_party/gaze/mgazenet/assets/base.mnn": {
+      "bytes": 6245556,
+      "sha256": "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96"
+    },
+    "third_party/gaze/mgazenet/assets/vendor-manifest.json": {
+      "bytes": 2084,
+      "sha256": "56d075aa1b36b574ecb359da741f56c51a39635165bed8f64a1f77ec2275b063"
+    },
+    "third_party/gaze/mgazenet/assets/notices/GazeFollower-CC-BY-NC-SA-4.0.txt": {
+      "bytes": 20848,
+      "sha256": "9e502ba75fd0fd30cea5497b438a4bc12f07f02bc932a7a6041fd6a18b8f46a0"
+    },
+    "third_party/gaze/mgazenet/assets/notices/MNN-Apache-2.0.txt": {
+      "bytes": 11346,
+      "sha256": "a830d59c4f98d110e0540d0581efada06192ba6e798434307d1794b07a290302"
+    },
+    "third_party/gaze/mgazenet/jniLibs/arm64-v8a/libMNN.so": {
+      "bytes": 2452856,
+      "sha256": "c91fb9e65ef45477406583cf374978c61713318893f6af473aecdafed4c17f60"
+    },
+    "third_party/gaze/mgazenet/jniLibs/arm64-v8a/libmnncore.so": {
+      "bytes": 22816,
+      "sha256": "075cbfac452b1a4b601a5e9d74134b800cf13e34a998aee3d1367571c2007bd9"
+    },
+    "third_party/gaze/mgazenet/jniLibs/arm64-v8a/libc++_shared.so": {
+      "bytes": 1794776,
+      "sha256": "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970"
+    },
+    "third_party/gaze/mgazenet/jniLibs/armeabi-v7a/libMNN.so": {
+      "bytes": 1342036,
+      "sha256": "3504fe856a208ead295536ff8398dcdd210e5cd7fc51d7cd34a9e1fcf084c2f7"
+    },
+    "third_party/gaze/mgazenet/jniLibs/armeabi-v7a/libmnncore.so": {
+      "bytes": 15524,
+      "sha256": "966aa04af136c8c99fe84309bc845e16478cee215a2b717b829635bfc20b1f9c"
+    },
+    "third_party/gaze/mgazenet/jniLibs/armeabi-v7a/libc++_shared.so": {
+      "bytes": 1301936,
+      "sha256": "4df8b2e81690dd1393a94f65c18b41e5b91494b10b21415823a94ab6bb81018a"
+    },
+    "third_party/gaze/gazefollower2/GazeNet_Next.mnn": {
+      "bytes": 11432348,
+      "sha256": "4547cc4685a7176aad75c50a25dc9a3368d1dd1fafe0d8ea5c32421af93a49b0"
+    },
+    "third_party/gaze/gazefollower2/candidate.json": {
+      "bytes": 50848,
+      "sha256": "e5a2ecbe665a8024fc601d875d8f58f63ff26c5ea14e69e36e0a1f5a7b9132c5"
+    },
+    "third_party/gaze/gazefollower2/GazeFollower2-LICENSE.txt": {
+      "bytes": 2151,
+      "sha256": "846fe2d3b8891afd3552f7a221d1c745a8f190c90e0d6a20ccd8bc723e45353c"
+    },
+    "third_party/gaze/gazefollower2/NOTICE.txt": {
+      "bytes": 311,
+      "sha256": "1ce8acc97a4c9afeae0eddcca2fe5d8368079a68dfcc03754cdbe4f4a4d099f1"
+    },
+    "third_party/gaze/gazefollower2/ramp_face.f32": {
+      "bytes": 602112,
+      "sha256": "2901e4b8e0589be261efb9dccc47022001fc88662b122bdf704e6aab0ef8d80d"
+    },
+    "third_party/gaze/gazefollower2/ramp_left.f32": {
+      "bytes": 150528,
+      "sha256": "9bf436393cd104707d2c7b06cfad6a5e5149114ef1223bdb7b4a9a2bb282c7a5"
+    },
+    "third_party/gaze/gazefollower2/ramp_right.f32": {
+      "bytes": 150528,
+      "sha256": "274379cdfe1e3eabee9f0e836bff847196004a2d075ed924919cbb27a881541b"
+    },
+    "third_party/gaze/gazefollower2/ramp_rect.f32": {
+      "bytes": 48,
+      "sha256": "29030535c3c85556196a0d4d715a70dde260cd9dd7e7f2f5111552f71f0d2b8c"
+    },
+    "third_party/gaze/gazefollower2/clipped_face.f32": {
+      "bytes": 602112,
+      "sha256": "76e0871f3e2b116d79d7812443171ddcff43a9e87a8bf9eecc5abed17b6dff41"
+    },
+    "third_party/gaze/gazefollower2/clipped_left.f32": {
+      "bytes": 150528,
+      "sha256": "c0db7b56fcc1f80dee5916ad5e476db3d92643d9047f9425bb46b3d7f929f26f"
+    },
+    "third_party/gaze/gazefollower2/clipped_right.f32": {
+      "bytes": 150528,
+      "sha256": "b7c76374ed0108b7f8a3fbcb4ba5dbea040b491c09ce0b240ae057046073e14a"
+    },
+    "third_party/gaze/gazefollower2/clipped_rect.f32": {
+      "bytes": 48,
+      "sha256": "308c2c26bf7bbacb3ef77c0dd92cac789b95cf3774963fbbcec830c6e6d62555"
+    },
+    "third_party/gaze/gazefollower2/channels_face.f32": {
+      "bytes": 602112,
+      "sha256": "82bae6f0514e5b42f27cef644e3ce4ec0909738ff500bf24d5c400d00f0a0feb"
+    },
+    "third_party/gaze/gazefollower2/channels_left.f32": {
+      "bytes": 150528,
+      "sha256": "81f1aa753440427306ea9f4486b70ed296af561f94d3ae59333b7716eaa45d10"
+    },
+    "third_party/gaze/gazefollower2/channels_right.f32": {
+      "bytes": 150528,
+      "sha256": "6953d45e986a5a11e55a7c3ba2ef2b783cb562f0328d6c904c40b70fd3e8cc9a"
+    },
+    "third_party/gaze/gazefollower2/channels_rect.f32": {
+      "bytes": 48,
+      "sha256": "cf7dac1808fe4604170eb68acda8cb1f16de4e7ac6c8f7b59150f81670ef373a"
+    },
+    "app/src/main/assets/face_landmarker.task": {
+      "bytes": 3758596,
+      "sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
+    },
+    "app/src/main/assets/comparison/newsmead-current-vs-mgazenet-reading-v1.json": {
+      "bytes": 3255,
+      "sha256": "41a3fbccd4df38c2bb13d4695a052fe15d3ef78423b19a4c1737d3de6944f185"
+    },
+    "app/src/main/assets/notices/NewsMead-MGazeNet-attribution.txt": {
+      "bytes": 1400,
+      "sha256": "4bdc9ad30439efca14bdb5f6b961d142627b56f4abc0fb9ce0b7273601fbd7a0"
+    },
+    "mgazenet-benchmark/src/main/assets/notices/NewsMead-benchmark-attribution.txt": {
+      "bytes": 1205,
+      "sha256": "45298576d75fb1b1b32dbde544c629ea5f129bb07d7e115c8f348c115c6f1fce"
+    }
+  }
+}

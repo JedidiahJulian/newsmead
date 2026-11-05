@@ -2,7 +2,10 @@
 
 2026-11-05, Asia/Manila. Experimental branch: `experiment/gazefollower2-native`.
 Android Studio follow-up: this branch now sets `gazefollower2CandidateDir` in
-project `gradle.properties`, so normal Sync/Run includes the selector. Previously
+project `gradle.properties` to tracked `third_party/gaze/gazefollower2`, so normal
+Sync/Run includes the selector without local asset preparation. Original model,
+both ARM runtimes, candidate and notices are tracked in `third_party/gaze` with
+byte-preserving attributes. See [clean-checkout setup](gaze-build-setup.md). Previously
 the CLI flag was omitted by Studio Run and produced the original calibration UI.
 Verified a no-flag app build, both packaged model hashes and Home → A/B/C on the
 phone after a data-preserving install. Empty override produces flag false and no
@@ -239,13 +242,15 @@ gradlew.bat --offline --no-daemon :app:assembleDebug :app:assembleDebugAndroidTe
 ```
 
 In Android Studio, sync the project with Gradle files and Run the `app` debug
-configuration normally. No per-run CLI flag is needed. The reviewed local
-`output/gazefollower2-native/candidate-01` folder must remain available; missing or
-changed artifacts fail verification instead of silently hiding the selector.
+configuration normally. No per-run CLI flag is needed. The reviewed
+files in tracked `third_party/gaze` are included in a fresh checkout; old ignored
+candidate/vendor folders are no longer build inputs. Missing or changed artifacts
+fail verification instead of silently hiding the selector.
 
-For an explicit baseline build, pass `-Pgazefollower2CandidateDir=`. An empty or
-absent property selects the original Home calibration entry and excludes candidate
-assets in both app and benchmark modules. The experiment uses the pinned FP32
+For an explicit baseline build, pass `-Pgazefollower2CandidateDir=`. This empty
+override selects the original Home calibration entry and excludes candidate
+assets in both app and benchmark modules. Leaving the override off uses this
+branch's default experiment. The experiment uses the pinned FP32
 conversion and MNN 3.6.1 already checked on SM-A566B; see the
 [native checkpoint](gazefollower2-native-prototype.md).
 

@@ -1,0 +1,24 @@
+{
+  "gazefollower_revision": "553920edcb7998c029828677f50f6d8eb4a16249",
+  "mnn_revision": "d407447ed56c4121a11ccbd266dc184ca1ead0c2",
+  "mnn_version": "3.6.1",
+  "model_sha256": "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96",
+  "mnn_archive_sha256": "46dc7e86d45b8d4e957db81d2603e0b7f6c9ce9b84092ffdcee1b843cbfc9d71",
+  "face_landmarker_sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+  "model_url": "https://raw.githubusercontent.com/GanchengZhu/GazeFollower/553920edcb7998c029828677f50f6d8eb4a16249/gazefollower/res/model_weights/base.mnn",
+  "mnn_archive_url": "https://github.com/alibaba/MNN/releases/download/3.6.1/mnn_3.6.1_android_armv7_armv8_cpu_opencl_vulkan.zip",
+  "files": {
+    "assets/base.mnn": "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96",
+    "assets/face_landmarker.task": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+    "assets/notices/GazeFollower-CC-BY-NC-SA-4.0.txt": "9e502ba75fd0fd30cea5497b438a4bc12f07f02bc932a7a6041fd6a18b8f46a0",
+    "assets/notices/MNN-Apache-2.0.txt": "a830d59c4f98d110e0540d0581efada06192ba6e798434307d1794b07a290302",
+    "jniLibs/arm64-v8a/libc++_shared.so": "f9992c4ba6b7c5a716e3a202fceb1ce029d6a2b0605838ac6b3219f489dd7970",
+    "jniLibs/arm64-v8a/libMNN.so": "c91fb9e65ef45477406583cf374978c61713318893f6af473aecdafed4c17f60",
+    "jniLibs/arm64-v8a/libmnncore.so": "075cbfac452b1a4b601a5e9d74134b800cf13e34a998aee3d1367571c2007bd9",
+    "reference/calibration/CalibrationController.py": "5bcbf3c5ced0533d074a67d1f7dd7511947cf844cf303632cd9df3d5f7653fd9",
+    "reference/calibration/SVRCalibration.py": "7027557532b76fa385f8cf6fc7de439f3a603b5d821e9152c2420308b4811c58",
+    "reference/camera/WebCamCamera.py": "af70933cab18ee807c9acf48637a23eb61b22a237e97d8701d7f09e5f63249cb",
+    "reference/face_alignment/MediaPipeFaceAlignment.py": "5378917b8f53d4192a22e02fbd0fdbe42064a408db22d4a641bdca2e902426ff",
+    "reference/gaze_estimator/MGazeNetGazeEstimator.py": "4821f333bbd0759e728fa797966dac0f7adebd38514bd7875530b3f4fcff1a5c"
+  }
+}

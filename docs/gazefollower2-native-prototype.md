@@ -1,5 +1,11 @@
 # GazeFollower2 native candidate — first implementation checkpoint
 
+**Build setup update, 2026-11-05:** ordinary Android Studio Run consumes the
+verified files in tracked `third_party/gaze`. No Python/conversion/vendor-fetch
+step is required. See [current setup](gaze-build-setup.md). Conversion commands
+below document the original research work; retained ignored output is evidence,
+not a required input to a fresh checkout.
+
 Subsequent app work: [three-configuration comparison flow](gazefollower2-app-comparison.md).
 The first milestone's implementation scope below is retained as historical context.
 
