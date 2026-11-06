@@ -231,7 +231,8 @@ class ReadingBaselineActivity : AppCompatActivity() {
         pipeline.tick(startedAt)
         studyVisit?.record("rdf_schedule_tick", StudyJson.obj("tick_ms" to startedAt), startedAt.toDouble())
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val camera = MgazeNetGazeProvider(this, body, smoothForReading = true, rejectBlinks = true)
+        val camera = MgazeNetGazeProvider(this, body, smoothForReading = true, rejectBlinks = true,
+            maxOutputAgeMs = StudyConfig.READING_MAX_OUTPUT_AGE_MS)
         provider = camera
         val recording = studyVisit
         val epoch = recording?.providerStarted(fingerprint)

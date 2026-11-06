@@ -1,4 +1,4 @@
-# Agent context — updated 2026-11-04
+# Agent context — updated 2026-11-06
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,24 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-11-06 groupmate fixes integrated; shared baseline is the next task:**
+Checkpoint `71831c7` was already committed and pushed by the user. Merged
+`origin/feature/scanpath-mahalanobis-score` through `44d27fa`: configurable
+650 ms output age for the existing R/D/F baseline, plus optional article/Firebase
+state error handling. Retained study callbacks and asynchronous terminal capture;
+added effective `output_max_age_ms` to provider metadata/acquisition identity.
+Article callers and coordinate-MD analysis retain their 500 ms defaults; no metric
+formula, coverage gate or automatic reference-compatibility override changed.
+Offline debug build and 38 focused JVM tests pass; independent source review has
+no actionable findings. No install, camera, Firebase test or new collection ran.
+Evidence: `output/rdf-merge-2026-11-06/`; details in
+[R/D/F integration checkpoint](study-rdf-integration-2026-11-06.md).
+User now prioritizes the joint R/D/F/coordinate baseline before another article
+run, superseding the earlier deferral. That workflow is not implemented by this
+merge. Reuse a compatible article reading surface and acquisition configuration,
+retain raw coordinates and separate profile statuses/source links, and do not
+relabel legacy `rdf_baseline` packages as compatible coordinate references.
 
 **2026-11-04 aid-count/timing capability clarified from existing records:**
 User asks whether aid triggers/times can be linked to readings. Yes: canonical
@@ -367,6 +385,20 @@ overlapping windows and regularized covariance do not validate instability.
 The 34-record draft checker and 39+13 focused Python tests pass. One bounded
 engineer source audit was reused; no app/schema behavior, device, camera, Firebase,
 staging or commit change. The review does not establish human benefit/readiness.
+**2026-11-03 reading-baseline valid-window regression fixed in software:**
+The current scanpath/Mahalanobis branch had removed the baseline-specific 650 ms
+MGazeNet output-age allowance restored on `measurement/mahalanobis`, leaving the
+500 ms provider default. Slow but bounded reading coordinates could therefore be
+classified stale before reaching the feature pipeline: feature windows still
+increased the denominator while no window became usable. Restored the configurable
+output-age gate through `MgazeNetOutputGate`, `MgazeNetLiveOutput` and
+`MgazeNetGazeProvider`, and applied 650 ms only in `ReadingBaselineActivity` via
+`StudyConfig.READING_MAX_OUTPUT_AGE_MS`. The newer stable-frame-rate camera policy,
+blink recovery, capture timestamps, feature denominators and validity/coverage
+thresholds are unchanged. Focused output/live-output plus reading-feature tests
+passed; independent source review found no actionable issue. This establishes the
+software path, not live-device recovery or coordinate accuracy; no device/camera
+operation was performed.
 
 **2026-10-27 proposed thesis-scope and Firebase Spark update — design only:**
 Added [thesis-project-scope.md](thesis-project-scope.md) from the prior scope

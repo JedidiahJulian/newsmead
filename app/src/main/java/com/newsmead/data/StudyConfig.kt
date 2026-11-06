@@ -86,6 +86,14 @@ object StudyConfig {
     /** Gaze dot and FPS are researcher diagnostics, not participant scaffolds. */
     const val GAZE_DEBUG_VISUALS = true
 
+    /**
+     * Operational age limit for reading coordinates. MGazeNet inference can
+     * exceed the provider's stricter display default on slower devices; the
+     * baseline must use the same bounded reading allowance as the previously
+     * verified Mahalanobis path. This is not an accuracy threshold.
+     */
+    const val READING_MAX_OUTPUT_AGE_MS = 650.0
+
     /** Recent behavior window used by adaptation; cumulative RSI remains logged. */
     const val SCAFFOLD_WINDOW_MS = 10_000L
 

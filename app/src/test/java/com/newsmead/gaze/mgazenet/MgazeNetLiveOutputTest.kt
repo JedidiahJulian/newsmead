@@ -79,6 +79,15 @@ class MgazeNetLiveOutputTest {
         assertEquals(400f, recovered.y!!, .001f)
     }
 
+    @Test fun configuredReadingAgeLimitReachesSelectedCoordinatePath() {
+        val p = MgazeNetLiveOutput(1000, 2000, smoothForReading = false,
+            rejectBlinks = false, outputExpiryMs = 650.0)
+        val retained = p.evaluate(100.0, 700.0, true, floatArrayOf(.25f, .75f), "features", null)
+        assertTrue(retained.emitted)
+        assertEquals(250f, retained.x!!, .001f)
+        assertEquals(1500f, retained.y!!, .001f)
+    }
+
     @Test fun deliveryGapDoesNotRequireTwoNewOpenFramesButStillRejectsClosedEyes() {
         val p = reading()
         assertEquals("blink", output(p, 100.0).reason)
