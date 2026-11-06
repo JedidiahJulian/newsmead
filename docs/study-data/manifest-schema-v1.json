@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NewsMead local study v1 package manifest",
+  "type": "object",
+  "required": ["schema_version", "package_id", "status", "content_complete", "identity", "record_count", "chunks", "losses", "unknown_tail"],
+  "properties": {
+    "schema_version": {"const": "newsmead_study_v1"},
+    "package_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["finished", "recovered_incomplete"]},
+    "content_complete": {"type": "boolean"},
+    "identity": {"type": "object", "required": ["study_id", "participant_id", "installation_id", "run_id", "session_id", "clock_domain_id"], "additionalProperties": {"type": "string", "minLength": 1}},
+    "record_count": {"type": "integer", "minimum": 0},
+    "chunks": {"type": "array", "items": {"type": "object", "required": ["file", "byte_count", "sha256", "record_count", "first_seq", "last_seq"], "properties": {
+      "file": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+      "byte_count": {"type": "integer", "minimum": 0},
+      "encoding": {"const": "gzip_jsonl_v1"},
+      "uncompressed_byte_count": {"type": "integer", "minimum": 0, "maximum": 67108864},
+      "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+      "record_count": {"type": "integer", "minimum": 0},
+      "first_seq": {"type": "integer", "minimum": 0},
+      "last_seq": {"type": "integer", "minimum": 0}
+    }, "allOf": [{"if": {"required": ["encoding"]}, "then": {"required": ["uncompressed_byte_count"], "properties": {"file": {"pattern": "\\.jsonl\\.gz$"}}}}, {"if": {"properties": {"file": {"pattern": "\\.gz$"}}, "required": ["file"]}, "then": {"required": ["encoding", "uncompressed_byte_count"]}}]}},
+    "losses": {"type": "array", "items": {"type": "object"}},
+    "unknown_tail": {"type": "boolean"}
+  }
+}

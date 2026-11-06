@@ -100,6 +100,16 @@
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/btnScanpathReplay" />
                 <Button
+                    android:id="@+id/btnStudyCollection"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="8dp"
+                    android:text="@string/home_study_collection"
+                    android:textSize="16sp"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/btnScanpathPilot" />
+                <Button
                     android:id="@+id/btnLanguage"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -111,7 +121,7 @@
                     app:iconGravity="textStart"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/btnScanpathPilot" />
+                    app:layout_constraintTop_toBottomOf="@id/btnStudyCollection" />
 
                 <com.google.android.material.button.MaterialButtonToggleGroup
                     android:id="@+id/tgRegion"

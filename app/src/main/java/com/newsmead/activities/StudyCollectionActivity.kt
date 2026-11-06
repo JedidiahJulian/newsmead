@@ -1,0 +1,161 @@
+package com.newsmead.activities
+
+import android.os.Bundle
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.Spinner
+import android.widget.ArrayAdapter
+import android.widget.TextView
+import android.widget.ScrollView
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.checkbox.MaterialCheckBox
+import com.newsmead.research.study.StudyCollection
+import com.newsmead.research.study.StudyRecordingCatalog
+import java.text.DateFormat
+import java.util.Date
+import java.util.Locale
+
+/** Researcher controls. Opening this screen never starts the camera or recording. */
+class StudyCollectionActivity : AppCompatActivity() {
+    private lateinit var status: TextView
+    private lateinit var recordingList: LinearLayout
+    private lateinit var selectionStatus: TextView
+    private var catalog: StudyRecordingCatalog.Catalog? = null
+    private val selected = mutableSetOf<String>()
+    private var refreshGeneration = 0
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad,pad,pad,pad) }
+        fun button(label: String, action: () -> Unit) = root.addView(MaterialButton(this).apply {
+            text = label; setOnClickListener { action() }
+        })
+        button("Back") { finish() }
+        root.addView(TextView(this).apply { text = "Local study recording"; textSize = 22f })
+        root.addView(TextView(this).apply {
+            text = "For researcher-supervised testing. Numerical gaze and rendered article text stay on this phone until explicit transfer. Start a run before opening a baseline or article. Coordinate reference and later reading must be separate recorded periods with compatible settings. The condition label does not change aid settings. Neither distance controls assistance."
+        })
+        val participant = EditText(this).apply { hint = "Participant code"; setSingleLine(); setText(StudyCollection.run?.participant ?: "") }
+        val condition = EditText(this).apply { hint = "Condition label"; setSingleLine(); setText(StudyCollection.run?.condition ?: "pilot") }
+        val phase = Spinner(this).apply { adapter = ArrayAdapter(this@StudyCollectionActivity,
+            android.R.layout.simple_spinner_dropdown_item, listOf("Reading", "Coordinate reference")) }
+        root.addView(participant); root.addView(condition); root.addView(phase)
+        status = TextView(this).apply { setTextIsSelectable(true) }; root.addView(status)
+        button("Start run") {
+            runCatching { StudyCollection.start(this,participant.text.toString(),condition.text.toString(),
+                if (phase.selectedItemPosition == 1) "coordinate_reference" else "reading") }
+                .onSuccess { clearRecordings(); refresh() }.onFailure { status.text = it.message ?: "Could not start recording." }
+        }
+        button("Stop run") { StudyCollection.stop(); refresh(); loadRecordings() }
+        button("Recover interrupted records") {
+            status.text = "Checking local records…"
+            StudyCollection.background {
+                val result = runCatching { StudyCollection.recover(applicationContext) }
+                runOnUiThread { result.onSuccess { status.text = "Recovered $it packages. Originals retained."; loadRecordings() }
+                    .onFailure { status.text = it.message ?: "Recovery failed." } }
+            }
+        }
+        button("Transfer all study packages") {
+            status.text = "Preparing verified local copy…"
+            StudyCollection.background {
+                val result = runCatching { StudyCollection.export(applicationContext) }
+                runOnUiThread { result.onSuccess { intent -> if (intent != null) {
+                    status.text = "Original packages remain on the phone. Verify the received copy with the study importer."
+                    startActivity(intent)
+                } else status.text = "No completed or recovered packages to transfer." }
+                    .onFailure { status.text = it.message ?: "Transfer preparation failed." } }
+            }
+        }
+        root.addView(TextView(this).apply { text = "Saved recordings"; textSize = 20f })
+        root.addView(TextView(this).apply {
+            text = "Stop the run to browse. Select article readings or separate baseline/reference recordings. Required source R/D/F baselines are included when available. Coordinate references must be selected explicitly. Saved status is declared by the package; transfer verifies file hashes."
+        })
+        button("Refresh saved recordings") { loadRecordings() }
+        selectionStatus = TextView(this).apply { setTextIsSelectable(true) }; root.addView(selectionStatus)
+        recordingList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; root.addView(recordingList)
+        button("Transfer selected recordings") {
+            val ids = selected.toSet()
+            if (StudyCollection.run != null) { status.text = "Stop recording before transfer." }
+            else if (ids.isEmpty()) { selectionStatus.text = "Select at least one recording." }
+            else {
+                status.text = "Preparing selected recordings and available source baselines…"
+                StudyCollection.background {
+                    val result = runCatching { StudyCollection.export(applicationContext, ids) }
+                    runOnUiThread {
+                        if (!isFinishing && !isDestroyed) result.onSuccess { intent ->
+                            if (intent == null) status.text = "No selected packages remain. Refresh the list."
+                            else { status.text = "Selected originals remain on the phone. Verify the received copy with the study importer."; startActivity(intent) }
+                        }.onFailure { status.text = it.message ?: "Transfer preparation failed." }
+                    }
+                }
+            }
+        }
+        setContentView(ScrollView(this).apply { fitsSystemWindows = true; addView(root) }); refresh()
+        if (StudyCollection.run == null) loadRecordings() else clearRecordings()
+    }
+    private fun clearRecordings() {
+        refreshGeneration++; selected.clear(); catalog = null
+        recordingList.removeAllViews(); selectionStatus.text = "Stop recording, then refresh saved recordings."
+    }
+    private fun loadRecordings() {
+        clearRecordings()
+        if (StudyCollection.run != null) return
+        val generation = refreshGeneration
+        selectionStatus.text = "Loading saved recording metadata…"
+        StudyCollection.background {
+            val result = runCatching { StudyCollection.catalog(applicationContext) }
+            runOnUiThread {
+                if (isFinishing || isDestroyed || generation != refreshGeneration) return@runOnUiThread
+                result.onSuccess { loaded ->
+                    if (StudyCollection.run != null) { clearRecordings(); return@onSuccess }
+                    catalog = loaded
+                    loaded.recordings.forEach { recording ->
+                        recordingList.addView(MaterialCheckBox(this).apply {
+                            text = describe(recording)
+                            setOnCheckedChangeListener { _, checked ->
+                                if (checked) selected.add(recording.id) else selected.remove(recording.id)
+                                updateSelection()
+                            }
+                        })
+                    }
+                    updateSelection()
+                }.onFailure { selectionStatus.text = it.message ?: "Could not load saved recordings." }
+            }
+        }
+    }
+    private fun describe(recording: StudyRecordingCatalog.Recording): String {
+        val first = recording.first
+        val label = when (first.phase) {
+            "rdf_baseline" -> "R/D/F baseline"
+            "coordinate_reference" -> "Coordinate reference (explicit selection)"
+            "reading" -> "Article reading"
+            else -> "Phase unavailable"
+        }
+        val article = recording.packages.map { it.articleId ?: "unavailable" }.distinct().joinToString(", ")
+        val date = recording.startedUtcMs?.let { DateFormat.getDateTimeInstance().format(Date(it)) } ?: "Time unavailable"
+        val duration = recording.durationMs?.let { String.format(Locale.ROOT, "%.1f s recorded segment span (includes exclusions)", it / 1000) } ?: "Duration unavailable"
+        val references = recording.packages.map { p ->
+            if (p.phase == "rdf_baseline") p.baselineAttempt ?: "unavailable"
+            else if (!p.referenceKnown) "unavailable" else p.reference?.attempt ?: "none"
+        }.distinct().joinToString(", ")
+        return "$label • ${first.participant}\nArticle ID: $article\nR/D/F reference ID: $references\n$date • $duration\n" +
+            "${String.format(Locale.ROOT, "%.2f MB", recording.bytes / 1_000_000.0)} • ${recording.packages.size} segment(s) • " +
+            recording.packages.map { it.status }.distinct().joinToString(", ") +
+            "\n" + if (recording.legacy) "Legacy transport session: ${first.session}"
+            else "Recording ID: ${first.readingId ?: first.session}"
+    }
+    private fun updateSelection() {
+        val loaded = catalog ?: return
+        val plan = if (selected.isEmpty()) null else StudyRecordingCatalog.select(loaded, selected)
+        selectionStatus.text = "${loaded.recordings.size} saved recording(s); ${selected.size} selected." +
+            (plan?.let { "\n${it.packageIds.size} package(s) to transfer. Included source baseline package IDs: " +
+                it.includedReferenceIds.joinToString(", ").ifEmpty { "none" } +
+                if (it.warnings.isEmpty()) "" else "\n" + it.warnings.joinToString("\n") } ?: "") +
+            if (loaded.warnings.isEmpty()) "" else "\n" + loaded.warnings.joinToString("\n")
+    }
+    private fun refresh() { status.text = (StudyCollection.run?.let {
+        "Recording enabled: ${it.participant}, ${it.condition}, ${it.phase}. Return to Home to open a baseline or article."
+    } ?: "Recording is stopped. Export never deletes original records.") +
+        "\nRecent session IDs:\n" + StudyCollection.recentSessions().joinToString("\n") }
+}

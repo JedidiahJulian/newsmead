@@ -280,6 +280,7 @@ class SmoothedReadingAidRuntimeTest {
             root.layout(0, 0, 600, 800)
             val runtime = ArticleReadingAidRuntime(body, ReadingAidWordView(ctx), ReadingAidOverlayView(ctx),
                 config = ReadingAidPolicyConfig.definitionPrototype().copy(conditionId = "SMOOTHED_RUNTIME_FIXTURE_V1"),
+                preferences = ReaderAidPreferences(guideStyle = ReadingGuideStyle.SENTENCE),
                 inputSource = ReadingAidInputSource.SYNTHETIC_REPLAY, renderAids = false,
                 coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED)
             try {
@@ -288,32 +289,35 @@ class SmoothedReadingAidRuntimeTest {
                 val row = g.lines[1]
                 val x = g.textOriginX + body.layout.getPrimaryHorizontal(12)
                 val y = g.textOriginY + (row.top + row.bottom) / 2
-                val t = SystemClock.elapsedRealtimeNanos() / 1e6 - 5.0
-                val selected = ScanpathSample(t, t + 1, -100.0, -100.0, 1, 11, 16, g.snapshotId,
+                val selected = ScanpathSample(null, null, -100.0, -100.0, 1, 11, 16, g.snapshotId,
                     displayX = x, displayY = y, coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED)
                 fun offer(sample: ScanpathSample) {
-                    runtime.input(0, sample)
-                    val at = sample.captureMs!!
+                    val at = SystemClock.elapsedRealtimeNanos() / 1e6
+                    val delivered = sample.copy(captureMs = at, deliveryMs = at)
+                    runtime.input(0, delivered)
+                    // V4 uses supplied extractor residence; keep its end/delivery fresh and ordered.
                     runtime.candidate(0, ScanpathCandidateEvidence("prefix:$at", 0, at - 1500, at, 1500.0,
-                        20, 11, 16, 1, 1.0, 1.0, g.snapshotId, sample.deliveryMs,
+                        20, 11, 16, 1, 1.0, 1.0, g.snapshotId, delivered.deliveryMs,
                         "trigger_observation_delivery"))
                 }
                 offer(selected)
                 val actions = runtime.activeActions()
-                assertTrue(actions.any { it.aidType == ReadingAidType.CURRENT_SENTENCE && it.anchor.line == 1 })
-                assertTrue(actions.any { it.aidType == ReadingAidType.WORD_DEFINITION &&
+                assertTrue("Explicit SENTENCE preference must produce a sentence guide from selected coordinates: $actions",
+                    actions.any { it.aidType == ReadingAidType.CURRENT_SENTENCE && it.anchor.line == 1 })
+                assertTrue("Fresh 1500ms V4 word-residence evidence must produce a definition offer: $actions",
+                    actions.any { it.aidType == ReadingAidType.WORD_DEFINITION &&
                     it.anchor.line == 1 && it.anchor.wordStartUtf16 == 11 })
                 val settings = runtime.configurationSnapshot().getJSONObject("settings")
                 assertEquals("article_smoothed_v1", settings.getString("coordinate_stream"))
                 assertTrue(settings.getBoolean("smoothing"))
                 // Valid originals must not rescue absent filtered coordinates.
-                offer(selected.copy(captureMs = t + 1, deliveryMs = t + 2, rawX = x, rawY = y,
+                offer(selected.copy(rawX = x, rawY = y,
                     displayX = null, displayY = null))
-                assertTrue(runtime.activeActions().isEmpty())
+                assertTrue("Valid raw coordinates must not rescue unavailable selected coordinates", runtime.activeActions().isEmpty())
                 // A raw declaration cannot be silently accepted by a smoothed runtime.
-                offer(selected.copy(captureMs = t + 2, deliveryMs = t + 3, rawX = x, rawY = y,
+                offer(selected.copy(rawX = x, rawY = y,
                     coordinateStream = ScanpathCoordinateStream.CALIBRATED_RAW))
-                assertTrue(runtime.activeActions().isEmpty())
+                assertTrue("Raw-stream declarations must remain invalid in a smoothed runtime", runtime.activeActions().isEmpty())
             } finally { runtime.close("fixture") }
         }
     }

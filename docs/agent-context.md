@@ -1,4 +1,4 @@
-# Agent context — updated 2026-11-03
+# Agent context — updated 2026-11-04
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,244 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-11-04 aid-count/timing capability clarified from existing records:**
+User asks whether aid triggers/times can be linked to readings. Yes: canonical
+aid_decision + separate trace/render/presentation/lookup/consultation records
+already retain scopedIDs, reasons/rules and sharedelapsed timestamps. Notebook
+Section7 currently groups native decisionrecords and showspopup timeline; no
+intervention-episodecounting orbefore/aftercorrelationtableimplemented yet.
+Actualprimary1,068CURRENT_LINE/188FOCUS_REGION CHOSEN include replacements/updates,
+not1,256independenthelp episodes. Laterpopup1WORD_DEFINITION CHOSEN/1shown/1accepted.
+Don'tsum aid_decision withruntime_tracecopy orrender withpresentationcopy. Need
+explicitcountdefinition forcontinuousguide/focus andproxies/censoredduration;
+rollingRDFwindows canstraddleaidonset. Associationcanreflecttriggeringgaze, not
+alonebenefit. Clarified notebookREADME; noAndroid/notebookcode/devicechanges.
+
+**2026-11-04 Jupyter exploration ready; combined baseline work deferred:**
+User explicitly postpones unifiedRDF/coordinate baseline integration and asks to
+inspect stored data/process inJupyter. NoAndroid/device/calibration/baseline
+changes. Added clean20cell `notebooks/gaze_study_exploration.ipynb`, README and
+tested dependency pins; installedPython3.10already hasJupyter/pandas/Matplotlib.
+Newstdlib `tools/gaze/study_notebook.py` catalogsdeclaredmetadata and strictly
+loadsonepackage into compact scoped gaze/RDF/scanpath/aid/boundary/health/reference
+tables without defaultcoordinate replay or fullgeometry/history blobs. Preserve
+invalid/null/MD0, originalclock IDs/rawselectedseparation; protectenvelopefield
+collisions, native decision.action IDs andequaltypedaliases.6focusedhelpertests
+pass; actualmain+popup sessions STRICT_VERIFIED. Notebookexecuted20cells with
+5plots andCSVs,277RDFticks/186AVAILABLE,3,754gazerecords.3,481directpatternrows
+include2,495P13boundaries/858P12summaries; splitword/line anddo notinferbehavior
+counts. Separatepopup8eventtimeline retained. Null-actionSUPPRESSED notebook
+regressionpasses. Independentreview findingsfixed; noresidualsourcefindings;
+leadvisuallycheckedplots. Sourcecleared; executednotebook/HTMLpreview/receipts
+under `output/study-notebook-check/`, compactexports under output/study-notebook/.
+Kernelstartupstalledinsandbox; approvedlocalNBClientexecutionwithworkspace
+runtimefilespasses. Statistical-analysisguidanceappliedexploratorily andcited
+verifiedScientificAgentSkillspaperinnbrefs; nohypothesistests/benefitclaims or
+inventedcoordinateMDscores. See [notebook workflow](../notebooks/README.md).
+
+**2026-11-03 live compressed-run audit: stable2m20, popup attempt separate:**
+User completed storage-check/compressed run, designating previous article visit
+as performance check; later revisit deliberately attempted lookup. User recalls
+littlelag,~21or26displayedFPS uncertain. Fourfinalized packages verified: early
+prebaselinearticle10.481s, RDFbaseline62.360s READY84/124retained, designated
+04c0dd8a article139.904s, laterbcdd4bc7 article78.325s. Lasttwo are samearticle but
+distinctreadingIDs with24.418s gap outside both, matching exactnewbaselineattempt.
+Designatedvisit9.413MBstored/168.638MBlogical (94.42% reduction),3,734coordinate
+callbacks~26.961/s;30s bins~26-27/s, medianlat183.25ms/p95209.22ms. All4complete,
+0declaredwriterloss/unknownend/outsidecapture. This is2m20live, notfull3m, cameraFPS,
+accuracy orbenefit. NativeRDF186AVAILABLE/91INVALID_WINDOW preserved. Laterlookup
+offer at73.8117s, accepted75.7901s, panelproxy75.8133s; CHOSEN73.7920s followed
+native1009.187mswordresidence. Pre-drawproxy19.875msafterdecision doesnotmeasure
+actualscreenlatency/wordaccuracy/dictionarysuccess or explain priorqualification
+delay. Reviewer confirmedmath/identities; narrowed displaytimingclaim. Nocode,
+install,restart,newcapture orrecordingdeletion. Nextissues: triggerreliability,
+realcoordinate-reference collection andlongerintended-session endurance. Evidence
+`output/study-live-check-04/`; [live storage recheck](study-live-storage-recheck-2026-11-03.md).
+
+**2026-11-03 lossless storage1.2 installed; actual local sharing verified:**
+User authorized remaining pipeline work. New gzip worker chunks preserve every
+logical JSONL byte/row with explicit gzip_jsonl_v1 + uncompressed count; stored
+hash/count cover compressed bytes. Plain legacy remains supported; recovery
+preserves originals, salvages prefix, stops at gzip failure and flags unknown
+loss/end. Strict decoded64MiB chunk/512MiB Python analysis limits remain. Actual
+stopped112.5MB article replays to6.36MB (94.35% reduction), byte-identical after
+decompression. Camera-free Android180s fixture gives5,398callbacks/29.985Hz,
+36,116records,0writerloss, max sampled queue3,83.31MBlogical→2.416MBstored; this
+does not test camera/rendering. All8device checks pass; focusedJVM41 (40pass,
+1Windowslinkskip), Python38importer+6transfer tests pass. Added received-export
+verification CLI with complete inventory reconciliation and explicit coordinate
+reference/evaluation check; synthetic65s default reference fits READY. No actual
+coordinate reference has yet been collected/confirmed. Focused review finding on
+missing whole packages fixed with regression; follow-up has no residual issues.
+Actual Transfer selected button/Androidchooser/separate-UID local receiver/USB
+copy verifies exactrealarticle+sourcebaseline, excludesearlierarticle, allhashes
+match. FirstreceiverKotlinruntime fixture failed; Java-only fix passes, mainapp
+unaffected. Receivercomponent disabled after check. Mainupdate installed without
+clearing data; savedcalibration hashunchanged. ActiveRDFbaseline is process-only,
+so full live scoring rehearsal needs existing baseline again. Next: user3min
+article + separate short article performance/boundary rehearsal; no camera/live
+capture started automatically. Evidence `output/study-storage-check-03/` and
+[storage/transfer checkpoint](study-storage-transfer-2026-11-03.md). No commits.
+
+**2026-11-03 article-duration wording corrected against actual boundaries:**
+The reported88.692s is one article segment's elapsed span, not verified reading
+time. Hash-verified originals show final pause at88.150599s and screen_left end
+at88.692259s; the0.541660s exit tail retains3coordinate/9no_face observations,
+all context_allowed=false. No earlier pause in this longer segment; no captured
+timestamp outside its logical bounds. Baseline/earlier article are separate, with
+7.602s/8.209s gaps outside the identified segments. Allowed context88.150599s does
+not establish attention or valid gaze coverage. No app changes or new capture.
+Evidence `output/study-live-check-02/boundary-audit.json`; explanation in
+[live recheck and browser](study-recording-browser-2026-11-03.md).
+
+**2026-11-03 live recheck successful; recording browser/selected export installed:**
+User completed baseline+article and reports no visible issues. Three stopped
+perf-check packages verify complete/no writer loss or unknown tail. BaselineREADY;
+two article-reading IDs are distinct and both reference the matching same attempt.
+Longer article spans88.69s,2495 coordinate outputs (~28.64/s overcapture span),
+medianlatency176.17ms,114available nativeRDFticks,773drawn proxies. This supports
+this device/run's performance recovery, not accuracy/benefit/longendurance.
+Raw volume112.5MB (~76MB/min) remains a material pipeline concern. New catalog
+groups reading segments, lists baseline/coordinate/legacy entries separately,
+loads boundedprefix/tail metadata offUI, and supports selectedZIP with positively
+matched sourceRDFbaseline dependencies (notcoordinate-reference inference).
+Original bytes/hashinventory/latereceipts retained. Recovery path/leafalias guards
+andunknown-calibration matching were fixed in independent review. Importerv1.1
+retains validnative zero-spanINSUFFICIENT warmup ticks as explicit unavailable
+withnullcoverage/MD andsource order; nativecore/baseline/aidalgorithms unchanged.
+Fullguardedbuildpasses;34focusedJVM (33pass,1Windowslinkskip),35Pythontests,
+7unique camera-free devicechecks pass after oneoldfixtureFIFOtiming fix.
+Selected synthetic readingZIP includes2segments+1baseline, excludesotherreading,
+andall3packages import afterUSB transfer. Browserupdate installeddata-preserving;
+no morecapture requested. Source details/limits:
+[live recheck and browser](study-recording-browser-2026-11-03.md).
+Evidence `output/study-live-check-02/`, `summary.json`, `*-import-v1.1/`,
+`browser-export/receipt.json`. Studyqualitycriteria/benefitanalysis remain deferred.
+
+**2026-11-03 next live-test clarification: include the existing R/D/F baseline:**
+User questioned skipping baseline after the update. Source confirms that a
+baseline-free run can exercise recording/aid performance, but MahalanobisScorer
+short-circuits to BASELINE_UNAVAILABLE and cannot verify normal scoring/reference
+linkage. For the next representative pipeline check, collect the existing Reading
+baseline with the same participant code first, freeze it, then read an article
+for30s in the same app process. Reuse saved gaze calibration if compatible; no
+calibration redo is implied. Earlier no-baseline instruction was limited FPS
+triage, not full pipeline validation. No baseline algorithms or app code changed.
+
+**2026-11-03 scope clarified: prioritize the recording pipeline:**
+User defers study-level recording acceptance criteria and independent outcomes /
+reading-benefit analysis. Current work should focus on recording performance,
+clear article-reading boundaries and identities, separate linked baseline records,
+durable local storage/recovery, and accessible recording selection/export.
+Existing raw/selected observations, timestamps, missingness/loss flags, reference
+identities and actual configuration must remain available for later analysis;
+preserving these is collection instrumentation, not choosing study cutoffs.
+Do not add new analysis thresholds, participant exclusion rules, benefit tests or
+change the original R/D/F baseline algorithm under this pipeline task. Existing
+measurement gates remain as implemented. No new live capture was started for
+this scope discussion. Real camera/reader performance after v1.1 remains pending.
+
+**2026-11-03 live article collector lag; v1.1 synthetic load check passed:**
+User stopped testing/run: ~30FPS off, ~15FPS early recording, ~6FPS/hanging with
+absent aids/dot later (user observations, no matched benchmark). Three identified
+stopped engineering article packages verify complete/no declared writer loss but
+total42.07MB; auditrows34.99MB, repeated fullgeometry23-68% bypackage. Source shows
+UI-thread fullcontext.geometry reflection/deepcopy and repeatedfield-name regex
+allocation. New StudyAuditEncoder normalizes geometry to earlier aid_audit layout
+snapshots with unique layout_revision; all other nativecontext/raw fields retained.
+StudyJson caches fieldnames. Collector1.1, explicit aid_geometry_ref_v1 payload;
+no metric/filter/aidthreshold/downsampling/writerprotocol changes. Review fixed
+controlled-scroll nativeID alias viaunique revisions and rejection/retry test.
+Article view entries nowget article_reading_id; provider restarts linked bysegment
+index/previoussession. Back/configuration viewrecreation = newreadingentry, scope
+article_view_visit_v1. Home/setup creates no study packages. User confirms explicit
+RDFbaseline remains separate/reusable; asks to preserve baseline measurement as-is.
+Explained two Start controls and existing Start/fit/onPause behavior; no baseline
+algorithm/lifecycle changes. Active profile remains process-only. Full guarded
+APK and27 focusedJVM tests pass; data-preserving update installed. Seven device
+tests pass including camera-free180s mainthread policy/audit/writer endurance:
+5381ticks (~29.89/s),19missedslots,35997records,10763resolvedlayoutrefs,0writerloss.
+Meanwork12.01/5.65/5.22ms perminute; no progressivedeterioration in this fixture.
+Warmed fullcontext/reference encoding benchmark31x faster,96.65% smaller; excludes
+writer overhead/camera/rendering and usescachedfields inbothpaths. Offline importer
+accepts83.04MB endurancepackage; syntheticloadstorage27.7MB/min remainsmaterial.
+`fix-summary.json`, `endurance/result.json` and `endurance/import/receipt.json`
+retain results; no newlive capture. BaselineStart/Finish/passagerules/onPause were
+confirmedalready present on feature/scanpath-mahalanobis-score via gitshow; native
+MD/pipeline/profile corefiles have nodiff againstthatbranch. OnlyStudyRecording UI
+andpersistencehooks are new. User asked provenance afterambiguouswording; clarified.
+Evidence `output/study-lag-check-01/`, docs
+[performance investigation](study-collector-performance-2026-11-03.md).
+Actual camera/reader FPS and overhead remain unverified; do not claim ready for
+participants. A bounded30s user check is next, no freshbaseline needed forFPSonly.
+
+**2026-11-03 first live R/D/F baseline verified; article check next:**
+User completed the supervised engineering baseline and reported "Baseline frozen".
+Read only its identified package over USB, without restarting the app/provider;
+actual importer and manifest hashes pass: 4,415 records, four chunks, complete,
+no declared writer losses or unknown tail. Fit is READY, 105/140 windows retained;
+these overlapping windows are not independent observations. 1,619 coordinate
+callbacks span 69.297s (~23.35 coordinate outputs/s, not camera FPS or accuracy);
+six blink observations and one stopped receipt. Median capture-to-delivery latency
+178.33ms; terminal arrivals 1,651 / busy drops 25. This is one engineering session,
+not an overhead comparison or independent tracking validation. Local numeric/text
+evidence only: `output/study-live-check-01/baseline-summary.json`, original package
+`729f9467-db38-4674-8fd6-9e51a881d490/`, and `baseline-import/receipt.json`.
+Important identity discrepancy: study-run code is `device_check`; the frozen
+baseline code is `device-check`. Preserve originals and explicitly document this;
+before article reading, Stop/Start only the study run with `device-check` to match
+the in-memory profile. Do not restart/reinstall or repeat calibration. Subsequent
+article package should retain a matching RDF reference. No coordinate reference
+has been collected yet, so coordinate MD remains unavailable as designed.
+
+**2026-11-03 connected-phone camera-free rehearsal passed; live check next:**
+On user-authorized SM-A566B/SDK36/arm64, restored the three missing ARMv7 files
+from the existing hash-pinned official MNN archive using
+`tools/gaze/mgazenet/restore_armv7_vendor.py`; no guard/hash/model changes.
+Full debug APK, packaged-library verification and instrumentation assembly pass
+with normal guards. Data-preserving installs retain the saved gaze calibration
+file; this does not establish its current accuracy/compatibility. The active
+R/D/F baseline remains process memory. 51 unique on-device tests pass after
+correcting two obsolete preference/timestamp fixtures and a synthetic zero
+delivery ID. Six synthetic USB exports/seven packages import with matching
+hashes; all 77 retained records and manifests pass JSON schemas. Added scrollable
+study controls and constrained debug test storage; focused review fixed failed
+setup teardown and immutable per-visit late-receipt routing, with no residual
+findings in the reviewed scope. No camera access, private recording inspection,
+cloud transfer, data clearing or commit. Logs/hashes/receipts:
+`output/study-phone-check-01/summary.json` and associated artifacts; see
+[rehearsal and limits](study-device-rehearsal-2026-11-03.md).
+User is available for a live check using the saved calibration. Next: explicitly
+start an engineering study run, fresh R/D/F baseline and article reading; inspect
+actual cadence/missingness/aid events and separate coordinate-reference coverage.
+Real accuracy, collection overhead, endurance and human validity remain untested.
+
+**Earlier 2026-11-03 local integration checkpoint; vendor blocker since resolved:**
+Created `feature/local-study-collection` from coordinate-MD core commit `93a2abd`.
+Added explicit Home study controls, local baseline/article provider recording,
+per-consumer inputs/native Scanpath outputs, V5 support/evaluation/decision/draw
+instrumentation, R/D/F baseline/window/fit/score records, context/close/loss/recovery
+handling, verified ZIP transfer and offline coordinate-MD import/reference analysis.
+Both MDs remain observational; coordinate core, algorithms, filters, Firebase and
+frozen diagnostic/pilot formats are unchanged. Saving R/D/F research profiles does
+not restore active models after restart. See [local workflow and limits](study-collection-local-v1.md).
+Transport is `newsmead_study_v1`, distinct from the preserved v0.1 draft. Explicit
+earlier coordinate-reference periods require actual context compatibility; no
+automatic use of the different 22dp R/D/F baseline. Captures retain source clocks,
+per-provider IDs, raw/selected points and capture-aligned presentation epochs;
+consumer invalidity alone cannot create a coordinate presentation boundary.
+Review fixes cover sequence holes, window-local context attribution, maintenance
+races, aid presentation signatures and integrity-checked late close receipts.
+Writer9/ importer32 synthetic checks and actual Kotlin→Python package interop pass;
+final reviewed isolated Kotlin compile/333 JVM tests pass, zero failures/errors.
+Typed observer wiring removes an ambiguous compiler nullability warning. Focused
+review has no remaining actionable findings; full APK remains blocked as below.
+Full APK guard fails on missing pinned `armeabi-v7a` vendor libraries; isolated
+JVM checks exclude only that unavailable packaging prerequisite. Evidence is in
+`output/study-collection-*`, `study-writer-v1-checks`, `study-importer-v1-checks`.
+No device/install/capture/private data/cloud work or staging/commit. Phone overhead,
+lifecycle/transfer rehearsal and participant-protocol decisions remain open.
 
 **2026-11-03 checkout location correction:**
 Owner requested that coordinate-MD work reside in the original checkout

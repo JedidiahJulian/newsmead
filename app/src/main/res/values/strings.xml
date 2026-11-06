@@ -1,4 +1,5 @@
 <resources>
+    <string name="home_study_collection">Study recording</string>
     <string name="definition_lookup_offer">Look up %1$s</string>
     <string name="app_name">NewsMead</string>
 

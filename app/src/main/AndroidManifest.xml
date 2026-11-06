@@ -50,6 +50,7 @@
         <activity
             android:name=".activities.ReadingBaselineActivity"
             android:exported="false" />
+        <activity android:name=".activities.StudyCollectionActivity" android:exported="false" />
         <!-- Explicit-start synthetic replay; no gaze source, camera or calibration writes. -->
         <activity
             android:name=".activities.ScanpathReplayActivity"

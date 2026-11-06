@@ -81,6 +81,14 @@ class ReadingLocationSupport(
     private var wordFirst = 0.0
     private var offeredWord: Word? = null
 
+    /** Copied numerical state for the collector; querying it never advances evidence. */
+    fun auditSnapshot(): Map<String, Any?> = mapOf("segment" to segment, "epoch" to epoch,
+        "candidate" to candidate, "candidate_first_capture_ms" to candidateFirst,
+        "candidate_aligned" to candidateAligned, "current" to current,
+        "visit_ids" to visits.map { it.id }, "word" to word, "word_first_capture_ms" to wordFirst,
+        "offered_word" to offeredWord, "last_capture_ms" to lastCapture,
+        "last_delivery_ms" to lastDelivery)
+
     /** Operational/missing boundaries reset duration, while an unresolved word remains suppressed. */
     fun interrupt() {
         points.clear(); visits.clear(); candidate = null; candidateAligned = false; current = null; word = null

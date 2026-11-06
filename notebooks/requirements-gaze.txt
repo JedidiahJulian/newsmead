@@ -1,0 +1,8 @@
+# Tested with the existing Python 3.10 environment; no phone/app dependencies.
+pandas==2.2.3
+numpy==1.26.4
+matplotlib==3.10.3
+jupyterlab==4.3.2
+ipykernel==6.29.5
+nbformat==5.10.4
+nbclient==0.10.1

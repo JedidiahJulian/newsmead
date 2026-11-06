@@ -63,6 +63,15 @@ internal class ReadingFocusPolicy(
     var witnessesExpired: Boolean = false
         private set
 
+    fun auditSnapshot(): Map<String, Any?> = mapOf("source" to source, "source_epoch" to sourceEpoch,
+        "loss" to loss?.let { it.copy(reasons = it.reasons.toMutableSet()) }, "presence" to presence?.copy(),
+        "armed" to armed, "visits" to visits.toList(), "visit_bands" to visitBands.toList(),
+        "episodes" to episodes.toList(), "alternations" to alternations.toList(), "rereads" to rereads.toList(),
+        "episode_demand" to episodeDemand?.copy(), "reread_demand" to rereadDemand?.copy(),
+        "interruption_demand" to interruptionDemand?.copy(), "alternation_demand" to alternationDemand?.copy(),
+        "last_credited_capture_ms" to lastCreditedEndCapture, "recovery_tail" to recoveryTail,
+        "witnesses_expired" to witnessesExpired)
+
     fun reset() {
         episodes.clear(); alternations.clear(); interruptionDemand = null; alternationDemand = null
         episodeDemand = null; lastCreditedEndCapture = Double.NEGATIVE_INFINITY; supportEpoch = null

@@ -97,6 +97,9 @@ class HomeFragment : Fragment(), clickListener {
         viewBinding.btnReadingBaseline.setOnClickListener {
             startActivity(Intent(requireContext(), ReadingBaselineActivity::class.java))
         }
+        viewBinding.btnStudyCollection.setOnClickListener {
+            startActivity(Intent(requireContext(), com.newsmead.activities.StudyCollectionActivity::class.java))
+        }
         viewBinding.btnScanpathReplay.setOnClickListener {
             startActivity(Intent(requireContext(), ScanpathReplayActivity::class.java))
         }

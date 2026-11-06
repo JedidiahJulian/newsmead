@@ -52,6 +52,14 @@ internal class ReadingBookmarkPolicy(
         setOf("unassigned_line", "unassigned_word", "ambiguous_line", "ambiguous_word")
     val savedLine: Int? get() = source?.line
 
+    fun auditSnapshot(): Map<String, Any?> = mapOf("source" to source, "comparison" to comparison,
+        "landing" to landing, "shown" to shown, "shown_at_ms" to shownAt,
+        "outside_first_ms" to outsideFirst, "outside_last_ms" to outsideLast, "outside_count" to outsideCount,
+        "loss_first_delivery_ms" to lossFirstDelivery, "loss_last_delivery_ms" to lossLastDelivery,
+        "loss_count" to lossCount, "release_credit_ms" to releaseCreditMs,
+        "release_previous" to releasePrevious, "release_is_return" to releaseIsReturn,
+        "presence_first_ms" to presenceFirst, "presence_last_ms" to presenceLast)
+
     fun reset() {
         source = null; comparison = null; landing = null; shown = false
         shownAt = null; contextKey = null; clearRelease()

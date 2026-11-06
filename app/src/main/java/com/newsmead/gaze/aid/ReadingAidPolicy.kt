@@ -13,7 +13,8 @@ class ReadingAidPolicy(
     val config: ReadingAidPolicyConfig = ReadingAidPolicyConfig.manualOnly(),
     preferences: ReaderAidPreferences = ReaderAidPreferences(),
     bookmarkDetectorConfig: ScanpathConfig = ScanpathConfig(),
-    onFocusEpisode: (ReadingAidFocusEpisode) -> Unit = {}
+    onFocusEpisode: (ReadingAidFocusEpisode) -> Unit = {},
+    private val onAudit: ((String, Double, Map<String, Any?>) -> Unit)? = null
 ) {
     var preferences: ReaderAidPreferences = preferences
         private set
@@ -42,6 +43,14 @@ class ReadingAidPolicy(
     private var guideSearchUntil = Double.NEGATIVE_INFINITY
     private val guideDirection = ReadingGuideDirectionTracker()
     private var bookmarkPreciseSupport: ReadingAidContinuationEvidence? = null
+    private var lastAudit: Map<String, Any?>? = null
+    private fun audit(c: ReadingAidContext, invalidation: Boolean = false) {
+        val sink = onAudit ?: return
+        val value = mapOf("generation" to c.generation, "geometry_snapshot_id" to c.geometrySnapshotId,
+            "location" to location.auditSnapshot(), "bookmark" to bookmark.auditSnapshot(),
+            "focus" to focus.auditSnapshot(), "before_invalidation" to invalidation)
+        if (value != lastAudit) { lastAudit = value; runCatching { sink("support_revision", c.nowMs, value + ("input_context" to c)) } }
+    }
 
     private data class ContinuationSupport(val evidence: ReadingAidContinuationEvidence,
         val fraction: Double) {
@@ -89,6 +98,7 @@ class ReadingAidPolicy(
     fun tick(context: ReadingAidContext): List<ReadingAidDecision> = prepare(context)
 
     fun reset(context: ReadingAidContext, preserveCompletedFocus: Boolean = false): List<ReadingAidDecision> {
+        audit(context, true)
         val out = mutableListOf<ReadingAidDecision>()
         if (config.evidenceAlignedV5 && epoch?.second != context.geometrySnapshotId) focus.invalidateReread()
         val keepFocus = preserveCompletedFocus && currentGuideProfile() && epoch?.first == context.generation
@@ -559,6 +569,31 @@ class ReadingAidPolicy(
 
     /** V5 supports aids from a separate stabilized location stream; extractor events stay descriptive. */
     private fun prepareV5(c: ReadingAidContext): List<ReadingAidDecision> {
+        audit(c)
+        val decisions = evaluateV5(c)
+        audit(c)
+        onAudit?.let { sink ->
+            val operational = config.automaticRulesEnabled && preferences.enabled && preferences.maxStrength != 0.0 &&
+                (preferences.adaptiveStrength || preferences.manualStrength != 0.0) &&
+                c.bookmarkInputAllowed && c.focusInputAllowed && continuationGeometryValid(c)
+            val components = listOf("guide" to (preferences.lineGuide), "lookup" to preferences.wordDefinition,
+                "bookmark" to preferences.lineStartCue, "focus" to preferences.focusRegion).map { (name, enabled) ->
+                mapOf("component" to name, "status" to if (operational && enabled) "evaluated" else "not_evaluated",
+                    "reason" to if (!operational) "operational_or_geometry_gate" else if (!enabled) "reader_disabled" else "native_v5_evaluation",
+                    "active_action_ids" to active.values.filter { action -> when(name) {
+                        "guide" -> action.aidType in listOf(ReadingAidType.CURRENT_LINE,ReadingAidType.CURRENT_SENTENCE)
+                        "lookup" -> action.aidType == ReadingAidType.WORD_DEFINITION
+                        "bookmark" -> action.aidType == ReadingAidType.READING_BOOKMARK
+                        else -> action.aidType == ReadingAidType.FOCUS_REGION
+                    } }.map { it.id })
+            }
+            runCatching { sink("aid_evaluation", c.nowMs, mapOf("capture_ms" to c.captureMs,
+                "generation" to c.generation, "geometry_snapshot_id" to c.geometrySnapshotId,
+                "input_context" to c, "components" to components)) }
+        }
+        return decisions
+    }
+    private fun evaluateV5(c: ReadingAidContext): List<ReadingAidDecision> {
         val out = mutableListOf<ReadingAidDecision>()
         val next = c.generation to c.geometrySnapshotId
         if (epoch != null && epoch != next) {

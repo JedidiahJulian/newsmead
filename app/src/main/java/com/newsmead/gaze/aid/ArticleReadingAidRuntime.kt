@@ -41,14 +41,16 @@ class ArticleReadingAidRuntime(
     private val motionCompensatedAids: Boolean = false,
     /** Optional separately measured screen-pixel error bound for this calibration/device. */
     private val measuredLocationUncertainty: ReadingLocationUncertainty? = null,
+    private val onTraceRecord: ((String, Double, JSONObject) -> Unit)? = null,
+    private val onPolicyAudit: ((String, Double, Map<String, Any?>) -> Unit)? = null,
 ) {
     val scanpathConfig = ScanpathConfig(returnSweepStartFraction = 0.25, returnSweepEndFraction = 0.75,
         wordResidenceMs = config.wordMinObservedMs, lineResidenceMs = config.lineMinObservedMs,
         cycleWindowMs = config.cycleWindowMs, progressionWindowMs = 1000.0,
         lineProgressionMaxUnitsPerS = 0.5, progressionMinObservedFraction = 0.5)
-    private val trace = ReadingAidTrace()
+    private val trace = ReadingAidTrace(onRecord = onTraceRecord)
     private val policy = ReadingAidPolicy(config, preferences, scanpathConfig,
-        onFocusEpisode = { episode -> trace.focusEpisode(episode); onFocusEpisode(episode) })
+        onFocusEpisode = { episode -> trace.focusEpisode(episode); onFocusEpisode(episode) }, onAudit = onPolicyAudit)
     val preferences get() = policy.preferences
     private val calibrationFingerprint = if (inputSource == ReadingAidInputSource.LIVE_MGAZENET)
         MgazeNetCalibrationStore(body.context).fingerprint() else null
@@ -275,6 +277,7 @@ class ArticleReadingAidRuntime(
         checkMain()
         if (closed) return
         suspended = false
+        trace.record("resumed", elapsedMs(), JSONObject())
         context = context.copy(nowMs = elapsedMs(), validLiveInput = false)
         decisions(policy.reset(context, preserveCompletedFocus = preserveFocusOnResume))
         preserveFocusOnResume = false
