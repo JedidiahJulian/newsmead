@@ -347,7 +347,7 @@ class ReadingBaselineActivity : AppCompatActivity() {
 
     companion object {
         // Same fixed provisional reading material as the working Mahalanobis branch.
-        private val BASELINE_PASSAGE = """
+        internal val BASELINE_PASSAGE = """
             On quiet mornings, Lina walked to the community library before the streets became busy. She liked the wide windows, the wooden tables, and the patient rhythm of pages turning nearby. The familiar room made it easier to settle into a story without rushing.
 
             One week, the librarian displayed a report about gardens built above crowded buildings. These rooftop spaces reduced heat, absorbed rainwater, and gave residents a place to grow herbs. Volunteers recorded which plants survived strong sunlight and which needed shade during the afternoon.

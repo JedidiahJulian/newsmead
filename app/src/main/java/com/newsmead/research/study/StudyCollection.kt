@@ -7,10 +7,12 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.widget.TextView
+import android.view.View
 import android.graphics.Rect
 import androidx.core.content.FileProvider
 import com.newsmead.BuildConfig
 import com.newsmead.gaze.ParticipantReadingBaseline
+import com.newsmead.gaze.SharedReadingBaseline
 import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
 import com.newsmead.gaze.getVisibleRectOnScreen
 import com.newsmead.gaze.aid.ReadingAidAction
@@ -172,6 +174,11 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
     val id = UUID.randomUUID().toString()
     private val handler = Handler(Looper.getMainLooper())
     private val started = now()
+    val startMs: Double get() = started
+    val endMs: Double? get() = logicalEnd
+    val packageId: String get() = writer.packageDirectory.name
+    val acceptsResults: Boolean get() = !sealed && writer.failure == null
+    private val sharedSurface = metadata.optString("coordinate_reference_contract") == SharedReadingBaseline.SURFACE
     private val pending = mutableSetOf<String>()
     private var logicalEnd: Double? = null
     private var sealed = false
@@ -203,7 +210,7 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
         })
     init {
         record("session_start", StudyJson.obj("start_ms" to started, "phase" to phase,
-            "collector_version" to "study_collection_v1.2", "audit_context_encoding" to StudyAuditEncoder.VERSION,
+            "collector_version" to "study_collection_v1.3", "audit_context_encoding" to StudyAuditEncoder.VERSION,
             "chunk_storage_encoding" to StudyChunkIO.GZIP_ENCODING,
             "coordinate_core_version" to com.newsmead.gaze.trajectory.CoordinateMahalanobis.VERSION,
             "rdf_definition" to "capture_time_line_stays_v1",
@@ -237,13 +244,18 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
         acquisitionIds[epoch] = StudyJson.hash(json.toString())
         record("provider_metadata", StudyJson.obj("provider_epoch_id" to epoch, "metadata" to json), now())
     }
-    fun presentation(body: TextView, extra: JSONObject = JSONObject()) {
+    fun presentation(body: TextView, extra: JSONObject = JSONObject(), readingViewport: View? = null) {
         if (logicalEnd != null) return
         val visible = Rect(); body.getVisibleRectOnScreen(visible)
+        val viewport = Rect()
+        if (sharedSurface) {
+            require(readingViewport != null) { "Shared baseline requires the actual article reading viewport" }
+            readingViewport.getVisibleRectOnScreen(viewport)
+        }
         val signature = listOf(body.layout, body.textSize, body.width, body.textScaleX, body.letterSpacing,
             body.lineSpacingExtra, body.lineSpacingMultiplier, body.typeface, body.currentTextColor,
             body.textLocale, body.resources.configuration.fontScale, visible.left, visible.top, visible.right,
-            visible.bottom, extra.toString())
+            visible.bottom, viewport.left, viewport.top, viewport.right, viewport.bottom, extra.toString())
         if (signature == lastPresentationSignature && body.text === lastTextSource) return
         lastPresentationSignature = signature
         val value = StudyJson.obj("text_size_px" to body.textSize, "column_width_px" to (body.layout?.width ?: body.width),
@@ -255,6 +267,15 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
             "typeface_style" to body.typeface.style, "typeface_descriptor" to body.typeface.toString(),
             "language" to body.textLocale.toLanguageTag(),
             "text_color" to body.currentTextColor, "settings" to extra, "aid_preferences" to aidSettings)
+        if (sharedSurface) {
+            value.put("reading_viewport_screen_px", StudyJson.value(listOf(viewport.left, viewport.top, viewport.right, viewport.bottom)))
+            value.put("body_padding_px", StudyJson.value(listOf(body.totalPaddingLeft, body.totalPaddingTop,
+                body.totalPaddingRight, body.totalPaddingBottom)))
+            value.put("font_resource", "fragment_article/ts_body_large")
+            val compatibility = StudyReadingSurface.specification(value)
+            value.put("coordinate_compatibility", compatibility)
+            value.put("coordinate_presentation_id", StudyJson.hash(compatibility.toString()))
+        }
         val hash = StudyJson.hash(value.toString())
         if (hash != presentationId) {
             presentation = value; presentationId = hash; boundary("presentation_changed")
@@ -288,7 +309,8 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
         val coordinateContext = if (meta != null && state?.presentationId != null && calibration != null) StudyJson.obj(
             "participant_id" to run.participant, "installation_id" to run.installation, "calibration_id" to calibration,
             "model_id" to meta.optString("model_sha256", "unknown"),
-            "acquisition_id" to acquisitionIds[epoch], "presentation_id" to state.presentationId,
+            "acquisition_id" to acquisitionIds[epoch], "presentation_id" to
+                (state.settings.optString("coordinate_presentation_id").takeIf { it.isNotBlank() } ?: state.presentationId),
             "clock_domain_id" to run.clockDomain, "screen_width_px" to screenWidth, "screen_height_px" to screenHeight,
             "rotation_degrees" to rotationDegrees, "coordinate_stream" to "calibrated_raw_v1") else null
         record("gaze_observation", StudyJson.obj("provider_epoch_id" to epoch, "delivery_id" to o.deliveryId,
@@ -303,6 +325,8 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
     }
     fun baseline(profile: ParticipantReadingBaseline.Entry?) = record("rdf_reference", StudyJson.obj(
         "reference" to profile, "participant_match" to (profile == null || profile.participantCode == run.participant)), now())
+    fun coordinateReference(reference: SharedReadingBaseline.Entry?) = record("coordinate_reference",
+        StudyJson.obj("reference" to reference?.fields()), now())
     fun runtimeEvent(kind: String, atMs: Double, detail: JSONObject) {
         record(if (kind == "support_revision") kind else "aid_runtime_$kind", detail, atMs)
         if (kind == "preferences" || kind == "started") {

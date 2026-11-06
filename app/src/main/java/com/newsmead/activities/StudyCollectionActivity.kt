@@ -34,7 +34,7 @@ class StudyCollectionActivity : AppCompatActivity() {
         button("Back") { finish() }
         root.addView(TextView(this).apply { text = "Local study recording"; textSize = 22f })
         root.addView(TextView(this).apply {
-            text = "For researcher-supervised testing. Numerical gaze and rendered article text stay on this phone until explicit transfer. Start a run before opening a baseline or article. Coordinate reference and later reading must be separate recorded periods with compatible settings. The condition label does not change aid settings. Neither distance controls assistance."
+            text = "For researcher-supervised testing. Numerical gaze and rendered article text stay on this phone until explicit transfer. Start a Reading run, collect the shared Reading baseline, then open an article. The baseline supplies R/D/F and a raw-coordinate reference for offline fitting. The condition label does not change aid settings. Neither distance controls assistance."
         })
         val participant = EditText(this).apply { hint = "Participant code"; setSingleLine(); setText(StudyCollection.run?.participant ?: "") }
         val condition = EditText(this).apply { hint = "Condition label"; setSingleLine(); setText(StudyCollection.run?.condition ?: "pilot") }
@@ -69,7 +69,7 @@ class StudyCollectionActivity : AppCompatActivity() {
         }
         root.addView(TextView(this).apply { text = "Saved recordings"; textSize = 20f })
         root.addView(TextView(this).apply {
-            text = "Stop the run to browse. Select article readings or separate baseline/reference recordings. Required source R/D/F baselines are included when available. Coordinate references must be selected explicitly. Saved status is declared by the package; transfer verifies file hashes."
+            text = "Stop the run to browse. Select article readings or separate baseline/reference recordings. Linked shared baselines are included when available, independently of R/D/F fit success. Legacy coordinate-reference recordings require explicit selection. Saved status is declared by the package; transfer verifies file hashes."
         })
         button("Refresh saved recordings") { loadRecordings() }
         selectionStatus = TextView(this).apply { setTextIsSelectable(true) }; root.addView(selectionStatus)
@@ -128,6 +128,7 @@ class StudyCollectionActivity : AppCompatActivity() {
         val first = recording.first
         val label = when (first.phase) {
             "rdf_baseline" -> "R/D/F baseline"
+            "reading_baseline" -> "Shared reading baseline (coordinate fit pending offline)"
             "coordinate_reference" -> "Coordinate reference (explicit selection)"
             "reading" -> "Article reading"
             else -> "Phase unavailable"
@@ -136,10 +137,11 @@ class StudyCollectionActivity : AppCompatActivity() {
         val date = recording.startedUtcMs?.let { DateFormat.getDateTimeInstance().format(Date(it)) } ?: "Time unavailable"
         val duration = recording.durationMs?.let { String.format(Locale.ROOT, "%.1f s recorded segment span (includes exclusions)", it / 1000) } ?: "Duration unavailable"
         val references = recording.packages.map { p ->
-            if (p.phase == "rdf_baseline") p.baselineAttempt ?: "unavailable"
+            if (p.phase in listOf("rdf_baseline", "reading_baseline")) p.baselineAttempt ?: "unavailable"
             else if (!p.referenceKnown) "unavailable" else p.reference?.attempt ?: "none"
         }.distinct().joinToString(", ")
-        return "$label • ${first.participant}\nArticle ID: $article\nR/D/F reference ID: $references\n$date • $duration\n" +
+        val coordinate = recording.packages.map { it.coordinateReference?.packageId ?: "none" }.distinct().joinToString(", ")
+        return "$label • ${first.participant}\nArticle ID: $article\nR/D/F reference ID: $references\nCoordinate source package: $coordinate\n$date • $duration\n" +
             "${String.format(Locale.ROOT, "%.2f MB", recording.bytes / 1_000_000.0)} • ${recording.packages.size} segment(s) • " +
             recording.packages.map { it.status }.distinct().joinToString(", ") +
             "\n" + if (recording.legacy) "Legacy transport session: ${first.session}"

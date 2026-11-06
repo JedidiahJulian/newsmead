@@ -149,7 +149,7 @@ reason an aid triggered; that association alone does not establish benefit.
   stages. `verified_visibility=false` does not demonstrate successful dictionary
   content, perception or benefit.
 - Coordinate MD remains uncomputed without a compatible reference; unavailable
-  is never replaced by zero. The combined baseline workflow remains deferred.
+  is never replaced by zero. Completed shared reading baselines can now be fitted offline from their declared source link.
 - These engineering visits do not establish reading benefit. Participant/article
   outcomes and planned comparisons still need a study design.
 
@@ -171,3 +171,33 @@ Exploratory-analysis framing used the statistical-analysis skill from Scientific
 Agent Skills: Kassis, T., Agarwal, V., He, Y., Patel, D., & Brueckner, A. M. (2026),
 [*Scientific Agent Skills: A Library of Procedural Knowledge for Research Agents*](https://doi.org/10.48550/arXiv.2609.00065).
 This procedural citation does not validate NewsMead's gaze measurements.
+
+
+## Shared reading baseline and coordinate MD
+
+The coordinate section resolves only the `coordinate_reference` recorded at
+reading startup. A sibling source package in the same parent directory or a
+source session in the same export ZIP is strictly loaded and checked before
+fitting. For a separately copied baseline, set `COORDINATE_REFERENCE_SOURCE`
+(and `COORDINATE_REFERENCE_SESSION_ID` when needed). An explicit legacy
+`coordinate_reference` session is also supported. No latest/closest baseline is
+selected and an old `rdf_baseline` never becomes a coordinate reference.
+
+The source must declare `shared_reading_baseline_v1`, the
+`article_reading_surface_v1` contract and a completed `shared_baseline_result`.
+The declared package/session, attempt, participant, installation, calibration,
+clock and source bounds must match and precede evaluation. R/D/F fit failure
+does not itself prevent coordinate fitting. Core context compatibility, recorder
+loss, raw/selected separation and numerical/coverage gates remain unchanged.
+The provider's recorded 650ms acquisition gate does not change the coordinate
+core's 500ms analysis gate. Reference bounds may be overridden only as a paired
+explicit subset; the original recorded link is still checked against the full
+source period.
+
+The notebook displays point MD, MD2 and statuses, exact native-window summaries,
+separate R/D/F and coordinate availability, and fit/config/source provenance.
+It exports `coordinate_points.csv`, `coordinate_native_windows.csv` and
+`coordinate-provenance.json`. Missing sources or incompatible links stay explicit
+and distances remain null; a valid center point stays zero with AVAILABLE.
+Tracked notebook outputs remain cleared. Synthetic regression checks establish
+software behavior only, not tracker accuracy or participant validity.

@@ -13,7 +13,6 @@ import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.newsmead.R
 import com.newsmead.activities.GazeCalibrationActivity
-import com.newsmead.activities.ReadingBaselineActivity
 import com.newsmead.activities.ScanpathReplayActivity
 import com.newsmead.activities.ScanpathPilotActivity
 import com.newsmead.custom.CustomDividerItemDecoration
@@ -95,7 +94,8 @@ class HomeFragment : Fragment(), clickListener {
             startActivity(Intent(requireContext(), GazeCalibrationActivity::class.java))
         }
         viewBinding.btnReadingBaseline.setOnClickListener {
-            startActivity(Intent(requireContext(), ReadingBaselineActivity::class.java))
+            Navigation.findNavController(requireView()).navigate(R.id.articleFragment,
+                com.newsmead.research.study.SharedBaselineReader.arguments())
         }
         viewBinding.btnStudyCollection.setOnClickListener {
             startActivity(Intent(requireContext(), com.newsmead.activities.StudyCollectionActivity::class.java))

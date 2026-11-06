@@ -25,6 +25,17 @@ class StudyTransferCheckTest(unittest.TestCase):
                         handle.write(path, directory.name + "/" + path.name)
         return target
 
+    def test_shared_source_inventory_and_link_check_are_independent_of_rdf_fit(self):
+        reference, evaluation = self.fixture.shared_packages()
+        for directory in (reference, evaluation): self.fixture.compress(directory)
+        result = transfer.check_transfer(self.archive(reference, evaluation))
+        self.assertEqual(result["coordinate_reference_sessions"], ["shared-session"])
+        link = next(r for r in result["coordinate_source_links"] if r["session_id"] == "reading-session")
+        self.assertEqual(link["status"], "DECLARED_SOURCE_VERIFIED_PENDING_OFFLINE_FIT")
+        baseline = next(p for p in result["packages"] if p["session_id"] == "shared-session")
+        self.assertEqual(baseline["shared_baseline_results"][0]["rdf_status"], "INSUFFICIENT_REFERENCE")
+        self.assertIsNotNone(baseline["shared_baseline_period"])
+
     def test_received_multi_package_export_lists_separate_reference_without_auto_selecting(self):
         reading = self.fixture.package("reading")
         reference = self.fixture.package("reference", True)

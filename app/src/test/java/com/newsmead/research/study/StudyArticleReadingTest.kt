@@ -4,6 +4,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class StudyArticleReadingTest {
+    @Test fun sharedReadingMetadataCarriesRequiredCalibrationAndContract() {
+        val shared = StudyArticleReading().nextSegment("article", "calibration", true)
+        assertEquals("calibration", shared.getString("calibration_id"))
+        assertEquals(StudyBaselineProtocol.SURFACE, shared.getString("coordinate_reference_contract"))
+        assertFalse(StudyArticleReading().nextSegment("article").has("coordinate_reference_contract"))
+        for (missing in listOf<String?>(null, "", " ")) {
+            try { StudyArticleReading().nextSegment("article", missing, true); fail("Missing calibration must reject") }
+            catch (_: IllegalArgumentException) { }
+        }
+    }
     @Test fun providerSegmentsShareReadingAndLinkEarlierSession() {
         val reading = StudyArticleReading()
         val first = reading.nextSegment("article-A")

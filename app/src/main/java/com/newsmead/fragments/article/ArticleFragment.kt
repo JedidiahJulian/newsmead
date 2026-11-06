@@ -96,6 +96,8 @@ import java.util.Locale
 
 class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener {
     private lateinit var binding: FragmentArticleBinding
+    private val sharedBaselineMode get() = arguments?.getBoolean(com.newsmead.gaze.SharedReadingBaseline.ARGUMENT) == true
+    private var sharedBaselineReader: com.newsmead.research.study.SharedBaselineReader? = null
     private lateinit var adapter: ArticleSimplifiedAdapter
     private lateinit var savedLists: ArrayList<SavedList>
     private lateinit var textToSpeech: TextToSpeech
@@ -194,7 +196,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         get() = StudyConfig.SCANPATH_READING_AIDS && !StudyConfig.GAZE_TOUCH_VALIDATION
     private val scanpathCounts = mutableMapOf<String, Int>()
     private val scanpathGeometryListener = ViewTreeObserver.OnPreDrawListener {
-        studyVisit?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to StudyConfig.GAZE_DEBUG_VISUALS))
+        studyVisit?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to StudyConfig.GAZE_DEBUG_VISUALS), binding.nsvArticleText)
         studyVisit?.exclude("tts", ::textToSpeech.isInitialized && textToSpeech.isSpeaking)
         articleAutoScroll?.onPreDraw()
         scanpathSession?.checkGeometry()
@@ -218,6 +220,12 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     ): View {
         Log.d("ArticleFragment", "onCreateView: ArticleFragment started")
         binding = FragmentArticleBinding.inflate(inflater, container, false)
+        if (sharedBaselineMode) {
+            articleBodyReady = false
+            articleForUsage = null
+            sharedBaselineReader = com.newsmead.research.study.SharedBaselineReader(this, binding).also { it.bind() }
+            return binding.root
+        }
         // A recreated article view is a new reading entry, including Back from another article.
         // Provider restarts and transient dialogs within this view keep the same reading identity.
         studyArticleReading = com.newsmead.research.study.StudyArticleReading()
@@ -729,6 +737,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     // Don't forget to release TextToSpeech when your activity is destroyed
     override fun onDestroy() {
+        if (sharedBaselineMode) { sharedBaselineReader?.close(); super.onDestroy(); return }
         stopArticleDemo("fragment_destroyed")
         definitionPopup?.close()
         definitionPopup = null
@@ -767,6 +776,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     override fun onResume() {
         super.onResume()
+        if (sharedBaselineMode) return
         studyVisit?.exclude("screen_paused", false)
         studyVisit?.resumed()
         articleAutoScroll?.setEnabled(aidPreferences.enabled && aidPreferences.autoScroll)
@@ -818,6 +828,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     override fun onPause() {
+        if (sharedBaselineMode) { sharedBaselineReader?.interrupt("screen_paused"); super.onPause(); return }
         studyVisit?.exclude("screen_paused", true)
         // A delayed camera close must not start a requested recording after leaving.
         cameraPolicyChangeGeneration++
@@ -839,6 +850,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     override fun onDestroyView() {
+        if (sharedBaselineMode) {
+            sharedBaselineReader?.close(); sharedBaselineReader = null
+            super.onDestroyView(); return
+        }
         articleAutoScroll?.close()
         articleAutoScroll = null
         binding.nsvArticleText.onUserTouch = null
@@ -861,6 +876,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     override fun onStop() {
+        if (sharedBaselineMode) { sharedBaselineReader?.interrupt("screen_left"); super.onStop(); return }
         closeArticleUsage()
         finishReadingMeasurement("screen_left", restore = false)
         scaffoldDemoHandler.removeCallbacksAndMessages(null)
@@ -1388,13 +1404,16 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             Toast.makeText(context, issue, Toast.LENGTH_LONG).show()
             return
         }
+        val fingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint()
+        val sharedReference = com.newsmead.gaze.SharedReadingBaseline.current(fingerprint, StudyCollection.run?.participant)
         val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true,
-            rejectBlinks = true, preferStableFrameRate = preferStableFrameRate)
+            rejectBlinks = true, preferStableFrameRate = preferStableFrameRate,
+            maxOutputAgeMs = if (sharedReference != null) StudyConfig.READING_MAX_OUTPUT_AGE_MS else MgazeNetGazeProvider.MAX_OUTPUT_AGE_MS)
         stopScanpathSession("provider_replaced")
         activeBaselineFingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint()
         activeMahalanobisBaseline = ParticipantReadingBaseline.current(activeBaselineFingerprint)
         val recording = if (StudyCollection.run == null) null else StudyCollection.open(requireContext(),
-            metadata = studyArticleReading.nextSegment(articleForUsage?.newsId).apply {
+            metadata = studyArticleReading.nextSegment(articleForUsage?.newsId, fingerprint, sharedReference != null).apply {
                 put("usage_session_id", ResearchSession.sessionId)
                 put("usage_clock", "separate_session_relative_elapsed_ms")
                 put("source", StudyJson.value(articleForUsage?.source))
@@ -1403,8 +1422,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             })
         recording?.let { studyArticleReading.opened(it.id) }
         studyVisit = recording
-        recording?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to StudyConfig.GAZE_DEBUG_VISUALS))
+        recording?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to StudyConfig.GAZE_DEBUG_VISUALS), binding.nsvArticleText)
         recording?.baseline(activeMahalanobisBaseline)
+        recording?.coordinateReference(sharedReference)
         val providerEpoch = recording?.providerStarted(activeBaselineFingerprint)
         val studyScreen = binding.root.physicalDisplaySize()
         val studyRotation = binding.root.display.rotation * 90

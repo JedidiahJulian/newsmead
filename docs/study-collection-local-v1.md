@@ -4,7 +4,7 @@ Implemented on `feature/local-study-collection`, based on coordinate-MD commit
 `93a2abd`. This is a local research instrument integration, not an approved
 participant procedure or evidence of reading benefit.
 
-Current priority, clarified 2026-11-03: finish the recording pipeline before
+Current priority, updated 2026-11-06: finish the shared reading baseline and recording pipeline before
 study-level acceptance criteria or reading-benefit analysis. This includes live
 performance, article/session identity and boundaries, separate baseline linkage,
 local persistence/recovery and recording selection/export. Retain the existing
@@ -15,24 +15,30 @@ participant exclusions or changes to baseline/metric algorithms.
 ## Researcher workflow
 
 1. Home → **Study recording**. Enter a pseudonymous participant code and a
-   condition label. Choose **Reading** or **Coordinate reference**, then Start.
+   condition label. Choose **Reading**, then Start.
    Opening the controls alone does not start recording or the camera. The label
    records the assigned condition; it does not configure the aids. Set the
    intended aid settings through the existing reader controls.
-2. Return Home and open the existing reading-baseline activity or an article.
-   Each baseline attempt/article-provider visit creates its own package. Normal
-   reading retains its existing aids, filter and camera policy. Baseline attempts
-   are recorded as `rdf_baseline` regardless of the run's selected phase.
-3. For coordinate MD, explicitly record a separate earlier **Coordinate reference**
-   article period. The 22dp/default-camera R/D/F baseline is not automatically
-   treated as a compatible coordinate reference for ordinary adjustable articles.
-   Keep relevant viewport, typography, acquisition and aid settings compatible.
-   Record intended material and any failures. The core's 60-second observed-time
-   reference default is provisional, not a validated participant instruction.
-4. Leave the reference article, Stop the run, then Start a **Reading** run with
-   the same participant and chosen condition. Keep the app process alive if the
-   reference is intended for this comparison: clock-domain identity is explicitly
-   process-scoped and active R/D/F profiles are not restored after restart.
+2. Return Home → **Reading baseline**. The existing passage opens in the actual
+   article layout with saved/locked article typography. Opening it starts no
+   camera. Press **Start**, confirm the instructions and read without aids or a
+   gaze dot. The footer shows R/D/F retained-window and covered-time progress.
+3. Press **Finish**. This writes a separate `reading_baseline` package, its
+   existing R/D/F fit and an explicitly completed raw-coordinate reference.
+   R/D/F readiness and coordinate **recorded; offline fit pending** are separate
+   outcomes. Neither status guarantees that the other profile is available.
+   Pausing/leaving before Finish marks an interruption; it cannot supply an
+   accepted shared reference. The core's 60-second observed-time reference gate
+   is provisional, not a validated participant instruction.
+4. Return Home and open a later article in the same Reading run and app process.
+   It records separate R/D/F and coordinate source links. Active shared-reference
+   reading and baseline acquisition both use stable-frame-rate preference and
+   the explicit 650 ms provider allowance; coordinate analysis still uses its
+   own 500 ms age gate. After restart, participant change or recalibration, collect
+   a fresh baseline. Changed typography/viewport/acquisition remains incompatible.
+   See [shared baseline contract](shared-reading-baseline-v1.md). Legacy
+   `rdf_baseline` and explicitly selected `coordinate_reference` recordings keep
+   their original meanings; no old package is relabeled.
 5. After reading, Stop the run and choose **Transfer all study packages**. The
    exporter waits for closing writers, recovers valid incomplete prefixes where
    needed, verifies chunk hashes and stages a ZIP using the existing FileProvider.
@@ -40,7 +46,9 @@ participant exclusions or changes to baseline/metric algorithms.
    packages are retained. Successful sharing is not a verified transfer receipt.
    Alternatively, select logical recordings in **Saved recordings** and choose
    **Transfer selected recordings**. Matching source R/D/F baseline packages are
-   included when available; coordinate references require explicit selection.
+   included when available. The declared shared coordinate source is included
+   independently of R/D/F fit success; legacy coordinate references require
+   explicit selection.
    See [browser workflow and live verification](study-recording-browser-2026-11-03.md).
 6. Verify/import the received package before analysis or deleting originals.
    Recent full session IDs are selectable in Study recording for linking
@@ -55,7 +63,7 @@ condition and numeric progression criteria remain open.
 ## What is recorded
 
 Canonical package schema: `newsmead_study_v1`, collector version
-`study_collection_v1.2` (older packages retain their original collector version).
+`study_collection_v1.3` (older packages retain their original collector version).
 The [record envelope schema](study-data/record-schema-v1.json)
 and [manifest schema](study-data/manifest-schema-v1.json) describe the transport.
 Native payloads retain their source fields/versions; the importer checks the
@@ -84,7 +92,8 @@ clock. The private study directory is `noBackupFilesDir/study-packages-v1/`.
 For exploratory inspection of existing recordings in Jupyter, use the
 [notebook workflow](../notebooks/README.md). It loads verified compact tables,
 plots recorded gaze/native R/D/F/scanpath/aid outputs, preserves missingness and
-exports CSVs. It does not require or implement the deferred joint-baseline change.
+exports CSVs. Its coordinate section now resolves the declared shared source,
+fits it offline and retains point/window availability and fitting provenance.
 
 The [coordinate core](gaze-coordinate-md-core.md) is unchanged. Canonical
 coordinate analysis uses calibrated **pre-smoothing screen pixels**, and never
@@ -95,9 +104,13 @@ Coordinate MD runs offline after export. Each point carries actual acquisition
 and processing metadata plus a compatibility context: participant, installation,
 calibration/model, acquisition hash, presentation hash, clock domain, physical
 screen dimensions/rotation and raw stream. Unhashed metadata are retained.
-Presentation signatures include the visible physical viewport, typography,
-language/color, dot setting and aid preferences. Exact text/layout identities
-remain provenance, not a requirement that articles wrap identically.
+Legacy presentation signatures include visible body clipping, typography,
+language/color, dot setting and aid preferences. New shared baseline/readings use
+the explicit `article_reading_surface_v1` coordinate compatibility signature:
+physical scroll viewport, column/padding, font resource/style, language and
+typography. Full clipping/color/aid settings remain recorded separately and their
+transitions still break exposure. Exact text remains provenance; different news
+articles need not contain identical text.
 
 Capture-time floor lookup prevents delayed samples from receiving future
 presentation settings. Controls, consultation, TTS, scrolling, renderer changes

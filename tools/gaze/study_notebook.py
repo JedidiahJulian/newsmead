@@ -10,8 +10,10 @@ Native aid actions under decision.action use ``decision_action_`` columns.
 Nested scalar aliases such as action.id and top-level action_id share a column
 only when their native scalar types and values are exactly equal; mismatches
 reject rather than overwrite either value.
-No replay, eligibility filter, deduplication, or event finalization is
-performed. Offsets and latency are descriptive differences in elapsed ms.
+`load_recording` projects source records without replay, eligibility filtering,
+deduplication, or event finalization. The separate `coordinate_analysis` entry
+point explicitly fits and replays a compatible reference offline. Offsets and
+latency are descriptive differences in elapsed ms.
 """
 from __future__ import annotations
 
@@ -25,7 +27,7 @@ import zipfile
 
 import study_package as sp
 
-VERSION = "study_notebook_v1"
+VERSION = "study_notebook_v1.1"
 TABLES = ("gaze", "rdf", "scanpath", "aids", "boundaries", "health", "references")
 MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 
@@ -112,7 +114,7 @@ def _nested(target, payload, key, children=(), arrays=()):
 
 def _table(kind):
     if kind == "gaze_observation": return "gaze"
-    if kind in ("rdf_reference", "rdf_baseline_fit"): return "references"
+    if kind in ("rdf_reference", "rdf_baseline_fit", "coordinate_reference", "shared_baseline_result"): return "references"
     if kind.startswith("rdf_"): return "rdf"
     if kind.startswith("scanpath_") or kind == "layout_snapshot": return "scanpath"
     if kind.startswith("aid_") or kind == "support_revision": return "aids"
@@ -229,6 +231,50 @@ def load_recording(source: Path, session_id=None) -> NotebookRecording:
                    table_counts={k: len(v) for k, v in tables.items()},
                    coordinate_md_computed=False)
     return NotebookRecording(metadata, tables, receipt)
+
+
+def coordinate_analysis(source, session_id=None, reference_source=None, reference_session_id=None,
+                        config=None, reference_start_ms=None, reference_end_ms=None):
+    """Replay an explicitly declared source from a sibling package or export ZIP.
+
+    An explicit source also supports legacy coordinate_reference sessions. Catalog
+    declarations locate bytes only; strict package loading and link validation
+    precede scoring. No closest/latest baseline or R/D/F substitution is used.
+    """
+    source = Path(source)
+    candidates = catalog_sources(source)
+    selected = [r for r in candidates if session_id is None or r["session_id"] == session_id]
+    if len(selected) != 1:
+        raise ValueError("select exactly one evaluation package with session_id")
+    selected = selected[0]
+    evaluation_source = Path(selected["source"])
+    package = sp.load_package(evaluation_source, selected["session_id"])
+    link, issue = sp.declared_coordinate_reference(package)
+    reference = None
+    if reference_source is not None or link is not None:
+        search = Path(reference_source) if reference_source is not None else (
+            source if not source.is_dir() or not (source / "manifest.json").exists() else source.parent)
+        refs = catalog_sources(search)
+        if reference_source is not None and reference_session_id is not None:
+            refs = [r for r in refs if r["session_id"] == reference_session_id]
+        elif link is not None:
+            refs = [r for r in refs if r["package_id"] == link.get("source_package_id")
+                    and r["session_id"] == link.get("source_session_id")]
+        if len(refs) == 1:
+            reference = sp.load_package(Path(refs[0]["source"]), refs[0]["session_id"])
+        elif reference_source is not None:
+            raise ValueError("select exactly one reference package with reference_session_id")
+        else:
+            issue = "REFERENCE_UNAVAILABLE:declared_source_missing_or_ambiguous"
+    result = sp.analyze(package, reference, config, reference_start_ms, reference_end_ms)
+    if reference is None and issue:
+        result["reference_issue"] = issue
+    result["coordinate_availability"] = (result["fit"]["status"] if result["fit"] else result["reference_issue"])
+    result["rdf_availability"] = dict(Counter(
+        r["payload"].get("score", {}).get("status", "UNAVAILABLE")
+        if isinstance(r["payload"].get("score"), dict) else "UNAVAILABLE"
+        for r in package.records if r["kind"] == "rdf_tick"))
+    return result
 
 
 def cadence_bins(gaze_rows, start_ms, end_ms, bin_seconds=10):

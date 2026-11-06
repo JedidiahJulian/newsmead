@@ -75,6 +75,115 @@ class StudyPackageTest(unittest.TestCase):
         (directory / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         return manifest
 
+    def shared_packages(self):
+        reference = self.package("shared", True)
+        evaluation = self.package("shared-reading")
+        calibration = self.fixture["context"]["calibration_id"]
+        def baseline(manifest, rows):
+            manifest["identity"]["session_id"] = "shared-session"
+            for row in rows:
+                row["session_id"] = "shared-session"
+            rows[0]["payload"].update(phase="reading_baseline", metadata=dict(
+                baseline_protocol=sp.SHARED_BASELINE_PROTOCOL, baseline_attempt_id="attempt",
+                baseline_participant_code=self.identity["participant_id"], calibration_id=calibration,
+                coordinate_reference_declared=True, coordinate_reference_contract=sp.READING_SURFACE_CONTRACT))
+            result = copy.deepcopy(rows[-1])
+            result.update(kind="shared_baseline_result", payload=dict(baseline_attempt_id="attempt", completed=True,
+                coordinate_reference_status=sp.PENDING_OFFLINE_FIT, rdf_status="INSUFFICIENT_REFERENCE",
+                start_ms=0, end_ms=400))
+            rows.insert(-1, result)
+            for seq, row in enumerate(rows):
+                row.update(seq=seq, record_id=f"shared:{seq}")
+        self.mutate(reference, baseline)
+        def reading(manifest, rows):
+            manifest["identity"]["session_id"] = "reading-session"
+            for row in rows:
+                row["session_id"] = "reading-session"
+            rows[0]["payload"]["metadata"] = dict(calibration_id=calibration)
+            link = copy.deepcopy(rows[-1])
+            link.update(kind="coordinate_reference", payload=dict(reference=dict(
+                protocol=sp.SHARED_BASELINE_PROTOCOL, source_package_id="shared", source_session_id="shared-session",
+                baseline_attempt_id="attempt", participant_id=self.identity["participant_id"],
+                installation_id=self.identity["installation_id"], calibration_id=calibration,
+                clock_domain_id=self.identity["clock_domain_id"], start_ms=0, end_ms=400, status=sp.PENDING_OFFLINE_FIT)))
+            rows.insert(1, link)
+            for seq, row in enumerate(rows):
+                row.update(seq=seq, record_id=f"shared-reading:{seq}")
+        self.mutate(evaluation, reading)
+        return reference, evaluation
+
+    def test_shared_completed_rdf_failure_still_fits_coordinate_and_md_zero(self):
+        reference, evaluation = self.shared_packages()
+        got = sp.analyze(sp.load_package(evaluation), sp.load_package(reference), md.Config(min_reference_coverage_ms=0))
+        self.assertEqual(got["fit"]["status"], "READY")
+        self.assertEqual([p["result"]["md2"] for p in got["points"]], [25, 0, 2])
+        self.assertEqual(got["points"][1]["result"]["status"], "AVAILABLE")
+        self.assertEqual(got["summaries"][0]["result"]["mean_md2"], 6.75)
+        self.assertEqual(got["config"]["max_age_ms"], 500)
+        grouped = sp.grouped_tables(sp.load_package(evaluation).records)
+        self.assertEqual(len(grouped["coordinate_references_v1"]), 1)
+
+    def test_shared_context_geometry_acquisition_and_stream_still_require_compatibility(self):
+        reference, evaluation = self.shared_packages()
+        ref, reading = sp.load_package(reference), sp.load_package(evaluation)
+        for field, value in (("presentation_id", "changed-layout"), ("acquisition_id", "changed-gate"),
+                             ("screen_width_px", 777), ("coordinate_stream", md.SELECTED_STREAM)):
+            with self.subTest(field=field):
+                bad = copy.deepcopy(reading)
+                for row in bad.records:
+                    if row["kind"] == "gaze_observation": row["payload"]["coordinate_context"][field] = value
+                got = sp.analyze(bad, ref, md.Config(min_reference_coverage_ms=0))
+                self.assertEqual(got["fit"]["status"], "READY")
+                self.assertTrue(all(p["result"]["status"] == "REFERENCE_MISMATCH" for p in got["points"]))
+                self.assertTrue(all(p["result"]["md"] is None for p in got["points"]))
+
+    def test_analysis_scans_evaluation_boundaries_once_for_multiple_windows(self):
+        reference, evaluation = self.shared_packages()
+        ref, reading = sp.load_package(reference), sp.load_package(evaluation)
+        tick = copy.deepcopy(next(r for r in reading.records if r["kind"] == "rdf_tick"))
+        tick["record_id"] = "second-window"
+        reading.records.append(tick)
+        with patch.object(sp, "boundaries", wraps=sp.boundaries) as scans:
+            got = sp.analyze(reading, ref, md.Config(min_reference_coverage_ms=0))
+        self.assertEqual(sum(call.args[0] is reading for call in scans.call_args_list), 1)
+        self.assertEqual(sum(call.args[0] is ref for call in scans.call_args_list), 1)
+        self.assertEqual([s["result"]["mean_md2"] for s in got["summaries"]], [6.75, 6.75])
+        self.assertEqual([p["result"]["md2"] for p in got["points"]], [25, 0, 2])
+
+    def test_shared_bad_links_and_incomplete_captures_never_score(self):
+        reference_dir, evaluation_dir = self.shared_packages()
+        ref, evaluation = sp.load_package(reference_dir), sp.load_package(evaluation_dir)
+        for field, value in (("source_package_id", "other"), ("source_session_id", "other"),
+                ("baseline_attempt_id", "other"), ("participant_id", "other"), ("installation_id", "other"),
+                ("calibration_id", "other"), ("clock_domain_id", "other"), ("end_ms", 401)):
+            with self.subTest(field=field):
+                bad = copy.deepcopy(evaluation)
+                next(r for r in bad.records if r["kind"] == "coordinate_reference")["payload"]["reference"][field] = value
+                got = sp.analyze(bad, ref, md.Config(min_reference_coverage_ms=0))
+                self.assertTrue(got["reference_issue"].startswith("REFERENCE_MISMATCH"))
+                self.assertTrue(all(p["result"]["md"] is None for p in got["points"]))
+        for case in ("interrupted", "undeclared", "wrong_attempt", "future", "same_session", "missing_link", "calibration_context"):
+            with self.subTest(case=case):
+                bad, reading = copy.deepcopy(ref), copy.deepcopy(evaluation)
+                result = next(r for r in bad.records if r["kind"] == "shared_baseline_result")["payload"]
+                if case == "interrupted": result["completed"] = False
+                elif case == "undeclared": bad.records[0]["payload"]["metadata"]["coordinate_reference_declared"] = False
+                elif case == "wrong_attempt": result["baseline_attempt_id"] = "other"
+                elif case == "future": reading.records[0]["payload"]["start_ms"] = 300
+                elif case == "same_session": reading.manifest["identity"]["session_id"] = "shared-session"
+                elif case == "missing_link": reading.records = [r for r in reading.records if r["kind"] != "coordinate_reference"]
+                elif case == "calibration_context": reading.records[0]["payload"]["metadata"]["calibration_id"] = "other"
+                got = sp.analyze(reading, bad, md.Config(min_reference_coverage_ms=0))
+                self.assertIsNone(got["fit"])
+                self.assertTrue(all(p["result"]["md"] is None for p in got["points"]))
+        legacy = copy.deepcopy(ref)
+        legacy.records[0]["payload"]["phase"] = "rdf_baseline"
+        got = sp.analyze(evaluation, legacy)
+        self.assertIsNone(got["fit"])
+        self.assertIn("not_shared_reading_baseline", got["reference_issue"])
+        with self.assertRaisesRegex(ValueError, "own reference"):
+            sp.analyze(ref, ref)
+
     def test_compressed_directory_zip_import_and_coordinate_reference_are_lossless(self):
         directory = self.package()
         reference = self.package("compressed-reference", True)

@@ -33,6 +33,7 @@ $sources = @(
     (Join-Path $repoRoot 'app/src/main/java/com/newsmead/research/study/StudyPackageWriter.kt'),
     (Join-Path $repoRoot 'app/src/main/java/com/newsmead/research/study/StudyChunkIO.kt'),
     (Join-Path $repoRoot 'app/src/main/java/com/newsmead/research/study/StudyRecordingCatalog.kt'),
+    (Join-Path $repoRoot 'app/src/main/java/com/newsmead/research/study/StudyBaselineProtocol.kt'),
     (Join-Path $repoRoot 'app/src/test/java/com/newsmead/research/study/StudyRecordingCatalogTest.kt'),
     (Join-Path $repoRoot 'app/src/test/java/com/newsmead/research/study/StudyChunkIOTest.kt'),
     (Join-Path $repoRoot 'app/src/test/java/com/newsmead/research/study/StudyPackageWriterTest.kt')

@@ -12,12 +12,17 @@ class StudyRecordingCatalogTest {
     private fun fixture(root: File, id: String, reading: String? = null, phase: String = "reading",
         participant: String = "p", installation: String = "phone", attempt: String? = null,
         reference: String? = null, calibration: String? = "cal", terminal: Boolean = true,
-        oversizedPrefix: Boolean = false): File {
+        oversizedPrefix: Boolean = false, coordinateReference: JSONObject? = null,
+        clockDomain: String = "clock"): File {
         val directory = File(root, id).apply { mkdirs() }
         val metadata = JSONObject().put("article_id", "same-article")
         reading?.let { metadata.put("article_reading_id", it) }
         attempt?.let { metadata.put("baseline_attempt_id", it) }
         calibration?.let { metadata.put("calibration_id", it) }
+        if (phase == "reading_baseline" || coordinateReference != null)
+            metadata.put("coordinate_reference_contract", StudyBaselineProtocol.SURFACE)
+        if (phase == "reading_baseline") metadata.put("baseline_protocol", StudyBaselineProtocol.VERSION)
+            .put("coordinate_reference_declared", true)
         fun row(kind: String, payload: JSONObject) = JSONObject().put("package_id", id).put("session_id", "session-$id")
             .put("kind", kind).put("payload", payload).toString() + "\n"
         var text = row("session_start", JSONObject().put("phase", phase).put("metadata", metadata)
@@ -26,15 +31,56 @@ class StudyRecordingCatalogTest {
         if (phase != "rdf_baseline") text += row("rdf_reference", JSONObject().put("reference", reference?.let {
             JSONObject().put("session_id", it).put("participant_code", participant).put("calibration_fingerprint", calibration)
         } ?: JSONObject.NULL))
+        text += row("coordinate_reference", JSONObject().put("reference", coordinateReference ?: JSONObject.NULL))
         text += row("provider_start", JSONObject().put("calibration_id", calibration ?: JSONObject.NULL))
         if (terminal) text += row("package_end", JSONObject().put("end_elapsed_ms", 350.0))
         val chunk = File(directory, "chunk_00001.jsonl").apply { writeText(text) }
         File(directory, "manifest.json").writeText(JSONObject().put("schema_version", StudyPackageWriter.SCHEMA)
             .put("package_id", id).put("status", "finished").put("content_complete", true)
             .put("identity", JSONObject().put("participant_id", participant).put("installation_id", installation)
-                .put("session_id", "session-$id"))
+                .put("session_id", "session-$id").put("clock_domain_id", clockDomain))
             .put("chunks", JSONArray().put(JSONObject().put("file", chunk.name).put("byte_count", chunk.length()))).toString())
         return directory
+    }
+
+    private fun coordinateLink() = JSONObject().put("protocol", StudyBaselineProtocol.VERSION)
+        .put("source_package_id", "joint").put("source_session_id", "session-joint")
+        .put("baseline_attempt_id", "attempt").put("participant_id", "p")
+        .put("installation_id", "phone").put("calibration_id", "cal").put("clock_domain_id", "clock")
+
+    @Test fun jointSourceIsIncludedWithoutAnRdfProfileAndBothDependenciesDeduplicate() {
+        val root = root()
+        fixture(root, "joint", phase = "reading_baseline", attempt = "attempt")
+        fixture(root, "a", "visit-a", coordinateReference = coordinateLink())
+        fixture(root, "b", "visit-b", reference = "attempt", coordinateReference = coordinateLink())
+        val catalog = StudyRecordingCatalog.load(root)
+        assertTrue(catalog.warnings.toString(), catalog.warnings.isEmpty())
+        assertFalse(catalog.recordings.single { it.first.phase == "reading_baseline" }.legacy)
+        val articles = catalog.recordings.filter { it.first.phase == "reading" }.map { it.id }.toSet()
+        val selection = StudyRecordingCatalog.select(catalog, articles)
+        assertEquals(setOf("a", "b", "joint"), selection.packageIds)
+        assertEquals(setOf("joint"), selection.includedReferenceIds)
+        assertTrue(selection.warnings.toString(), selection.warnings.isEmpty())
+    }
+
+    @Test fun coordinateSourceMustMatchExactPackageSessionAttemptAndClock() {
+        for (field in listOf("source_package_id", "source_session_id", "baseline_attempt_id", "participant_id",
+            "installation_id", "calibration_id", "clock_domain_id")) {
+            val root = root()
+            fixture(root, "joint", phase = "reading_baseline", attempt = "attempt")
+            fixture(root, "article", "visit", coordinateReference = coordinateLink().put(field, "other"))
+            val catalog = StudyRecordingCatalog.load(root)
+            val selected = StudyRecordingCatalog.select(catalog, setOf(catalog.recordings.single { it.first.phase == "reading" }.id))
+            assertEquals(field, setOf("article"), selected.packageIds)
+            assertTrue(field, selected.includedReferenceIds.isEmpty())
+            assertTrue(field, selected.warnings.single().contains("source coordinate baseline"))
+        }
+        val root = root()
+        fixture(root, "joint", phase = "rdf_baseline", attempt = "attempt")
+        fixture(root, "article", "visit", coordinateReference = coordinateLink())
+        val catalog = StudyRecordingCatalog.load(root)
+        assertEquals(setOf("article"), StudyRecordingCatalog.select(catalog,
+            setOf(catalog.recordings.single { it.first.phase == "reading" }.id)).packageIds)
     }
 
     @Test fun logicalReadingsGroupSegmentsButReopenedSameContentAndLegacyStaySeparate() {

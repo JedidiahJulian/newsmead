@@ -12,6 +12,35 @@ protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
 
+**2026-11-06 shared baseline implemented; live rehearsal pending:**
+Home Reading baseline now opens the existing passage in the actual ArticleFragment
+layout through SharedBaselineReader. Explicit Start only: no normal article
+network/usage/aid/dot/TTS path. The existing R/D/F collector fits on Finish;
+raw-coordinate reference is independently recorded as RECORDED_PENDING_OFFLINE_FIT.
+New phase reading_baseline declares shared_reading_baseline_v1 and a completed
+result; interruptions cannot activate a source. Later compatible readings retain
+exact independent source links; selected export includes the coordinate source
+even when R/D/F failed, without duplicating a shared dependency. New structural
+article_reading_surface_v1 identity retains fixed viewport/font/geometry checks;
+full actual clipping/color/aid metadata and all boundaries remain recorded.
+Shared baseline/linked article provider age is650ms, coordinate analysis remains
+500ms. Legacy settings/packages are preserved; no MD formula/gate changed.
+Strict importer1.3 and notebook1.1 resolve/freeze the declared source offline and
+retain point/window statuses, nulls/zero, both availabilities and provenance.
+Source review found missing evaluation calibration metadata; fixed through the
+tested segment metadata builder. Follow-up review has no actionable findings.
+Debug + test APKs build;39focused JVM tests and56Python tests pass. Writer/catalog
+host suite25passes; actual Kotlin writer/producer metadata→Python synthetic65s
+reference fitsREADY with MD2≈0/2/4 and mean≈2 despite unavailableRDF. Updated
+notebook executes22sourcecells+QA on legacy recordings without errors; absent
+coordinate reference stays unavailable/null. Boundary scans are cached once per
+analysis with unchanged-result regression. No device install/camera/new capture.
+Evidence `output/shared-baseline-2026-11-06/`;
+[workflow and contract](shared-reading-baseline-v1.md). Next: checkpoint source,
+then separately authorized phone update and fresh shared baseline→later article→
+verified export/EDA. Live layout, performance and real coordinate fitting remain
+unverified. Unrelated local framework/scope edits and private artifacts excluded.
+
 **2026-11-06 groupmate fixes integrated; shared baseline is the next task:**
 Checkpoint `71831c7` was already committed and pushed by the user. Merged
 `origin/feature/scanpath-mahalanobis-score` through `44d27fa`: configurable

@@ -20,7 +20,7 @@ import zipfile
 import coordinate_mahalanobis as md
 
 SCHEMA = "newsmead_study_v1"
-VERSION = "newsmead_study_import_v1.2"
+VERSION = "newsmead_study_import_v1.3"
 IDENTITY = ("study_id", "participant_id", "installation_id", "run_id", "session_id", "clock_domain_id")
 MAX_BYTES = 512 * 1024 * 1024
 MAX_MEMBERS = 10000
@@ -376,6 +376,91 @@ def boundaries(package):
             for r in package.records if r["kind"] == "boundary"]
 
 
+SHARED_BASELINE_PROTOCOL = "shared_reading_baseline_v1"
+READING_SURFACE_CONTRACT = "article_reading_surface_v1"
+PENDING_OFFLINE_FIT = "RECORDED_PENDING_OFFLINE_FIT"
+
+
+def declared_coordinate_reference(package):
+    """Return exactly one recorded link; never infer it from an R/D/F profile."""
+    rows = [r["payload"] for r in package.records if r["kind"] == "coordinate_reference"]
+    if not rows:
+        return None, "REFERENCE_UNAVAILABLE:no_declared_coordinate_reference"
+    if len(rows) != 1 or "reference" not in rows[0]:
+        return None, "REFERENCE_MISMATCH:ambiguous_coordinate_reference"
+    link = rows[0]["reference"]
+    if link is None:
+        return None, "REFERENCE_UNAVAILABLE:no_frozen_coordinate_reference"
+    if not isinstance(link, dict):
+        return None, "REFERENCE_MISMATCH:invalid_coordinate_reference"
+    return link, None
+
+
+def shared_baseline_period(reference):
+    """Validate the explicit completed joint capture independently of R/D/F fit."""
+    starts = [r["payload"] for r in reference.records if r["kind"] == "session_start"]
+    ends = [r["payload"] for r in reference.records if r["kind"] == "session_end"]
+    results = [r["payload"] for r in reference.records if r["kind"] == "shared_baseline_result"]
+    if len(starts) != 1 or starts[0].get("phase") != "reading_baseline":
+        return None, "REFERENCE_UNAVAILABLE:not_shared_reading_baseline"
+    meta = starts[0].get("metadata", {})
+    identity = reference.manifest["identity"]
+    if (meta.get("baseline_protocol") != SHARED_BASELINE_PROTOCOL
+            or meta.get("coordinate_reference_declared") is not True
+            or meta.get("coordinate_reference_contract") != READING_SURFACE_CONTRACT
+            or not isinstance(meta.get("baseline_attempt_id"), str) or not meta["baseline_attempt_id"].strip()
+            or not isinstance(meta.get("calibration_id"), str) or not meta["calibration_id"].strip()
+            or meta.get("baseline_participant_code") != identity["participant_id"]):
+        return None, "REFERENCE_MISMATCH:shared_baseline_declaration"
+    if len(ends) != 1 or len(results) != 1 or results[0].get("completed") is not True:
+        return None, "REFERENCE_UNAVAILABLE:shared_baseline_not_completed"
+    result = results[0]
+    if (result.get("baseline_attempt_id") != meta["baseline_attempt_id"]
+            or result.get("coordinate_reference_status") != PENDING_OFFLINE_FIT):
+        return None, "REFERENCE_MISMATCH:shared_baseline_result"
+    start, end = result.get("start_ms"), result.get("end_ms")
+    if not finite(start) or not finite(end) or not 0 <= start < end:
+        return None, "REFERENCE_MISMATCH:shared_baseline_bounds"
+    if not (finite(starts[0].get("start_ms")) and finite(ends[0].get("end_ms"))
+            and starts[0]["start_ms"] <= start < end <= ends[0]["end_ms"]):
+        return None, "REFERENCE_MISMATCH:shared_baseline_bounds"
+    return dict(start_ms=start, end_ms=end, baseline_attempt_id=meta["baseline_attempt_id"],
+                calibration_id=meta["calibration_id"]), None
+
+
+def shared_reference_link_issue(package, reference):
+    link, issue = declared_coordinate_reference(package)
+    if issue:
+        return issue
+    period, issue = shared_baseline_period(reference)
+    if issue:
+        return issue
+    identity = reference.manifest["identity"]
+    own = package.manifest["identity"]
+    expected = dict(protocol=SHARED_BASELINE_PROTOCOL, source_package_id=reference.manifest["package_id"],
+        source_session_id=identity["session_id"], baseline_attempt_id=period["baseline_attempt_id"],
+        participant_id=identity["participant_id"], installation_id=identity["installation_id"],
+        calibration_id=period["calibration_id"], clock_domain_id=identity["clock_domain_id"],
+        start_ms=period["start_ms"], end_ms=period["end_ms"], status=PENDING_OFFLINE_FIT)
+    if any(link.get(k) != v or (k in ("start_ms", "end_ms") and not finite(link.get(k)))
+           for k, v in expected.items()):
+        return "REFERENCE_MISMATCH:declared_source_link"
+    if own["session_id"] == identity["session_id"]:
+        return "REFERENCE_MISMATCH:self_reference_session"
+    if any(own[k] != identity[k] for k in ("participant_id", "installation_id", "clock_domain_id")):
+        return "REFERENCE_MISMATCH:evaluation_identity"
+    starts = [r["payload"] for r in package.records if r["kind"] == "session_start"]
+    if (len(starts) != 1 or starts[0].get("metadata", {}).get("calibration_id") != period["calibration_id"]):
+        return "REFERENCE_MISMATCH:evaluation_calibration"
+    if not finite(starts[0].get("start_ms")) or starts[0]["start_ms"] <= period["end_ms"]:
+        return "REFERENCE_MISMATCH:reference_not_earlier"
+    for source in (reference, package):
+        for row, observation in observations(source):
+            if observation is not None and observation.context.calibration_id != period["calibration_id"]:
+                return "REFERENCE_MISMATCH:declared_calibration_context"
+    return None
+
+
 def reference_fit(reference, config, reference_start_ms=None, reference_end_ms=None):
     if (reference_start_ms is None) != (reference_end_ms is None):
         raise ValueError("reference start/end overrides must be supplied together")
@@ -383,12 +468,18 @@ def reference_fit(reference, config, reference_start_ms=None, reference_end_ms=N
         md._bounds(reference_start_ms, reference_end_ms)
     starts = [r for r in reference.records if r["kind"] == "session_start"]
     ends = [r for r in reference.records if r["kind"] == "session_end"]
-    if len(starts) != 1 or starts[0]["payload"].get("phase") != "coordinate_reference":
-        raise ValueError("reference requires one explicit coordinate_reference session")
+    if len(starts) != 1 or starts[0]["payload"].get("phase") not in ("coordinate_reference", "reading_baseline"):
+        raise ValueError("reference requires one explicit coordinate_reference or reading_baseline session")
+    shared = starts[0]["payload"].get("phase") == "reading_baseline"
+    period, issue = shared_baseline_period(reference) if shared else (None, None)
+    if issue:
+        return None, issue
     if len(ends) != 1:
         return None, "REFERENCE_UNAVAILABLE:missing_explicit_session_end"
     start = starts[0]["payload"]["start_ms"]
     end = ends[0]["payload"]["end_ms"]
+    if shared:
+        start, end = period["start_ms"], period["end_ms"]
     md._bounds(start, end)
     if reference_start_ms is not None:
         if reference_start_ms < start or reference_end_ms > end:
@@ -422,10 +513,20 @@ def analyze(package, reference=None, config=None, reference_start_ms=None, refer
     if reference_start_ms is not None and reference is None:
         raise ValueError("reference bounds require a separate reference package")
     config = config or md.Config()
+    # Snapshot once: each native window/context uses the same recorded boundaries.
+    evaluation_boundaries = tuple(boundaries(package))
     if reference and reference.manifest["package_id"] == package.manifest["package_id"]:
         raise ValueError("evaluation package cannot be its own reference")
-    fit, reference_issue = (reference_fit(reference, config, reference_start_ms, reference_end_ms)
-                            if reference else (None, "REFERENCE_UNAVAILABLE:no_reference_selected"))
+    link, _ = declared_coordinate_reference(package)
+    shared_source = reference and any(r["kind"] == "session_start" and r["payload"].get("phase") == "reading_baseline"
+                                      for r in reference.records)
+    shared_link = link is not None and link.get("protocol") == SHARED_BASELINE_PROTOCOL
+    issue = shared_reference_link_issue(package, reference) if reference and (shared_source or shared_link) else None
+    if issue:
+        fit, reference_issue = None, issue
+    else:
+        fit, reference_issue = (reference_fit(reference, config, reference_start_ms, reference_end_ms)
+                                if reference else (None, "REFERENCE_UNAVAILABLE:no_reference_selected"))
     profile = fit.profile if fit else None
     source = observations(package)
     all_observations = [o for _, o in source if o is not None]
@@ -467,7 +568,7 @@ def analyze(package, reference=None, config=None, reference_start_ms=None, refer
         def add_run():
             placed = [o.capture_ms for o in run if finite(o.capture_ms) and o.capture_ms >= 0]
             if len(placed) > 1 and max(placed) > min(placed):
-                cuts = sorted({min(placed), max(placed)} | {b.at_ms for b in boundaries(package)
+                cuts = sorted({min(placed), max(placed)} | {b.at_ms for b in evaluation_boundaries
                               if min(placed) < b.at_ms < max(placed)})
                 for start, end in zip(cuts, cuts[1:]):
                     windows.append((f"epoch:{len(windows)}", "stationary_observed_bounds", start, end, list(run)))
@@ -492,7 +593,7 @@ def analyze(package, reference=None, config=None, reference_start_ms=None, refer
                 "adapter_missing_context_records": [r["record_id"] for r in missing_context]})
         for context in window_contexts:
             summary = md.json_value(md.summarize(profile, context, obs, start, end,
-                                                 boundaries(package), package.losses, config))
+                                                 evaluation_boundaries, package.losses, config))
             missing = []
             for row in missing_context:
                 p = row["payload"]
@@ -512,6 +613,9 @@ def analyze(package, reference=None, config=None, reference_start_ms=None, refer
     return {"analysis_version": md.VERSION, "fit": md.json_value(fit), "points": points,
             "summaries": summaries, "config": md.json_value(config), "reference_issue": reference_issue,
             "reference_source_package_id": reference.manifest["package_id"] if reference else None,
+            "reference_source_manifest_sha256": reference.manifest_sha256 if reference else None,
+            "reference_source_identity": reference.manifest["identity"] if reference else None,
+            "coordinate_reference_declaration": declared_coordinate_reference(package)[0],
             "reference_bounds_override": ({"start_ms": reference_start_ms, "end_ms": reference_end_ms,
                 "selection": "explicit_caller_bounds_no_automatic_selection"} if reference_start_ms is not None else None)}
 
@@ -521,6 +625,7 @@ GROUPED_KINDS = {
     "gaze_observations_v1": {"gaze_observation"},
     "rdf_windows_v1": {"rdf_tick", "rdf_baseline_window"},
     "rdf_references_v1": {"rdf_reference", "rdf_baseline_fit"},
+    "coordinate_references_v1": {"coordinate_reference", "shared_baseline_result"},
     "scanpath_v1": {"scanpath_input", "scanpath_acceptance", "scanpath_output", "scanpath_layout"},
     "aid_evidence_v1": {"support_revision", "aid_evaluation"},
     "aid_events_v1": {"aid_decision", "aid_presentation"},

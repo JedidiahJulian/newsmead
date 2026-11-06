@@ -67,6 +67,39 @@ class NotebookTest(unittest.TestCase):
         (directory/"manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         return directory
 
+    def test_shared_reference_directory_zip_explicit_and_missing_routes(self):
+        import test_study_package as fixtures
+        f = fixtures.StudyPackageTest("runTest")
+        f.setUp()
+        self.addCleanup(f.tearDown)
+        reference, evaluation = f.shared_packages()
+        config = sp.md.Config(min_reference_coverage_ms=0)
+        for source, session in ((evaluation, None), (f.root, "reading-session")):
+            got = sn.coordinate_analysis(source, session, config=config)
+            self.assertEqual(got["coordinate_availability"], "READY")
+            self.assertEqual(got["points"][1]["result"]["md"], 0)
+            self.assertEqual(got["rdf_availability"], {"UNAVAILABLE": 1})
+        archive = f.root / "export.zip"
+        with zipfile.ZipFile(archive, "w") as handle:
+            for directory in (reference, evaluation):
+                for path in directory.iterdir(): handle.write(path, directory.name + "/" + path.name)
+        got = sn.coordinate_analysis(archive, "reading-session", config=config)
+        self.assertEqual(got["coordinate_availability"], "READY")
+        got = sn.coordinate_analysis(evaluation, reference_source=reference, config=config)
+        self.assertEqual(got["fit"]["status"], "READY")
+        compact = sn.load_recording(evaluation)
+        link = compact.tables["references"][0]
+        self.assertEqual(link["kind"], "coordinate_reference")
+        self.assertEqual(link["reference_baseline_attempt_id"], "attempt")
+        baseline = sn.load_recording(reference)
+        self.assertTrue(baseline.tables["references"][0]["completed"])
+        # Keep evaluation untouched and hide the sibling from catalog discovery.
+        original = sn.catalog_sources
+        with patch.object(sn, "catalog_sources", side_effect=lambda source: [r for r in original(source) if r["package_id"] != "shared"]):
+            missing = sn.coordinate_analysis(evaluation, config=config)
+        self.assertIn("declared_source_missing", missing["reference_issue"])
+        self.assertTrue(all(p["result"]["md"] is None for p in missing["points"]))
+
     def test_legacy_gzip_strict_load_once_and_compact_native_values(self):
         for compressed in (False, True):
             with self.subTest(compressed=compressed):

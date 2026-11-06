@@ -9,21 +9,26 @@ import java.security.MessageDigest
 /** Bounded metadata reader. Never loads a gaze stream or treats display metadata as a path. */
 object StudyRecordingCatalog {
     data class Reference(val attempt: String, val participant: String?, val calibration: String?)
+    data class CoordinateReference(val packageId: String, val session: String, val attempt: String,
+        val participant: String, val installation: String, val calibration: String, val clockDomain: String)
     data class Package(val id: String, val session: String, val participant: String, val installation: String,
         val phase: String, val readingId: String?, val articleId: String?, val startedUtcMs: Long?,
         val durationMs: Double?, val bytes: Long, val status: String, val baselineAttempt: String?,
-        val calibration: String?, val reference: Reference?, val referenceKnown: Boolean)
+        val calibration: String?, val reference: Reference?, val referenceKnown: Boolean,
+        val coordinateReference: CoordinateReference? = null, val coordinateReferenceKnown: Boolean = false,
+        val clockDomain: String? = null, val baselineProtocol: String? = null, val sharedSurface: Boolean = false)
     data class Recording(val id: String, val packages: List<Package>) {
         val first get() = packages.first()
         val bytes get() = packages.sumOf { it.bytes }
         val startedUtcMs get() = packages.mapNotNull { it.startedUtcMs }.minOrNull()
         val durationMs get() = if (packages.all { it.durationMs != null }) packages.sumOf { it.durationMs!! } else null
-        val legacy get() = first.readingId == null && first.phase != "rdf_baseline"
+        val legacy get() = first.readingId == null && first.phase !in baselinePhases
     }
     data class Catalog(val recordings: List<Recording>, val warnings: List<String>)
     data class Selection(val packageIds: Set<String>, val includedReferenceIds: Set<String>, val warnings: List<String>)
     private val safeName = Regex("[A-Za-z0-9_-]+")
     private val safeFile = Regex("[A-Za-z0-9_.-]+")
+    private val baselinePhases = setOf("rdf_baseline", "reading_baseline")
 
     fun directory(root: File, id: String): File {
         require(safeName.matches(id)) { "Unsafe package ID" }
@@ -54,7 +59,7 @@ object StudyRecordingCatalog {
         val groups = packages.groupBy { p ->
             // Length-independent JSON tuple encoding prevents delimiter collisions in metadata identities.
             listOf(p.participant, p.installation, p.phase,
-                if (p.phase == "rdf_baseline") "baseline:${p.id}" else p.readingId?.let { "reading:$it" } ?: "legacy:${p.session}")
+                if (p.phase in baselinePhases) "baseline:${p.id}" else p.readingId?.let { "reading:$it" } ?: "legacy:${p.session}")
         }.map { (key, values) -> Recording(hash(org.json.JSONArray(key).toString()), values.sortedBy { it.startedUtcMs ?: Long.MAX_VALUE }) }
             .sortedByDescending { it.startedUtcMs ?: Long.MIN_VALUE }
         return Catalog(groups, warnings)
@@ -66,14 +71,27 @@ object StudyRecordingCatalog {
         val selected = catalog.recordings.filter { it.id in recordingIds }.flatMap { it.packages }
         val all = catalog.recordings.flatMap { it.packages }
         val ids = selected.map { it.id }.toMutableSet(); val included = mutableSetOf<String>(); val warnings = mutableSetOf<String>()
-        selected.filter { it.phase != "rdf_baseline" }.forEach { article ->
+        selected.filter { it.phase !in baselinePhases }.forEach { article ->
             if (!article.referenceKnown) warnings.add("${article.session}: baseline linkage unavailable in bounded startup metadata; original records are retained.")
             article.reference?.let { ref ->
-                val matches = all.filter { baseline -> baseline.phase == "rdf_baseline" && baseline.baselineAttempt == ref.attempt &&
+                val matches = all.filter { baseline -> baseline.phase in baselinePhases && baseline.baselineAttempt == ref.attempt &&
                     baseline.participant == article.participant && baseline.installation == article.installation &&
                     ref.participant == article.participant && article.calibration != null &&
                     ref.calibration == article.calibration && baseline.calibration == article.calibration }
                 if (matches.isEmpty()) warnings.add("${article.session}: source R/D/F baseline ${ref.attempt} is missing or participant/calibration compatibility is unknown or mismatched; the article's frozen rdf_reference remains intact.")
+                matches.forEach { baseline -> if (baseline.id !in ids) { ids.add(baseline.id); included.add(baseline.id) } }
+            }
+            if (article.sharedSurface && !article.coordinateReferenceKnown)
+                warnings.add("${article.session}: coordinate baseline linkage unavailable in bounded startup metadata.")
+            article.coordinateReference?.let { ref ->
+                val matches = all.filter { baseline -> baseline.phase == "reading_baseline" &&
+                    baseline.baselineProtocol == StudyBaselineProtocol.VERSION &&
+                    baseline.id == ref.packageId && baseline.session == ref.session && baseline.baselineAttempt == ref.attempt &&
+                    baseline.participant == article.participant && ref.participant == article.participant &&
+                    baseline.installation == article.installation && ref.installation == article.installation &&
+                    article.calibration != null && ref.calibration == article.calibration && baseline.calibration == article.calibration &&
+                    article.clockDomain != null && ref.clockDomain == article.clockDomain && baseline.clockDomain == article.clockDomain }
+                if (matches.isEmpty()) warnings.add("${article.session}: declared source coordinate baseline ${ref.packageId} is missing or incompatible; coordinate fitting remains unavailable.")
                 matches.forEach { baseline -> if (baseline.id !in ids) { ids.add(baseline.id); included.add(baseline.id) } }
             }
         }
@@ -99,6 +117,7 @@ object StudyRecordingCatalog {
             files.add(input to chunk); bytes = Math.addExact(bytes, input.length())
         }
         var start: JSONObject? = null; var reference: Reference? = null; var known = false; var calibration: String? = null
+        var coordinate: CoordinateReference? = null; var coordinateKnown = false
         readPrefix(files) { row ->
             require(row.getString("package_id") == directory.name && row.getString("session_id") == session) { "Record identity mismatch" }
             val payload = row.getJSONObject("payload")
@@ -109,6 +128,16 @@ object StudyRecordingCatalog {
                     known = true
                     if (!payload.isNull("reference")) payload.getJSONObject("reference").let { ref ->
                         reference = Reference(requireNotNull(string(ref, "session_id")), string(ref, "participant_code"), string(ref, "calibration_fingerprint"))
+                    }
+                }
+                "coordinate_reference" -> {
+                    require(payload.has("reference")) { "Missing coordinate reference field" }
+                    coordinateKnown = true
+                    if (!payload.isNull("reference")) payload.getJSONObject("reference").let { ref ->
+                        require(ref.getString("protocol") == StudyBaselineProtocol.VERSION)
+                        coordinate = CoordinateReference(ref.getString("source_package_id"), ref.getString("source_session_id"),
+                            ref.getString("baseline_attempt_id"), ref.getString("participant_id"), ref.getString("installation_id"),
+                            ref.getString("calibration_id"), ref.getString("clock_domain_id"))
                     }
                 }
                 "provider_start" -> { calibration = string(payload, "calibration_id"); return@readPrefix false }
@@ -123,8 +152,9 @@ object StudyRecordingCatalog {
             string(metadata, "article_id")?.takeUnless { it == "0" }, start?.opt("started_utc_ms")?.let { (it as? Number)?.toLong() },
             if (begin != null && end != null && end >= begin) end - begin else null, bytes,
             manifest.optString("status", "unavailable") + if (!manifest.optBoolean("content_complete")) " / incomplete" else "",
-            string(metadata, "baseline_attempt_id"), if (phase == "rdf_baseline") string(metadata, "calibration_id") else calibration,
-            reference, known)
+            string(metadata, "baseline_attempt_id"), if (phase in baselinePhases) string(metadata, "calibration_id") else calibration,
+            reference, known, coordinate, coordinateKnown, string(identity, "clock_domain_id"),
+            string(metadata, "baseline_protocol"), string(metadata, "coordinate_reference_contract") == StudyBaselineProtocol.SURFACE)
     }
 
     private fun readPrefix(files: List<Pair<File, JSONObject>>, visit: (JSONObject) -> Boolean) {
