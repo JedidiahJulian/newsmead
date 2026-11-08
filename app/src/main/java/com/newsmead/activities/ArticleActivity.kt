@@ -37,6 +37,8 @@ class ArticleActivity : AppCompatActivity() {
         // Create bundle to pass article parcelable to article fragment
         val bundle = Bundle()
         bundle.putParcelable("article", article)
+        bundle.putBoolean(com.newsmead.gaze.SharedReadingBaseline.ARGUMENT,
+            intent.getBooleanExtra(com.newsmead.gaze.SharedReadingBaseline.ARGUMENT, false))
 
         Log.d("ArticleActivity", "onCreate: Bundle Contents: $bundle")
 

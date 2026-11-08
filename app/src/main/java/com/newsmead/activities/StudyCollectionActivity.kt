@@ -8,6 +8,7 @@ import android.widget.ArrayAdapter
 import android.widget.TextView
 import android.widget.ScrollView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.newsmead.research.study.StudyCollection
@@ -34,8 +35,39 @@ class StudyCollectionActivity : AppCompatActivity() {
         button("Back") { finish() }
         root.addView(TextView(this).apply { text = "Local study recording"; textSize = 22f })
         root.addView(TextView(this).apply {
-            text = "For researcher-supervised testing. Numerical gaze and rendered article text stay on this phone until explicit transfer. Start a Reading run, collect the shared Reading baseline, then open an article. The baseline supplies R/D/F and a raw-coordinate reference for offline fitting. The condition label does not change aid settings. Neither distance controls assistance."
+            text = "Researcher controls. Use a participant code, not a name. Start a Reading run, collect the person's Reading baseline, then open the assigned article. Records stay on this phone until you transfer them."
         })
+        button("Session instructions") {
+            AlertDialog.Builder(this).setTitle("Researcher session instructions")
+                .setMessage("""
+                    1. Consent and screening
+                    Complete the approved consent and screening procedure before camera use. Interview audio is optional and needs separate agreement. Keep signed forms separate from coded gaze records.
+
+                    2. Calibrate this person
+                    Home → Calibrate eye tracker. Complete and save a fresh calibration for each new person. A saved calibration from the previous person is not suitable. The current app uses 13 targets and six checks, not the old colour-band instructions. Record its actual PASS/RETRY result and follow the approved retry procedure; PASS does not establish word/line accuracy.
+
+                    3. Start the recording run
+                    Enter the participant code and assigned condition label. Choose Reading and tap Start run. This prepares collection; opening this screen does not start the camera. A condition label is only a label.
+
+                    4. Collect the reading baseline
+                    Home → Reading baseline → Start. Ask the reader to read normally and scroll as needed. Use the displayed covered time and valid-window count; this is not an automatic 20-second warm-up. Tap Finish, then check the result. R/D/F describes the behaviour reference. The coordinate reference is recorded here and checked after transfer.
+
+                    5. Read the assigned article
+                    Open Reading aids in the article and set its main switch ON or OFF for the assigned condition before asking the participant to begin. Check this for every article. Keep font size, orientation and other settings consistent. Record when the participant begins/finishes; an article visit also includes setup time.
+
+                    6. Between readings
+                    Leave the article, administer its prepared comprehension questions and allow the planned break. To change the condition label, Stop run, enter the next label and Start run with the same participant. Keep the app process open; after an app restart, collect a new reading baseline.
+
+                    7. Finish the session
+                    Leave the article and tap Stop run. Follow the approved order: usability survey, interview, then debriefing. Record whether permission to use the data is maintained after debriefing. Honour pauses and withdrawal.
+
+                    8. Save and transfer
+                    Refresh saved recordings. Select this participant's readings and transfer selected recordings; available linked baselines are included. Retain originals until the received copy is verified. Stopping a run stops study records, not the article camera setting.
+
+                    Use the approved participant-facing scripts. Do not describe MD as controlling the aids or an unavailable reference as ready.
+                """.trimIndent())
+                .setPositiveButton("Close", null).show()
+        }
         val participant = EditText(this).apply { hint = "Participant code"; setSingleLine(); setText(StudyCollection.run?.participant ?: "") }
         val condition = EditText(this).apply { hint = "Condition label"; setSingleLine(); setText(StudyCollection.run?.condition ?: "pilot") }
         val phase = Spinner(this).apply { adapter = ArrayAdapter(this@StudyCollectionActivity,

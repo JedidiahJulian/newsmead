@@ -94,7 +94,7 @@ class HomeFragment : Fragment(), clickListener {
             startActivity(Intent(requireContext(), GazeCalibrationActivity::class.java))
         }
         viewBinding.btnReadingBaseline.setOnClickListener {
-            Navigation.findNavController(requireView()).navigate(R.id.articleFragment,
+            Navigation.findNavController(requireView()).navigate(R.id.action_homeFragment_to_articleActivityStart,
                 com.newsmead.research.study.SharedBaselineReader.arguments())
         }
         viewBinding.btnStudyCollection.setOnClickListener {

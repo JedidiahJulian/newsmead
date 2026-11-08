@@ -59,7 +59,7 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
     private var validVectors = 0
     private var dialog: AlertDialog? = null
     private lateinit var progress: TextView
-    private var lastResult = "Start study recording, then press Start to collect an unassisted reading baseline."
+    private var lastResult = "Researcher: start a Reading run in Study recording before using Start on this screen."
     private val preDraw = ViewTreeObserver.OnPreDrawListener {
         if (running) {
             visit?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to false), binding.nsvArticleText)
@@ -78,6 +78,7 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
     }
 
     fun bind() {
+        SharedStudyToolbar.holdExpanded(binding)
         binding.tvArticleHeadline.text = "Reading baseline"
         binding.tvSource.text = "NewsMead"
         binding.tvCategory.text = "Unassisted reading"
@@ -117,9 +118,7 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
         binding.btnRunGazeTest.setOnClickListener { instructions() }
         binding.root.viewTreeObserver.addOnPreDrawListener(preDraw)
         binding.root.doOnPreDraw {
-            binding.articleHeaderAppBar.setExpanded(false, false)
-            binding.root.doOnPreDraw { binding.nsvArticleText.scrollTo(0, binding.tvArticleText.top) }
-            binding.root.invalidate()
+            binding.nsvArticleText.scrollTo(0, binding.tvArticleText.top)
         }
     }
 
@@ -128,9 +127,9 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
         var startRequested = false
         val run = StudyCollection.run
         val ready = run != null && run.phase == "reading"
-        dialog = AlertDialog.Builder(context).setTitle("Shared reading baseline")
-            .setMessage(if (ready) "Participant: ${run!!.participant}\n\nRead the passage naturally and scroll by hand. Visual aids and the gaze dot are off. Press Finish when ready. R/D/F needs ${config.minimumRetainedWindows} valid windows and ${config.minimumBaselineDurationMs / 1000} seconds of covered reading after warm-up. The raw-coordinate reference is saved for separate fitting after export.\n\n$lastResult"
-                else "Start a Reading run in Study recording before collecting this baseline.")
+        dialog = AlertDialog.Builder(context).setTitle("Before baseline reading")
+            .setMessage(if (ready) "For the reader:\nPlease read this passage as you normally would and scroll when needed. You may ask for a break or stop at any time.\n\nFor the researcher:\nParticipant code: ${run!!.participant}\nUse this person's saved calibration. This is a separate setup reading with visual aids off. Wait for at least ${config.minimumBaselineDurationMs / 1000} seconds covered and ${config.minimumRetainedWindows} valid windows, then tap Finish and check the result.\n\nR/D/F is the behaviour reference. The coordinate reference is recorded now and fitted after transfer; recording it does not mean that fit is ready.\n\n$lastResult"
+                else "Start a Reading run in Study recording first. Enter the participant code and condition, choose Reading, and tap Start run. Then return here and use Start.")
             .setNegativeButton(android.R.string.cancel, null)
             .apply { if (ready) setPositiveButton("Start") { _, _ -> startRequested = true } }
             .create().also { d ->
@@ -260,8 +259,10 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
                     "rdf_status" to (fit?.status?.name ?: "INTERRUPTED"), "start_ms" to recording.startMs, "end_ms" to end), StudyVisit.now())
                 if (valid) SharedReadingBaseline.recorded(SharedReadingBaseline.Entry(recording.packageId, recording.id,
                     attemptId, person, recording.run.installation, fingerprint, recording.run.clockDomain, recording.startMs, end))
-                lastResult = if (valid) "R/D/F: ${fit!!.status}. Coordinate reference: recorded; fitting pending after export."
-                    else "Baseline interrupted; start a new attempt."
+                lastResult = if (valid) {
+                    "Baseline recording saved. Behaviour reference (R/D/F): ${fit!!.status}. Coordinate reference: recorded, to be checked after transfer. " +
+                        if (rdfReady) "Return Home and open the assigned article when ready." else "R/D/F is not ready. Check the setup before another baseline attempt."
+                } else "Baseline interrupted. Check the setup and use Start for a new attempt."
             } finally {
                 recording.endResult(); provider = null; visit = null; stopping = false
                 if (!closed) {

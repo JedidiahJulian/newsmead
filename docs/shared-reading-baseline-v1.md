@@ -14,6 +14,20 @@ Opening the screen starts no camera, ordinary article logging, network requests,
 aid runtime, gaze dot or TTS. It uses the saved/locked article font settings and
 scrolls the passage into the normal reading viewport.
 
+The shared baseline and later article views with a matching active participant/
+calibration source hold the toolbar expanded, so hand scrolling does not collapse
+and expand the scroll-container viewport. Ordinary unlinked article views keep
+their existing collapsing toolbar. The actual viewport is still measured; font,
+reflow and aid-dock changes retain their boundaries and compatibility checks.
+Once applied, the expanded-toolbar policy lasts for that view's lifetime, even
+if its reference later becomes unavailable; a newly opened unlinked view uses
+the ordinary toolbar policy. Deferred starts wait for layout, coalesce competing
+requests, recheck live-camera prerequisites and are cancelled on pause/destruction.
+
+Participant-facing ordinary articles currently hide the diagnostic gaze dot
+(`GAZE_DEBUG_VISUALS=false`); raw observations and aid processing still run.
+Explicit visible-feedback validation retains its own dot and protocol.
+
 Press **Start**, dismiss the instructions and read naturally, scrolling by hand.
 The existing R/D/F pipeline/collector receive the selected smoothed stream;
 original provider observations are saved before mapping/exclusions, including
@@ -34,6 +48,11 @@ These outcomes remain independent:
 
 Continue into later articles in the same process with the same participant and
 compatible calibration/settings. A source link can carry across those readings.
+Before testing a new person, the researcher must complete and save that person's
+calibration. The saved tracker calibration is device/screen compatible but is
+not bound to a participant code. Its engineering quality PASS is not validated
+reading accuracy; use the separate explicit accuracy checks as specified for the
+session. Starting a study run alone does not replace the previous calibration.
 After process restart, a new baseline is needed; saved eye-tracker calibration
 and an active reading reference are distinct. Fonts/layout/acquisition changes
 must not silently reuse an incompatible coordinate profile.

@@ -83,8 +83,8 @@ object StudyConfig {
     /** Draw the active level's name on screen during DEMO_CYCLE recordings. */
     const val SCAFFOLD_DEMO_CAPTION = true
 
-    /** Gaze dot and FPS are researcher diagnostics, not participant scaffolds. */
-    const val GAZE_DEBUG_VISUALS = true
+    /** Participant article reading hides researcher diagnostics; numerical capture stays active. */
+    const val GAZE_DEBUG_VISUALS = false
 
     /**
      * Operational age limit for reading coordinates. MGazeNet inference can

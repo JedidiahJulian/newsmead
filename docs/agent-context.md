@@ -1,4 +1,4 @@
-# Agent context — updated 2026-11-06
+# Agent context — updated 2026-11-08
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,173 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-11-08 consent/screening review and participant-readiness work:**
+User supplied the THS-ST2 agreement PDF and asks to prioritize it with about one
+week until the demo (working target around Nov15, not a confirmed date). User
+believes1-4complete and would be happy to reach5: recruit volunteers and begin
+initial data collection. Roughly4possible volunteers/1currently available is the
+working interpretation, not confirmed scheduling. User explicitly does NOT want
+another drafted plan: inspect the paper's actual consent/screening requirements,
+avoid crucial procedural mistakes, and prepare the current model/app for testing.
+User CONFIRMS approval is documented elsewhere; do not keep asking or treat the
+unsigned repository clearance template as an approval blocker.
+AppendixA includes consent(3pages), screening guide(9pages), debriefing(5pages).
+Consent covers camera calibration, two reading conditions, comprehension questions,
+interview, separate optional interview audio and45-60min sessions. Screening specifies
+age45+, teach-back capacity before signature, habitual correction, scaled near card
+at its stated distance, binocular20/40 criterion, reported diagnoses, background
+questions and a held-out150-200word practice. These are documented protocol rules,
+not newly validated medical screening or model-accuracy criteria.
+Critical stale instructions: guide16pointcalibration/LOOCV/green-amber-red bands
+and automatic20sbaseline do not match currentMGazeNet13point +6post-fitchecks,
+engineering PASS/RETRY cm guardrails, explicit shared-baseline Start/Finish and
+offline coordinate fitting. Debriefing falsely describes index-driven adaptation
+and recovery as the measured main outcome; factual alignment is needed before use.
+Current templates require survey->interview->debrief, post-debrief permission for
+data use and honoring withdrawal. Interview-audio permission does not cover
+recording reading/practice audio. Names/signatures and screening responses remain
+separate from coded gaze packages. Read-only PDF evidence is in ignored
+output/ths2-agreement-review-2026-11-08/.
+User confirms research approval is documented elsewhere. User separately
+authorized a data-preserving app/test install and camera-free checks. New shared
+toolbar policy fixes expanded geometry for baseline/linked article views while
+preserving passage scrolling and actual metadata/gates. Deferred attach race found
+in review was fixed with coalescing/cancellation/lifecycle guards; re-review has no
+remaining findings. Participant article gaze/FPS diagnostics are now hidden, with
+numeric capture and explicit dot-validation protocols preserved.
+Offline main/test builds and3focused JVM tests pass;3camera-free phone tests pass
+(viewport swipes/flings/restoration and baseline navigation). Calibration hash
+and all13recording manifests unchanged; camera app-op shows no new access.
+The earlier viewport build was installed and tested. The final session-guide APK
+installed below has SHA256
+13f25c7bf560d52791830e57f674162ceab95b6fef7a785cab9ffb80536a6455.
+Evidence: ignored output/participant-readiness-2026-11-08/. User subsequently
+deferred the manual self-rehearsal because of time/token limits. Current scope is
+clear participant/researcher steps and app session instructions, not another
+development schedule or a request for live capture. Added the researcher help
+dialog in Study recording, clearer baseline prompts, and
+`docs/participant-session-steps.md` with the operational sequence, participant
+wording, a blank session record and actual protocol/app differences. Final offline
+main/test builds pass, final wording was checked inside the APK, and the updated
+baseline-navigation test passes on SM-A566B (1 test). Calibration and all 13 saved
+package manifests are unchanged. The new eight-section guide was opened and
+visually inspected on the phone; it is left open, recording stopped. Camera app-op
+shows no new access. USB briefly became unauthorized; user accepted it again and
+the data-preserving install succeeded. Receipts are in ignored
+`output/participant-readiness-2026-11-08/session-guide/`; build logs in its parent.
+Live default-gate coordinate-reference fit is PENDING; do not call repaired
+collection or older-adult accuracy validated yet. No live capture was performed.
+The owner then requested branch `initial-demo`, created from the current
+`feature/local-study-collection` HEAD with all working edits preserved. Home hides
+Scanpath pilot/replay and places Study recording directly below Reading baseline.
+Offline build, data-preserving phone install and Home UI checks pass; both hidden
+controls are absent while baseline/recording controls remain visible. Evidence:
+`output/participant-readiness-2026-11-08/initial-demo-home.json`. That latest demo
+APK SHA256 is 7ce302dd7cc79b8e461ecdcdf9a6d7fc700f27b33d06744c2705381743d94aad.
+Bounded source audit confirms StudyConfig.BYPASS_LOGIN=true/OFFLINE_MODE=false;
+auth/recommendation paths exist but runtime item1verification is still needed.
+Study recording OFF does not disable the article camera; condition text labels
+do not control aid preferences. The actual controls sheet sets aids on/off.
+Saved MGazeNet calibration has no participant binding: fresh calibration for
+each new person is a required researcher step, not guaranteed by changing a code.
+Coordinate reference in the latest rehearsal remains unavailable until a fresh
+fixed-viewport baseline is actually captured and verified. Do not relabel scores
+or lower gates. Retain broader thesis goals and agreement6/7(data analysis and
+mandatory conference paper), without making a full rewrite or conclusive efficacy
+study a new requirement before initial volunteer collection.
+
+**2026-11-08 thesis hypotheses require a revised outcome decision:**
+User confirms the manuscript predates the current scanpath/MD system and its
+recovery-latency objective must be reconsidered. The earlier suggested recovery
+H0/H1 is provisional, not an approved current hypothesis. Preserve the confirmed
+goals of feasibility/acceptability and reading benefit. Scanpaths drive the
+existing aids; R/D/F and coordinate MD remain observational and are not validated
+instability/recovery outcomes. User tentatively preferred perceived effort/loss
+of place because the thesis is HCI, then challenged the evidence for that choice
+and clarified the need for a performance/evaluation metric alongside the scanpath
+algorithm. Perceived effort is not a finalized primary outcome. Do not invent a
+new composite or claim reliability from logical fit/precedent alone. Retain
+scanpaths and both MD measures; observational use does not inherently prevent a
+prespecified comparison endpoint, but a change in MD/patterns alone is not proof
+of reduced effort or reader benefit. Separate detector correctness, reader-task
+performance/experience and technical feasibility. No questionnaire, task scoring
+rule or final hypothesis is approved yet. NASA-TLX official guidance
+https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/
+describes subjective workload across six dimensions, not reading effort alone;
+an instrument choice must preserve that distinction and be piloted with intended
+readers. Primary evidence checked: Paas et al.(1994),
+https://ris.utwente.nl/ws/files/248299579/Paas1994measurement.pdf pp.422-425,
+used1-9mental-effort ratings in student statistics/geometry training; reported
+internal consistency across repeated problems alpha.90/.82, explicitly did not
+assess validity. This is not older-phone-reading validation. GazePrompt(2024),
+https://arxiv.org/html/2402.12772 sections4.1-4.2, compared line-switching times/
+errors and word-recognition outcomes plus subjective experience in13low-vision
+desktop reading-aloud participants; precedent for independent task outcomes,
+not transferred NewsMead accuracy. Bounded MD-source review found gaze-processing
+uses, not validation of our exact R/D/F or rawXY MD as reading effort. Mishra et
+al.(2017), https://ojs.aaai.org/index.php/AAAI/article/download/11159/11018,
+evaluated a different learned scanpath-complexity measure against readers' ratings
+in16EyeLink participants; does not validate our exact features. Select the
+outcome and comparison before freezing hypotheses, sample size and analysis.
+An MD reference baseline does not replace an aids-off comparison condition.
+No manuscript/app/protocol changes are authorized by this clarification alone.
+The owner then asks for established reading performance metrics. See
+[reading-outcome evidence shortlist](reading-outcome-measures-evidence-2026-11-08.md)
+for comprehension, passage speed, oral errors, line switching, resumption lag and
+MNREAD, including actual reliability findings and transfer limits. No metric is
+selected. Existing visit spans do not establish completion/reading speed, and no
+independent task outcome is retroactively created by the gaze logs.
+
+**2026-11-06 latest run EDA completed at the user's request:**
+User completed engineering-01/shared-baseline-check and designates the latest
+run, keeping the earlier bug-interrupted attempt separate. Copied only its
+finalized shared baseline and article packages over USB; originals retained.
+Private evidence is under `output/study-shared-live-check-2026-11-06-01/`.
+User initially requested learning-paced EDA, then moved teaching to another chat
+and explicitly authorized this chat to complete EDA because of time limits.
+Executed notebook, seven figures, compact baseline/article CSVs, report and
+provenance are in `output/study-shared-live-check-2026-11-06-01/eda/`.
+Both sources strictly load and all129source files retain original hashes. Baseline
+72.805s, article198.006s (193.568s collector-allowed, not verified attentive
+reading);33.055s gap outside both. Article coordinate first-to-last cadence25.876/s,
+median delivery age185.55ms/p95220.00ms, not measured camera/screen FPS. User
+reports baseline appeared ready and no observed article lag/issues; no FPS recalled.
+R/D/F baseline READY75/145retained; article254AVAILABLE/138INVALID_WINDOW ticks,
+quality254VALID/92MISSING/46INSUFFICIENT. Of5143RDFinputs,952excluded;656are
+geometry_unsettled. Aid CHOSEN rows1598CURRENT_LINE/68FOCUS_REGION/3READING_BOOKMARK/
+1WORD_DEFINITION are updates, not independent help episodes; one lookup offer
+and acceptance. R/D/F MD median2.277, not a validated difficulty label.
+Coordinate source links match, but full-source fit returns
+REFERENCE_MISMATCH:multiple_reference_contexts (22baseline/15article contexts;
+only viewport varies in the structural signature). Independent unchanged-core
+coverage diagnostic finds largest single-context eligible coverage50.459s, below
+60s; do not lower gates, pool/relabel contexts or select a favorable source subset.
+All coordinate scores stay null.12notebook code cells execute with zero errors;
+tracked notebook unchanged. Independent metric/denominator review fixed cache
+lineage checks; final source and plots reviewed before handoff. No inference,
+app behavior/protocol change, device operation or upload. Proposed next work is
+stable compatible baseline viewport and coordinate-specific readiness, then
+geometry exclusions and predefined aid exposure/outcomes before participant tests.
+
+**2026-11-06 shared-baseline entry crash fixed and verified on phone:**
+User reported Reading baseline force-close. Device crash stack identified
+HomeFragment navigating articleFragment in MainActivity's nav_graph, while news
+reading belongs to ArticleActivity's separate nav_article_graph. Home now uses
+the existing article Activity action; ArticleActivity explicitly forwards shared
+mode into ArticleFragment. Earlier build/JVM tests did not exercise this route.
+Updated main/test APKs built and installed data-preserving on SM-A566B/SDK36.
+Real phone regression passes Home entry, mode/passage/Start UI, Activity
+recreation, repeated entry, no-run Start guard, toolbar Back after a swipe and
+system Back. First test-only Back assertion assumed the collapsed toolbar was
+visible; corrected to reveal it with a real swipe, then retest passed. No camera
+or study run started. Saved calibration hash and inventory of11study packages
+match before/after; installed APK hash matches local tested build.
+Evidence `output/shared-baseline-crash-2026-11-06/`;
+[fix and phone checks](shared-baseline-navigation-fix-2026-11-06.md).
+Actual gaze capture, reference fitting and endurance still need the user's fresh
+reading rehearsal. Source fix is not committed automatically. Unrelated local
+edits and private diagnostics remain excluded.
 
 **2026-11-06 shared baseline implemented; live rehearsal pending:**
 Home Reading baseline now opens the existing passage in the actual ArticleFragment

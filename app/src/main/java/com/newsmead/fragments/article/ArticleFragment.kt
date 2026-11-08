@@ -123,6 +123,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var resumeGazeAfterStop = false
     private var cameraPolicyChangePending = false
     private var cameraPolicyChangeGeneration = 0
+    private var sharedViewportStart: androidx.core.view.OneShotPreDrawListener? = null
     private var rsiInferencer: ReadingStateInferencer? = null
     private var targetStabilizer: GazeTargetStabilizer? = null
     private var stabilityEstimator: WindowedStabilityEstimator? = null
@@ -226,6 +227,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             sharedBaselineReader = com.newsmead.research.study.SharedBaselineReader(this, binding).also { it.bind() }
             return binding.root
         }
+        com.newsmead.research.study.SharedStudyToolbar.forLinkedArticle(binding,
+            com.newsmead.gaze.SharedReadingBaseline.current(
+                MgazeNetCalibrationStore(requireContext()).fingerprint(), StudyCollection.run?.participant))
         // A recreated article view is a new reading entry, including Back from another article.
         // Provider restarts and transient dialogs within this view keep the same reading identity.
         studyArticleReading = com.newsmead.research.study.StudyArticleReading()
@@ -827,7 +831,13 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
     }
 
+    private fun cancelSharedViewportStart() {
+        sharedViewportStart?.removeListener()
+        sharedViewportStart = null
+    }
+
     override fun onPause() {
+        cancelSharedViewportStart()
         if (sharedBaselineMode) { sharedBaselineReader?.interrupt("screen_paused"); super.onPause(); return }
         studyVisit?.exclude("screen_paused", true)
         // A delayed camera close must not start a requested recording after leaving.
@@ -850,6 +860,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     override fun onDestroyView() {
+        cancelSharedViewportStart()
         if (sharedBaselineMode) {
             sharedBaselineReader?.close(); sharedBaselineReader = null
             super.onDestroyView(); return
@@ -1398,7 +1409,14 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
      * touch input; missing/invalid calibration must be fixed before reading.
      */
     private fun attachLiveGaze(onGaze: GazeProvider.OnGaze, preferStableFrameRate: Boolean = true) {
-        if (demoCameraSuppressed) return
+        // All callers, including a deferred viewport retry, must obey the same start guards.
+        if (!StudyConfig.GAZE_ENABLED || !articleBodyReady || !isAdded || !isResumed ||
+            launchedCalibration || demoCameraSuppressed || cameraPolicyChangePending ||
+            gazeProvider != null || sharedViewportStart != null) return
+        if (SystemClock.elapsedRealtime() < gazeRestartNotBeforeMs) {
+            resumeArticleGazeWhenReady()
+            return
+        }
         val issue = MgazeNetCalibrationStore(requireContext()).compatibilityIssue(binding.root)
         if (issue != null) {
             Toast.makeText(context, issue, Toast.LENGTH_LONG).show()
@@ -1406,6 +1424,25 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
         val fingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint()
         val sharedReference = com.newsmead.gaze.SharedReadingBaseline.current(fingerprint, StudyCollection.run?.participant)
+        if (sharedReference != null && com.newsmead.research.study.SharedStudyToolbar.holdExpanded(binding)) {
+            // A shared reference may have become active while this view was away. Settle the
+            // actual viewport before opening a study segment or starting the provider.
+            val readingView = binding.root
+            // Coalesce competing starts until layout settles. Pause/destruction removes this
+            // listener; the ordinary resume path retains the need to start in a new lifecycle.
+            resumeGazeAfterStop = true
+            sharedViewportStart = readingView.doOnPreDraw {
+                sharedViewportStart = null
+                if (view === readingView) {
+                    attachLiveGaze(onGaze, preferStableFrameRate)
+                    if (gazeProvider != null) {
+                        calibrationRestartPending = false
+                        resumeGazeAfterStop = false
+                    }
+                }
+            }
+            return
+        }
         val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true,
             rejectBlinks = true, preferStableFrameRate = preferStableFrameRate,
             maxOutputAgeMs = if (sharedReference != null) StudyConfig.READING_MAX_OUTPUT_AGE_MS else MgazeNetGazeProvider.MAX_OUTPUT_AGE_MS)
