@@ -1,4 +1,4 @@
-# Agent context — updated 2026-11-08
+# Agent context — updated 2026-11-09
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,250 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-11-09 handoff: reader-controlled On / Off / Auto remains unimplemented:**
+Owner explicitly wants On/Off/Auto as real reader controls, not only a researcher
+demo, and will have a group member implement it. Intended distinction discussed:
+Off hides an aid; Auto retains existing gaze qualification; On keeps support
+visible without waiting for a scanpath trigger. Per-aid controls are recommended
+but not explicitly confirmed; On-mode placement (follow gaze versus reader-tapped
+word/line) is still unresolved, especially for definitions and bookmarks. Settle
+those semantics with the group; do not equate the current enabled boolean or
+manual-strength slider with a forced-On mode. Persist actual modes/changes and
+retain them in study configuration/events; real reading in On is not demo data.
+Existing Article aid demo is separate, cycles every4seconds, stops live tracking,
+and requires leaving/reopening the article to resume normal tracking. Latest
+built app contains local fixed articles/privacy changes, not the3-state feature.
+
+**2026-11-09 interview sheet simplified after owner feedback:**
+Owner rejects the4-page guide as too wordy for live interviewing and supplies
+Downloads/annex8-fm1.pdf as a STRUCTURE reference, then explicitly asks for short,
+open-ended questions and follow-ups. Inspected reference text/first-page layout;
+did not adopt its medical content, demographics or verbal-only consent procedure.
+Rewrote sibling formative_interview_guide.tex as2readable pages with numbered
+topics1-10, one open-ended follow-up each, simple grey section bars and brief
+opening/preview cues. VersionFT-2026-11-09-S1;284words including header/footer.
+Questions1-5 remain after natural reading/written notes;6-8 repeat per previewed
+aid;9-10 close before debrief. Preview is explicitly deliberate, not gaze-triggered.
+Moved detailed administration/interpretation notes to existing
+participant-session-steps.md; methodology safeguards remain in Chapter4 unchanged.
+Updated operator-guide question references to1-10. This is a conversational guide,
+not a script requiring every follow-up. Known consent/screening/debrief and app
+instruction alignment remains outstanding; no protocol, eligibility, audio-scope,
+questionnaire or measurement change was made by this simplification.
+Rebuilt original main.pdf(116pages) and replaced original interview-guide PDF
+with the2-page extract. Compile/crossrefs, ten-question/phase checks, both-page
+visual QA and final hashes pass. Source-before backups, reference renders, checks
+and final receipt: sibling output/pdf/interview-guide-simple-2026-11-09/.
+Main SHA256188791d82d63516e13fbab5ea0c0c30ec0d04504e0a915e5bd6be3f931e532bc;
+guide SHA2560f488776718c049b51e7145c1af12cbcf3db3546adef3caf6a438cedacf1f39f.
+No original consent/screening/debrief PDF changes, app/device work, staging or commit.
+
+**2026-11-09 formative methodology and interview guide revised:**
+Owner explicitly authorizes updating the existing formative thesis section and
+interview questions. Edited sibling THS-ST-Paper Chapter4 Section4.1 (plus its
+intro phrase), Chapter1 formative summary/figure caption, AppendixA guide inclusion,
+and corrected the placeholder GazePrompt bibliography entry. Added shared source
+formative_interview_guide.tex and a4-page printable extract; rebuilt main.pdf
+(118pages). No wholesale manuscript rewrite or original3form-PDF edits this task.
+Initial round remains3-5target participants: normal reading with live aids after
+existing preparation/shared baseline; exit article/Stop run; written N1-N5 feedback;
+labelled display preview; post-task P1-P3 for each previewed aid and closing C1-C2;
+formative-aligned debrief/data-use confirmation. No mandatory control group or
+off/on comparison, no forced triggers or concurrent think-aloud. MD remains
+observational; reference/score failures stay unavailable; no new questionnaire,
+clinical gate or validated focus/stability score is adopted. Preserve existing
+eligibility/retries and label phase/version; do not pool pilot with later main data.
+Preview is not natural trigger evidence, and recorded rendering is not reported
+noticing. Guide explicitly notes ordinary article opening can start camera before
+demo mode; recording OFF alone does not stop capture. PartA/reading/preview audio
+is outside the current post-session audio permission; final interview audio only
+if separately permitted. Operator guide now distinguishes formative vs comparison
+flows; older per-article UES proposal remains a later-evaluation candidate.
+IMPORTANT: current consent/screening/debriefing PDFs still describe2comparison
+readings; target their procedure wording before using this formative variant.
+Review caught the debrief mismatch, fixed the prerequisite and explicit natural/
+preview explanation in revised text; re-review has no remaining findings. Approval
+is documented elsewhere, not newly questioned. Installed app Session instructions
+also still describe comparison flow. Legacy later-outcome/controller sections
+remain outside this bounded revision. Source boundary checks preserve Chapter4
+afterSection4.1, Chapter1 outside the targeted summary and existing appendix PDFs.
+LaTeX build/crossrefs and guide question-ID checks pass; revised pages visually
+inspected. Backups/build/QA/receipts in sibling output/pdf/formative-methods-2026-11-09/.
+Final original main.pdf SHA25638b034d5713cbbd25ab7423d280df5a6773409248456995747cc5d228b914a6f;
+formative_interview_guide.pdf SHA256d0719f394e565a81ebfbe7d7fc8284ebb38a19ccc02a533bbeb13ef587e3f015.
+No app code change, device operation, collection, staging or commit in this task.
+
+**2026-11-09 account-free fixed article list implemented:**
+Owner explicitly requests prefilled articles without creating a testing account
+or syncing history. The account-free build now shows Saved -> Testing articles,
+using the existing2 bundled setup samples (not approved participant comparison
+texts). New StudyArticleCatalog validates explicit unique IDs/title/body, preserves
+exact text and namespaces IDs as local-study-v1:<article_id>. StudyArticlesFragment
+uses the existing card/list/navigation design. ArticleFragment gives packaged
+body precedence over account Room cache and URL extraction; the network feed
+remains enabled. Actual final English articles/questions still need selection.
+Source audit also found normal saved offline articles can be refreshed after1day
+by startup preload; the prior claim that normal saving alone permanently freezes
+them was incomplete. Packaged testing articles bypass that account path.
+Single accountFreeStudyBuild flag in app/build.gradle.kts supplies BYPASS_LOGIN
+and pre-start manifest policy. Account preload/history/saved checks and auth UI
+are bypassed; no testing account or participant Firebase identity was created.
+Analytics is deactivated in the manifest. Focused review caught a retained-opt-in
+Crashlytics startup race; fixed with the accountFree manifest overlay removing
+the eager CrashlyticsRegistrar before SDK initialization. Logging wrappers skip
+cloud reporting. Reviewer confirmed the exact18.4.3 registrar is absent from
+merged debug manifest and the remaining KTX registrar cannot recreate reporting.
+No gaze, aid, MD or baseline algorithm changes. No claim of whole-app network
+silence: news/dictionary requests remain possible and Firebase SDKs remain bundled.
+Final offline main/test APK builds and16focused JVM tests pass; packaged catalog
+matches source. LocalStudyArticlesDeviceTest is compiled and camera-free (list,
+Home/Profile, recreation, manifest/component checks), but NOT run. No phone
+install/capture, staging, commit, original-PDF or manuscript edits in this task.
+APK SHA256 b194c610f6586faca493c155f192979acfdb87e47926159baf72338857ebbe21.
+Checks receipt/log: ignored output/local-study-articles-checks-2026-11-09.json
+and output/local-study-articles-final-build-2026-11-09.log. Hardware startup,
+retained-data upgrade and article-reading runtime remain unverified for this build.
+SDK policy sources: https://firebase.google.com/docs/analytics/android/configure-data-collection
+and https://firebase.google.com/docs/crashlytics/android/customize-crash-reports .
+
+**2026-11-09 assessment research and concrete recommendation prepared:**
+Owner says proceed with HCI-focused evaluation preparation and confirms English
+for the first volunteers' articles/assessments. Added a clearly marked draft to
+the existing reading-outcome-measures-evidence-2026-11-08.md and linked it from
+participant-session-steps.md; original forms/manuscript/app are unchanged in this
+task. Recommendation: full12-item English UES-SF after each assigned reading,
+with Focused Attention the candidate numerical experience outcome, plus neutral
+post-condition interviews for continuity/comfort/distraction, existing logs and
+supporting comprehension questions. This is NOT a selected instrument, frozen
+primary endpoint or active participant protocol. UES-SF FA measures absorption/
+time passing; it cannot establish concentration lapses or keeping one's place.
+The source supports separate subscale means, reverse-coded usability items and
+separate repeated administrations; retaining all12 avoids claiming three selected
+items are the complete instrument. No validated place-keeping score was established
+in this bounded review. English wording needs no new translation, but older-adult
+phone-news validity remains unestablished. No custom composite, new clinical
+threshold, formal hypothesis, significance test or numeric stability endpoint.
+Draft includes6neutral interview prompts, explicit task/package linkage, missingness,
+counterbalancing, per-article assessment priming, and materials still to be named.
+Primary source: https://oro.open.ac.uk/68806/1/1-s2.0-S1071581918300041-main.pdf
+sections6/8 and AppendicesA-B. Direct HCI reading-aid precedent remains GazePrompt
+sections4.1.2/5.1 (desktop low vision). No device capture, PDF rewrite or staging.
+
+**2026-11-09 owner prioritizes reading experience, focus and stability:**
+The owner clarifies that focus and stability during news reading should lead the
+HCI evaluation, with comprehension receiving less priority. This is an outcome
+direction, not selection of a questionnaire, validated stability score or final
+statistical endpoint. Define perceived concentration/keeping one's place separately
+from objectively demonstrated attention or reading errors. Scanpath classifications
+are categorical algorithm outputs; their counts/durations can be quantitative.
+Interviews supply qualitative evidence. Both MD variants remain numerical
+observations, not established reader-benefit/stability measures. Do not equate
+lower MD, fewer regressions or smoother coordinates with improved reading.
+The owner also notes the live recommendation feed changes articles. Source check:
+StudyConfig.OFFLINE_MODE=false; DataHelper.loadArticleData uses the network path
+with a 10-minute response cache; loadLocalArticleData and study_articles.json
+already offer a bundled-content route, currently inactive. No feed or content
+change was made. Proposed controlled comparisons can freeze selected real-news
+texts and balance their condition/order assignments while retaining normal
+recommendations for exploratory use; this has not been adopted or implemented.
+Relevant primary precedent: GazePrompt sections4.1.2 and5.1 used experience ratings,
+interviews and controlled passages; silent-reading participants were13 low-vision
+adults aged30-85 on a desktop, not validation for older phone-news readers:
+https://arxiv.org/html/2402.12772 . UES/UES-SF is a published engagement-instrument
+candidate, not a selected measure or verified place-keeping assessment:
+https://doi.org/10.1016/j.ijhcs.2018.01.004 . Assessment selection remains open.
+
+**2026-11-09 post-reading assessment preparation remains open:**
+User asks whether user testing also requires assessments and interview data.
+Current Chapter 4 already specifies comprehension after each article, researcher
+observations, a usability survey, then semi-structured interview and debrief.
+The session guide likewise links external answers/notes by participant/task IDs;
+the local study recorder has no comprehension/survey/interview capture UI.
+Bounded search found no finalized article question/answer-key set, questionnaire
+instrument or separate interview-guide artifact in the current project files.
+Do not claim the consent/screening revisions finished assessment preparation.
+Proposed initial collection: fixed article questions with scoring key; actual task
+start/end/completion and technical/assistance notes; an established usability
+questionnaire selected with the owner; neutral interview on noticed changes,
+help/distraction, comfort and preference before debrief; existing post-debrief
+data-use confirmation. Paper/local records can link to gaze data without Firebase.
+SUS is only a candidate for perceived system usability, not a reading-performance
+test or adopted instrument. Primary author source retrieved:
+https://uxpajournal.org/wp-content/uploads/sites/7/pdf/JUS_Brooke_February_2013.pdf
+No new assessment forms, questionnaire, primary outcome or scoring protocol were
+selected/created in this clarification. Chapter 4's older recovery-latency-primary
+and index/controller wording still need a separate substantive revision.
+
+**2026-11-08 WHOeyes descriptive recording and functional eligibility adopted:**
+User reports WHOeyes near output is only 0-100%, without a 20/40 result, and asks
+whether that exact acuity cutoff is necessary. No percentage-to-Snellen mapping
+was verified; do not assume 50%=20/40 or use an undocumented percentage cutoff.
+User explicitly approved the proposed alternative ('yes lets do that'). WHOeyes
+score/setup are now descriptive background; eligibility uses ability to see and
+read the existing held-out practice passage at fixed study settings with habitual
+correction, while tracking is assessed separately. No Snellen or percentage
+eligibility cutoff and no clinical/validated-reading-score claim. A wrong practice
+comprehension answer alone is not a visual-screening failure. The record now asks
+'Practice text readable? Yes / No / Unclear'. All remaining criteria must still
+be completed; age, health exclusions and two full calibration attempts unchanged.
+Updated original sibling THS-ST-Paper/screening_guide.pdf in place (9 pages),
+targeted its Chapter 4 eligibility/source paragraphs, and aligned the existing
+docs/participant-session-steps.md. Consent/debrief PDFs were not changed again.
+Nineteen targeted PDF edits; changed pages visually inspected, drawings preserved,
+zero changed pixels outside amended regions. Independent review found a legacy
+'Section 3 passed' enrolment reference; fixed and reviewer confirmed resolution.
+Backups, scripts and final receipt: ignored
+output/pdf/functional-reading-eligibility-2026-11-08/.
+No app/device operation, new clinical validation, staging or commit. Whole-manuscript
+PDF was not rebuilt; other legacy methodology sections remain a separate task.
+GazePrompt's functional-reading eligibility is precedent in 13 desktop low-vision
+participants, not validation of our phone screen:
+https://arxiv.org/html/2402.12772 sections4.1.1-4.1.2.
+
+**2026-11-08 original PDFs revised with explicit authorization:**
+User then explicitly instructed: work directly on originals and provide correct
+PDFs. Edited the three original files in sibling THS-ST-Paper in place:
+`Informed_Consent_Form.pdf` (3 pages), `screening_guide.pdf` (9 pages), and
+`debriefing_script.pdf` (5 pages). This is targeted PDF text surgery, not a new
+packet or redesign. Original letterheads, section numbering, Times typography,
+bilingual scripts, form/table rules, checkboxes and signature areas retained.
+Consent corrects camera tasks, numerical local records/transfer, coded identity
+and identifiable optional audio. Screening integrates WHOeyes near/binocular/
+40 cm with actual score/units/device/version/distance and uncertain-result handling,
+current 13-target/six-check cm gate (including 12 usable samples/check), same
+two-full-attempt limit, fresh participant calibration before practice and explicit
+shared baseline controls. Clinical exclusions and age criteria were not changed.
+Debrief removes unestablished recovery-primary/baseline-driven aid claims, preserves
+both languages, clarifies scored answers and linked-copy withdrawal; early-exit
+debrief exceptions fixed after independent copy review. No app logic changed.
+All 17 pages rendered/inspected; candidate-to-original pixel comparisons find zero
+changes outside intended text regions, and drawing geometry/counts are preserved.
+Original unsigned PDFs have no AcroForms; printed fields remain intact. Original
+hashes checked before promotion, and final original-file hashes match candidates.
+Byte backups, edit manifests and QA: ignored
+`output/pdf/original-document-edits-2026-11-08/`, final-receipt.json. No staging,
+commit, phone operation, third-party-app test or new clinical validation performed.
+
+**2026-11-08 correction: use the existing consent/screening documents:**
+The user explicitly rejected the lead's unsolicited wholesale rebuild of the
+forms. They asked to see and understand their existing documents, identify needed
+revisions and prepare printing, not replace the documents' structure and wording.
+The original thesis PDFs were never changed. The generated replacement packet,
+its builder/Markdown copies and its runbook changes were removed. Work from the
+existing forms with page/section-specific proposed edits, preserving their layout
+and established procedure. Do not infer permission for another complete rebuild.
+The user conditionally prefers WHOeyes if credible for screening and permits
+any researcher's screening phone, including iPhone; Android-only applies to
+NewsMead. That discussion is not a finalized amendment of their screening guide.
+WHO officially supports near testing at 40 cm, manual distance on Android and
+an automatic iOS option. Direct validation retrieved used iOS (220 participants,
+50 aged 41-80); no best-app or exact Android-device accuracy claim is established.
+Evidence retained for retrieval:
+https://www.who.int/teams/noncommunicable-diseases/sensory-functions-disability-and-rehabilitation/whoeyes
+https://ira.lib.polyu.edu.hk/bitstream/10397/107489/1/Wu_Real-world_Application_Smartphone-based.pdf
+Alternatives' near studies: https://pmc.ncbi.nlm.nih.gov/articles/PMC4815669/
+and https://pmc.ncbi.nlm.nih.gov/articles/PMC7933864/.
 
 **2026-11-08 consent/screening review and participant-readiness work:**
 User supplied the THS-ST2 agreement PDF and asks to prioritize it with about one

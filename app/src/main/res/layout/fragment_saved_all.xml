@@ -7,6 +7,18 @@
     android:background="?primaryBackgroundColor"
     tools:context=".fragments.saved.SavedAllFragment">
 
+    <TextView
+        android:id="@+id/tvLocalArticleNotice"
+        style="@style/ts_body_large"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:textColor="?primaryTextColor"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvSavedAll"
         android:layout_width="0dp"
@@ -14,5 +26,5 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/tvLocalArticleNotice" />
 </androidx.constraintlayout.widget.ConstraintLayout>

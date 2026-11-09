@@ -7,6 +7,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import com.google.android.material.tabs.TabLayoutMediator
+import com.newsmead.R
+import com.newsmead.data.StudyConfig
 import com.newsmead.databinding.FragmentSavedBinding
 
 // TODO: Rename parameter arguments, choose names that match
@@ -51,7 +53,9 @@ class SavedFragment : Fragment() {
 
         val tabLayout = binding.tlListTabs
         TabLayoutMediator(tabLayout, binding.vpViewPager) { tab, position ->
-            when(position) {
+            if (StudyConfig.BYPASS_LOGIN) {
+                tab.text = getString(R.string.saved_testing_articles)
+            } else when(position) {
                 0 -> tab.text = "Your Lists"
                 1 -> tab.text = "All"
             }

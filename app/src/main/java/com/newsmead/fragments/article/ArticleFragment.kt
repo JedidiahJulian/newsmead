@@ -444,6 +444,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             false // Return false so the event is not consumed and continues to be propagated
         }
 
+        // Account-backed saving is not available in the account-free study build.
+        binding.btnSaveList.visibility = if (StudyConfig.BYPASS_LOGIN) View.GONE else View.VISIBLE
         // Bottom sheet dialog for saving articles
         binding.btnSaveList.setOnClickListener {
             binding.btnSaveList.isEnabled = false
@@ -525,12 +527,19 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             viewLifecycleOwner.lifecycleScope.launch {
                 // Check if offline article
                 val articleId = article.newsId
-                val offlineArticle = DatabaseHelper.getNewsArticleDao().getNewsArticle(articleId)
+                val packagedArticle = com.newsmead.data.StudyArticleCatalog.contains(article)
+                val offlineArticle = if (packagedArticle) null else
+                    DatabaseHelper.getNewsArticleDao().getNewsArticle(articleId)
                 if (view !== articleView.root) return@launch
 
                 Log.d("ArticleFragment", "onCreateView: offlineArticle: $offlineArticle")
 
-                if (offlineArticle?.articleBody?.isNotEmpty() == true) {
+                if (packagedArticle) {
+                    // This exact packaged text must survive feed refreshes and cached Room content.
+                    displayedBody = article.body
+                    binding.tvArticleText.text = displayedBody
+                    binding.ivArticleFullImage.visibility = View.GONE
+                } else if (offlineArticle?.articleBody?.isNotEmpty() == true) {
                     // Offline article
                     displayedBody = offlineArticle.articleBody
                     binding.tvArticleText.text = displayedBody

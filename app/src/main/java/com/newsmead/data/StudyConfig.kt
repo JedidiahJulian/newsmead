@@ -1,19 +1,21 @@
 package com.newsmead.data
 
+import com.newsmead.BuildConfig
+
 /**
- * Central switches for running NewsMead as a thesis-study research instrument
- * (no real users, no backend). Flip these back to false to restore the original
- * production behaviour.
+ * Study behaviour switches. The account-free build still permits live news;
+ * fixed testing articles are available separately without account-backed lists.
  *
  * See docs/progress-notes.md for the full context and the study_articles.json schema.
  */
 object StudyConfig {
 
     /**
-     * Bypass the Firebase login gate in SplashActivity and treat every session
-     * as already authenticated, so launch goes straight to the home screen.
+     * Skip the login gate and account-backed saved/history/telemetry paths.
+     * Configured by accountFreeStudyBuild in app/build.gradle.kts so the manifest
+     * disables collection before SDK startup as well.
      */
-    const val BYPASS_LOGIN = true
+    const val BYPASS_LOGIN = BuildConfig.ACCOUNT_FREE_STUDY
 
     /**
      * Serve article content from a bundled local asset instead of NewsData.io.

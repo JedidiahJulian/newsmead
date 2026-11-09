@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <service android:name="com.google.firebase.components.ComponentDiscoveryService">
+            <!-- A persisted reporting opt-in must not start Crashlytics in the study build. -->
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.crashlytics.CrashlyticsRegistrar"
+                tools:node="remove" />
+        </service>
+    </application>
+</manifest>

@@ -14,6 +14,24 @@ participant exclusions or changes to baseline/metric algorithms.
 
 ## Researcher workflow
 
+For the account-free `initial-demo` build, **Saved -> Testing articles** opens
+the packaged `study_articles.json` catalog without Firebase lists or login. These
+two current entries are setup samples, not approved comparison texts. Their IDs
+are namespaced `local-study-v1:<article_id>`; the ordinary reader uses the exact
+packaged body rather than Room's account cache or URL extraction. The live feed
+still uses its existing network route. Select/preserve the final English texts
+and questions before participant comparison. Edit the bundled asset and rebuild
+to distribute the same selected texts to other testing phones.
+
+The single `accountFreeStudyBuild` switch in `app/build.gradle.kts` controls the
+login bypass, local Saved UI, account preload/history guards and telemetry policy.
+It deactivates Analytics in the manifest and selects an account-free manifest
+overlay that removes eager Crashlytics registration, including when an earlier
+SDK opt-in is retained. Logging wrappers also skip cloud reporting. This does
+not make the whole app offline or establish network silence; normal news and
+dictionary requests remain possible. The local gaze packages and transfer
+workflow below retain their existing meanings.
+
 1. Home → **Study recording**. Enter a pseudonymous participant code and a
    condition label. Choose **Reading**, then Start.
    Opening the controls alone does not start recording or the camera. The label

@@ -26,7 +26,7 @@ class FirebaseHelper {
         // access so a logout/login within the same process never serves a
         // stale currentUid (and therefore never leaks a prior user's Firestore data).
         private val currentUid: String
-            get() = FirebaseAuth.getInstance().currentUser?.uid ?: "null"
+            get() = if (StudyConfig.BYPASS_LOGIN) "null" else FirebaseAuth.getInstance().currentUser?.uid ?: "null"
 
         fun getUid(): String = currentUid
 
@@ -424,6 +424,7 @@ class FirebaseHelper {
         }
 
         suspend fun getHistory(context: Context): List<Article> = coroutineScope {
+            if (StudyConfig.BYPASS_LOGIN) return@coroutineScope emptyList()
             if (currentUid == "null") {
                 Toast.makeText(context, "Please login to view history", Toast.LENGTH_SHORT).show()
                 return@coroutineScope emptyList()
@@ -468,6 +469,7 @@ class FirebaseHelper {
         }
 
         suspend fun checkIfArticleSavedInLists(context: Context, articleId: String): List<String> {
+            if (StudyConfig.BYPASS_LOGIN) return emptyList()
             if (currentUid == "null") {
                 Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
                 return emptyList()
@@ -807,6 +809,8 @@ class FirebaseHelper {
          * @param article Article to add to history
          */
         fun addArticleToHistory(article: Article) {
+            // A previous login can remain cached even when the study bypasses login.
+            if (StudyConfig.BYPASS_LOGIN) return
             val uid = FirebaseAuth.getInstance().currentUser?.uid
             if (uid == null) {
                 // History is optional and must never prevent an article from opening.
