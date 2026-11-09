@@ -12,6 +12,18 @@ protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
 
+**2026-11-09 reading-aids ON/AUTO/OFF modes implemented in software:**
+Replaced the session-only master boolean UI with an immediate radio-mode control.
+AUTO retains the existing trigger/evidence path; OFF centrally clears presentations
+and disables auto-scroll while preserving individual choices; ON presents enabled
+guide, bookmark and focus visuals at a current mapped or visible article row without
+claiming trigger evidence. Word lookup still requires a mapped word and user tap;
+Sentence context resolves from the selected visible article row. Article preferences now
+persist through `article_reading_preferences`; a legacy `reading_aids_enabled` value,
+if present, maps false to OFF and true to AUTO. Focused policy/migration tests passed
+and the Android test APK compiled. No device, camera, calibration or human-validity
+check was performed.
+
 **2026-11-03 reading-baseline valid-window regression fixed in software:**
 The current scanpath/Mahalanobis branch had removed the baseline-specific 650 ms
 MGazeNet output-age allowance restored on `measurement/mahalanobis`, leaving the

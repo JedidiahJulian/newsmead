@@ -70,7 +70,7 @@ class ReadingAidContinuationPolicyTest {
     }
 
     @Test fun zeroManualGlobalOffAndCueOptOutPreventActivation() {
-        for (prefs in listOf(ReaderAidPreferences(enabled = false),
+        for (prefs in listOf(ReaderAidPreferences(mode = ReadingAidsMode.OFF),
             ReaderAidPreferences(lineStartCue = false), ReaderAidPreferences(maxStrength = 0.0),
             ReaderAidPreferences(adaptiveStrength = false, manualStrength = 0.0))) {
             val p = policy(prefs.copy(lineGuide = false))

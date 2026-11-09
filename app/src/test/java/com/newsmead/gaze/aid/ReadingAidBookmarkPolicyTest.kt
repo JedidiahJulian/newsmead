@@ -243,7 +243,7 @@ class ReadingAidBookmarkPolicyTest {
         val id = marker(p)!!.id
         p.updatePreferences(p.preferences.copy(maxStrength = 0.1), context(400.0, null))
         assertEquals(id, marker(p)?.id)
-        for (prefs in listOf(ReaderAidPreferences(enabled = false), ReaderAidPreferences(lineStartCue = false),
+        for (prefs in listOf(ReaderAidPreferences(mode = ReadingAidsMode.OFF), ReaderAidPreferences(lineStartCue = false),
             ReaderAidPreferences(maxStrength = 0.0), ReaderAidPreferences(adaptiveStrength = false, manualStrength = 0.0))) {
             val other = policy(); armOutside(other)
             other.updatePreferences(prefs, context(400.0, null))

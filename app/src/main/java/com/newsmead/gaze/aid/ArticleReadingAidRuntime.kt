@@ -275,9 +275,24 @@ class ArticleReadingAidRuntime(
         checkMain()
         if (closed) return
         suspended = false
-        context = context.copy(nowMs = elapsedMs(), validLiveInput = false)
+        val visibleLine = snapshot?.let { geometry ->
+            geometry.lines.indices.firstOrNull { line ->
+                val row = geometry.lines[line]
+                row.startUtf16 < row.endUtf16 && row.left + geometry.textOriginX >= geometry.visibleRectScreen.left &&
+                    row.right + geometry.textOriginX <= geometry.visibleRectScreen.right &&
+                    row.top + geometry.textOriginY >= geometry.visibleRectScreen.top &&
+                    row.bottom + geometry.textOriginY <= geometry.visibleRectScreen.bottom
+            }
+        }
+        context = context.copy(nowMs = elapsedMs(), validLiveInput = false,
+            focusInputAllowed = true, bookmarkInputAllowed = true,
+            targetLine = if (preferences.mode == ReadingAidsMode.ON) visibleLine else context.targetLine,
+            guideRange = if (preferences.mode == ReadingAidsMode.ON &&
+                preferences.guideStyle == ReadingGuideStyle.SENTENCE)
+                guideResolver.resolve(body.text.toString(), snapshot, visibleLine) else context.guideRange)
         decisions(policy.reset(context, preserveCompletedFocus = preserveFocusOnResume))
         preserveFocusOnResume = false
+        if (preferences.mode == ReadingAidsMode.ON) decisions(policy.tick(context))
         updateDockVisibility()
     }
 
@@ -372,7 +387,8 @@ class ArticleReadingAidRuntime(
             View.VISIBLE else View.GONE
     }
 
-    private fun preferenceJson() = JSONObject().put("enabled", preferences.enabled)
+    private fun preferenceJson() = JSONObject().put("mode", preferences.mode.name.lowercase())
+        .put("enabled", preferences.enabled)
         .put("auto_scroll", preferences.autoScroll)
         .put("line_guide", preferences.lineGuide).put("line_start_cue", preferences.lineStartCue)
         .put("guide_style", preferences.guideStyle.name)

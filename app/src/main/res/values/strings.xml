@@ -402,7 +402,10 @@
     <string name="reading_aid_menu_cap">Maximum strength setting: %1$d%%</string>
     <string name="reading_aid_menu_strength">Manual strength setting: %1$d%%</string>
     <string name="reading_aid_menu_done">Done</string>
-    <string name="reading_aids_enabled">Enable reading aids</string>
+    <string name="reading_aids_mode">Reading aids mode</string>
+    <string name="reading_aids_mode_on">ON — Always activate enabled reading aids</string>
+    <string name="reading_aids_mode_auto">AUTO — Activate reading aids automatically</string>
+    <string name="reading_aids_mode_off">OFF — Disable reading aids</string>
     <string name="reading_aids_line">Follow the current line</string>
     <string name="reading_aids_start">Mark where I left off after looking away or a line jump</string>
     <string name="reading_aids_word">Magnify a repeatedly inspected word</string>

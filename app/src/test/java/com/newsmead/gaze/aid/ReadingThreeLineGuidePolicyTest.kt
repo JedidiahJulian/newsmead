@@ -11,10 +11,11 @@ class ReadingThreeLineGuidePolicyTest {
         (0..13).map { ScanpathLine(it * 100, it * 100 + 99, 0.0, 400.0,
             it * 50.0, it * 50.0 + 50) }, ScanpathTextDirection.LTR)
 
-    private inner class Session {
+    private inner class Session(preferences: ReaderAidPreferences = ReaderAidPreferences(
+        guideStyle = ReadingGuideStyle.THREE_LINE,
+        wordDefinition = false, focusRegion = false, lineStartCue = false)) {
         val policy = ReadingAidPolicy(ReadingAidPolicyConfig.evidenceAlignedPrototype(),
-            ReaderAidPreferences(guideStyle = ReadingGuideStyle.THREE_LINE,
-                wordDefinition = false, focusRegion = false, lineStartCue = false))
+            preferences)
         var frame = geometry
         var time = 0.0
         lateinit var latest: ReadingAidContext
@@ -31,12 +32,67 @@ class ReadingThreeLineGuidePolicyTest {
             latest = ReadingAidContext(1, frame.snapshotId, frame.lines.size, line,
                 row.startUtf16, row.startUtf16 + 5, time, time, time, reason == null,
                 frame, 40.0, sample, locationUncertainty = ReadingLocationUncertainty(1.0, 1.0,
-                    "synthetic_fixture_not_phone_accuracy"))
+                    "synthetic_fixture_not_phone_accuracy"),
+                targetWordBounds = ScanpathRect(0.0, row.top, 50.0, row.bottom))
             policy.onObservation(null, latest)
         }
         fun hold(line: Int, samples: Int = 12) { repeat(samples) { sample(line) } }
         fun guide() = policy.activeActions().single { it.aidType == ReadingAidType.CURRENT_LINE }
         fun band() = guide().guideEvidence!!.threeLine!!
+    }
+
+    @Test fun onForcesEligiblePresentationsAndModeChangesClearThem() {
+        val s = Session(ReaderAidPreferences(mode = ReadingAidsMode.ON,
+            guideStyle = ReadingGuideStyle.LINE, lineStartCue = true,
+            focusRegion = true, wordDefinition = true))
+        s.hold(6, 1)
+        val active = s.policy.activeActions()
+        assertEquals("MODE_ON_GUIDE_PRESENTATION_V1",
+            active.single { it.aidType == ReadingAidType.CURRENT_LINE }.ruleId)
+        assertEquals("MODE_ON_BOOKMARK_PRESENTATION_V1",
+            active.single { it.aidType == ReadingAidType.READING_BOOKMARK }.ruleId)
+        assertEquals("MODE_ON_FOCUS_PRESENTATION_V1",
+            active.single { it.aidType == ReadingAidType.FOCUS_REGION }.ruleId)
+        assertEquals("MODE_ON_WORD_LOOKUP_OFFER_V1",
+            active.single { it.aidType == ReadingAidType.WORD_DEFINITION }.ruleId)
+
+        s.policy.updatePreferences(s.policy.preferences.copy(mode = ReadingAidsMode.AUTO), s.latest)
+        assertFalse(s.policy.activeActions().any { it.ruleId.startsWith("MODE_ON_") })
+        s.policy.updatePreferences(s.policy.preferences.copy(mode = ReadingAidsMode.OFF), s.latest)
+        assertTrue(s.policy.activeActions().isEmpty())
+    }
+
+    @Test fun onUsesVisibleRowWithoutAutomaticProfileOrLiveSample() {
+        val policy = ReadingAidPolicy(ReadingAidPolicyConfig.manualOnly(),
+            ReaderAidPreferences(mode = ReadingAidsMode.ON, wordDefinition = false))
+        val context = ReadingAidContext(1, geometry.snapshotId, geometry.lines.size,
+            null, null, null, 100.0, null, null, false, geometry = geometry)
+        policy.tick(context)
+        val active = policy.activeActions()
+        assertEquals(0, active.single { it.aidType == ReadingAidType.CURRENT_LINE }.anchor.line)
+        assertTrue(active.filter { it.aidType in listOf(ReadingAidType.CURRENT_LINE,
+            ReadingAidType.READING_BOOKMARK, ReadingAidType.FOCUS_REGION) }
+            .all { it.ruleId.startsWith("MODE_ON_") })
+    }
+
+    @Test fun onUsesResolvedSentenceRangeAtVisibleRowWithoutLiveSample() {
+        val policy = ReadingAidPolicy(ReadingAidPolicyConfig.evidenceAlignedPrototype(),
+            ReaderAidPreferences(mode = ReadingAidsMode.ON, guideStyle = ReadingGuideStyle.SENTENCE,
+                lineStartCue = false, focusRegion = false, wordDefinition = false))
+        val context = ReadingAidContext(1, geometry.snapshotId, geometry.lines.size,
+            0, null, null, 100.0, null, null, false, geometry = geometry,
+            guideRange = ReadingGuideRange(0, 99, ReadingGuideUnit.SENTENCE))
+        policy.tick(context)
+        assertEquals(ReadingGuideRange(0, 99, ReadingGuideUnit.SENTENCE),
+            policy.activeActions().single().guideRange)
+        assertEquals(ReadingAidType.CURRENT_SENTENCE, policy.activeActions().single().aidType)
+    }
+
+    @Test fun onStillRespectsIndividuallyDisabledAids() {
+        val s = Session(ReaderAidPreferences(mode = ReadingAidsMode.ON,
+            lineGuide = false, lineStartCue = false, focusRegion = false, wordDefinition = false))
+        s.hold(6, 4)
+        assertTrue(s.policy.activeActions().isEmpty())
     }
 
     @Test fun stationaryThreeLinePresentationIsSeparateFromMeasuredUncertainty() {

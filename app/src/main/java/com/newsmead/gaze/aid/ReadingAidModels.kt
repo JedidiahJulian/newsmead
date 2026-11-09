@@ -6,6 +6,7 @@ import com.newsmead.gaze.scanpath.ScanpathSample
 /** Pure policy values. Text offsets are UTF-16; all times are capture/delivery milliseconds. */
 enum class ReadingAidType { CURRENT_LINE, CURRENT_SENTENCE, NEXT_LINE_START, READING_BOOKMARK, WORD_MAGNIFIER, FOCUS_REGION, WORD_DEFINITION }
 enum class ReadingGuideStyle { LINE, THREE_LINE, SENTENCE }
+enum class ReadingAidsMode { ON, AUTO, OFF }
 
 enum class ReadingGuideDirection { BALANCED, DOWN, UP }
 
@@ -112,7 +113,7 @@ data class ReadingAidDecision(
 )
 
 data class ReaderAidPreferences(
-    val enabled: Boolean = true,
+    val mode: ReadingAidsMode = ReadingAidsMode.AUTO,
     val lineGuide: Boolean = true,
     val lineStartCue: Boolean = true,
     val wordMagnifier: Boolean = true,
@@ -125,6 +126,7 @@ data class ReaderAidPreferences(
     val focusStyle: ReadingFocusStyle = ReadingFocusStyle.FADE_TEXT,
     val autoScroll: Boolean = false
 ) {
+    val enabled: Boolean get() = mode != ReadingAidsMode.OFF
     init { require(maxStrength.isFinite() && maxStrength in 0.0..1.0 && manualStrength.isFinite() && manualStrength in 0.0..1.0) }
 }
 

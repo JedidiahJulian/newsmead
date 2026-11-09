@@ -62,10 +62,16 @@ class ReadingAidPolicy(
     fun activeActions(): List<ReadingAidAction> = active.values.sortedBy { it.aidType.name }
 
     fun updatePreferences(value: ReaderAidPreferences, context: ReadingAidContext): List<ReadingAidDecision> {
+        val modeChanged = value.mode != preferences.mode
         val guideChanged = value.guideStyle != preferences.guideStyle ||
-            value.lineGuide != preferences.lineGuide || value.enabled != preferences.enabled
+            value.lineGuide != preferences.lineGuide || modeChanged
         preferences = value
         val out = mutableListOf<ReadingAidDecision>()
+        if (modeChanged) {
+            for (type in active.keys.toList())
+                clear(type, context.nowMs, "reading_aids_mode_changed", out, false)
+            resetEvidence()
+        }
         if (guideChanged) {
             guideDirection.reset()
             clear(ReadingAidType.CURRENT_LINE, context.nowMs, "guide_style_changed", out, false)
@@ -105,6 +111,7 @@ class ReadingAidPolicy(
     fun onEvent(event: ScanpathEvent, latestFinalizedFixation: ScanpathFixation?,
                 context: ReadingAidContext): List<ReadingAidDecision> {
         val out = prepare(context).toMutableList()
+        if (preferences.mode == ReadingAidsMode.ON) return out
         // V5 consumes selected fresh samples in prepare; finalized events remain descriptive.
         if (config.evidenceAlignedV5) return out
         if (event.eventId in seenEvents) return out
@@ -231,6 +238,7 @@ class ReadingAidPolicy(
 
     fun onObservation(candidate: ScanpathCandidateEvidence?, context: ReadingAidContext): List<ReadingAidDecision> {
         val out = prepare(context).toMutableList()
+        if (preferences.mode == ReadingAidsMode.ON) return out
         if (config.evidenceAlignedV5) return out
         if (!valid(context)) return out
         if (candidate != null && segment != null && candidate.segment != segment) {
@@ -570,13 +578,19 @@ class ReadingAidPolicy(
             seenEvents.clear()
         }
         epoch = next
-        if (!config.automaticRulesEnabled || !preferences.enabled || preferences.maxStrength == 0.0 ||
+        if ((!config.automaticRulesEnabled && preferences.mode != ReadingAidsMode.ON) ||
+            !preferences.enabled || preferences.maxStrength == 0.0 ||
             (!preferences.adaptiveStrength && preferences.manualStrength == 0.0) ||
-            !c.bookmarkInputAllowed || !c.focusInputAllowed || !continuationGeometryValid(c)) {
+            (preferences.mode != ReadingAidsMode.ON && (!c.bookmarkInputAllowed || !c.focusInputAllowed)) ||
+            !continuationGeometryValid(c)) {
             clearAll(c.nowMs, "operational_or_geometry_boundary", out)
             location.reset(); guideDirection.reset(); bookmark.reset(); bookmarkPreciseSupport = null
             if (!preferences.enabled || preferences.maxStrength == 0.0 ||
                 (!preferences.adaptiveStrength && preferences.manualStrength == 0.0)) focus.reset() else focus.pause()
+            return out
+        }
+        if (preferences.mode == ReadingAidsMode.ON) {
+            forceEnabledPresentations(null, c, out)
             return out
         }
         val update = location.update(c, c.locationUncertainty, c.targetWordBounds)
@@ -647,6 +661,77 @@ class ReadingAidPolicy(
             else if (c.nowMs >= action.expiresMs) expire(type, c.nowMs, out)
         }
         return out
+    }
+
+    /** ON bypasses behavioral triggers; a visible row is enough for non-word presentations. */
+    private fun forceEnabledPresentations(visit: ReadingSupportedVisit?, c: ReadingAidContext,
+        out: MutableList<ReadingAidDecision>) {
+        if (!continuationGeometryValid(c)) return
+        val line = visit?.band?.representativeLine
+            ?.takeIf { fullyVisible(it, c) }
+            ?: c.rawSample?.line?.takeIf { c.validLiveInput && fullyVisible(it, c) }
+            ?: c.geometry!!.lines.indices.firstOrNull { fullyVisible(it, c) }
+            ?: return
+        val support = visit?.continuation()
+        val first = support?.firstCaptureMs ?: c.nowMs
+        val last = support?.lastCaptureMs ?: c.nowMs
+        val available = support?.evidenceAvailableMs ?: c.nowMs
+        val evidenceIds = listOfNotNull(support?.evidenceId)
+        val continuation = listOfNotNull(support)
+        forceGuide(line, first, last, available, evidenceIds, continuation, c, out)
+        if (allowed(ReadingAidType.READING_BOOKMARK)) choose(ReadingAidType.READING_BOOKMARK,
+            anchor(c, line), 1.0, first, last, available, emptyList(), evidenceIds,
+            "MODE_ON_BOOKMARK_PRESENTATION_V1", emptyList(),
+            "Reader-selected ON presentation at a current or visible article position; not bookmark-trigger evidence.",
+            c, out, continuationEvidence = continuation)
+        if (allowed(ReadingAidType.FOCUS_REGION)) choose(ReadingAidType.FOCUS_REGION,
+            anchor(c, line), ReadingAidPolicyConfig.FOCUS_STRENGTH_STEP,
+            first, last, available, emptyList(), evidenceIds, "MODE_ON_FOCUS_PRESENTATION_V1", emptyList(),
+            "Reader-selected ON presentation at a current or visible article position; not focus-trigger evidence.",
+            c, out, continuationEvidence = continuation)
+        val wordStart = c.targetWordStartUtf16
+        val wordEnd = c.targetWordEndUtf16
+        val wordLine = c.rawSample?.line
+        if (allowed(ReadingAidType.WORD_DEFINITION) && c.validLiveInput && wordLine != null &&
+            wordStart != null && wordEnd != null && c.targetWordBounds != null && fullyVisible(wordLine, c))
+            choose(ReadingAidType.WORD_DEFINITION,
+            anchor(c, wordLine, wordStart, wordEnd), 1.0, first, last, available,
+            emptyList(), evidenceIds, "MODE_ON_WORD_LOOKUP_OFFER_V1", emptyList(),
+            "Reader-selected ON lookup offer at a mapped word; definition content still requires user interaction.",
+            c, out, continuationEvidence = continuation, wordConfidence = "mapped_current_word")
+    }
+
+    private fun forceGuide(line: Int, first: Double, last: Double, available: Double,
+        evidenceIds: List<String>, continuation: List<ReadingAidContinuationEvidence>,
+        c: ReadingAidContext, out: MutableList<ReadingAidDecision>) {
+        if (!preferences.lineGuide) return
+        val g = c.geometry ?: return
+        val sentence = preferences.guideStyle == ReadingGuideStyle.SENTENCE
+        val threeLine = preferences.guideStyle == ReadingGuideStyle.THREE_LINE
+        val row = g.lines[line]
+        val rows = ReadingLineGuideAppearance.rows(line, g.lines.lastIndex, ReadingGuideDirection.BALANCED)
+        val range = when {
+            sentence -> c.guideRange?.takeIf {
+                c.targetLine == line && guideRangeValid(c) && it.endUtf16 > it.startUtf16
+            } ?: return
+            threeLine -> ReadingGuideRange(g.lines[rows.first].startUtf16,
+                g.lines[rows.last].endUtf16, ReadingGuideUnit.READING_BAND)
+            else -> ReadingGuideRange(row.startUtf16, row.endUtf16, ReadingGuideUnit.LINE)
+        }
+        val type = if (sentence) ReadingAidType.CURRENT_SENTENCE else ReadingAidType.CURRENT_LINE
+        val opacity = if (threeLine) ReadingLineGuideAppearance.THREE_CENTER_OPACITY else .13
+        val capped = minOf(opacity, .19 * preferences.maxStrength,
+            if (preferences.adaptiveStrength) .19 else .19 * preferences.manualStrength)
+        val three = if (threeLine) ReadingLineGuideAppearance.threeLine(
+            ReadingGuideDirection.BALANCED, capped, continuation) else null
+        val guide = ReadingAidGuideEvidence(line, line, "reader_selected_on_visible_anchor", false,
+            Double.MAX_VALUE, c.nowMs - 1.0, capped, entryMs = 1.0, threeLine = three)
+        clear(if (sentence) ReadingAidType.CURRENT_LINE else ReadingAidType.CURRENT_SENTENCE,
+            c.nowMs, "guide_style_changed", out, false)
+        choose(type, anchor(c, line), capped / .19, first, last, available,
+            emptyList(), evidenceIds, "MODE_ON_GUIDE_PRESENTATION_V1", emptyList(),
+            "Reader-selected ON presentation at a current or visible article position; not trigger evidence.",
+            c, out, continuationEvidence = continuation, guideRange = range, guideEvidence = guide)
     }
 
     private fun ReadingSupportedVisit.continuation() = ReadingAidContinuationEvidence(id, segment,
@@ -721,6 +806,10 @@ class ReadingAidPolicy(
             seenEvents.clear()
         }
         epoch = next
+        if (preferences.mode == ReadingAidsMode.ON) {
+            forceEnabledPresentations(null, c, out)
+            return out
+        }
         if (currentGuideProfile()) {
             if (!config.automaticRulesEnabled || !allowed(ReadingAidType.FOCUS_REGION) ||
                 preferences.maxStrength == 0.0 || (!preferences.adaptiveStrength && preferences.manualStrength == 0.0)) {
@@ -885,7 +974,7 @@ class ReadingAidPolicy(
                 (config.maxMagnificationScale - 1.0) * strength else null,
             if (type == ReadingAidType.FOCUS_REGION) config.focusContextRadiusLines else null,
             guideEvidence?.presentationStartedMs ?: c.nowMs,
-            if (type == ReadingAidType.READING_BOOKMARK || focusEvidence != null) Double.MAX_VALUE
+            if (type == ReadingAidType.READING_BOOKMARK || focusEvidence != null || rule.startsWith("MODE_ON_")) Double.MAX_VALUE
             else if (guideEvidence != null) guideEvidence.lastSupportedDeliveryMs + guideEvidence.lossGraceMs + guideEvidence.exitMs
             else c.nowMs + config.aidTtlMs, events, evidence,
             first, last, available, rule, sources, relationship, true, config.configId, continuationEvidence, bookmarkEvidence, guideRange, focusEvidence,

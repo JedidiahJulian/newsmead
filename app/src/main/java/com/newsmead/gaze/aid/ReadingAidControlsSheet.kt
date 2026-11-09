@@ -37,7 +37,28 @@ object ReadingAidControlsSheet {
             if (child) children.add(this)
             setOnCheckedChangeListener { _, value -> change(update(value)) }
         }
-        toggle(R.id.readingAidMenuEnabled, R.string.reading_aids_enabled, prefs.enabled, false) { prefs.copy(enabled = it) }
+        text(R.string.reading_aids_mode)
+        val modes = RadioGroup(context).apply { orientation = RadioGroup.VERTICAL; panel.addView(this) }
+        fun modeRadio(id: Int, label: Int) = MaterialRadioButton(context).apply {
+            this.id = id; setText(label); minHeight = dp(48); modes.addView(this)
+        }
+        val modeOn = modeRadio(R.id.readingAidModeOn, R.string.reading_aids_mode_on)
+        val modeAuto = modeRadio(R.id.readingAidModeAuto, R.string.reading_aids_mode_auto)
+        val modeOff = modeRadio(R.id.readingAidModeOff, R.string.reading_aids_mode_off)
+        modes.check(when (prefs.mode) {
+            ReadingAidsMode.ON -> modeOn.id
+            ReadingAidsMode.AUTO -> modeAuto.id
+            ReadingAidsMode.OFF -> modeOff.id
+        })
+        modes.setOnCheckedChangeListener { _, id ->
+            val mode = when (id) {
+                modeOn.id -> ReadingAidsMode.ON
+                modeAuto.id -> ReadingAidsMode.AUTO
+                modeOff.id -> ReadingAidsMode.OFF
+                else -> return@setOnCheckedChangeListener
+            }
+            change(prefs.copy(mode = mode))
+        }
         toggle(R.id.readingAidMenuGuide, R.string.reading_aid_menu_guide, prefs.lineGuide) { prefs.copy(lineGuide = it) }
         val styles = RadioGroup(context).apply { orientation = RadioGroup.VERTICAL; panel.addView(this) }
         fun radio(id: Int, label: Int) = MaterialRadioButton(context).apply {
@@ -121,7 +142,7 @@ object ReadingAidControlsSheet {
         }
         panel.addView(advanced)
         refresh = {
-            val limit = if (prefs.enabled && prefs.lineGuide)
+            val limit = if (prefs.mode != ReadingAidsMode.OFF && prefs.lineGuide)
                 .19 * minOf(prefs.maxStrength, if (prefs.adaptiveStrength) 1.0 else prefs.manualStrength) else 0.0
             if (prefs.guideStyle == ReadingGuideStyle.THREE_LINE) {
                 val center = minOf(ReadingLineGuideAppearance.THREE_CENTER_OPACITY, limit)
@@ -133,15 +154,16 @@ object ReadingAidControlsSheet {
                 guideHelp.setText(if (prefs.guideStyle == ReadingGuideStyle.SENTENCE)
                     R.string.reading_aid_menu_sentence_help else R.string.reading_aid_menu_line_help)
             }
-            children.forEach { it.isEnabled = prefs.enabled }
-            line.isEnabled = prefs.enabled && prefs.lineGuide
-            threeLine.isEnabled = prefs.enabled && prefs.lineGuide
-            sentence.isEnabled = prefs.enabled && prefs.lineGuide
-            focusStyles.isEnabled = prefs.enabled && prefs.focusRegion
-            fadeText.isEnabled = prefs.enabled && prefs.focusRegion
-            darkSurroundings.isEnabled = prefs.enabled && prefs.focusRegion
-            manual.isEnabled = prefs.enabled && !prefs.adaptiveStrength
-            adaptive.isEnabled = prefs.enabled
+            val modeAllowsAids = prefs.mode != ReadingAidsMode.OFF
+            children.forEach { it.isEnabled = modeAllowsAids }
+            line.isEnabled = modeAllowsAids && prefs.lineGuide
+            threeLine.isEnabled = modeAllowsAids && prefs.lineGuide
+            sentence.isEnabled = modeAllowsAids && prefs.lineGuide
+            focusStyles.isEnabled = modeAllowsAids && prefs.focusRegion
+            fadeText.isEnabled = modeAllowsAids && prefs.focusRegion
+            darkSurroundings.isEnabled = modeAllowsAids && prefs.focusRegion
+            manual.isEnabled = modeAllowsAids && !prefs.adaptiveStrength
+            adaptive.isEnabled = modeAllowsAids
         }
         refresh()
         MaterialButton(context).apply {

@@ -13,6 +13,7 @@ import com.newsmead.R
 import com.newsmead.activities.ScanpathReplayActivity
 import com.newsmead.activities.ScanpathReplayResult
 import com.newsmead.gaze.aid.ReaderAidPreferences
+import com.newsmead.gaze.aid.ReadingAidsMode
 import com.newsmead.gaze.aid.ReadingGuideStyle
 import com.newsmead.gaze.aid.ReadingFocusStyle
 import org.json.JSONObject
@@ -127,7 +128,7 @@ class ScanpathReplayActivityTest {
     @Test fun allScenariosWithAidsDisabledRetainLegacyDetectorOutcomes() {
         ActivityScenario.launch(ScanpathReplayActivity::class.java).use { activity ->
             ScanpathReplayScenarios.scenarios.forEach { scenario ->
-                select(activity, scenario.id, ReaderAidPreferences(enabled = false, wordDefinition = false))
+                select(activity, scenario.id, ReaderAidPreferences(mode = ReadingAidsMode.OFF, wordDefinition = false))
                 val result = await(activity, scenario.id == "word_refixations")
                 assertEquals("${scenario.id}: ${result.termination}", "completed", result.termination)
                 assertNull(result.traceFailure)

@@ -70,6 +70,7 @@ import com.newsmead.gaze.scanpath.ScanpathEngine
 import com.newsmead.gaze.aid.ArticleReadingAidRuntime
 import com.newsmead.gaze.aid.ReadingAidOverlayView
 import com.newsmead.gaze.aid.ReaderAidPreferences
+import com.newsmead.gaze.aid.ReaderAidPreferencesStore
 import com.newsmead.gaze.aid.ReadingAidControlsSheet
 import com.newsmead.gaze.aid.ReadingAidControlGate
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -202,6 +203,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     ): View {
         Log.d("ArticleFragment", "onCreateView: ArticleFragment started")
         binding = FragmentArticleBinding.inflate(inflater, container, false)
+        aidPreferences = ReaderAidPreferencesStore.load(requireContext(),
+            ReaderAidPreferences(wordMagnifier = false))
         articleBodyReady = false
         isTranslated = false
         definitionPopup = ReadingAidDefinitionPopup(requireContext(), binding.root as ViewGroup, binding.tvArticleText)
@@ -1673,6 +1676,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         readingAidControls = ReadingAidControlsSheet.show(requireContext(), aidPreferences,
             onChanged = { preferences ->
                 aidPreferences = preferences
+                ReaderAidPreferencesStore.save(requireContext(), preferences)
                 if (readingAidRuntime === runtime) runtime?.updatePreferences(preferences)
                 articleAutoScroll?.setEnabled(preferences.enabled && preferences.autoScroll)
             }, onDismiss = {

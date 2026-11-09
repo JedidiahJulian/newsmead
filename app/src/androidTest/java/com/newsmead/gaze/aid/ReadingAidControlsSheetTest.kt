@@ -56,15 +56,16 @@ class ReadingAidControlsSheetTest {
                 try {
                     val line = menu.findViewById<MaterialRadioButton>(R.id.readingAidMenuLine)!!
                     val sentence = menu.findViewById<MaterialRadioButton>(R.id.readingAidMenuSentence)!!
-                    val master = menu.findViewById<SwitchMaterial>(R.id.readingAidMenuEnabled)!!
+                    val off = menu.findViewById<MaterialRadioButton>(R.id.readingAidModeOff)!!
+                    val auto = menu.findViewById<MaterialRadioButton>(R.id.readingAidModeAuto)!!
                     sentence.performClick()
                     assertEquals(ReadingGuideStyle.SENTENCE, value.guideStyle)
                     assertTrue(sentence.isChecked); assertFalse(line.isChecked)
-                    master.performClick()
-                    assertFalse(value.enabled); assertFalse(sentence.isEnabled)
+                    off.performClick()
+                    assertEquals(ReadingAidsMode.OFF, value.mode); assertFalse(sentence.isEnabled)
                     assertTrue(sentence.isChecked); assertFalse(value.focusRegion)
-                    master.performClick()
-                    assertTrue(value.enabled); assertTrue(sentence.isEnabled)
+                    auto.performClick()
+                    assertEquals(ReadingAidsMode.AUTO, value.mode); assertTrue(sentence.isEnabled)
                     assertFalse(value.focusRegion); assertFalse(value.wordMagnifier)
                     assertEquals(.35, value.manualStrength, 0.0)
                     assertEquals(.8, value.maxStrength, 0.0)
@@ -106,7 +107,8 @@ class ReadingAidControlsSheetTest {
                     val fade = menu.findViewById<MaterialRadioButton>(R.id.readingAidMenuFocusFade)!!
                     val dark = menu.findViewById<MaterialRadioButton>(R.id.readingAidMenuFocusDark)!!
                     val focus = menu.findViewById<SwitchMaterial>(R.id.readingAidMenuFocus)!!
-                    val master = menu.findViewById<SwitchMaterial>(R.id.readingAidMenuEnabled)!!
+                    val off = menu.findViewById<MaterialRadioButton>(R.id.readingAidModeOff)!!
+                    val on = menu.findViewById<MaterialRadioButton>(R.id.readingAidModeOn)!!
                     assertTrue(fade.isChecked); assertFalse(dark.isChecked)
                     dark.performClick()
                     assertEquals(ReadingFocusStyle.DARK_SURROUNDINGS, value.focusStyle)
@@ -116,11 +118,11 @@ class ReadingAidControlsSheetTest {
                     assertEquals(ReadingFocusStyle.DARK_SURROUNDINGS, value.focusStyle)
                     focus.performClick()
                     assertTrue(value.focusRegion); assertTrue(dark.isEnabled); assertTrue(dark.isChecked)
-                    master.performClick()
-                    assertFalse(value.enabled); assertFalse(dark.isEnabled)
+                    off.performClick()
+                    assertEquals(ReadingAidsMode.OFF, value.mode); assertFalse(dark.isEnabled)
                     assertEquals(ReadingFocusStyle.DARK_SURROUNDINGS, value.focusStyle)
-                    master.performClick()
-                    assertTrue(value.enabled); assertTrue(dark.isEnabled); assertTrue(dark.isChecked)
+                    on.performClick()
+                    assertEquals(ReadingAidsMode.ON, value.mode); assertTrue(dark.isEnabled); assertTrue(dark.isChecked)
                     assertEquals(ReadingGuideStyle.SENTENCE, value.guideStyle)
                     assertFalse(value.wordDefinition); assertFalse(value.lineStartCue)
                     assertEquals(.37, value.manualStrength, 0.0); assertEquals(.82, value.maxStrength, 0.0)

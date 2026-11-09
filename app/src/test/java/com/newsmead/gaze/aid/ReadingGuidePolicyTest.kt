@@ -69,7 +69,7 @@ class ReadingGuidePolicyTest {
         assertTrue(p.activeActions().isEmpty())
     }
     @Test fun disableMasterManualZeroAndResetClear() {
-        for (preferences in listOf(ReaderAidPreferences(enabled = false),
+        for (preferences in listOf(ReaderAidPreferences(mode = ReadingAidsMode.OFF),
             ReaderAidPreferences(lineGuide = false), ReaderAidPreferences(maxStrength = 0.0),
             ReaderAidPreferences(adaptiveStrength = false, manualStrength = 0.0))) {
             val p = sentencePolicy()

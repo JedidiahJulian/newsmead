@@ -1,5 +1,7 @@
 <resources>
-    <item name="readingAidMenuEnabled" type="id" />
+    <item name="readingAidModeOn" type="id" />
+    <item name="readingAidModeAuto" type="id" />
+    <item name="readingAidModeOff" type="id" />
     <item name="readingAidMenuGuide" type="id" />
     <item name="readingAidMenuLine" type="id" />
     <item name="readingAidMenuThreeLine" type="id" />

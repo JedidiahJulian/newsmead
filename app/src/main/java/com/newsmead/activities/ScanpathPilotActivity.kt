@@ -215,7 +215,8 @@ class ScanpathPilotActivity : AppCompatActivity() {
         plan = if (selectedTask == "ordinary_reading") null else PilotTasks.build(selectedTask, plannedFrame!!, words)
         val reading = plan == null
         val condition = if (reading) settings.readingCondition else PilotReadingCondition.NO_AIDS
-        val prefs = if (condition == PilotReadingCondition.NO_AIDS) settings.preferences.copy(enabled = false) else settings.preferences
+        val prefs = if (condition == PilotReadingCondition.NO_AIDS)
+            settings.preferences.copy(mode = ReadingAidsMode.OFF) else settings.preferences
         runtime = ArticleReadingAidRuntime(binding.pilotBody, binding.pilotWordDock, overlay,
             ReadingAidPolicyConfig.evidenceAlignedPrototype().copy(conditionId = "SMOOTHED_PILOT_EVIDENCE_${condition.name}_V11"), prefs,
             if (synthetic) ReadingAidInputSource.SYNTHETIC_REPLAY else ReadingAidInputSource.LIVE_MGAZENET,

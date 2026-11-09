@@ -4,6 +4,7 @@ import android.view.View
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.radiobutton.MaterialRadioButton
 import com.newsmead.R
 import com.newsmead.activities.ScanpathReplayActivity
 import com.newsmead.gaze.aid.ReaderAidPreferences
@@ -27,7 +28,7 @@ class ArticleAutoScrollControllerTest {
                     assertFalse(toggle.isChecked)
                     toggle.isChecked = true
                     assertTrue(preferences.autoScroll)
-                    article.findViewById<SwitchMaterial>(R.id.readingAidMenuEnabled)!!.isChecked = false
+                    article.findViewById<MaterialRadioButton>(R.id.readingAidModeOff)!!.performClick()
                     assertFalse(toggle.isEnabled)
                 } finally { article.dismiss() }
                 val frozen = ReadingAidControlsSheet.show(activity, preferences, {})
