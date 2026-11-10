@@ -67,6 +67,8 @@ class MgazeNetGazeProvider(
     private var lastOutput = -1.0
     private var fresh = false
     var onObservation: ((Observation) -> Unit)? = null
+    /** Numeric acquisition/processing provenance; does not change the coordinate pipeline. */
+    var onMetadata: ((Map<String, Any?>) -> Unit)? = null
     var onFailure: ((String) -> Unit)? = null
     var onFps: ((Float) -> Unit)? = null
     private var fpsStart = 0.0
@@ -89,7 +91,13 @@ class MgazeNetGazeProvider(
         val output = MgazeNetLiveOutput(identity.screenWidth, identity.screenHeight,
             smoothForReading, rejectBlinks, maxOutputAgeMs)
         liveOutput = output
-        source = MgazeNetCameraSource(context,owner,ready = {}, result = { frame ->
+        source = MgazeNetCameraSource(context,owner,ready = { metadata ->
+            onMetadata?.invoke(metadata + mapOf("prefer_stable_frame_rate" to preferStableFrameRate,
+                "smooth_for_reading" to smoothForReading, "reject_blinks" to rejectBlinks,
+                "output_max_age_ms" to maxOutputAgeMs,
+                "smoothing_min_cutoff" to MgazeNetReadingSmoother.MIN_CUTOFF,
+                "smoothing_beta" to MgazeNetReadingSmoother.BETA))
+        }, result = { frame ->
             val size = view.physicalDisplaySize(displaySize)
             if (size.x != identity.screenWidth || size.y != identity.screenHeight || view.display.rotation != identity.rotation) {
                 fail("Screen geometry changed; recalibrate.")

@@ -1,4 +1,4 @@
-# Agent context — updated 2026-10-27
+# Agent context — updated 2026-11-09
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -24,6 +24,805 @@ if present, maps false to OFF and true to AUTO. Focused policy/migration tests p
 and the Android test APK compiled. No device, camera, calibration or human-validity
 check was performed.
 
+**2026-11-09 interview sheet simplified after owner feedback:**
+Owner rejects the4-page guide as too wordy for live interviewing and supplies
+Downloads/annex8-fm1.pdf as a STRUCTURE reference, then explicitly asks for short,
+open-ended questions and follow-ups. Inspected reference text/first-page layout;
+did not adopt its medical content, demographics or verbal-only consent procedure.
+Rewrote sibling formative_interview_guide.tex as2readable pages with numbered
+topics1-10, one open-ended follow-up each, simple grey section bars and brief
+opening/preview cues. VersionFT-2026-11-09-S1;284words including header/footer.
+Questions1-5 remain after natural reading/written notes;6-8 repeat per previewed
+aid;9-10 close before debrief. Preview is explicitly deliberate, not gaze-triggered.
+Moved detailed administration/interpretation notes to existing
+participant-session-steps.md; methodology safeguards remain in Chapter4 unchanged.
+Updated operator-guide question references to1-10. This is a conversational guide,
+not a script requiring every follow-up. Known consent/screening/debrief and app
+instruction alignment remains outstanding; no protocol, eligibility, audio-scope,
+questionnaire or measurement change was made by this simplification.
+Rebuilt original main.pdf(116pages) and replaced original interview-guide PDF
+with the2-page extract. Compile/crossrefs, ten-question/phase checks, both-page
+visual QA and final hashes pass. Source-before backups, reference renders, checks
+and final receipt: sibling output/pdf/interview-guide-simple-2026-11-09/.
+Main SHA256188791d82d63516e13fbab5ea0c0c30ec0d04504e0a915e5bd6be3f931e532bc;
+guide SHA2560f488776718c049b51e7145c1af12cbcf3db3546adef3caf6a438cedacf1f39f.
+No original consent/screening/debrief PDF changes, app/device work, staging or commit.
+
+**2026-11-09 formative methodology and interview guide revised:**
+Owner explicitly authorizes updating the existing formative thesis section and
+interview questions. Edited sibling THS-ST-Paper Chapter4 Section4.1 (plus its
+intro phrase), Chapter1 formative summary/figure caption, AppendixA guide inclusion,
+and corrected the placeholder GazePrompt bibliography entry. Added shared source
+formative_interview_guide.tex and a4-page printable extract; rebuilt main.pdf
+(118pages). No wholesale manuscript rewrite or original3form-PDF edits this task.
+Initial round remains3-5target participants: normal reading with live aids after
+existing preparation/shared baseline; exit article/Stop run; written N1-N5 feedback;
+labelled display preview; post-task P1-P3 for each previewed aid and closing C1-C2;
+formative-aligned debrief/data-use confirmation. No mandatory control group or
+off/on comparison, no forced triggers or concurrent think-aloud. MD remains
+observational; reference/score failures stay unavailable; no new questionnaire,
+clinical gate or validated focus/stability score is adopted. Preserve existing
+eligibility/retries and label phase/version; do not pool pilot with later main data.
+Preview is not natural trigger evidence, and recorded rendering is not reported
+noticing. Guide explicitly notes ordinary article opening can start camera before
+demo mode; recording OFF alone does not stop capture. PartA/reading/preview audio
+is outside the current post-session audio permission; final interview audio only
+if separately permitted. Operator guide now distinguishes formative vs comparison
+flows; older per-article UES proposal remains a later-evaluation candidate.
+IMPORTANT: current consent/screening/debriefing PDFs still describe2comparison
+readings; target their procedure wording before using this formative variant.
+Review caught the debrief mismatch, fixed the prerequisite and explicit natural/
+preview explanation in revised text; re-review has no remaining findings. Approval
+is documented elsewhere, not newly questioned. Installed app Session instructions
+also still describe comparison flow. Legacy later-outcome/controller sections
+remain outside this bounded revision. Source boundary checks preserve Chapter4
+afterSection4.1, Chapter1 outside the targeted summary and existing appendix PDFs.
+LaTeX build/crossrefs and guide question-ID checks pass; revised pages visually
+inspected. Backups/build/QA/receipts in sibling output/pdf/formative-methods-2026-11-09/.
+Final original main.pdf SHA25638b034d5713cbbd25ab7423d280df5a6773409248456995747cc5d228b914a6f;
+formative_interview_guide.pdf SHA256d0719f394e565a81ebfbe7d7fc8284ebb38a19ccc02a533bbeb13ef587e3f015.
+No app code change, device operation, collection, staging or commit in this task.
+
+**2026-11-09 account-free fixed article list implemented:**
+Owner explicitly requests prefilled articles without creating a testing account
+or syncing history. The account-free build now shows Saved -> Testing articles,
+using the existing2 bundled setup samples (not approved participant comparison
+texts). New StudyArticleCatalog validates explicit unique IDs/title/body, preserves
+exact text and namespaces IDs as local-study-v1:<article_id>. StudyArticlesFragment
+uses the existing card/list/navigation design. ArticleFragment gives packaged
+body precedence over account Room cache and URL extraction; the network feed
+remains enabled. Actual final English articles/questions still need selection.
+Source audit also found normal saved offline articles can be refreshed after1day
+by startup preload; the prior claim that normal saving alone permanently freezes
+them was incomplete. Packaged testing articles bypass that account path.
+Single accountFreeStudyBuild flag in app/build.gradle.kts supplies BYPASS_LOGIN
+and pre-start manifest policy. Account preload/history/saved checks and auth UI
+are bypassed; no testing account or participant Firebase identity was created.
+Analytics is deactivated in the manifest. Focused review caught a retained-opt-in
+Crashlytics startup race; fixed with the accountFree manifest overlay removing
+the eager CrashlyticsRegistrar before SDK initialization. Logging wrappers skip
+cloud reporting. Reviewer confirmed the exact18.4.3 registrar is absent from
+merged debug manifest and the remaining KTX registrar cannot recreate reporting.
+No gaze, aid, MD or baseline algorithm changes. No claim of whole-app network
+silence: news/dictionary requests remain possible and Firebase SDKs remain bundled.
+Final offline main/test APK builds and16focused JVM tests pass; packaged catalog
+matches source. LocalStudyArticlesDeviceTest is compiled and camera-free (list,
+Home/Profile, recreation, manifest/component checks), but NOT run. No phone
+install/capture, staging, commit, original-PDF or manuscript edits in this task.
+APK SHA256 b194c610f6586faca493c155f192979acfdb87e47926159baf72338857ebbe21.
+Checks receipt/log: ignored output/local-study-articles-checks-2026-11-09.json
+and output/local-study-articles-final-build-2026-11-09.log. Hardware startup,
+retained-data upgrade and article-reading runtime remain unverified for this build.
+SDK policy sources: https://firebase.google.com/docs/analytics/android/configure-data-collection
+and https://firebase.google.com/docs/crashlytics/android/customize-crash-reports .
+
+**2026-11-09 assessment research and concrete recommendation prepared:**
+Owner says proceed with HCI-focused evaluation preparation and confirms English
+for the first volunteers' articles/assessments. Added a clearly marked draft to
+the existing reading-outcome-measures-evidence-2026-11-08.md and linked it from
+participant-session-steps.md; original forms/manuscript/app are unchanged in this
+task. Recommendation: full12-item English UES-SF after each assigned reading,
+with Focused Attention the candidate numerical experience outcome, plus neutral
+post-condition interviews for continuity/comfort/distraction, existing logs and
+supporting comprehension questions. This is NOT a selected instrument, frozen
+primary endpoint or active participant protocol. UES-SF FA measures absorption/
+time passing; it cannot establish concentration lapses or keeping one's place.
+The source supports separate subscale means, reverse-coded usability items and
+separate repeated administrations; retaining all12 avoids claiming three selected
+items are the complete instrument. No validated place-keeping score was established
+in this bounded review. English wording needs no new translation, but older-adult
+phone-news validity remains unestablished. No custom composite, new clinical
+threshold, formal hypothesis, significance test or numeric stability endpoint.
+Draft includes6neutral interview prompts, explicit task/package linkage, missingness,
+counterbalancing, per-article assessment priming, and materials still to be named.
+Primary source: https://oro.open.ac.uk/68806/1/1-s2.0-S1071581918300041-main.pdf
+sections6/8 and AppendicesA-B. Direct HCI reading-aid precedent remains GazePrompt
+sections4.1.2/5.1 (desktop low vision). No device capture, PDF rewrite or staging.
+
+**2026-11-09 owner prioritizes reading experience, focus and stability:**
+The owner clarifies that focus and stability during news reading should lead the
+HCI evaluation, with comprehension receiving less priority. This is an outcome
+direction, not selection of a questionnaire, validated stability score or final
+statistical endpoint. Define perceived concentration/keeping one's place separately
+from objectively demonstrated attention or reading errors. Scanpath classifications
+are categorical algorithm outputs; their counts/durations can be quantitative.
+Interviews supply qualitative evidence. Both MD variants remain numerical
+observations, not established reader-benefit/stability measures. Do not equate
+lower MD, fewer regressions or smoother coordinates with improved reading.
+The owner also notes the live recommendation feed changes articles. Source check:
+StudyConfig.OFFLINE_MODE=false; DataHelper.loadArticleData uses the network path
+with a 10-minute response cache; loadLocalArticleData and study_articles.json
+already offer a bundled-content route, currently inactive. No feed or content
+change was made. Proposed controlled comparisons can freeze selected real-news
+texts and balance their condition/order assignments while retaining normal
+recommendations for exploratory use; this has not been adopted or implemented.
+Relevant primary precedent: GazePrompt sections4.1.2 and5.1 used experience ratings,
+interviews and controlled passages; silent-reading participants were13 low-vision
+adults aged30-85 on a desktop, not validation for older phone-news readers:
+https://arxiv.org/html/2402.12772 . UES/UES-SF is a published engagement-instrument
+candidate, not a selected measure or verified place-keeping assessment:
+https://doi.org/10.1016/j.ijhcs.2018.01.004 . Assessment selection remains open.
+
+**2026-11-09 post-reading assessment preparation remains open:**
+User asks whether user testing also requires assessments and interview data.
+Current Chapter 4 already specifies comprehension after each article, researcher
+observations, a usability survey, then semi-structured interview and debrief.
+The session guide likewise links external answers/notes by participant/task IDs;
+the local study recorder has no comprehension/survey/interview capture UI.
+Bounded search found no finalized article question/answer-key set, questionnaire
+instrument or separate interview-guide artifact in the current project files.
+Do not claim the consent/screening revisions finished assessment preparation.
+Proposed initial collection: fixed article questions with scoring key; actual task
+start/end/completion and technical/assistance notes; an established usability
+questionnaire selected with the owner; neutral interview on noticed changes,
+help/distraction, comfort and preference before debrief; existing post-debrief
+data-use confirmation. Paper/local records can link to gaze data without Firebase.
+SUS is only a candidate for perceived system usability, not a reading-performance
+test or adopted instrument. Primary author source retrieved:
+https://uxpajournal.org/wp-content/uploads/sites/7/pdf/JUS_Brooke_February_2013.pdf
+No new assessment forms, questionnaire, primary outcome or scoring protocol were
+selected/created in this clarification. Chapter 4's older recovery-latency-primary
+and index/controller wording still need a separate substantive revision.
+
+**2026-11-08 WHOeyes descriptive recording and functional eligibility adopted:**
+User reports WHOeyes near output is only 0-100%, without a 20/40 result, and asks
+whether that exact acuity cutoff is necessary. No percentage-to-Snellen mapping
+was verified; do not assume 50%=20/40 or use an undocumented percentage cutoff.
+User explicitly approved the proposed alternative ('yes lets do that'). WHOeyes
+score/setup are now descriptive background; eligibility uses ability to see and
+read the existing held-out practice passage at fixed study settings with habitual
+correction, while tracking is assessed separately. No Snellen or percentage
+eligibility cutoff and no clinical/validated-reading-score claim. A wrong practice
+comprehension answer alone is not a visual-screening failure. The record now asks
+'Practice text readable? Yes / No / Unclear'. All remaining criteria must still
+be completed; age, health exclusions and two full calibration attempts unchanged.
+Updated original sibling THS-ST-Paper/screening_guide.pdf in place (9 pages),
+targeted its Chapter 4 eligibility/source paragraphs, and aligned the existing
+docs/participant-session-steps.md. Consent/debrief PDFs were not changed again.
+Nineteen targeted PDF edits; changed pages visually inspected, drawings preserved,
+zero changed pixels outside amended regions. Independent review found a legacy
+'Section 3 passed' enrolment reference; fixed and reviewer confirmed resolution.
+Backups, scripts and final receipt: ignored
+output/pdf/functional-reading-eligibility-2026-11-08/.
+No app/device operation, new clinical validation, staging or commit. Whole-manuscript
+PDF was not rebuilt; other legacy methodology sections remain a separate task.
+GazePrompt's functional-reading eligibility is precedent in 13 desktop low-vision
+participants, not validation of our phone screen:
+https://arxiv.org/html/2402.12772 sections4.1.1-4.1.2.
+
+**2026-11-08 original PDFs revised with explicit authorization:**
+User then explicitly instructed: work directly on originals and provide correct
+PDFs. Edited the three original files in sibling THS-ST-Paper in place:
+`Informed_Consent_Form.pdf` (3 pages), `screening_guide.pdf` (9 pages), and
+`debriefing_script.pdf` (5 pages). This is targeted PDF text surgery, not a new
+packet or redesign. Original letterheads, section numbering, Times typography,
+bilingual scripts, form/table rules, checkboxes and signature areas retained.
+Consent corrects camera tasks, numerical local records/transfer, coded identity
+and identifiable optional audio. Screening integrates WHOeyes near/binocular/
+40 cm with actual score/units/device/version/distance and uncertain-result handling,
+current 13-target/six-check cm gate (including 12 usable samples/check), same
+two-full-attempt limit, fresh participant calibration before practice and explicit
+shared baseline controls. Clinical exclusions and age criteria were not changed.
+Debrief removes unestablished recovery-primary/baseline-driven aid claims, preserves
+both languages, clarifies scored answers and linked-copy withdrawal; early-exit
+debrief exceptions fixed after independent copy review. No app logic changed.
+All 17 pages rendered/inspected; candidate-to-original pixel comparisons find zero
+changes outside intended text regions, and drawing geometry/counts are preserved.
+Original unsigned PDFs have no AcroForms; printed fields remain intact. Original
+hashes checked before promotion, and final original-file hashes match candidates.
+Byte backups, edit manifests and QA: ignored
+`output/pdf/original-document-edits-2026-11-08/`, final-receipt.json. No staging,
+commit, phone operation, third-party-app test or new clinical validation performed.
+
+**2026-11-08 correction: use the existing consent/screening documents:**
+The user explicitly rejected the lead's unsolicited wholesale rebuild of the
+forms. They asked to see and understand their existing documents, identify needed
+revisions and prepare printing, not replace the documents' structure and wording.
+The original thesis PDFs were never changed. The generated replacement packet,
+its builder/Markdown copies and its runbook changes were removed. Work from the
+existing forms with page/section-specific proposed edits, preserving their layout
+and established procedure. Do not infer permission for another complete rebuild.
+The user conditionally prefers WHOeyes if credible for screening and permits
+any researcher's screening phone, including iPhone; Android-only applies to
+NewsMead. That discussion is not a finalized amendment of their screening guide.
+WHO officially supports near testing at 40 cm, manual distance on Android and
+an automatic iOS option. Direct validation retrieved used iOS (220 participants,
+50 aged 41-80); no best-app or exact Android-device accuracy claim is established.
+Evidence retained for retrieval:
+https://www.who.int/teams/noncommunicable-diseases/sensory-functions-disability-and-rehabilitation/whoeyes
+https://ira.lib.polyu.edu.hk/bitstream/10397/107489/1/Wu_Real-world_Application_Smartphone-based.pdf
+Alternatives' near studies: https://pmc.ncbi.nlm.nih.gov/articles/PMC4815669/
+and https://pmc.ncbi.nlm.nih.gov/articles/PMC7933864/.
+
+**2026-11-08 consent/screening review and participant-readiness work:**
+User supplied the THS-ST2 agreement PDF and asks to prioritize it with about one
+week until the demo (working target around Nov15, not a confirmed date). User
+believes1-4complete and would be happy to reach5: recruit volunteers and begin
+initial data collection. Roughly4possible volunteers/1currently available is the
+working interpretation, not confirmed scheduling. User explicitly does NOT want
+another drafted plan: inspect the paper's actual consent/screening requirements,
+avoid crucial procedural mistakes, and prepare the current model/app for testing.
+User CONFIRMS approval is documented elsewhere; do not keep asking or treat the
+unsigned repository clearance template as an approval blocker.
+AppendixA includes consent(3pages), screening guide(9pages), debriefing(5pages).
+Consent covers camera calibration, two reading conditions, comprehension questions,
+interview, separate optional interview audio and45-60min sessions. Screening specifies
+age45+, teach-back capacity before signature, habitual correction, scaled near card
+at its stated distance, binocular20/40 criterion, reported diagnoses, background
+questions and a held-out150-200word practice. These are documented protocol rules,
+not newly validated medical screening or model-accuracy criteria.
+Critical stale instructions: guide16pointcalibration/LOOCV/green-amber-red bands
+and automatic20sbaseline do not match currentMGazeNet13point +6post-fitchecks,
+engineering PASS/RETRY cm guardrails, explicit shared-baseline Start/Finish and
+offline coordinate fitting. Debriefing falsely describes index-driven adaptation
+and recovery as the measured main outcome; factual alignment is needed before use.
+Current templates require survey->interview->debrief, post-debrief permission for
+data use and honoring withdrawal. Interview-audio permission does not cover
+recording reading/practice audio. Names/signatures and screening responses remain
+separate from coded gaze packages. Read-only PDF evidence is in ignored
+output/ths2-agreement-review-2026-11-08/.
+User confirms research approval is documented elsewhere. User separately
+authorized a data-preserving app/test install and camera-free checks. New shared
+toolbar policy fixes expanded geometry for baseline/linked article views while
+preserving passage scrolling and actual metadata/gates. Deferred attach race found
+in review was fixed with coalescing/cancellation/lifecycle guards; re-review has no
+remaining findings. Participant article gaze/FPS diagnostics are now hidden, with
+numeric capture and explicit dot-validation protocols preserved.
+Offline main/test builds and3focused JVM tests pass;3camera-free phone tests pass
+(viewport swipes/flings/restoration and baseline navigation). Calibration hash
+and all13recording manifests unchanged; camera app-op shows no new access.
+The earlier viewport build was installed and tested. The final session-guide APK
+installed below has SHA256
+13f25c7bf560d52791830e57f674162ceab95b6fef7a785cab9ffb80536a6455.
+Evidence: ignored output/participant-readiness-2026-11-08/. User subsequently
+deferred the manual self-rehearsal because of time/token limits. Current scope is
+clear participant/researcher steps and app session instructions, not another
+development schedule or a request for live capture. Added the researcher help
+dialog in Study recording, clearer baseline prompts, and
+`docs/participant-session-steps.md` with the operational sequence, participant
+wording, a blank session record and actual protocol/app differences. Final offline
+main/test builds pass, final wording was checked inside the APK, and the updated
+baseline-navigation test passes on SM-A566B (1 test). Calibration and all 13 saved
+package manifests are unchanged. The new eight-section guide was opened and
+visually inspected on the phone; it is left open, recording stopped. Camera app-op
+shows no new access. USB briefly became unauthorized; user accepted it again and
+the data-preserving install succeeded. Receipts are in ignored
+`output/participant-readiness-2026-11-08/session-guide/`; build logs in its parent.
+Live default-gate coordinate-reference fit is PENDING; do not call repaired
+collection or older-adult accuracy validated yet. No live capture was performed.
+The owner then requested branch `initial-demo`, created from the current
+`feature/local-study-collection` HEAD with all working edits preserved. Home hides
+Scanpath pilot/replay and places Study recording directly below Reading baseline.
+Offline build, data-preserving phone install and Home UI checks pass; both hidden
+controls are absent while baseline/recording controls remain visible. Evidence:
+`output/participant-readiness-2026-11-08/initial-demo-home.json`. That latest demo
+APK SHA256 is 7ce302dd7cc79b8e461ecdcdf9a6d7fc700f27b33d06744c2705381743d94aad.
+Bounded source audit confirms StudyConfig.BYPASS_LOGIN=true/OFFLINE_MODE=false;
+auth/recommendation paths exist but runtime item1verification is still needed.
+Study recording OFF does not disable the article camera; condition text labels
+do not control aid preferences. The actual controls sheet sets aids on/off.
+Saved MGazeNet calibration has no participant binding: fresh calibration for
+each new person is a required researcher step, not guaranteed by changing a code.
+Coordinate reference in the latest rehearsal remains unavailable until a fresh
+fixed-viewport baseline is actually captured and verified. Do not relabel scores
+or lower gates. Retain broader thesis goals and agreement6/7(data analysis and
+mandatory conference paper), without making a full rewrite or conclusive efficacy
+study a new requirement before initial volunteer collection.
+
+**2026-11-08 thesis hypotheses require a revised outcome decision:**
+User confirms the manuscript predates the current scanpath/MD system and its
+recovery-latency objective must be reconsidered. The earlier suggested recovery
+H0/H1 is provisional, not an approved current hypothesis. Preserve the confirmed
+goals of feasibility/acceptability and reading benefit. Scanpaths drive the
+existing aids; R/D/F and coordinate MD remain observational and are not validated
+instability/recovery outcomes. User tentatively preferred perceived effort/loss
+of place because the thesis is HCI, then challenged the evidence for that choice
+and clarified the need for a performance/evaluation metric alongside the scanpath
+algorithm. Perceived effort is not a finalized primary outcome. Do not invent a
+new composite or claim reliability from logical fit/precedent alone. Retain
+scanpaths and both MD measures; observational use does not inherently prevent a
+prespecified comparison endpoint, but a change in MD/patterns alone is not proof
+of reduced effort or reader benefit. Separate detector correctness, reader-task
+performance/experience and technical feasibility. No questionnaire, task scoring
+rule or final hypothesis is approved yet. NASA-TLX official guidance
+https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/
+describes subjective workload across six dimensions, not reading effort alone;
+an instrument choice must preserve that distinction and be piloted with intended
+readers. Primary evidence checked: Paas et al.(1994),
+https://ris.utwente.nl/ws/files/248299579/Paas1994measurement.pdf pp.422-425,
+used1-9mental-effort ratings in student statistics/geometry training; reported
+internal consistency across repeated problems alpha.90/.82, explicitly did not
+assess validity. This is not older-phone-reading validation. GazePrompt(2024),
+https://arxiv.org/html/2402.12772 sections4.1-4.2, compared line-switching times/
+errors and word-recognition outcomes plus subjective experience in13low-vision
+desktop reading-aloud participants; precedent for independent task outcomes,
+not transferred NewsMead accuracy. Bounded MD-source review found gaze-processing
+uses, not validation of our exact R/D/F or rawXY MD as reading effort. Mishra et
+al.(2017), https://ojs.aaai.org/index.php/AAAI/article/download/11159/11018,
+evaluated a different learned scanpath-complexity measure against readers' ratings
+in16EyeLink participants; does not validate our exact features. Select the
+outcome and comparison before freezing hypotheses, sample size and analysis.
+An MD reference baseline does not replace an aids-off comparison condition.
+No manuscript/app/protocol changes are authorized by this clarification alone.
+The owner then asks for established reading performance metrics. See
+[reading-outcome evidence shortlist](reading-outcome-measures-evidence-2026-11-08.md)
+for comprehension, passage speed, oral errors, line switching, resumption lag and
+MNREAD, including actual reliability findings and transfer limits. No metric is
+selected. Existing visit spans do not establish completion/reading speed, and no
+independent task outcome is retroactively created by the gaze logs.
+
+**2026-11-06 latest run EDA completed at the user's request:**
+User completed engineering-01/shared-baseline-check and designates the latest
+run, keeping the earlier bug-interrupted attempt separate. Copied only its
+finalized shared baseline and article packages over USB; originals retained.
+Private evidence is under `output/study-shared-live-check-2026-11-06-01/`.
+User initially requested learning-paced EDA, then moved teaching to another chat
+and explicitly authorized this chat to complete EDA because of time limits.
+Executed notebook, seven figures, compact baseline/article CSVs, report and
+provenance are in `output/study-shared-live-check-2026-11-06-01/eda/`.
+Both sources strictly load and all129source files retain original hashes. Baseline
+72.805s, article198.006s (193.568s collector-allowed, not verified attentive
+reading);33.055s gap outside both. Article coordinate first-to-last cadence25.876/s,
+median delivery age185.55ms/p95220.00ms, not measured camera/screen FPS. User
+reports baseline appeared ready and no observed article lag/issues; no FPS recalled.
+R/D/F baseline READY75/145retained; article254AVAILABLE/138INVALID_WINDOW ticks,
+quality254VALID/92MISSING/46INSUFFICIENT. Of5143RDFinputs,952excluded;656are
+geometry_unsettled. Aid CHOSEN rows1598CURRENT_LINE/68FOCUS_REGION/3READING_BOOKMARK/
+1WORD_DEFINITION are updates, not independent help episodes; one lookup offer
+and acceptance. R/D/F MD median2.277, not a validated difficulty label.
+Coordinate source links match, but full-source fit returns
+REFERENCE_MISMATCH:multiple_reference_contexts (22baseline/15article contexts;
+only viewport varies in the structural signature). Independent unchanged-core
+coverage diagnostic finds largest single-context eligible coverage50.459s, below
+60s; do not lower gates, pool/relabel contexts or select a favorable source subset.
+All coordinate scores stay null.12notebook code cells execute with zero errors;
+tracked notebook unchanged. Independent metric/denominator review fixed cache
+lineage checks; final source and plots reviewed before handoff. No inference,
+app behavior/protocol change, device operation or upload. Proposed next work is
+stable compatible baseline viewport and coordinate-specific readiness, then
+geometry exclusions and predefined aid exposure/outcomes before participant tests.
+
+**2026-11-06 shared-baseline entry crash fixed and verified on phone:**
+User reported Reading baseline force-close. Device crash stack identified
+HomeFragment navigating articleFragment in MainActivity's nav_graph, while news
+reading belongs to ArticleActivity's separate nav_article_graph. Home now uses
+the existing article Activity action; ArticleActivity explicitly forwards shared
+mode into ArticleFragment. Earlier build/JVM tests did not exercise this route.
+Updated main/test APKs built and installed data-preserving on SM-A566B/SDK36.
+Real phone regression passes Home entry, mode/passage/Start UI, Activity
+recreation, repeated entry, no-run Start guard, toolbar Back after a swipe and
+system Back. First test-only Back assertion assumed the collapsed toolbar was
+visible; corrected to reveal it with a real swipe, then retest passed. No camera
+or study run started. Saved calibration hash and inventory of11study packages
+match before/after; installed APK hash matches local tested build.
+Evidence `output/shared-baseline-crash-2026-11-06/`;
+[fix and phone checks](shared-baseline-navigation-fix-2026-11-06.md).
+Actual gaze capture, reference fitting and endurance still need the user's fresh
+reading rehearsal. Source fix is not committed automatically. Unrelated local
+edits and private diagnostics remain excluded.
+
+**2026-11-06 shared baseline implemented; live rehearsal pending:**
+Home Reading baseline now opens the existing passage in the actual ArticleFragment
+layout through SharedBaselineReader. Explicit Start only: no normal article
+network/usage/aid/dot/TTS path. The existing R/D/F collector fits on Finish;
+raw-coordinate reference is independently recorded as RECORDED_PENDING_OFFLINE_FIT.
+New phase reading_baseline declares shared_reading_baseline_v1 and a completed
+result; interruptions cannot activate a source. Later compatible readings retain
+exact independent source links; selected export includes the coordinate source
+even when R/D/F failed, without duplicating a shared dependency. New structural
+article_reading_surface_v1 identity retains fixed viewport/font/geometry checks;
+full actual clipping/color/aid metadata and all boundaries remain recorded.
+Shared baseline/linked article provider age is650ms, coordinate analysis remains
+500ms. Legacy settings/packages are preserved; no MD formula/gate changed.
+Strict importer1.3 and notebook1.1 resolve/freeze the declared source offline and
+retain point/window statuses, nulls/zero, both availabilities and provenance.
+Source review found missing evaluation calibration metadata; fixed through the
+tested segment metadata builder. Follow-up review has no actionable findings.
+Debug + test APKs build;39focused JVM tests and56Python tests pass. Writer/catalog
+host suite25passes; actual Kotlin writer/producer metadata→Python synthetic65s
+reference fitsREADY with MD2≈0/2/4 and mean≈2 despite unavailableRDF. Updated
+notebook executes22sourcecells+QA on legacy recordings without errors; absent
+coordinate reference stays unavailable/null. Boundary scans are cached once per
+analysis with unchanged-result regression. No device install/camera/new capture.
+Evidence `output/shared-baseline-2026-11-06/`;
+[workflow and contract](shared-reading-baseline-v1.md). Next: checkpoint source,
+then separately authorized phone update and fresh shared baseline→later article→
+verified export/EDA. Live layout, performance and real coordinate fitting remain
+unverified. Unrelated local framework/scope edits and private artifacts excluded.
+
+**2026-11-06 groupmate fixes integrated; shared baseline is the next task:**
+Checkpoint `71831c7` was already committed and pushed by the user. Merged
+`origin/feature/scanpath-mahalanobis-score` through `44d27fa`: configurable
+650 ms output age for the existing R/D/F baseline, plus optional article/Firebase
+state error handling. Retained study callbacks and asynchronous terminal capture;
+added effective `output_max_age_ms` to provider metadata/acquisition identity.
+Article callers and coordinate-MD analysis retain their 500 ms defaults; no metric
+formula, coverage gate or automatic reference-compatibility override changed.
+Offline debug build and 38 focused JVM tests pass; independent source review has
+no actionable findings. No install, camera, Firebase test or new collection ran.
+Evidence: `output/rdf-merge-2026-11-06/`; details in
+[R/D/F integration checkpoint](study-rdf-integration-2026-11-06.md).
+User now prioritizes the joint R/D/F/coordinate baseline before another article
+run, superseding the earlier deferral. That workflow is not implemented by this
+merge. Reuse a compatible article reading surface and acquisition configuration,
+retain raw coordinates and separate profile statuses/source links, and do not
+relabel legacy `rdf_baseline` packages as compatible coordinate references.
+
+**2026-11-04 aid-count/timing capability clarified from existing records:**
+User asks whether aid triggers/times can be linked to readings. Yes: canonical
+aid_decision + separate trace/render/presentation/lookup/consultation records
+already retain scopedIDs, reasons/rules and sharedelapsed timestamps. Notebook
+Section7 currently groups native decisionrecords and showspopup timeline; no
+intervention-episodecounting orbefore/aftercorrelationtableimplemented yet.
+Actualprimary1,068CURRENT_LINE/188FOCUS_REGION CHOSEN include replacements/updates,
+not1,256independenthelp episodes. Laterpopup1WORD_DEFINITION CHOSEN/1shown/1accepted.
+Don'tsum aid_decision withruntime_tracecopy orrender withpresentationcopy. Need
+explicitcountdefinition forcontinuousguide/focus andproxies/censoredduration;
+rollingRDFwindows canstraddleaidonset. Associationcanreflecttriggeringgaze, not
+alonebenefit. Clarified notebookREADME; noAndroid/notebookcode/devicechanges.
+
+**2026-11-04 Jupyter exploration ready; combined baseline work deferred:**
+User explicitly postpones unifiedRDF/coordinate baseline integration and asks to
+inspect stored data/process inJupyter. NoAndroid/device/calibration/baseline
+changes. Added clean20cell `notebooks/gaze_study_exploration.ipynb`, README and
+tested dependency pins; installedPython3.10already hasJupyter/pandas/Matplotlib.
+Newstdlib `tools/gaze/study_notebook.py` catalogsdeclaredmetadata and strictly
+loadsonepackage into compact scoped gaze/RDF/scanpath/aid/boundary/health/reference
+tables without defaultcoordinate replay or fullgeometry/history blobs. Preserve
+invalid/null/MD0, originalclock IDs/rawselectedseparation; protectenvelopefield
+collisions, native decision.action IDs andequaltypedaliases.6focusedhelpertests
+pass; actualmain+popup sessions STRICT_VERIFIED. Notebookexecuted20cells with
+5plots andCSVs,277RDFticks/186AVAILABLE,3,754gazerecords.3,481directpatternrows
+include2,495P13boundaries/858P12summaries; splitword/line anddo notinferbehavior
+counts. Separatepopup8eventtimeline retained. Null-actionSUPPRESSED notebook
+regressionpasses. Independentreview findingsfixed; noresidualsourcefindings;
+leadvisuallycheckedplots. Sourcecleared; executednotebook/HTMLpreview/receipts
+under `output/study-notebook-check/`, compactexports under output/study-notebook/.
+Kernelstartupstalledinsandbox; approvedlocalNBClientexecutionwithworkspace
+runtimefilespasses. Statistical-analysisguidanceappliedexploratorily andcited
+verifiedScientificAgentSkillspaperinnbrefs; nohypothesistests/benefitclaims or
+inventedcoordinateMDscores. See [notebook workflow](../notebooks/README.md).
+
+**2026-11-03 live compressed-run audit: stable2m20, popup attempt separate:**
+User completed storage-check/compressed run, designating previous article visit
+as performance check; later revisit deliberately attempted lookup. User recalls
+littlelag,~21or26displayedFPS uncertain. Fourfinalized packages verified: early
+prebaselinearticle10.481s, RDFbaseline62.360s READY84/124retained, designated
+04c0dd8a article139.904s, laterbcdd4bc7 article78.325s. Lasttwo are samearticle but
+distinctreadingIDs with24.418s gap outside both, matching exactnewbaselineattempt.
+Designatedvisit9.413MBstored/168.638MBlogical (94.42% reduction),3,734coordinate
+callbacks~26.961/s;30s bins~26-27/s, medianlat183.25ms/p95209.22ms. All4complete,
+0declaredwriterloss/unknownend/outsidecapture. This is2m20live, notfull3m, cameraFPS,
+accuracy orbenefit. NativeRDF186AVAILABLE/91INVALID_WINDOW preserved. Laterlookup
+offer at73.8117s, accepted75.7901s, panelproxy75.8133s; CHOSEN73.7920s followed
+native1009.187mswordresidence. Pre-drawproxy19.875msafterdecision doesnotmeasure
+actualscreenlatency/wordaccuracy/dictionarysuccess or explain priorqualification
+delay. Reviewer confirmedmath/identities; narrowed displaytimingclaim. Nocode,
+install,restart,newcapture orrecordingdeletion. Nextissues: triggerreliability,
+realcoordinate-reference collection andlongerintended-session endurance. Evidence
+`output/study-live-check-04/`; [live storage recheck](study-live-storage-recheck-2026-11-03.md).
+
+**2026-11-03 lossless storage1.2 installed; actual local sharing verified:**
+User authorized remaining pipeline work. New gzip worker chunks preserve every
+logical JSONL byte/row with explicit gzip_jsonl_v1 + uncompressed count; stored
+hash/count cover compressed bytes. Plain legacy remains supported; recovery
+preserves originals, salvages prefix, stops at gzip failure and flags unknown
+loss/end. Strict decoded64MiB chunk/512MiB Python analysis limits remain. Actual
+stopped112.5MB article replays to6.36MB (94.35% reduction), byte-identical after
+decompression. Camera-free Android180s fixture gives5,398callbacks/29.985Hz,
+36,116records,0writerloss, max sampled queue3,83.31MBlogical→2.416MBstored; this
+does not test camera/rendering. All8device checks pass; focusedJVM41 (40pass,
+1Windowslinkskip), Python38importer+6transfer tests pass. Added received-export
+verification CLI with complete inventory reconciliation and explicit coordinate
+reference/evaluation check; synthetic65s default reference fits READY. No actual
+coordinate reference has yet been collected/confirmed. Focused review finding on
+missing whole packages fixed with regression; follow-up has no residual issues.
+Actual Transfer selected button/Androidchooser/separate-UID local receiver/USB
+copy verifies exactrealarticle+sourcebaseline, excludesearlierarticle, allhashes
+match. FirstreceiverKotlinruntime fixture failed; Java-only fix passes, mainapp
+unaffected. Receivercomponent disabled after check. Mainupdate installed without
+clearing data; savedcalibration hashunchanged. ActiveRDFbaseline is process-only,
+so full live scoring rehearsal needs existing baseline again. Next: user3min
+article + separate short article performance/boundary rehearsal; no camera/live
+capture started automatically. Evidence `output/study-storage-check-03/` and
+[storage/transfer checkpoint](study-storage-transfer-2026-11-03.md). No commits.
+
+**2026-11-03 article-duration wording corrected against actual boundaries:**
+The reported88.692s is one article segment's elapsed span, not verified reading
+time. Hash-verified originals show final pause at88.150599s and screen_left end
+at88.692259s; the0.541660s exit tail retains3coordinate/9no_face observations,
+all context_allowed=false. No earlier pause in this longer segment; no captured
+timestamp outside its logical bounds. Baseline/earlier article are separate, with
+7.602s/8.209s gaps outside the identified segments. Allowed context88.150599s does
+not establish attention or valid gaze coverage. No app changes or new capture.
+Evidence `output/study-live-check-02/boundary-audit.json`; explanation in
+[live recheck and browser](study-recording-browser-2026-11-03.md).
+
+**2026-11-03 live recheck successful; recording browser/selected export installed:**
+User completed baseline+article and reports no visible issues. Three stopped
+perf-check packages verify complete/no writer loss or unknown tail. BaselineREADY;
+two article-reading IDs are distinct and both reference the matching same attempt.
+Longer article spans88.69s,2495 coordinate outputs (~28.64/s overcapture span),
+medianlatency176.17ms,114available nativeRDFticks,773drawn proxies. This supports
+this device/run's performance recovery, not accuracy/benefit/longendurance.
+Raw volume112.5MB (~76MB/min) remains a material pipeline concern. New catalog
+groups reading segments, lists baseline/coordinate/legacy entries separately,
+loads boundedprefix/tail metadata offUI, and supports selectedZIP with positively
+matched sourceRDFbaseline dependencies (notcoordinate-reference inference).
+Original bytes/hashinventory/latereceipts retained. Recovery path/leafalias guards
+andunknown-calibration matching were fixed in independent review. Importerv1.1
+retains validnative zero-spanINSUFFICIENT warmup ticks as explicit unavailable
+withnullcoverage/MD andsource order; nativecore/baseline/aidalgorithms unchanged.
+Fullguardedbuildpasses;34focusedJVM (33pass,1Windowslinkskip),35Pythontests,
+7unique camera-free devicechecks pass after oneoldfixtureFIFOtiming fix.
+Selected synthetic readingZIP includes2segments+1baseline, excludesotherreading,
+andall3packages import afterUSB transfer. Browserupdate installeddata-preserving;
+no morecapture requested. Source details/limits:
+[live recheck and browser](study-recording-browser-2026-11-03.md).
+Evidence `output/study-live-check-02/`, `summary.json`, `*-import-v1.1/`,
+`browser-export/receipt.json`. Studyqualitycriteria/benefitanalysis remain deferred.
+
+**2026-11-03 next live-test clarification: include the existing R/D/F baseline:**
+User questioned skipping baseline after the update. Source confirms that a
+baseline-free run can exercise recording/aid performance, but MahalanobisScorer
+short-circuits to BASELINE_UNAVAILABLE and cannot verify normal scoring/reference
+linkage. For the next representative pipeline check, collect the existing Reading
+baseline with the same participant code first, freeze it, then read an article
+for30s in the same app process. Reuse saved gaze calibration if compatible; no
+calibration redo is implied. Earlier no-baseline instruction was limited FPS
+triage, not full pipeline validation. No baseline algorithms or app code changed.
+
+**2026-11-03 scope clarified: prioritize the recording pipeline:**
+User defers study-level recording acceptance criteria and independent outcomes /
+reading-benefit analysis. Current work should focus on recording performance,
+clear article-reading boundaries and identities, separate linked baseline records,
+durable local storage/recovery, and accessible recording selection/export.
+Existing raw/selected observations, timestamps, missingness/loss flags, reference
+identities and actual configuration must remain available for later analysis;
+preserving these is collection instrumentation, not choosing study cutoffs.
+Do not add new analysis thresholds, participant exclusion rules, benefit tests or
+change the original R/D/F baseline algorithm under this pipeline task. Existing
+measurement gates remain as implemented. No new live capture was started for
+this scope discussion. Real camera/reader performance after v1.1 remains pending.
+
+**2026-11-03 live article collector lag; v1.1 synthetic load check passed:**
+User stopped testing/run: ~30FPS off, ~15FPS early recording, ~6FPS/hanging with
+absent aids/dot later (user observations, no matched benchmark). Three identified
+stopped engineering article packages verify complete/no declared writer loss but
+total42.07MB; auditrows34.99MB, repeated fullgeometry23-68% bypackage. Source shows
+UI-thread fullcontext.geometry reflection/deepcopy and repeatedfield-name regex
+allocation. New StudyAuditEncoder normalizes geometry to earlier aid_audit layout
+snapshots with unique layout_revision; all other nativecontext/raw fields retained.
+StudyJson caches fieldnames. Collector1.1, explicit aid_geometry_ref_v1 payload;
+no metric/filter/aidthreshold/downsampling/writerprotocol changes. Review fixed
+controlled-scroll nativeID alias viaunique revisions and rejection/retry test.
+Article view entries nowget article_reading_id; provider restarts linked bysegment
+index/previoussession. Back/configuration viewrecreation = newreadingentry, scope
+article_view_visit_v1. Home/setup creates no study packages. User confirms explicit
+RDFbaseline remains separate/reusable; asks to preserve baseline measurement as-is.
+Explained two Start controls and existing Start/fit/onPause behavior; no baseline
+algorithm/lifecycle changes. Active profile remains process-only. Full guarded
+APK and27 focusedJVM tests pass; data-preserving update installed. Seven device
+tests pass including camera-free180s mainthread policy/audit/writer endurance:
+5381ticks (~29.89/s),19missedslots,35997records,10763resolvedlayoutrefs,0writerloss.
+Meanwork12.01/5.65/5.22ms perminute; no progressivedeterioration in this fixture.
+Warmed fullcontext/reference encoding benchmark31x faster,96.65% smaller; excludes
+writer overhead/camera/rendering and usescachedfields inbothpaths. Offline importer
+accepts83.04MB endurancepackage; syntheticloadstorage27.7MB/min remainsmaterial.
+`fix-summary.json`, `endurance/result.json` and `endurance/import/receipt.json`
+retain results; no newlive capture. BaselineStart/Finish/passagerules/onPause were
+confirmedalready present on feature/scanpath-mahalanobis-score via gitshow; native
+MD/pipeline/profile corefiles have nodiff againstthatbranch. OnlyStudyRecording UI
+andpersistencehooks are new. User asked provenance afterambiguouswording; clarified.
+Evidence `output/study-lag-check-01/`, docs
+[performance investigation](study-collector-performance-2026-11-03.md).
+Actual camera/reader FPS and overhead remain unverified; do not claim ready for
+participants. A bounded30s user check is next, no freshbaseline needed forFPSonly.
+
+**2026-11-03 first live R/D/F baseline verified; article check next:**
+User completed the supervised engineering baseline and reported "Baseline frozen".
+Read only its identified package over USB, without restarting the app/provider;
+actual importer and manifest hashes pass: 4,415 records, four chunks, complete,
+no declared writer losses or unknown tail. Fit is READY, 105/140 windows retained;
+these overlapping windows are not independent observations. 1,619 coordinate
+callbacks span 69.297s (~23.35 coordinate outputs/s, not camera FPS or accuracy);
+six blink observations and one stopped receipt. Median capture-to-delivery latency
+178.33ms; terminal arrivals 1,651 / busy drops 25. This is one engineering session,
+not an overhead comparison or independent tracking validation. Local numeric/text
+evidence only: `output/study-live-check-01/baseline-summary.json`, original package
+`729f9467-db38-4674-8fd6-9e51a881d490/`, and `baseline-import/receipt.json`.
+Important identity discrepancy: study-run code is `device_check`; the frozen
+baseline code is `device-check`. Preserve originals and explicitly document this;
+before article reading, Stop/Start only the study run with `device-check` to match
+the in-memory profile. Do not restart/reinstall or repeat calibration. Subsequent
+article package should retain a matching RDF reference. No coordinate reference
+has been collected yet, so coordinate MD remains unavailable as designed.
+
+**2026-11-03 connected-phone camera-free rehearsal passed; live check next:**
+On user-authorized SM-A566B/SDK36/arm64, restored the three missing ARMv7 files
+from the existing hash-pinned official MNN archive using
+`tools/gaze/mgazenet/restore_armv7_vendor.py`; no guard/hash/model changes.
+Full debug APK, packaged-library verification and instrumentation assembly pass
+with normal guards. Data-preserving installs retain the saved gaze calibration
+file; this does not establish its current accuracy/compatibility. The active
+R/D/F baseline remains process memory. 51 unique on-device tests pass after
+correcting two obsolete preference/timestamp fixtures and a synthetic zero
+delivery ID. Six synthetic USB exports/seven packages import with matching
+hashes; all 77 retained records and manifests pass JSON schemas. Added scrollable
+study controls and constrained debug test storage; focused review fixed failed
+setup teardown and immutable per-visit late-receipt routing, with no residual
+findings in the reviewed scope. No camera access, private recording inspection,
+cloud transfer, data clearing or commit. Logs/hashes/receipts:
+`output/study-phone-check-01/summary.json` and associated artifacts; see
+[rehearsal and limits](study-device-rehearsal-2026-11-03.md).
+User is available for a live check using the saved calibration. Next: explicitly
+start an engineering study run, fresh R/D/F baseline and article reading; inspect
+actual cadence/missingness/aid events and separate coordinate-reference coverage.
+Real accuracy, collection overhead, endurance and human validity remain untested.
+
+**Earlier 2026-11-03 local integration checkpoint; vendor blocker since resolved:**
+Created `feature/local-study-collection` from coordinate-MD core commit `93a2abd`.
+Added explicit Home study controls, local baseline/article provider recording,
+per-consumer inputs/native Scanpath outputs, V5 support/evaluation/decision/draw
+instrumentation, R/D/F baseline/window/fit/score records, context/close/loss/recovery
+handling, verified ZIP transfer and offline coordinate-MD import/reference analysis.
+Both MDs remain observational; coordinate core, algorithms, filters, Firebase and
+frozen diagnostic/pilot formats are unchanged. Saving R/D/F research profiles does
+not restore active models after restart. See [local workflow and limits](study-collection-local-v1.md).
+Transport is `newsmead_study_v1`, distinct from the preserved v0.1 draft. Explicit
+earlier coordinate-reference periods require actual context compatibility; no
+automatic use of the different 22dp R/D/F baseline. Captures retain source clocks,
+per-provider IDs, raw/selected points and capture-aligned presentation epochs;
+consumer invalidity alone cannot create a coordinate presentation boundary.
+Review fixes cover sequence holes, window-local context attribution, maintenance
+races, aid presentation signatures and integrity-checked late close receipts.
+Writer9/ importer32 synthetic checks and actual Kotlin→Python package interop pass;
+final reviewed isolated Kotlin compile/333 JVM tests pass, zero failures/errors.
+Typed observer wiring removes an ambiguous compiler nullability warning. Focused
+review has no remaining actionable findings; full APK remains blocked as below.
+Full APK guard fails on missing pinned `armeabi-v7a` vendor libraries; isolated
+JVM checks exclude only that unavailable packaging prerequisite. Evidence is in
+`output/study-collection-*`, `study-writer-v1-checks`, `study-importer-v1-checks`.
+No device/install/capture/private data/cloud work or staging/commit. Phone overhead,
+lifecycle/transfer rehearsal and participant-protocol decisions remain open.
+
+**2026-11-03 checkout location correction:**
+Owner requested that coordinate-MD work reside in the original checkout
+`C:/Users/USER/OneDrive/Desktop/newsmead` on branch
+`experiment/gaze-trajectory-mahalanobis`. The earlier separate-worktree path
+is obsolete. Existing original planning edits were preserved; no staging or commit.
+
+**2026-11-02 coordinate-MD core implemented; integration pending:**
+Owner approved proceeding with descriptive direct-coordinate MD. Added pure
+Python `tools/gaze/coordinate_mahalanobis.py` and Kotlin
+`gaze/trajectory/CoordinateMahalanobis.kt`, frozen separately fitted references,
+point MD/MD-squared and actual-bound observed-time summaries. Weighted population
+moments, sample-covariance sensitivity, scaled Cholesky, explicit stream/context/
+clock/missingness/loss gates and no MD-based deletion. Separate earlier reference
+input must be segmented to its declared bounds. Independent review found/fixed
+invalid-source clock poisoning and out-of-bounds reference delivery state.
+21 Python and 12 host Kotlin/JUnit tests passed, including shared synthetic JSON
+and correlated covariance; 35 synthetic error/cadence cases have reproducible
+receipt `output/coordinate-md-v1-checks/sensitivity.json`. These are software and
+prescribed numerical checks, not measured phone or older-adult validity. See
+[core and collection handoff](gaze-coordinate-md-core.md). Core version
+`coordinate_md_v1` is experimental; duration/coverage/conditioning gates are
+provisional. Study reference task and device overhead remain unresolved. No
+activity/provider/aids/RDF/filter/Firebase or frozen protocol changes, private
+data/device work, staging or commit. Historical plan-only entries below precede
+this implementation. Other branch owns study recording and integration.
+
+**2026-11-02 clarified objective: describe estimated gaze, not reading instability:**
+Owner explicitly removes reading instability from the new MD's measurement goal
+and requests research on existing practice. The rewritten
+[coordinate-MD plan](gaze-trajectory-mahalanobis-plan.md) supersedes the earlier
+H/V/movement direction below; that feature family is deferred. The bounded
+[primary-source/method review](gaze-coordinate-md-evidence.md) distinguishes MD
+calibration/filtering/classification precedents from descriptive spatial
+distribution, covariance ellipses and independent accuracy measurement. Proposed
+output is pointwise raw-coordinate distance from a separate frozen reference,
+with transparent spatial/quality context, no cognitive labels or MD-based removal.
+Self-fitted window mean MD-squared can normalize spread away: a four-point
+synthetic check confirms 1.5 despite shifted/wider clouds, versus 4.5/6.0 against
+a fixed reference. Receipt: `output/gaze-coordinate-md-research-2026-11-02/sanity.json`.
+This is mathematical evidence, not phone/human validation. One bounded researcher
+was used; no score implementation, runtime changes, private data or device work.
+Earlier same-day behavior-oriented recommendations are historical alternatives.
+
+**2026-11-02 error robustness and interpretation clarification:**
+Owner's motivation for the additional MD is inaccurate gaze and avoiding
+assumptions introduced by reading-event/engineered features. Direct coordinate MD
+is the proposed first simple benchmark; H/V/movement remains an alternative.
+Neither method automatically labels cognition; each has representation/reference
+assumptions. Prioritize offset/jitter/spike/drift/gain/cadence/missingness
+sensitivity before favoring a representation. Provider `coordinate` status is
+not accuracy, and shared-score agreement cannot establish it. The plan preserves
+numeric observations and treats reading-instability interpretation as unvalidated.
+No runtime implementation or device/private-data work in this clarification.
+
+**2026-11-02 representation clarification — decision still open:**
+Owner's original additional-MD idea was direct raw numerical gaze data, rather
+than the proposed H/V/movement vector. The vector in the experiment plan remains
+an alternative, not an approved feature set. Lead recommends low-level spatial /
+temporal descriptors as the more relevant starting hypothesis for behavior,
+with direct coordinate MD as a spatial comparator; no empirical superiority or
+reading-instability validity is established. Direct full-trajectory MD would also
+require an explicit alignment/dimension/missingness design. No implementation.
+
+**2026-11-02 gaze-trajectory Mahalanobis branch — plan only:**
+Owner explicitly assigns this chat the separate trajectory experiment before
+collection integration. Branch `experiment/gaze-trajectory-mahalanobis` starts
+at `3119cb9c6ccae4cbb7dcd7a45c1b1f56f2b1f535` in its own managed worktree.
+[Implementation plan](gaze-trajectory-mahalanobis-plan.md) proposes a small
+H/V/spatial-movement feature family without fixation/regression/dwell detectors,
+separate pre-smoothing/selected variants, actual shared window bounds,
+reference-only fitting and matched-estimator sensitivity analysis. Numerical gates
+are exploratory; no feature set or threshold is validated. Native R/D/F and all
+aid decisions remain unchanged; both distances are observational. Fair comparison
+requires explicit context/coverage/reference choices, not equal score magnitude.
+Pure Python reference and Kotlin core are proposed new-file work; the other
+workstream owns collection, existing activity integration and local export.
+The original checkout's uncommitted planning/framework edits were preserved there,
+not copied into this worktree. No score implementation, tests/device collection,
+private recording access, cloud change, staging or commit in this planning turn.
+
+**2026-11-02 direct source trace and local-only collection direction — design only:**
+Owner confirms initial study records stay local and are transferred afterward.
+[Pipeline source map and implementation seams](study-data-pipeline-source-map.md)
+traces source at `3119cb9c6ccae4cbb7dcd7a45c1b1f56f2b1f535`, including camera /
+provider, separate Scanpath/V5/MD paths, baseline, existing logs/export, lifecycle
+and offline tools. V5 is not a P01–P13-to-aid controller. Diagnostic recording
+changes aid/display/camera conditions and cannot be repurposed unchanged.
+Baseline uses 22dp/default camera policy versus adjustable sp/stable-FPS request
+in normal articles; current profile identity binds calibration, not typography.
+Usage-log elapsed time is session-relative; gaze elapsed is since boot. Provider
+terminal counters arrive asynchronously after logical reading close; the proposed
+collector must capture their old epoch independently and finalize after drain.
+Saving a research baseline artifact must not silently restore an active profile.
+Read and consulted **Review landed gaze metrics proposal (3)**: selected-stream
+consistency was accepted, while full collector details and final study dot setting
+remain proposed/open. No runtime/schema/device/Firebase changes or repeated tests.
+
+**2026-11-02 study-readiness review — planning only:**
+Current branch is `feature/scanpath-mahalanobis-score`; the 2026-11-01 source
+adds a separate calibration-bound, in-memory reading baseline and observational
+R/D/F Mahalanobis score (see `progress-notes.md`). Owner confirms older adults
+and wants both feasibility/acceptability and reading-benefit evidence; device
+route, numbers and duration remain open. MD must remain observational and must
+not influence aids. Owner also wants an exploratory gaze-trajectory measure that
+can reveal behavior missed by R/D/F; no second feature set/formula is adopted.
+[Readiness review and implementation plan](study-readiness-review-2026-11-02.md)
+records current source, evidence limits, proposed supervised on/off comparison,
+independent outcomes and local-recorder/export-first work packages. Earlier
+feasibility-only scope and v0.1 baseline deferral are historical where conflicting.
+Ordinary app usage logging already exists, but durable joint study collection,
+baseline/MD export, package recovery and a production importer are still missing.
+Scanpath's 125ms gap differs from V5 support's 250ms gap; do not infer a universal
+aid failure threshold from FPS. MD endpoint-span coverage is not valid-time union;
+overlapping windows and regularized covariance do not validate instability.
+The 34-record draft checker and 39+13 focused Python tests pass. One bounded
+engineer source audit was reused; no app/schema behavior, device, camera, Firebase,
+staging or commit change. The review does not establish human benefit/readiness.
 **2026-11-03 reading-baseline valid-window regression fixed in software:**
 The current scanpath/Mahalanobis branch had removed the baseline-specific 650 ms
 MGazeNet output-age allowance restored on `measurement/mahalanobis`, leaving the

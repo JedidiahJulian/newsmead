@@ -81,6 +81,10 @@ import com.newsmead.data.news.NewsDataApi
 import com.newsmead.logging.Analytics
 import com.newsmead.logging.AppLog
 import com.newsmead.research.ResearchSession
+import com.newsmead.research.study.StudyCollection
+import com.newsmead.research.study.StudyVisit
+import com.newsmead.research.study.StudyJson
+import com.newsmead.gaze.physicalDisplaySize
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.fragments.layouts.BottomSheetDialogSaveFragment
 import com.newsmead.models.Article
@@ -93,6 +97,8 @@ import java.util.Locale
 
 class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener {
     private lateinit var binding: FragmentArticleBinding
+    private val sharedBaselineMode get() = arguments?.getBoolean(com.newsmead.gaze.SharedReadingBaseline.ARGUMENT) == true
+    private var sharedBaselineReader: com.newsmead.research.study.SharedBaselineReader? = null
     private lateinit var adapter: ArticleSimplifiedAdapter
     private lateinit var savedLists: ArrayList<SavedList>
     private lateinit var textToSpeech: TextToSpeech
@@ -118,6 +124,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var resumeGazeAfterStop = false
     private var cameraPolicyChangePending = false
     private var cameraPolicyChangeGeneration = 0
+    private var sharedViewportStart: androidx.core.view.OneShotPreDrawListener? = null
     private var rsiInferencer: ReadingStateInferencer? = null
     private var targetStabilizer: GazeTargetStabilizer? = null
     private var stabilityEstimator: WindowedStabilityEstimator? = null
@@ -126,6 +133,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var lastStabilityLogMs = 0L
     private var lastAoiLogMs = 0L
     private var readingMeasurement: ReadingMeasurementLog? = null
+    private var studyVisit: StudyVisit? = null
+    private lateinit var studyArticleReading: com.newsmead.research.study.StudyArticleReading
     private var scanpathSession: ArticleScanpathSession? = null
     private var mahalanobisReadingSession: ArticleReadingSession? = null
     private var mahalanobisConfig = MahalanobisConfig()
@@ -142,12 +151,20 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private val mahalanobisTick = object : Runnable {
         override fun run() {
             val pipeline = readingFeatures ?: return
-            pipeline.tick(SystemClock.elapsedRealtime())?.let { vector ->
+            val tickAt = SystemClock.elapsedRealtime()
+            studyVisit?.record("rdf_schedule_tick", StudyJson.obj("tick_ms" to tickAt), tickAt.toDouble())
+            pipeline.tick(tickAt)?.let { vector ->
                 val current = ParticipantReadingBaseline.current(activeBaselineFingerprint)
                 val activeProfile = current?.profile.takeIf { current === activeMahalanobisBaseline }
                 val scorer = if (activeProfile != null) mahalanobisScorer else MahalanobisScorer(null)
                 val score = scorer?.score(vector)
                 latestMahalanobisScore = score
+                studyVisit?.record("rdf_tick", StudyJson.obj("tick_ms" to tickAt, "feature_vector" to vector,
+                    "score" to score, "baseline_status" to ParticipantReadingBaseline.status(activeBaselineFingerprint),
+                    "baseline_attempt_id" to activeMahalanobisBaseline?.sessionId,
+                    "baseline_participant_code" to activeMahalanobisBaseline?.participantCode,
+                    "participant_match" to (activeMahalanobisBaseline == null ||
+                        activeMahalanobisBaseline?.participantCode == StudyCollection.run?.participant)), tickAt.toDouble())
                 latestMahalanobisDebugSnapshot = score?.let {
                     MahalanobisDebugSnapshot.from(it, activeProfile,
                         ParticipantReadingBaseline.status(activeBaselineFingerprint), mahalanobisConfig)
@@ -181,6 +198,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         get() = StudyConfig.SCANPATH_READING_AIDS && !StudyConfig.GAZE_TOUCH_VALIDATION
     private val scanpathCounts = mutableMapOf<String, Int>()
     private val scanpathGeometryListener = ViewTreeObserver.OnPreDrawListener {
+        studyVisit?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to StudyConfig.GAZE_DEBUG_VISUALS), binding.nsvArticleText)
+        studyVisit?.exclude("tts", ::textToSpeech.isInitialized && textToSpeech.isSpeaking)
         articleAutoScroll?.onPreDraw()
         scanpathSession?.checkGeometry()
         mahalanobisReadingSession?.checkGeometry()
@@ -203,6 +222,18 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     ): View {
         Log.d("ArticleFragment", "onCreateView: ArticleFragment started")
         binding = FragmentArticleBinding.inflate(inflater, container, false)
+        if (sharedBaselineMode) {
+            articleBodyReady = false
+            articleForUsage = null
+            sharedBaselineReader = com.newsmead.research.study.SharedBaselineReader(this, binding).also { it.bind() }
+            return binding.root
+        }
+        com.newsmead.research.study.SharedStudyToolbar.forLinkedArticle(binding,
+            com.newsmead.gaze.SharedReadingBaseline.current(
+                MgazeNetCalibrationStore(requireContext()).fingerprint(), StudyCollection.run?.participant))
+        // A recreated article view is a new reading entry, including Back from another article.
+        // Provider restarts and transient dialogs within this view keep the same reading identity.
+        studyArticleReading = com.newsmead.research.study.StudyArticleReading()
         aidPreferences = ReaderAidPreferencesStore.load(requireContext(),
             ReaderAidPreferences(wordMagnifier = false))
         articleBodyReady = false
@@ -416,6 +447,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             false // Return false so the event is not consumed and continues to be propagated
         }
 
+        // Account-backed saving is not available in the account-free study build.
+        binding.btnSaveList.visibility = if (StudyConfig.BYPASS_LOGIN) View.GONE else View.VISIBLE
         // Bottom sheet dialog for saving articles
         binding.btnSaveList.setOnClickListener {
             binding.btnSaveList.isEnabled = false
@@ -497,12 +530,19 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             viewLifecycleOwner.lifecycleScope.launch {
                 // Check if offline article
                 val articleId = article.newsId
-                val offlineArticle = DatabaseHelper.getNewsArticleDao().getNewsArticle(articleId)
+                val packagedArticle = com.newsmead.data.StudyArticleCatalog.contains(article)
+                val offlineArticle = if (packagedArticle) null else
+                    DatabaseHelper.getNewsArticleDao().getNewsArticle(articleId)
                 if (view !== articleView.root) return@launch
 
                 Log.d("ArticleFragment", "onCreateView: offlineArticle: $offlineArticle")
 
-                if (offlineArticle?.articleBody?.isNotEmpty() == true) {
+                if (packagedArticle) {
+                    // This exact packaged text must survive feed refreshes and cached Room content.
+                    displayedBody = article.body
+                    binding.tvArticleText.text = displayedBody
+                    binding.ivArticleFullImage.visibility = View.GONE
+                } else if (offlineArticle?.articleBody?.isNotEmpty() == true) {
                     // Offline article
                     displayedBody = offlineArticle.articleBody
                     binding.tvArticleText.text = displayedBody
@@ -679,12 +719,17 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     private fun logReadAloud(started: Boolean) {
+        studyVisit?.exclude("tts", started)
+        studyVisit?.record("interaction", StudyJson.obj("kind" to "tts", "started" to started), StudyVisit.now())
         val articleId = loggedArticleId ?: return
         Analytics.readAloud(started)
         ResearchSession.readAloud(articleId, started)
     }
 
     private fun logTranslate(toFilipino: Boolean, useGoogle: Boolean) {
+        studyVisit?.boundary("translation_requested")
+        studyVisit?.record("interaction", StudyJson.obj("kind" to "translate", "to_filipino" to toFilipino,
+            "use_google" to useGoogle), StudyVisit.now())
         val articleId = loggedArticleId ?: return
         Analytics.translate(toFilipino, useGoogle)
         ResearchSession.translate(articleId, toFilipino, useGoogle)
@@ -708,6 +753,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     // Don't forget to release TextToSpeech when your activity is destroyed
     override fun onDestroy() {
+        if (sharedBaselineMode) { sharedBaselineReader?.close(); super.onDestroy(); return }
         stopArticleDemo("fragment_destroyed")
         definitionPopup?.close()
         definitionPopup = null
@@ -746,6 +792,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
     override fun onResume() {
         super.onResume()
+        if (sharedBaselineMode) return
+        studyVisit?.exclude("screen_paused", false)
+        studyVisit?.resumed()
         articleAutoScroll?.setEnabled(aidPreferences.enabled && aidPreferences.autoScroll)
         scanpathSession?.resume()
         mahalanobisReadingSession?.resume()
@@ -794,7 +843,15 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
     }
 
+    private fun cancelSharedViewportStart() {
+        sharedViewportStart?.removeListener()
+        sharedViewportStart = null
+    }
+
     override fun onPause() {
+        cancelSharedViewportStart()
+        if (sharedBaselineMode) { sharedBaselineReader?.interrupt("screen_paused"); super.onPause(); return }
+        studyVisit?.exclude("screen_paused", true)
         // A delayed camera close must not start a requested recording after leaving.
         cameraPolicyChangeGeneration++
         articleAutoScroll?.interrupt("screen_paused")
@@ -815,6 +872,11 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     override fun onDestroyView() {
+        cancelSharedViewportStart()
+        if (sharedBaselineMode) {
+            sharedBaselineReader?.close(); sharedBaselineReader = null
+            super.onDestroyView(); return
+        }
         articleAutoScroll?.close()
         articleAutoScroll = null
         binding.nsvArticleText.onUserTouch = null
@@ -837,6 +899,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     override fun onStop() {
+        if (sharedBaselineMode) { sharedBaselineReader?.interrupt("screen_left"); super.onStop(); return }
         closeArticleUsage()
         finishReadingMeasurement("screen_left", restore = false)
         scaffoldDemoHandler.removeCallbacksAndMessages(null)
@@ -946,6 +1009,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             return
         }
         readingMeasurement = session
+        studyVisit?.exclude("diagnostic_recording", true)
         updateTextSizeControls()
         binding.btnArticleReadingAids.isEnabled = false
         scanpathSession?.boundary("diagnostic_mode_changed")
@@ -959,6 +1023,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private fun finishReadingMeasurement(reason: String, restore: Boolean = true) {
         val session = readingMeasurement ?: return
         readingMeasurement = null
+        studyVisit?.exclude("diagnostic_recording", false)
         updateTextSizeControls()
         binding.btnArticleReadingAids.isEnabled = true
         scanpathSession?.boundary("diagnostic_mode_changed")
@@ -1356,17 +1421,62 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
      * touch input; missing/invalid calibration must be fixed before reading.
      */
     private fun attachLiveGaze(onGaze: GazeProvider.OnGaze, preferStableFrameRate: Boolean = true) {
-        if (demoCameraSuppressed) return
+        // All callers, including a deferred viewport retry, must obey the same start guards.
+        if (!StudyConfig.GAZE_ENABLED || !articleBodyReady || !isAdded || !isResumed ||
+            launchedCalibration || demoCameraSuppressed || cameraPolicyChangePending ||
+            gazeProvider != null || sharedViewportStart != null) return
+        if (SystemClock.elapsedRealtime() < gazeRestartNotBeforeMs) {
+            resumeArticleGazeWhenReady()
+            return
+        }
         val issue = MgazeNetCalibrationStore(requireContext()).compatibilityIssue(binding.root)
         if (issue != null) {
             Toast.makeText(context, issue, Toast.LENGTH_LONG).show()
             return
         }
+        val fingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint()
+        val sharedReference = com.newsmead.gaze.SharedReadingBaseline.current(fingerprint, StudyCollection.run?.participant)
+        if (sharedReference != null && com.newsmead.research.study.SharedStudyToolbar.holdExpanded(binding)) {
+            // A shared reference may have become active while this view was away. Settle the
+            // actual viewport before opening a study segment or starting the provider.
+            val readingView = binding.root
+            // Coalesce competing starts until layout settles. Pause/destruction removes this
+            // listener; the ordinary resume path retains the need to start in a new lifecycle.
+            resumeGazeAfterStop = true
+            sharedViewportStart = readingView.doOnPreDraw {
+                sharedViewportStart = null
+                if (view === readingView) {
+                    attachLiveGaze(onGaze, preferStableFrameRate)
+                    if (gazeProvider != null) {
+                        calibrationRestartPending = false
+                        resumeGazeAfterStop = false
+                    }
+                }
+            }
+            return
+        }
         val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true,
-            rejectBlinks = true, preferStableFrameRate = preferStableFrameRate)
+            rejectBlinks = true, preferStableFrameRate = preferStableFrameRate,
+            maxOutputAgeMs = if (sharedReference != null) StudyConfig.READING_MAX_OUTPUT_AGE_MS else MgazeNetGazeProvider.MAX_OUTPUT_AGE_MS)
         stopScanpathSession("provider_replaced")
         activeBaselineFingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint()
         activeMahalanobisBaseline = ParticipantReadingBaseline.current(activeBaselineFingerprint)
+        val recording = if (StudyCollection.run == null) null else StudyCollection.open(requireContext(),
+            metadata = studyArticleReading.nextSegment(articleForUsage?.newsId, fingerprint, sharedReference != null).apply {
+                put("usage_session_id", ResearchSession.sessionId)
+                put("usage_clock", "separate_session_relative_elapsed_ms")
+                put("source", StudyJson.value(articleForUsage?.source))
+                put("article_url", StudyJson.value(articleForUsage?.url))
+                put("diagnostic_dot", StudyConfig.GAZE_DEBUG_VISUALS)
+            })
+        recording?.let { studyArticleReading.opened(it.id) }
+        studyVisit = recording
+        recording?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to StudyConfig.GAZE_DEBUG_VISUALS), binding.nsvArticleText)
+        recording?.baseline(activeMahalanobisBaseline)
+        recording?.coordinateReference(sharedReference)
+        val providerEpoch = recording?.providerStarted(activeBaselineFingerprint)
+        val studyScreen = binding.root.physicalDisplaySize()
+        val studyRotation = binding.root.display.rotation * 90
         mahalanobisConfig = activeMahalanobisBaseline?.profile?.config ?: MahalanobisConfig()
         readingFeatures = ReadingFeaturePipeline(mahalanobisConfig)
         mahalanobisScorer = MahalanobisScorer(activeMahalanobisBaseline?.profile)
@@ -1374,13 +1484,20 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         latestMahalanobisDebugSnapshot = null
         mahalanobisLineCount = 0
         scanpathCounts.clear()
+        val studyTraceObserver: ((String, Double, org.json.JSONObject) -> Unit)? = recording?.let { it::runtimeEvent }
+        val studyPolicyObserver: ((String, Double, Map<String, Any?>) -> Unit)? = recording?.let { it::auditEvent }
         val aids = readingAidOverlay?.let { ArticleReadingAidRuntime(binding.tvArticleText,
             binding.readingAidWordDock, it, config = ReadingAidPolicyConfig.evidenceAlignedPrototype()
                 .copy(conditionId = "SMOOTHED_ARTICLE_CONTENT_AIDS_V11"),
             preferences = aidPreferences, definitionPopup = definitionPopup,
             coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED, blinkFilterEnabled = true,
             motionCompensatedAids = true,
+            onTraceRecord = studyTraceObserver,
+            onPolicyAudit = studyPolicyObserver,
+            onDecision = { decision -> recording?.record("aid_decision", StudyJson.obj("decision" to decision), decision.nowMs) },
+            onRenderReceipt = { action, drawn, reason, at -> recording?.aidRender(action, drawn, reason, at) },
             onConsultationChanged = { active, at, reason ->
+                recording?.exclude("definition_consultation", active)
                 articleAutoScroll?.interrupt("definition_consultation")
                 scanpathSession?.setConsultation(active, at, reason)
                 mahalanobisReadingSession?.setConsultation(active, at, reason)
@@ -1393,23 +1510,38 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             motionCompensatedAids = true,
             config = aids?.scanpathConfig ?: com.newsmead.gaze.scanpath.ScanpathConfig(),
             onEvent = { generation, event ->
+            recording?.record("scanpath_output", StudyJson.obj("producer" to "pattern", "generation" to generation, "output" to event), event.evidenceAvailableMs)
             scanpathCounts[event.patternId] = (scanpathCounts[event.patternId] ?: 0) + 1
             aids?.event(generation, event)
-        }, onGeometry = { generation, geometry -> aids?.geometry(generation, geometry) },
-            onInput = { generation, sample -> aids?.input(generation, sample) },
-            onCandidate = { generation, candidate -> aids?.candidate(generation, candidate) },
-            onFixation = { generation, fixation -> aids?.fixation(generation, fixation) })
+        }, onGeometry = { generation, geometry ->
+                recording?.record("layout_snapshot", StudyJson.obj("producer" to "scanpath", "generation" to generation, "geometry" to geometry), StudyVisit.now())
+                recording?.boundary("scanpath_geometry"); aids?.geometry(generation, geometry) },
+            onInput = { generation, sample ->
+                recording?.record("scanpath_input", StudyJson.obj("generation" to generation, "sample" to sample), sample.captureMs)
+                aids?.input(generation, sample) },
+            onAcceptance = { generation, sample, accepted -> recording?.record("scanpath_acceptance", StudyJson.obj(
+                "generation" to generation, "capture_ms" to sample.captureMs, "accepted" to accepted), sample.captureMs) },
+            onCandidate = { generation, candidate ->
+                recording?.record("scanpath_output", StudyJson.obj("producer" to "candidate", "generation" to generation, "output" to candidate), StudyVisit.now())
+                aids?.candidate(generation, candidate) },
+            onFixation = { generation, fixation ->
+                recording?.record("scanpath_output", StudyJson.obj("producer" to "fixation_screen_projection", "generation" to generation, "output" to fixation), fixation.evidenceAvailableMs)
+                aids?.fixation(generation, fixation) })
         scanpathSession = liveScanpath
         val liveReadingFeatures = ArticleReadingSession(binding.tvArticleText,
             coordinateStream = ReadingCoordinateStream.ARTICLE_SMOOTHED,
             motionCompensatedAids = false,
-            onGeometry = { _, geometry -> mahalanobisLineCount = geometry?.lines?.size ?: 0 },
-            onInput = { _, sample ->
+            onGeometry = { generation, geometry -> mahalanobisLineCount = geometry?.lines?.size ?: 0
+                recording?.record("layout_snapshot", StudyJson.obj("producer" to "rdf", "generation" to generation, "geometry" to geometry), StudyVisit.now()) },
+            onInput = { generation, sample ->
+                recording?.record("rdf_input", StudyJson.obj("generation" to generation, "sample" to sample), sample.captureMs)
                 sample.captureMs?.takeIf { it.isFinite() && it >= 0 && it < Long.MAX_VALUE.toDouble() }
                     ?.let { capture -> readingFeatures?.sample(sample.line, mahalanobisLineCount,
                         sample.eligible, capture.toLong()) }
             },
             onBoundary = { reason ->
+                recording?.record("rdf_boundary", StudyJson.obj("reason" to reason), StudyVisit.now())
+                if (com.newsmead.research.study.StudyCaptureContext.presentationBoundary(reason)) recording?.boundary(reason)
                 when (reason) {
                     "invalid_sample", "non_monotonic_capture" -> Unit
                     "reading_scroll" -> readingFeatures?.breakContinuity()
@@ -1425,11 +1557,13 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         Log.i("Scanpath", "live stream=${liveScanpath.coordinateStream.id} engine=${ScanpathEngine.EXTRACTOR_VERSION} " +
             "classifier=${ScanpathEngine.CLASSIFIER_VERSION}; independent experimental aids=${aids != null}")
         provider.onFps = { fps -> gazeOverlay?.setFps(fps) }
+        provider.onMetadata = { metadata -> if (providerEpoch != null) recording?.metadata(providerEpoch, metadata) }
         provider.onFailure = { message ->
             if (scanpathSession === liveScanpath) stopScanpathSession("provider_failed")
             Toast.makeText(context,message,Toast.LENGTH_LONG).show()
         }
         provider.onObservation = { observation ->
+            if (providerEpoch != null) recording?.observation(providerEpoch, observation, studyScreen.x, studyScreen.y, studyRotation)
             // An old provider's terminal callback must not close a newer article stream.
             // Detect external movement before any gaze can be interpreted as self-scroll.
             if (scanpathSession === liveScanpath) articleAutoScroll?.onPreDraw()
@@ -1487,6 +1621,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     private fun stopScanpathSession(reason: String) {
+        studyVisit?.finish(reason); studyVisit = null
         mahalanobisHandler.removeCallbacks(mahalanobisTick)
         val featureSession = mahalanobisReadingSession
         mahalanobisReadingSession = null

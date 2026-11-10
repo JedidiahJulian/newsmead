@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NewsMead local study v1 record envelope",
+  "type": "object",
+  "required": ["schema_version", "package_id", "study_id", "participant_id", "installation_id", "run_id", "session_id", "clock_domain_id", "kind", "record_id", "seq", "recorded_elapsed_ms", "source_elapsed_ms", "payload"],
+  "properties": {
+    "schema_version": {"const": "newsmead_study_v1"},
+    "package_id": {"type": "string", "minLength": 1},
+    "study_id": {"type": "string", "minLength": 1},
+    "participant_id": {"type": "string", "minLength": 1},
+    "installation_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "clock_domain_id": {"type": "string", "minLength": 1},
+    "kind": {"type": "string", "minLength": 1},
+    "record_id": {"type": "string", "minLength": 1},
+    "seq": {"type": "integer", "minimum": 0},
+    "recorded_elapsed_ms": {"type": "number", "minimum": 0},
+    "source_elapsed_ms": {"type": ["number", "null"], "minimum": 0},
+    "payload": {"type": "object"}
+  },
+  "additionalProperties": false
+}

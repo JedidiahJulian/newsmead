@@ -14,6 +14,7 @@ import com.newsmead.R
 import com.newsmead.activities.AccountActivity
 import com.newsmead.data.FirebaseHelper
 import com.newsmead.data.PreloadedData
+import com.newsmead.data.StudyConfig
 import com.newsmead.logging.Analytics
 import com.newsmead.logging.AppLog
 import com.newsmead.research.ResearchSession
@@ -41,6 +42,15 @@ class ProfileFragment : Fragment() {
 
         // Initialize viewBinding for ProfileFragment
         this.viewBinding = FragmentProfileBinding.inflate(layoutInflater)
+
+        configureAppearance()
+        if (StudyConfig.BYPASS_LOGIN) {
+            viewBinding.constraintLayout.visibility = View.GONE
+            viewBinding.btnSave.visibility = View.GONE
+            viewBinding.btnLogout.visibility = View.GONE
+            viewBinding.tvProfileSubtitle.setText(R.string.profile_study_subtitle)
+            return
+        }
 
         // Connect to Firebase Auth
         this.auth = FirebaseAuth.getInstance()
@@ -86,6 +96,9 @@ class ProfileFragment : Fragment() {
             updateProfile(password, confirmPassword)
         }
 
+    }
+
+    private fun configureAppearance() {
         // Check if dark mode is enabled on phone
         val activityConfig = requireActivity().resources.configuration.uiMode
         if (activityConfig and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES) {

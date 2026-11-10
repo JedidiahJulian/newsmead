@@ -29,6 +29,10 @@ import com.newsmead.gaze.mgazenet.MgazeNetCalibrationStore
 import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
 import com.newsmead.gaze.reading.ArticleReadingSession
 import com.newsmead.gaze.reading.ReadingCoordinateStream
+import com.newsmead.gaze.physicalDisplaySize
+import com.newsmead.research.study.StudyCollection
+import com.newsmead.research.study.StudyVisit
+import com.newsmead.research.study.StudyJson
 
 /** Explicit unassisted reading; model inputs stay in memory and no aid runtime is attached. */
 class ReadingBaselineActivity : AppCompatActivity() {
@@ -57,6 +61,7 @@ class ReadingBaselineActivity : AppCompatActivity() {
     private var startedAt = 0L
     private var lineCount = 0
     private var vectors = 0
+    private var studyVisit: StudyVisit? = null
     private var validVectors = 0
     private var latestWindowSummary = "Waiting for gaze samples"
     private val intervalExclusions = linkedMapOf<String, Int>()
@@ -66,7 +71,9 @@ class ReadingBaselineActivity : AppCompatActivity() {
         if (requested && granted && resumed && !destroyed) beginAttempt()
         else if (requested) status.text = "Camera permission is required. Press Start when ready."
     }
-    private val preDraw = ViewTreeObserver.OnPreDrawListener { adapter?.checkGeometry(); true }
+    private val preDraw = ViewTreeObserver.OnPreDrawListener {
+        studyVisit?.presentation(body); adapter?.checkGeometry(); true
+    }
     private val tick = object : Runnable {
         override fun run() {
             if (!running) return
@@ -189,12 +196,20 @@ class ReadingBaselineActivity : AppCompatActivity() {
         intervalExclusions.clear()
         lineCount = 0
         startedAt = now()
+        studyVisit?.finish("baseline_replaced")
+        studyVisit = StudyCollection.open(this, "rdf_baseline", StudyJson.obj(
+            "baseline_attempt_id" to sessionId, "baseline_participant_code" to participantCode,
+            "participant_match" to (StudyCollection.run?.participant == participantCode),
+            "calibration_id" to fingerprint, "rdf_config" to config))
+        studyVisit?.presentation(body)
         running = true
         adapter = ArticleReadingSession(body,
             coordinateStream = ReadingCoordinateStream.ARTICLE_SMOOTHED,
             motionCompensatedAids = false,
-            onGeometry = { _, geometry -> lineCount = geometry?.lines?.size ?: 0 },
-            onInput = { _, sample ->
+            onGeometry = { generation, geometry -> lineCount = geometry?.lines?.size ?: 0
+                studyVisit?.record("layout_snapshot", StudyJson.obj("producer" to "rdf", "generation" to generation, "geometry" to geometry), StudyVisit.now()) },
+            onInput = { generation, sample ->
+                studyVisit?.record("rdf_input", StudyJson.obj("generation" to generation, "sample" to sample), sample.captureMs)
                 if (!sample.eligible) {
                     val reason = sample.exclusion ?: "unknown"
                     intervalExclusions[reason] = (intervalExclusions[reason] ?: 0) + 1
@@ -204,6 +219,8 @@ class ReadingBaselineActivity : AppCompatActivity() {
                     pipeline.sample(sample.line, lineCount, sample.eligible, capture.toLong())
             },
             onBoundary = { reason ->
+                studyVisit?.record("rdf_boundary", StudyJson.obj("reason" to reason), StudyVisit.now())
+                if (com.newsmead.research.study.StudyCaptureContext.presentationBoundary(reason)) studyVisit?.boundary(reason)
                 when (reason) {
                     "invalid_sample", "non_monotonic_capture" -> Unit
                     "reading_scroll" -> pipeline.breakContinuity()
@@ -212,11 +229,20 @@ class ReadingBaselineActivity : AppCompatActivity() {
             })
         adapter?.checkGeometry()
         pipeline.tick(startedAt)
+        studyVisit?.record("rdf_schedule_tick", StudyJson.obj("tick_ms" to startedAt), startedAt.toDouble())
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val camera = MgazeNetGazeProvider(this, body, smoothForReading = true, rejectBlinks = true,
             maxOutputAgeMs = StudyConfig.READING_MAX_OUTPUT_AGE_MS)
         provider = camera
-        camera.onObservation = { observation -> if (running && provider === camera) adapter?.record(observation) }
+        val recording = studyVisit
+        val epoch = recording?.providerStarted(fingerprint)
+        val screen = body.physicalDisplaySize()
+        val rotation = body.display.rotation * 90
+        camera.onMetadata = { metadata -> if (epoch != null) recording?.metadata(epoch, metadata) }
+        camera.onObservation = { observation ->
+            if (epoch != null) recording?.observation(epoch, observation, screen.x, screen.y, rotation)
+            if (running && provider === camera) adapter?.record(observation)
+        }
         camera.onFailure = { reason ->
             if (provider === camera && !destroyed) {
                 ParticipantReadingBaseline.abandonCollecting(sessionId, fingerprint)
@@ -233,8 +259,12 @@ class ReadingBaselineActivity : AppCompatActivity() {
     }
 
     private fun collectTick() {
-        pipeline.tick(now())?.let { vector ->
-            collector.add(vector)
+        val tickAt = now()
+        studyVisit?.record("rdf_schedule_tick", StudyJson.obj("tick_ms" to tickAt), tickAt.toDouble())
+        pipeline.tick(tickAt)?.let { vector ->
+            val retained = collector.add(vector)
+            studyVisit?.record("rdf_baseline_window", StudyJson.obj("feature_vector" to vector,
+                "retained" to retained, "baseline_attempt_id" to sessionId), tickAt.toDouble())
             vectors++
             if (vector.isUsable(config)) validVectors++
             val reason = intervalExclusions.maxByOrNull { it.value }?.key
@@ -247,6 +277,8 @@ class ReadingBaselineActivity : AppCompatActivity() {
     private fun finishAttempt() {
         if (!running || stopping) return
         collectTick()
+        val recording = studyVisit
+        recording?.beginResult()
         stopCollection {
             val store = MgazeNetCalibrationStore(this)
             if (!ParticipantReadingBaseline.isCurrentSession(sessionId) || store.fingerprint() != fingerprint || store.compatibilityIssue(root) != null) {
@@ -254,6 +286,9 @@ class ReadingBaselineActivity : AppCompatActivity() {
                 status.text = "Baseline rejected: session or calibration changed. Press Start to retry."
             } else {
                 val fit = collector.freeze()
+                recording?.record("rdf_baseline_fit", StudyJson.obj("fit" to fit,
+                    "baseline_attempt_id" to sessionId, "baseline_participant_code" to participantCode,
+                    "config" to config), StudyVisit.now())
                 val profile = fit.profile
                 if (profile == null) {
                     ParticipantReadingBaseline.markInvalid(sessionId, fingerprint)
@@ -265,6 +300,7 @@ class ReadingBaselineActivity : AppCompatActivity() {
                     status.text = "Baseline frozen. Return to article reading in this session."
                 }
             }
+            recording?.endResult()
         }
     }
 
@@ -272,6 +308,7 @@ class ReadingBaselineActivity : AppCompatActivity() {
     private fun stopCollection(after: () -> Unit = {}) {
         if (stopping) return
         running = false
+        studyVisit?.finish("baseline_stopped")
         handler.removeCallbacks(tick)
         adapter?.close("baseline_stopped"); adapter = null
         pipeline.breakContinuity()
@@ -310,7 +347,7 @@ class ReadingBaselineActivity : AppCompatActivity() {
 
     companion object {
         // Same fixed provisional reading material as the working Mahalanobis branch.
-        private val BASELINE_PASSAGE = """
+        internal val BASELINE_PASSAGE = """
             On quiet mornings, Lina walked to the community library before the streets became busy. She liked the wide windows, the wooden tables, and the patient rhythm of pages turning nearby. The familiar room made it easier to settle into a story without rushing.
 
             One week, the librarian displayed a report about gardens built above crowded buildings. These rooftop spaces reduced heat, absorbed rainwater, and gave residents a place to grow herbs. Volunteers recorded which plants survived strong sunlight and which needed shade during the afternoon.

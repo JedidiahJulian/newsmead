@@ -50,6 +50,7 @@
         <activity
             android:name=".activities.ReadingBaselineActivity"
             android:exported="false" />
+        <activity android:name=".activities.StudyCollectionActivity" android:exported="false" />
         <!-- Explicit-start synthetic replay; no gaze source, camera or calibration writes. -->
         <activity
             android:name=".activities.ScanpathReplayActivity"
@@ -91,6 +92,12 @@
         <meta-data
             android:name="google_analytics_adid_collection_enabled"
             android:value="false" />
+        <meta-data
+            android:name="firebase_analytics_collection_deactivated"
+            android:value="${studyAnalyticsDeactivated}" />
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="${studyCloudReportsEnabled}" />
     </application>
 
 </manifest>

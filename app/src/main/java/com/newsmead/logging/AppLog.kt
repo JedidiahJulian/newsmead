@@ -3,6 +3,7 @@ package com.newsmead.logging
 import android.util.Log
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.newsmead.BuildConfig
+import com.newsmead.data.StudyConfig
 
 /**
  * Single entry point for diagnostic logging.
@@ -89,7 +90,7 @@ object AppLog {
      * test or a screen falls over.
      */
     private val crashlytics: FirebaseCrashlytics?
-        get() = try {
+        get() = if (StudyConfig.BYPASS_LOGIN) null else try {
             FirebaseCrashlytics.getInstance()
         } catch (exception: IllegalStateException) {
             null

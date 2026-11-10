@@ -1,4 +1,5 @@
 <resources>
+    <string name="home_study_collection">Study recording</string>
     <string name="definition_lookup_offer">Look up %1$s</string>
     <string name="app_name">NewsMead</string>
 
@@ -149,6 +150,11 @@
     <string name="saved_title">Saved Articles</string>
     <string name="saved_your_lists">Your Lists</string>
     <string name="saved_all">All</string>
+    <string name="saved_testing_articles">Testing articles</string>
+    <string name="saved_testing_samples_notice">Sample articles for setup. They stay available when the news feed refreshes.</string>
+    <string name="saved_testing_empty">No testing articles are included in this build.</string>
+    <string name="saved_testing_load_error">Testing articles could not be loaded. Please ask the researcher for help.</string>
+    <string name="profile_study_subtitle">No account is needed. Open Saved for the testing articles.</string>
 
     <string name="saved_notes_btn">Open Notes</string>
 

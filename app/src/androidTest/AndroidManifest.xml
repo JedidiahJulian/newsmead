@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Local-only receiving app for checking the actual Android share route.
+             This component exists in the test APK, never the main application. -->
+        <activity
+            android:name="com.newsmead.research.study.StudyTransferReceiver"
+            android:exported="true"
+            android:label="Study transfer verification">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/zip" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

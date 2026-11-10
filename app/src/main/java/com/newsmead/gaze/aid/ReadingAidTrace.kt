@@ -10,7 +10,8 @@ import com.newsmead.gaze.scanpath.ScanpathEvent
 import com.newsmead.gaze.scanpath.ScanpathFixation
 
 /** Bounded in-memory numeric/action journal; disk export requires the explicit menu action. */
-class ReadingAidTrace(private val capacity: Int = 2048) {
+class ReadingAidTrace(private val capacity: Int = 2048,
+    private val onRecord: ((String, Double, JSONObject) -> Unit)? = null) {
     private val records = ArrayDeque<JSONObject>()
     private var sequence = 0L
     private var dropped = 0L
@@ -83,8 +84,11 @@ class ReadingAidTrace(private val capacity: Int = 2048) {
         facts.remove(key)
         if (facts.size == 512) { facts.remove(facts.keys.first()); evictedFacts++ }
         facts[key] = fact.put("generation", generation)
+        onRecord?.let { sink -> runCatching { sink("support_revision", android.os.SystemClock.elapsedRealtimeNanos() / 1e6,
+            JSONObject().put("producer", "trace_fact").put("entity_id", id).put("fact", fact)) } }
     }
     fun record(kind: String, nowMs: Double, detail: JSONObject) {
+        onRecord?.let { runCatching { it(kind, nowMs, detail) } }
         if (records.size == capacity) { records.removeFirst(); dropped++ }
         records.addLast(JSONObject().put("sequence", ++sequence).put("kind", kind)
             .put("elapsed_ms", nowMs).put("detail", detail))

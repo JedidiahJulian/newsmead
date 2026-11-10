@@ -5,6 +5,7 @@ import android.app.Application
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.newsmead.logging.AppLog
 import com.newsmead.models.Article
 import com.newsmead.research.ResearchSession
@@ -22,6 +23,10 @@ class NewsMeadApplication: Application() {
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate() {
         super.onCreate()
+        // The account-free manifest removes the component before SDK startup.
+        if (!StudyConfig.BYPASS_LOGIN) {
+            FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(true)
+        }
         DatabaseHelper.initDatabase(this)
 
         // One research session per foreground period, rather than per process.
@@ -30,11 +35,13 @@ class NewsMeadApplication: Application() {
         // every file would be unterminated — which would waste the
         // dropped-record accounting SessionLog does.
         registerActivityLifecycleCallbacks(SessionLifecycle())
-        AppLog.setAuthState(if (FirebaseHelper.getUid() == "null") "signed_out" else "signed_in")
+        if (!StudyConfig.BYPASS_LOGIN) {
+            AppLog.setAuthState(if (FirebaseHelper.getUid() == "null") "signed_out" else "signed_in")
+        }
 
         // Check if logged in
         // If logged in, then preload data
-        if (FirebaseHelper.getUid() != "null") {
+        if (!StudyConfig.BYPASS_LOGIN && FirebaseHelper.getUid() != "null") {
             GlobalScope.launch {
                 try {
                     val pairData = FirebaseHelper.getListsAndArticles(this@NewsMeadApplication)

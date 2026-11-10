@@ -19,6 +19,9 @@ plugins {
     id("kotlin-kapt")
 }
 
+// One switch for the login-free study UI and its pre-start Firebase collection policy.
+val accountFreeStudyBuild = true
+
 val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
@@ -35,6 +38,10 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.2"
+
+        buildConfigField("boolean", "ACCOUNT_FREE_STUDY", accountFreeStudyBuild.toString())
+        manifestPlaceholders["studyAnalyticsDeactivated"] = accountFreeStudyBuild.toString()
+        manifestPlaceholders["studyCloudReportsEnabled"] = (!accountFreeStudyBuild).toString()
 
         // Frozen estimator baseline identity for the matched comparison harness.
         // The reference build applies the reviewed comparison patch to its exact
@@ -95,6 +102,11 @@ android {
     sourceSets["main"].apply {
         assets.srcDir(layout.buildDirectory.dir("generated/mgazenetAssets"))
         jniLibs.srcDir(rootProject.file("mgazenet-benchmark/vendor/jniLibs"))
+    }
+    if (accountFreeStudyBuild) {
+        // Remove eager Crashlytics registration before SDK startup, including retained-data upgrades.
+        sourceSets["debug"].manifest.srcFile("src/accountFree/AndroidManifest.xml")
+        sourceSets["release"].manifest.srcFile("src/accountFree/AndroidManifest.xml")
     }
     // Preserve shrinking; extract the pinned native libraries with AGP 8.3.
     packaging { jniLibs { useLegacyPackaging = true } }

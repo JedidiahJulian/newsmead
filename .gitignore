@@ -28,6 +28,7 @@ local.properties
 /canpath-driven adjustable reading aids*
 __pycache__/
 *.py[cod]
+/notebooks/.ipynb_checkpoints/
 
 # .DS_Store
 # /.idea/shelf

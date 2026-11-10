@@ -5,6 +5,7 @@ import androidx.core.os.bundleOf
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.analytics.ktx.analytics
 import com.google.firebase.ktx.Firebase
+import com.newsmead.data.StudyConfig
 
 /**
  * Firebase Analytics events, declared in one place.
@@ -22,7 +23,7 @@ import com.google.firebase.ktx.Firebase
 object Analytics {
 
     private val analytics: FirebaseAnalytics?
-        get() = try {
+        get() = if (StudyConfig.BYPASS_LOGIN) null else try {
             Firebase.analytics
         } catch (exception: IllegalStateException) {
             null
