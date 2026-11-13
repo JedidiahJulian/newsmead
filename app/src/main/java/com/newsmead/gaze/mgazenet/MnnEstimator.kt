@@ -5,7 +5,8 @@ import com.taobao.android.mnn.MNNNetNative as Native
 import java.security.MessageDigest
 
 /** Thread confined, CPU only. No calibration files, screen coordinates or callbacks. */
-class MnnEstimator(context: Context, private val threads: Int = 4) : AutoCloseable {
+class MnnEstimator(context: Context, val threads: Int = DEFAULT_THREADS) : AutoCloseable {
+    val runtime: String get() = runtimeForThreads(threads)
     private var net = 0L
     private val session: Long
     private val inputs: LongArray
@@ -59,7 +60,12 @@ class MnnEstimator(context: Context, private val threads: Int = 4) : AutoCloseab
         private const val EYE_SIZE = 3 * 112 * 112
         private const val RECT_SIZE = 12
         const val MODEL_SHA = "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96"
+        const val DEFAULT_THREADS = 4
         const val RUNTIME = "MNN 3.6.1 CPU Session, 4 threads, default precision (not upstream Module low precision)"
+        fun runtimeForThreads(threads: Int): String {
+            require(threads in 1..8)
+            return "MNN 3.6.1 CPU Session, $threads threads, default precision (not upstream Module low precision)"
+        }
         fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     }
 }

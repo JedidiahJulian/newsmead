@@ -7,9 +7,9 @@
 For the current build:
 
 1. Confirm GAZE_TOUCH_VALIDATION is false and SCAFFOLD_MODE is ADAPTIVE in
-   StudyConfig. The current diagnostic build has GAZE_DEBUG_VISUALS enabled so
-   researchers can see the gaze dot and FPS; disable it before participant-facing
-   data collection.
+   StudyConfig. In an article, open **Article options** and use **Show gaze dot
+   and FPS** for researcher checks. Select **Hide gaze dot and FPS** before
+   participant-facing data collection.
 2. Build/install with JDK 17.
 3. On the **home screen**, tap "Calibrate eye tracker", grant camera permission,
    and complete all 16 targets while keeping phone/head position stable. Review
@@ -130,9 +130,9 @@ watch the live gaze-to-line output:
 ```
 adb logcat -s GazeAOI          # gaze=(x,y) line=N/total, updates as they read
 ```
-The red dot is visible because the current diagnostic build enables
-GAZE_DEBUG_VISUALS. Disable it before participant-facing sessions. Current logs
-use rawLine and stableLine; stableLine is
+Use **Show gaze dot and FPS** in the article's **Article options** menu when the
+researcher diagnostic is needed. Select **Hide gaze dot and FPS** before
+participant-facing sessions. Current logs use rawLine and stableLine; stableLine is
 the debounced line supplied to RSI and scaffolding.
 
 ---

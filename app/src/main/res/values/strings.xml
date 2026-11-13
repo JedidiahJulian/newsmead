@@ -387,6 +387,10 @@
     <string name="reading_aids_option">Reading aids</string>
     <string name="reading_aid_entry_short">Aids</string>
     <string name="article_options">Article options</string>
+    <string name="article_show_gaze_diagnostics">Show gaze dot and FPS</string>
+    <string name="article_hide_gaze_diagnostics">Hide gaze dot and FPS</string>
+    <string name="article_gaze_diagnostics_shown">Gaze dot and FPS are shown</string>
+    <string name="article_gaze_diagnostics_hidden">Gaze dot and FPS are hidden</string>
     <string name="reading_aid_menu_opacity">Guide opacity: %1$.1f%%</string>
     <string name="reading_aid_menu_guide">Reading guide</string>
     <string name="reading_aid_menu_line">Single line</string>

@@ -793,9 +793,11 @@ const val GAZE_DEBUG_VISUALS = true
 
 - `SCAFFOLD_DEMO_LEVEL_DURATION_MS`: how long `DEMO_CYCLE` holds each level.
 - `SCAFFOLD_DEMO_CAPTION`: draws the active level's name on screen during `DEMO_CYCLE`.
-- `GAZE_DEBUG_VISUALS`: the red gaze dot and FPS readout. A researcher diagnostic, not a participant scaffold.
+- `GAZE_DEBUG_VISUALS`: the default state of the red gaze dot and FPS readout for a fresh install.
+  Researchers can change the persisted state on-device from an article's **Article options** menu.
+  This is a researcher diagnostic, not a participant scaffold.
 
-Before any participant-facing session, confirm `SCAFFOLD_MODE` is `ADAPTIVE` (or `OFF` for the control condition) and `GAZE_DEBUG_VISUALS` is `false`.
+Before any participant-facing session, confirm `SCAFFOLD_MODE` is `ADAPTIVE` (or `OFF` for the control condition) and **Hide gaze dot and FPS** is selected in Article options.
 
 Transitions are logged under `GazeScaffold`:
 

@@ -190,6 +190,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var readingAidControls: BottomSheetDialog? = null
     private var articleAutoScroll: ArticleAutoScrollController? = null
     private var articleOptionsDialog: AlertDialog? = null
+    private var showGazeDiagnostics = StudyConfig.GAZE_DEBUG_VISUALS
     private val readerControlGate = ReadingAidControlGate()
     private var controlsRuntime: ArticleReadingAidRuntime? = null
     private var controlsSession: ArticleScanpathSession? = null
@@ -198,7 +199,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         get() = StudyConfig.SCANPATH_READING_AIDS && !StudyConfig.GAZE_TOUCH_VALIDATION
     private val scanpathCounts = mutableMapOf<String, Int>()
     private val scanpathGeometryListener = ViewTreeObserver.OnPreDrawListener {
-        studyVisit?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to StudyConfig.GAZE_DEBUG_VISUALS), binding.nsvArticleText)
+        studyVisit?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to showGazeDiagnostics), binding.nsvArticleText)
         studyVisit?.exclude("tts", ::textToSpeech.isInitialized && textToSpeech.isSpeaking)
         articleAutoScroll?.onPreDraw()
         scanpathSession?.checkGeometry()
@@ -234,6 +235,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         // A recreated article view is a new reading entry, including Back from another article.
         // Provider restarts and transient dialogs within this view keep the same reading identity.
         studyArticleReading = com.newsmead.research.study.StudyArticleReading()
+        showGazeDiagnostics = ArticleDisplayPreferences.showGazeDiagnostics(requireContext())
         aidPreferences = ReaderAidPreferencesStore.load(requireContext(),
             ReaderAidPreferences(wordMagnifier = false))
         articleBodyReady = false
@@ -935,6 +937,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             .setItems(
                 arrayOf(
                     getString(R.string.reading_aids_option),
+                    getString(if (showGazeDiagnostics) R.string.article_hide_gaze_diagnostics
+                        else R.string.article_show_gaze_diagnostics),
                     getString(R.string.reading_validation_accuracy_option),
                     getString(R.string.reading_validation_reading_option),
                     getString(R.string.reading_measurement_option),
@@ -946,13 +950,21 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             ) { _, which ->
                 when (which) {
                     0 -> showReadingAidControls()
-                    1 -> launchGazeTest()
-                    2 -> launchReadingValidation()
-                    3 -> showReadingMeasurementInstructions()
-                    4 -> saveReadingAidTrace()
-                    5 -> launchScanpathReplay()
-                    6 -> launchScanpathPilot()
-                    7 -> startArticleDemo()
+                    1 -> {
+                        showGazeDiagnostics = !showGazeDiagnostics
+                        ArticleDisplayPreferences.setShowGazeDiagnostics(requireContext(), showGazeDiagnostics)
+                        gazeOverlay?.setDebugVisualsEnabled(showGazeDiagnostics)
+                        Toast.makeText(requireContext(), if (showGazeDiagnostics)
+                            R.string.article_gaze_diagnostics_shown else R.string.article_gaze_diagnostics_hidden,
+                            Toast.LENGTH_SHORT).show()
+                    }
+                    2 -> launchGazeTest()
+                    3 -> launchReadingValidation()
+                    4 -> showReadingMeasurementInstructions()
+                    5 -> saveReadingAidTrace()
+                    6 -> launchScanpathReplay()
+                    7 -> launchScanpathPilot()
+                    8 -> startArticleDemo()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -1220,7 +1232,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         )
         overlay.bringToFront()
         overlay.translationZ = 1000f
-        overlay.setDebugVisualsEnabled(StudyConfig.GAZE_DEBUG_VISUALS)
+        overlay.setDebugVisualsEnabled(showGazeDiagnostics)
         if (scanpathAidsEnabled) {
             val aidOverlay = ReadingAidOverlayView(requireContext(), lineStartMarkerInGutter = true)
             (binding.root as ViewGroup).addView(aidOverlay, ConstraintLayout.LayoutParams(0, 0).apply {
@@ -1467,11 +1479,11 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 put("usage_clock", "separate_session_relative_elapsed_ms")
                 put("source", StudyJson.value(articleForUsage?.source))
                 put("article_url", StudyJson.value(articleForUsage?.url))
-                put("diagnostic_dot", StudyConfig.GAZE_DEBUG_VISUALS)
+                put("diagnostic_dot", showGazeDiagnostics)
             })
         recording?.let { studyArticleReading.opened(it.id) }
         studyVisit = recording
-        recording?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to StudyConfig.GAZE_DEBUG_VISUALS), binding.nsvArticleText)
+        recording?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to showGazeDiagnostics), binding.nsvArticleText)
         recording?.baseline(activeMahalanobisBaseline)
         recording?.coordinateReference(sharedReference)
         val providerEpoch = recording?.providerStarted(activeBaselineFingerprint)

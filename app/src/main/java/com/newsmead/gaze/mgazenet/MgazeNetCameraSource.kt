@@ -28,6 +28,7 @@ import java.util.Locale
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -38,7 +39,13 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private val store: MgazeNetCalibrationStore,
     private val saved: CalibrationBundle.Artifact? = null,
     private val eyelidTelemetryEnabled: Boolean = false,
-    private val preferStableFrameRate: Boolean = false) {
+    private val preferStableFrameRate: Boolean = false,
+    private val diagnosticMnnThreads: Int = MnnEstimator.DEFAULT_THREADS) {
+    init {
+        require(diagnosticMnnThreads in 1..8)
+        // Diagnostic thread experiments must not load or produce a production calibration.
+        require(diagnosticMnnThreads == MnnEstimator.DEFAULT_THREADS || saved == null)
+    }
     data class Frame(val captureMs: Double, val outputMs: Double, val features: FloatArray?,
         val leftArea: Double, val rightArea: Double, val prediction: FloatArray?, val reason: String,
         val cropSizes: List<List<Int>>?, val posture: MgazeNetPostureGate.Sample?,
@@ -67,7 +74,8 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private var lastTimestamp = -1L
     private var delegateName = "GPU"
     private var requestedFpsRange: Range<Int>? = null
-    private val performanceLog = PerformanceLog()
+    private val performanceMetrics = PipelinePerformanceMetrics()
+    private val admission = BoundedFrameAdmission(PREPROCESSOR_SLOT_COUNT)
     private val landmarkX = DoubleArray(478)
     private val landmarkY = DoubleArray(478)
 
@@ -78,7 +86,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 check(org.opencv.android.OpenCVLoader.initLocal())
                 check(CalibrationIdentity.hash(context.assets.open("face_landmarker.task").use { it.readBytes() }) == CalibrationIdentity.LOCALIZER)
                 store.verifyNativePersistence()
-                model = MnnEstimator(context)
+                model = MnnEstimator(context, diagnosticMnnThreads)
                 preprocessors = List(PREPROCESSOR_SLOT_COUNT) { Preprocessor() }
                 preprocessors.forEach { availablePreprocessors.add(it) }
                 svr = saved?.let { store.load(it) } ?: SvrCalibration()
@@ -132,6 +140,15 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
         if (stopped.get() || !clockReady) { image.close(); return }
         val analyzerStartedNs = SystemClock.elapsedRealtimeNanos()
         arrivals.incrementAndGet()
+        if (!admission.tryAcquire()) {
+            drops.incrementAndGet()
+            performanceMetrics.arrival(analyzerStartedNs, busy = true)?.let { Log.i(PERFORMANCE_TAG, it) }
+            image.close()
+            return
+        }
+        performanceMetrics.arrival(analyzerStartedNs, busy = false)?.let { Log.i(PERFORMANCE_TAG, it) }
+        var reservedPreprocessor: Preprocessor? = null
+        var handedToWorker = false
         try {
             val captureNs = image.imageInfo.timestamp
             check(captureNs > 0 && captureNs <= SystemClock.elapsedRealtimeNanos()) { "Invalid shared camera timestamp" }
@@ -144,7 +161,9 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 signature = shape
                 val metadata = linkedMapOf<String,Any?>(
                     "acquisition" to acquisition,
-                    "model_sha256" to MnnEstimator.MODEL_SHA,"runtime" to MnnEstimator.RUNTIME,
+                    "model_sha256" to MnnEstimator.MODEL_SHA,"runtime" to model!!.runtime,
+                    "mnn_cpu_threads" to model!!.threads,
+                    "diagnostic_thread_override" to (diagnosticMnnThreads != MnnEstimator.DEFAULT_THREADS),
                     "face_landmarker_sha256" to "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
                     "localizer" to "Tasks 0.10.29 VIDEO one-face detection=.1 tracking=.1 presence=.5",
                     "delegate" to delegateName,"camera_source_shape_rotation" to shape,
@@ -181,16 +200,17 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 val crops = points?.let { GazeGeometry.crops(landmarkX,landmarkY,bitmap.width,bitmap.height) }
                 val reason = when { landmarks == null -> "no_face"; crops == null -> "invalid_crops"; else -> "features" }
                 val posture = crops?.let { MgazeNetPostureGate.from(it,bitmap.width,bitmap.height) }
-                val preprocessor = if (crops == null) null else availablePreprocessors.poll()
-                if (crops != null && preprocessor == null) {
-                    drops.incrementAndGet()
-                    return
-                }
+                // A permit covers localization, preprocessing and the worker submission,
+                // including no-face results. No bitmap work or result backlog when both are busy.
+                val preprocessor = if (crops == null) null else checkNotNull(availablePreprocessors.poll())
+                reservedPreprocessor = preprocessor
                 val preprocessStartedNs = SystemClock.elapsedRealtimeNanos()
                 val inputs = if (crops == null) null else preprocessor!!.prepare(bitmap,crops)
                 val preprocessFinishedNs = SystemClock.elapsedRealtimeNanos()
                 val queuedNs = SystemClock.elapsedRealtimeNanos()
                 worker.execute {
+                    var handedToMain = false
+                    var preprocessorReturned = false
                     try {
                         if (stopped.get()) return@execute
                         val workerStartedNs = SystemClock.elapsedRealtimeNanos()
@@ -200,8 +220,8 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                         val prediction = try { features?.let { if (svr!!.trained) svr!!.predict(it) else null } }
                             catch (e: Throwable) { features?.fill(0f); throw e }
                         val finishedNs = SystemClock.elapsedRealtimeNanos()
-                        performanceLog.record(
-                            face = crops != null,
+                        performanceMetrics.processed(
+                            reason = reason,
                             copyMs = (copyFinishedNs - analyzerStartedNs) / 1e6,
                             queueMs = (workerStartedNs - queuedNs) / 1e6,
                             localizerMs = (localizerFinishedNs - localizerStartedNs) / 1e6,
@@ -209,17 +229,28 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                             inferenceMs = (inferenceFinishedNs - inferenceStartedNs) / 1e6,
                             predictionMs = (finishedNs - inferenceFinishedNs) / 1e6,
                             totalMs = (finishedNs - analyzerStartedNs) / 1e6,
-                            arrivals = arrivals.get(),
-                            drops = drops.get(),
-                            nowNs = finishedNs,
                         )
+                        // Return mutable input storage before main can release the admission permit.
+                        preprocessor?.let { availablePreprocessors.offer(it) }
+                        preprocessorReturned = true
                         deliver(captureNs,features,crops,posture,prediction,reason,eyelids)
+                        handedToMain = true
                     } catch (e: Throwable) { error(e) }
-                    finally { preprocessor?.let { availablePreprocessors.offer(it) } }
+                    finally {
+                        if (!preprocessorReturned) preprocessor?.let { availablePreprocessors.offer(it) }
+                        if (!handedToMain) admission.release()
+                    }
                 }
+                handedToWorker = true
             } finally { mp.close() }
         } catch (e: Throwable) { error(e) }
-        finally { image.close() }
+        finally {
+            if (!handedToWorker) {
+                reservedPreprocessor?.let { availablePreprocessors.offer(it) }
+                admission.release()
+            }
+            image.close()
+        }
     }
 
     private fun deliver(captureNs: Long, features: FloatArray?, crops: GazeGeometry.Crops?,
@@ -227,15 +258,23 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
         eyelids: MgazeNetEyelidGeometry.Sample?) {
         main.execute callback@{
             // Delivery time includes main-queue delay. Final queued results precede close completion.
-            if (stopped.get()) { features?.fill(0f); return@callback }
-            try { result(Frame(captureNs/1e6,now(),features,crops?.leftOpenness ?: 0.0,
+            try {
+                if (stopped.get()) return@callback
+                val deliveryAgeMs = (SystemClock.elapsedRealtimeNanos() - captureNs) / 1e6
+                performanceMetrics.delivered(reason, deliveryAgeMs)
+                result(Frame(captureNs/1e6,now(),features,crops?.leftOpenness ?: 0.0,
                 crops?.rightOpenness ?: 0.0,prediction,reason,crops?.let {
                     listOf(listOf(it.face.width,it.face.height),listOf(it.left.width,it.left.height),
                         listOf(it.right.width,it.right.height))
-                },posture,arrivals.get(),drops.get(),eyelids)) } finally { features?.fill(0f) }
+                },posture,arrivals.get(),drops.get(),eyelids))
+            } finally {
+                features?.fill(0f)
+                admission.release()
+            }
         }
     }
     fun fit(features: Array<FloatArray>, labels: Array<FloatArray>, complete: (Boolean) -> Unit) {
+        check(diagnosticMnnThreads == MnnEstimator.DEFAULT_THREADS) { "Diagnostic thread override cannot fit calibration" }
         worker.execute {
             val success = try { if (stopped.get()) false else { svr!!.fit(features,labels); true } }
                 catch (_: Throwable) { false }
@@ -244,6 +283,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
         }
     }
     fun save(identity: CalibrationIdentity, complete: (Boolean) -> Unit) {
+        check(diagnosticMnnThreads == MnnEstimator.DEFAULT_THREADS) { "Diagnostic thread override cannot save calibration" }
         worker.execute {
             val success = try { if (stopped.get()) false else { store.save(identity,svr!!) { !stopped.get() }; true } }
                 catch (_: Throwable) { false }
@@ -283,59 +323,134 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 }
                 finally {
                     worker.shutdown()
-                    main.execute { complete(mapOf("analyzer_arrivals" to arrivals.get(),"observed_busy_drops" to drops.get(),
-                        "cameraX_undelivered_frames" to "not_observable","resource_close_errors" to errors)) }
+                    main.execute {
+                        performanceMetrics.finish(SystemClock.elapsedRealtimeNanos())?.let { Log.i(PERFORMANCE_TAG, it) }
+                        complete(mapOf("analyzer_arrivals" to arrivals.get(),"observed_busy_drops" to drops.get(),
+                        "early_admission_busy_drops" to drops.get(),"late_busy_drops" to 0L,
+                        "cameraX_undelivered_frames" to "not_observable","resource_close_errors" to errors))
+                    }
                 }
             }
         }.start()
     }
-    private class PerformanceLog {
-        private var startedNs = 0L
-        private var samples = 0
-        private var faceSamples = 0
-        private var copyTotal = 0.0
-        private var queueTotal = 0.0
-        private var localizerTotal = 0.0
-        private var preprocessTotal = 0.0
-        private var inferenceTotal = 0.0
-        private var predictionTotal = 0.0
-        private var total = 0.0
+    companion object {
+        private const val PREPROCESSOR_SLOT_COUNT = 2
+        private const val PERFORMANCE_TAG = "MGazeNetPerf"
+        fun now() = SystemClock.elapsedRealtimeNanos()/1e6
+    }
+}
 
-        fun record(face: Boolean, copyMs: Double, queueMs: Double, localizerMs: Double,
-            preprocessMs: Double, inferenceMs: Double, predictionMs: Double, totalMs: Double,
-            arrivals: Long, drops: Long, nowNs: Long) {
-            if (startedNs == 0L) startedNs = nowNs
-            samples++
-            if (face) faceSamples++
-            copyTotal += copyMs
-            queueTotal += queueMs
-            localizerTotal += localizerMs
-            preprocessTotal += preprocessMs
-            inferenceTotal += inferenceMs
-            predictionTotal += predictionMs
-            total += totalMs
-            if (nowNs - startedNs < PERFORMANCE_LOG_WINDOW_NS) return
-            Log.i(PERFORMANCE_TAG, String.format(Locale.US,
-                "samples=%d face=%d arrivals=%d drops=%d avg_ms copy=%.1f queue=%.1f localizer=%.1f preprocess=%.1f inference=%.1f svr=%.1f total=%.1f",
-                samples,faceSamples,arrivals,drops,copyTotal/samples,queueTotal/samples,localizerTotal/samples,
-                preprocessTotal/samples,inferenceTotal/samples,predictionTotal/samples,total/samples))
-            startedNs = nowNs
-            samples = 0
-            faceSamples = 0
-            copyTotal = 0.0
-            queueTotal = 0.0
-            localizerTotal = 0.0
-            preprocessTotal = 0.0
-            inferenceTotal = 0.0
-            predictionTotal = 0.0
-            total = 0.0
+/** Permits bound frame work through main delivery, including no-face submissions. */
+internal class BoundedFrameAdmission(capacity: Int) {
+    init { require(capacity > 0) }
+    private val slots = Semaphore(capacity)
+    fun tryAcquire(): Boolean = slots.tryAcquire()
+    fun release() = slots.release()
+}
+
+/** Event-time windows, not capture cohorts. Fixed three buckets; no per-frame history or I/O.
+ * Arrival/drop counts refer only to delivered analyzer callbacks (CameraX omissions are unknown).
+ * Result rate counts main callback invocations; processed rate counts worker completions.
+ */
+internal class PipelinePerformanceMetrics(private val windowNs: Long = 2_000_000_000L) {
+    init { require(windowNs > 0) }
+    private var startedNs: Long? = null
+    private var arrivals = 0L
+    private var earlyDrops = 0L
+    private var arrivalsTotal = 0L
+    private var dropsTotal = 0L
+    // "features" means usable face/eye crops reached MNN, not a provider-valid coordinate.
+    private val face = Stages("face_features")
+    private val invalidFace = Stages("face_present_invalid_crops")
+    private val noFace = Stages("no_face")
+
+    @Synchronized fun arrival(nowNs: Long, busy: Boolean): String? {
+        val start = startedNs ?: nowNs.also { startedNs = it }
+        require(nowNs >= start)
+        arrivals++
+        arrivalsTotal++
+        if (busy) { earlyDrops++; dropsTotal++ }
+        if (nowNs - start < windowNs) return null
+        return report(nowNs)
+    }
+
+    @Synchronized fun finish(nowNs: Long): String? = report(nowNs)
+
+    private fun report(nowNs: Long): String? {
+        val start = startedNs ?: return null
+        if (nowNs <= start) return null
+        val seconds = (nowNs - start) / 1e9
+        val processed = face.count + invalidFace.count + noFace.count
+        val delivered = face.results + invalidFace.results + noFace.results
+        val message = String.format(Locale.US,
+            "window_s=%.3f samples=%d processed_hz=%.2f results=%d result_hz=%.2f arrivals=%d early_busy_drops=%d late_busy_drops=0 busy_face_status=unobserved arrivals_total=%d drops_total=%d; %s; %s; %s",
+            seconds, processed, processed / seconds, delivered, delivered / seconds,
+            arrivals, earlyDrops, arrivalsTotal, dropsTotal,
+            face.summary(seconds, inference = true), invalidFace.summary(seconds, inference = false),
+            noFace.summary(seconds, inference = false))
+        startedNs = nowNs
+        arrivals = 0
+        earlyDrops = 0
+        face.clear(); invalidFace.clear(); noFace.clear()
+        return message
+    }
+
+    @Synchronized fun processed(reason: String, copyMs: Double, queueMs: Double, localizerMs: Double,
+        preprocessMs: Double, inferenceMs: Double, predictionMs: Double, totalMs: Double) {
+        bucket(reason).apply {
+            count++
+            copy += copyMs; queue += queueMs; localizer += localizerMs
+            preprocess += preprocessMs; inference += inferenceMs; prediction += predictionMs; total += totalMs
         }
     }
 
-    companion object {
-        private const val PREPROCESSOR_SLOT_COUNT = 2
-        private const val PERFORMANCE_LOG_WINDOW_NS = 2_000_000_000L
-        private const val PERFORMANCE_TAG = "MGazeNetPerf"
-        fun now() = SystemClock.elapsedRealtimeNanos()/1e6
+    @Synchronized fun delivered(reason: String, deliveryAgeMs: Double) {
+        require(deliveryAgeMs.isFinite() && deliveryAgeMs >= 0.0)
+        bucket(reason).apply {
+            results++
+            deliveryAgeTotal += deliveryAgeMs
+            deliveryAgeMax = maxOf(deliveryAgeMax, deliveryAgeMs)
+        }
+    }
+
+    private fun bucket(reason: String): Stages = when (reason) {
+        "features" -> face
+        "invalid_crops" -> invalidFace
+        "no_face" -> noFace
+        else -> error("Unknown frame reason")
+    }
+
+    private class Stages(val name: String) {
+        var count = 0L
+        var results = 0L
+        var copy = 0.0
+        var queue = 0.0
+        var localizer = 0.0
+        var preprocess = 0.0
+        var inference = 0.0
+        var prediction = 0.0
+        var total = 0.0
+        var deliveryAgeTotal = 0.0
+        var deliveryAgeMax = 0.0
+        fun summary(seconds: Double, inference: Boolean): String {
+            if (count == 0L) return String.format(Locale.US,
+                "%s processed=0 processed_hz=0.00 results=%d result_hz=%.2f avg_ms=unavailable delivery_age_ms=%s",
+                name, results, results / seconds, deliveryAgeSummary())
+            val prefix = String.format(Locale.US,
+                "%s processed=%d processed_hz=%.2f results=%d result_hz=%.2f avg_ms copy=%.1f queue=%.1f localizer=%.1f analyzer_to_worker=%.1f delivery_age_ms=%s",
+                name, count, count / seconds, results, results / seconds,
+                copy / count, queue / count, localizer / count, total / count, deliveryAgeSummary())
+            return if (inference) prefix + String.format(Locale.US,
+                " preprocess=%.1f inference=%.1f svr=%.1f", preprocess / count, this.inference / count, prediction / count)
+            else "$prefix preprocess=not_run inference=not_run svr=not_run"
+        }
+        private fun deliveryAgeSummary(): String = if (results == 0L) "unavailable"
+            else String.format(Locale.US, "mean=%.1f,max=%.1f", deliveryAgeTotal / results, deliveryAgeMax)
+        fun clear() {
+            count = 0; results = 0
+            copy = 0.0; queue = 0.0; localizer = 0.0; preprocess = 0.0
+            inference = 0.0; prediction = 0.0; total = 0.0
+            deliveryAgeTotal = 0.0; deliveryAgeMax = 0.0
+        }
     }
 }

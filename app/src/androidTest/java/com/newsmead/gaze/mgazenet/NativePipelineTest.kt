@@ -2,8 +2,11 @@ package com.newsmead.gaze.mgazenet
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.os.SystemClock
+import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.opencv.android.OpenCVLoader
@@ -94,6 +97,35 @@ class NativePipelineTest {
             try { model.infer(p.copy(face = FloatArray(3))); fail("Bad input reached JNI") }
             catch (_: IllegalArgumentException) { }
         } }
+    }
+    /** Explicit camera-free diagnostic only: -e mgazenetThreadDiagnostics true.
+     * Reports warm inference time on identical synthetic inputs, never a speed pass/fail.
+     */
+    @Test fun diagnosticCpuThreadSweepHasFiniteOutputs() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("mgazenetThreadDiagnostics") == "true")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        Preprocessor().use { prep ->
+            val fixture = SyntheticFixtures.images().first()
+            val inputs = prep.prepare(fixture.frame, fixture.crops)
+            val reference = MnnEstimator(context).use { it.infer(inputs) }
+            for (threads in listOf(1, 2, 4)) {
+                MnnEstimator(context, threads).use { model ->
+                    assertEquals(threads, model.threads)
+                    model.infer(inputs).fill(0f) // Warm this session before timing.
+                    val started = SystemClock.elapsedRealtimeNanos()
+                    repeat(3) {
+                        val features = model.infer(inputs)
+                        assertEquals(258, features.size)
+                        assertTrue(features.all(Float::isFinite))
+                        assertArrayEquals(reference, features, 1e-5f)
+                        features.fill(0f)
+                    }
+                    val elapsedMs = (SystemClock.elapsedRealtimeNanos() - started) / 1e6
+                    Log.i("MGazeNetPerf", "thread_diagnostic runtime=${model.runtime} warm_runs=3 mean_ms=${elapsedMs / 3}")
+                }
+            }
+            reference.fill(0f)
+        }
     }
     @Test fun nativeOpenCvSupportsFrameLevelSvr() {
         SvrCalibration().use { svr ->
