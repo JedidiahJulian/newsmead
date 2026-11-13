@@ -28,7 +28,7 @@ data class CalibrationIdentity(
         const val VERSION = "newsmead_mgazenet_calibration_v2"
         const val MODEL = "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96"
         const val LOCALIZER = "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
-        const val PIPELINE = "Tasks0.10.29_VIDEO_1face_.1_.1_.5_GPU_initCPU;640x480_requested_RGBA_upright_unmirrored;GF1.0.2_crops_RGB_linear_uint8_NCHW_rightflip;MNN3.6.1_CPU4_normal;GF1.0.2_13point_9x5order_phone10to90_cue1200_onsetsettle1500_45rows_post500_area>10;no_filter_no_correction_v2"
+        const val PIPELINE = "Tasks0.10.29_VIDEO_1face_.1_.1_.5_GPU_initCPU;640x480_requested_RGBA_upright_unmirrored;GF1.0.2_crops_RGB_linear_uint8_NCHW_rightflip;MNN3.6.1_CPU${MnnEstimator.DEFAULT_CPU_THREADS}_normal;GF1.0.2_13point_9x5order_phone10to90_cue1200_onsetsettle1500_45rows_post500_area>10;no_filter_no_correction_v2"
         const val SVR = "OpenCV4.11.0_EPS_SVR_RBF_C1_gamma.005_P.001_MAX_ITER10000_epsilon.0001"
         const val COORDINATES = "screen_px_v1;labels=physical_px/physical_display;full_calibration_viewport"
         const val FIT_TARGET_COUNT = 13

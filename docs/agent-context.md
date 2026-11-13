@@ -1,4 +1,4 @@
-# Agent context — updated 2026-11-09
+# Agent context — updated 2026-11-13
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,345 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**Latest 2026-11-13 decision: owner requests ordinary CPU2 default and Git commit.**
+The owner explicitly supersedes the earlier isolated-only restriction: use the
+promising two-thread setting in the MAIN app so groupmates with older phones can
+try it. S21 remains the priority, no phone/model allowlist, and human accuracy
+work remains deferred. CPU2 is the best tested thread count for this S21, not a
+proven optimum or a guarantee for other devices. Do not resume accuracy testing.
+
+Current source: MnnEstimator defaults to CPU2 at the same precision/model. The
+calibration identity derives its CPU-thread token from that default, so saved
+CPU4 calibrations are rejected and a fresh ordinary 13-point calibration is
+required. This is truthful runtime compatibility bookkeeping, not evidence that
+old calibration is inaccurate. Do not silently relabel/reuse or overwrite old
+calibration. Targets, fitting, camera dimensions, clocks and eligibility gates
+are unchanged. Groupmates install the ordinary debug APK, without trial flags,
+and calibrate normally. The orange cursor/FPS remain visible in debug builds.
+
+Latest S21 live screen, `output/mnn-gpu-probe-2026-11-13/s21-live-gpu-ready-*`:
+CPU2 gaze/GPU face recording-ON18.59callbacks/s,18.24coordinates/s,age215.70ms;
+OpenCL gaze/CPU face11.60/s,age301.81ms; OpenCL gaze/GPU face9.90callbacks/s,
+age325.74ms. Six fresh processes A,B,C,C,B,A, two10s phases each, all packages,
+calibration fingerprints and exact native/provider/writer closure checks passed;
+isolated successful raw packages deleted. GPU is slower and is not adopted.
+Rounded stage windows were recovered with PID AND device-epoch lifetime bounds;
+they mix lifecycle states and are not recording-condition costs or CPU shares.
+Short exploratory evidence, changing thermal state, no accuracy/endurance claim.
+
+A56 quick CPU2/CPU4 check `output/app-performance-2026-11-12/same-model-a56-current-cpu2-*`:
+recording-ON24.25callbacks/s CPU2 versus26.35CPU4 (age188.47/176.59ms).
+CPU4 first OFF block is INVALID: observed provider stopped during an activity
+pause/restart, early6.2/s then0; the pooled CPU4OFF14.95 in the old analysis JSON
+must not be quoted. Other CPU4OFF26.80/s; CPU2OFF23.95/s. The exact cause of the
+brief pause is unknown. New harness continuity guard rejects stopped/replaced
+providers before accepting timing and retains uncertain raw diagnostics. This
+guard has not yet been live-retested. No keep-screen-on behavior was changed.
+
+CPU Power High work is parked, unbuilt/untested, in ignored
+`output/cpu-power-wip-2026-11-13/`. App native source/Java bridge were restored to
+the tested GPU-only version before preparing the requested commit. Ordinary
+CPU2 APK omits optional OpenCL/bridge libraries; those remain explicitly opt-in
+debug diagnostics only. The standalone frozen benchmark is unchanged.
+
+Ordinary build/test APK/pinned assets and libraries checks PASSED, with optional
+GPU libraries absent. Focused gaze/study JVM737tests:736pass,1Windows skip.
+Broader JVM761tests:759pass,1skip,1existing FirebaseTest.createAccount failure
+(Android Process.myPid not mocked); unrelated cloud-account test not changed.
+Focused review found no default/identity issue and cleared the corrected cleanup
+race. Review/compilation do not verify the asynchronous lifecycle interleaving.
+
+Shareable APK `output/cpu2-default-2026-11-13/newsmead-cpu2-debug.apk` (65,014,266
+bytes, arm64-v8a + armeabi-v7a, minimum API24), SHA256
+255bbcfd5f0f60d66e302b0ad46974599f13baa4dfa2fc6fa856e1ecd6b46728;
+test87d2c29186dcf4c06ab3c98ba4849150e41b9249e4230a4c4c70add13a69e78b.
+Both phones now have this CPU2-default build; eight camera-free native/auth tests
+PASSED EACH. Their saved calibration bytes stayed unchanged; existing CPU4
+identities will require fresh gaze calibration through the ordinary UI. No live
+camera run was started for promotion, so do not claim the new ordinary build has
+already been live-measured. Logs/receipts are in the same ignored output directory.
+
+User authorizes staging/committing performance task files only; this checkpoint
+is prepared on feature/optimization-1, exact commit recorded in the ignored
+artifact receipt after committing. Preserve the pre-existing
+`.idea/deploymentTargetSelector.xml` edit and all private outputs. No push requested.
+
+**Historical 2026-11-13 checkpoint (superseded by the decision above):**
+**Latest owner correction:** S21 performance takes priority; preserving A56's
+maximum rate is not a requirement. CPU2 is a useful baseline, not the final
+choice or a proven optimum (~15/s is still too slow). Owner explicitly defers
+accuracy work until later. Accuracy implementation was interrupted before any
+files were written; do not resume it or request target-following checks now.
+Next: identify remaining S21 costs and test faster execution configurations.
+CPU1 isolated extension is reviewed and built/pins/216JVM pass(1skip), installed
+S21 only; its updated camera-free authorization probe passes. Main SHA256
+5fcbc38043c952736b825c03ae8586beac3c1a655697b3e0e9c7f878d44c2c03;
+test2cf35b34333ebd360f91661319c2342324209b0f717088367dfc9cffcdbd56dc.
+A56 stays884b688c main/63907ef6 test below. Hypothesis: removing MNN worker
+synchronisation; zero observed
+new workers alone cannot prove absence of an old native pool, so host must force
+a fresh process with no earlier MNN construction. No ordinary default change.
+
+S21 CPU2 60sOFF then60sON baseline COMPLETED: OFF17.52callbacks/s, ON15.21/s;
+age206.41/229.31ms, zero no-face, ONearly15.23/late15.19/s. Calibration unchanged,
+writers/providers closed, package verified/deleted. Thermal0→2. Own-PID exact
+MGazeNetPerf counters retained, mixed lifecycle windows (not ON/OFF comparison):
+early localizer~42ms/inference~28ms; later~50/~49ms, copy~10ms. Original app
+observation callback means5.09msOFF/8.19ON; UI frame12.19/15.14ms. Fixed order
+confounds recording/time/thermals; this is not proof recording causes the change.
+Files `s21-cpu2-stage-baseline-*`; host script reviewed. Fresh CPU1-vsCPU2
+ABBA COMPLETED S21, label s21-cpu1-vs2, reference2,candidate1,20second phases;
+host delta reviewed. CPU1 recordingON14.67callbacks/s/age276.28ms versus
+CPU2ON15.32/s/228.79ms; OFF14.62versus16.10. Within250msON1.77versus14.00/s.
+Allfourprocesses/pools/calibration/packages/closure/cleanup passed, thermal1→2,
+2→3,3→3,3→3. CPU1 native inference~67ms and queued~30–42ms in aggregate stages;
+not a gain, do not adopt. Two remains best of1/2/3/4 tested for S21, not finaloptimum.
+
+Next bounded PERFORMANCE experiment being implemented: same FaceLandmarker
+weights/options, explicit GPU versus CPU delegate execution, MNNconstantCPU2,
+freshprocessABBA on S21. Guarded DEBUG+ownedisolated storage, no default changes.
+CPU delegate may use savedGPUcalibration only as clearly labeled unvalidated
+reference mapping with EXACT dimensions/rotation; no calibration write/identity
+change or accuracy claim. Source reviewed with no correctness findings;
+main/test/pins/216JVM build passed(1skip), cleanup rebuild passed. Redundant
+per-frame filesystem authorization removed (constructor/start retained), Regex
+cached before timing. Installed S21 main
+cf8a659388533a21dfb3b70591c1ed363ec7d60900d67890b1883ab5899d9688;
+test419b77126cb711e9b563b8c27cedf7fca05947d2425db9a39b9f94c71c59bdfa.
+Both camera-free authorization/geometry probes pass. Fresh face confirmed;
+GPU/CPU/CPU/GPU trial COMPLETED, label s21-localizer-cpu, CPU2constant,20s phases.
+RecordingON15.72callbacks/s BOTH; CPUage231.85ms vsGPU222.46ms, no improvement.
+Allfourprocesses/actualdelegates/pools/geometry/calibration/packages/closure/
+deletion checks passed. Thermal0→1,1→2,2→3,3→3. Rounded mixed-lifecycle stages:
+CPUlocalizer44.19/inference49.09/capturewait112.85ms versusGPU46.09/42.98/111.10.
+Don't infer ON/OFFstage differences; no accuracy/endurance evidence. Do not
+spend A56 tests on this non-winning candidate. Lead next investigating same-model
+MNNGPUexecution feasibility, not a blindbackendflip: currentJNIwrites rawCPUhost
+tensor memory; pinned primarydocs require map/unmap or stagingtensor+copy forGPU,
+withlayout/sync/backendverification. CAMERA-FREE GPU probe now implemented in
+tools/gaze/mnn_gpu_probe/{build_probe.py,mnn_gpu_probe.cpp}, debug-only Java bridge,
+and MnnGpuExecutionProbeDeviceTest. No integration into live gaze/source/default.
+NDK26.1.10909125 installed via official AndroidCLI at
+C:/Users/USER/AppData/Local/Android/Sdk/ndk/26.1.10909125 (sandbox LOCALAPPDATA is
+redirected; use this actual path or explicit --ndk). Public MNN3.6.1 archive is
+hash-verified46dc7e86...; original core/C++libs unchanged. Optional OpenCLlib
+5293b0405a76f2fd824601c47ea5892e051235fb7c316851cabaec6a07aab184 and nativeprobe
+5d1c5804c6841427258c24969d6603b1c86702ab85b246a2fab5dd885831e871 compiled/pinned
+headers/ELFdeps checked. Source review found missing persistedheaderreceipt in
+buildscript; fixed+review cleared; prepare/compile rerun pass(notclean-outputclaim).
+Packaging is explicit -PnewsmeadMnnGpuProbe=true, debug sourceSet ONLY; normal
+builds require no NDK and release doesn't include triallibs. APK/pinned checks
+pass; both newlibs byte-identical inAPK. Output output/mnn-gpu-probe-2026-11-13/.
+GPU main APK31443d5e872313792f86cb87bc0795f8459726e81e9cd6ded2083e9556507c4a;
+test970340299794271534cbcdbd789780a8b843abb84ed9490f2225d97a11fbcb3a.
+Initial S21 probe FAILED CLOSED: OpenCL init failed and mainpipeline fell backCPU;
+no fixtures measured, native construction cleanup verified. Evidence s21-*.json/log
+and s21-mnn-runtime.log. Diagnosed public vendor libOpenCL.so present/listed but
+API34target lacked API31+uses-native-library declaration. Added optionalfalse
+libOpenCL.so in probe-only manifest. First rebuild hit usage-limit approval
+failure(no execution, not safetyrejection); resumed build exposed lead's mistaken
+!accountFree guard. Existing accountFreeStudyBuild=true. Fixed probe overlay to
+retain the original CrashlyticsRegistrar removal/analyticsdeactivation, selected
+AFTERordinaryaccountFree block only underGPUproperty; release/ordinary unchanged.
+Independent review and mergedmanifest privacy/driver checks pass. Rebuild/pins
+passed7s. S21now mainbff3392dd4f03d04ac7966ffa7500d1e5b8168363827e93dc1aee48ddf6640e3;
+test97034029...unchanged. Newcamera-free probe PASSED, label s21-driver-access:
+mainbackend3, malformedlengthrejected,258finiteoutputs on3syntheticfixtures,
+same-sessionrepeatdiff0, nativeclosureverified. Nativecallmeans35.65/36.04/35.49ms
+includeupload/validation/sync/outputcopy, not liveFPS. Its
+{device.log,summary.json,mnn-runtime.log,receipt.json} retain the evidence.
+Probe must observe main
+OpenCLbackend3, finite258outputs, same-sessionrepeat<=unchanged1e-5, safeclosure;
+CPUfallback cannotpass. BACKENDS mainpipeline doesnotexcludeper-opCPUfallback.
+NormalGPUprecision usesfp16storage/fp32compute, notCPUfloat32parity. Synthetic
+timings are not liveFPS/accuracy. Accuracy remains deferred.
+
+Live isolatedGPUintegration implemented/reviewed, not yet installed: per-instance
+BACKEND extra CPU|OPENCL requiresDEBUG+isolated+referencecount2; absentbackend
+preservesCPU4/directCPUconstructors. MnnEstimator delegatesGPU to cached-reflection
+ExperimentalGpuSession using testeddebugJNI; CPUinfer unchanged. GPUthread/pool
+countsunknown, noCPUobserver/hints. Exactmodelclosed/native_close_verified must
+passafterproviderclose beforestorage reset/rawdeletion. Build/pins/216JVMpassed
+(1skip), live-gpu-build-jvm.log. Focusedcamera-free GPUadaptertest added; testAPK
+build session3077 pending. Planned ownface-confirmedS21livecomparison6fresh
+processesA,B,C,C,B,A: A=CPU2gaze/GPUface, B=OpenCLgaze/CPUface,
+C=OpenCLgaze/GPUface; recordingorderbalanced,10sphases. Newhost
+run_live_gpu_comparison.py syntaxpasses, awaitingreview/devicechecks/readiness.
+Do not infer GPUworkerCPU2 from the referenceargument or treat GPUreference
+calibration as compatible/adopted. NoliveGPUperformance established yet.
+InstalledS21 main2d2025b7f6356c0dd5047d12d47c071444671329fc8f70ea493601f5663839bc;
+native/adapter/auth9checksPASSED. Firstliveattemptlabels21-live-gpu stoppedA1
+coverage(61%no_face), cleanclosure/calib/rawdeletion; excludeit. Freshface run
+labels21-live-gpu-face A1passedzeroNoFace(OFF25.20,ON20.49callbacks/s), butB1
+timedOUTbeforecamera/timedresults atonModelWorker5ssnapshotduringstartup.
+Writers/providercompleted/calibunchanged; modelreferencewasmissing soGPUclosure
+unverified andisolatedrawpackage retained at
+cache/study-device-test-live-perf-f8711aeb-68a6-4bde-8254-ccbdd4581ed3.
+Hostforce-stoppedownedapp; thatdoesnotverifyJava/nativeclosure. NoGPUthroughput
+resultfromthisattempt; don'tdeleteunrelatedcache.
+Harness-onlystartupfixreviewed: explicitCPU/OPENCLarmswaitfirstnonwatchdog
+coordinate<=15s, THEN3swarmup; existingprovider20swatchdog/expiry/face/timedgates
+unchanged. Uncancelledmodel-referencefuturecapturesexactmodelbehindinitbefore
+closeforfailurecleanupverification. Oldpartialrunsstayseparate. TestbuildPASSED
+43s,newtestd05402535a72c7aa33b143f213d0e6a4adf38a20ed4a87ec98152497eb9f7694
+installedS21; mainunchanged. Newlabelplanneds21-live-gpu-ready afterfreshface.
+HostP2fixed: exactPIDstagedumpsboundedbydeviceepochstart/end+Decimalfilter to
+excludePIDreuse. Oldpost-runstagefilesnumericPIDonly; primarytimedratesunaffected.
+Host reviewed, outputnamesprotected. Added aggregate
+capture-to-analyzer delay counter to existing numeric stage logs, no images.
+Scout found onObservation recording→JSON snapshot/queue plus shared scanpath/
+geometry work; no new safe app optimization established by source alone.
+Accuracy work remains deferred.
+
+S21 is the owner's primary success device; A56 is a regression check. Keep one
+gaze model and general capability/workload logic, with no phone/model allowlists.
+Prior task-specific authorization for test installs and short front-camera tests
+persists: numerical data only, no retained camera images, preserve calibration
+and participant packages. No staging/commit; preserve the pre-existing `.idea` edit.
+
+Ordinary execution remains MNN3.6.1 CPU4threads/default precision, two
+preprocessing slots; safe gzip/hidden-redraw/debug-cursor changes remain. The
+current experimental builds and device installs are recorded below. Passing
+software checks does not prove human accuracy or study readiness.
+
+General ADPF probe: this S21 returns null session; A56 accepts sessions. A56's
+face-present recording-ON exploratory comparison was23.39callbacks/s hintsOFF
+versus26.30ON; OFF26.80versus26.24. No general hint default enabled. Its earlier
+mostly-no-face run is excluded. Both runs closed/deleted isolated packages.
+
+Public OS-priority fallback is TEST ONLY: one MORE_FAVORABLE(-1) increment on the
+same four original MNN-worker identities; Android selects cores. A56 completed8
+blocks with all priorities restored: recordingON26.10→26.94callbacks/s,
+OFF26.55→26.50 (no clear large gain). S21's first control stopped on an unrelated
+Binder priority change despite0mutations; verifier now records such existing
+non-target variation while strictly verifying targets/new possible inherited
+priorities. A later S21 control had24.24%no-face callbacks and stopped coverage;
+no priority mutation occurred, calibration unchanged and isolated raw data deleted.
+
+New TEST-ONLY face preflight is reviewed and built: after warmup/before settings,
+wait up to20s for1s continuous reason!=no_face observations with <=500ms gaps and
+latest capture age. Positioning Toast appears while waiting and is cancelled
+before intervention/settle/timing. Existing timed <=.20 no-face/+coordinate guard
+stays unchanged. These are setup heuristics, not study/accuracy eligibility gates.
+
+Usage-limit approval failure stopped the build Nov12; no safety rejection or
+command execution occurred. Nov13 default Java25 failed before compilation;
+per-command JAVA_HOME to installed JDK21.0.3.9 restored the successful build.
+No project/global Java setting changed. Test APK SHA256
+`b93587ecddd5e8085417bb7ed7af91d2d78e21a72c002527dfd3a2346daafbff` installed S21.
+Eight-block S21 priority trial with preflight COMPLETED: recordingON9.95→10.04/s,
+age331.85→325.36ms; no material improvement, not adopted. All8priorities restored,
+calibration unchanged and isolated raw packages deleted; thermal0→2. Receipts:
+`worker-priority-s21-preflight-*`; `summarize_scheduler_trials.py` now uses this
+valid run instead of the earlier rejected coverage run.
+
+Owner explicitly authorized SAME-model execution exploration in a separate path,
+working study pipeline intact, accuracy checks before adoption. Added guarded
+Intent route CPU2/4 (now extended to CPU3): DEBUG+validated isolated live-perf
+cache only, constant count per instrumentation invocation. Ordinary/calibration/
+validation default4 and CalibrationIdentity CPU4 unchanged. Candidate uses saved
+CPU4 calibration only as explicitly unvalidated reference mapping. No writes.
+MNN retains FIRST process pool size; old both-models-loaded timings do not isolate
+a clean2worker pool. New host ABBA runs force fresh processes4,2,2,4 and verifies
+distinct PID/start identities plus observed pool sizes (not just requested count).
+
+CPU2 fresh-process ABBA PASSED on BOTH phones, all8packages verified/deleted and
+calibrations unchanged. S21 ON8.40→14.50callbacks/s, age380.85→233.80ms;
+<=250ms camera results0.35→12.85/s (not joint aid eligibility). A56 ON25.14→21.80,
+OFF26.79→21.85: globalCPU2 regresses A56. No adoption. Main/test builds/pins and
+216JVM checks pass (1Windows skip);8camera-free native/auth checks pass each.
+Current installed main on both:82309a3163a83b93ecace4af81058af01d18f32dd20ca340553483684132a55e,
+still ordinaryCPU4. Evidence `same-model-{s21,a56}-*`; analysis scripts in output.
+
+Testing ONE additional shared CPU3 compromise, not per-phone rules. Source
+extension+authorization probe reviewed (no Android findings); build/pins and216JVM
+checks passed (1Windows skip), `same-model-cpu3-build-jvm.log`, process-local JDK21.
+Main SHA256884b688cd77ed80335c90649f354f0f01ba2a276c583e5676b9ace55dbe86949;
+test8bbe561617ae47825c3c987b3d21912bb2717b2f5eb544b76eee20cb5b1bdaef.
+Installed BOTH;8camera-free native/auth checks pass each. CPU3 ABBA COMPLETED on
+both: S21 recordingON8.45→11.70callbacks/s, age377.60→272.88ms,
+<=250ms camera results0.40→6.55/s; A56ON24.90→26.25/s, age188.60→188.35ms.
+All8processes/pools/packages/closure/calibration/cleanup checks passed. S21
+thermal0→1→2→3→3; A56 receipts retain its thermal states. Short exploratory
+checks only; no endurance or accuracy established. Host runner now
+accepts --candidate-threads3, --serial and distinct --label, rejects ANY existing
+output destinations before device operations (mock guard verified; independent
+review cleared). Completed labels s21-cpu3 and a56-cpu3. CPU3 fixture parity PASSES
+both phones unchanged1e-5(max5.841255e-6 across774features/3syntheticfixtures),
+using CPU4-first shared native pool; not a performance or human accuracy check.
+PriorCPU2/4 strict1e-5 failure remains. New parameterized parity test APK63907ef68a8dba518095a6f38558ddecb0e099bfcc18e8973718a9424c682d7d installed BOTH,
+main unchanged884b688c above. Evidence same-model-cpu3-parity-{s21,a56}-*.
+Before adoption need raw held-out accuracy checks. Existing ComparisonRuntime is unsuitable (frozen device
+slots and saveComparisonCalibration overwrites normal calibration); do not reuse
+it for isolation. The briefly planned accuracy harness was stopped before edits
+on the owner's correction above. Preserve oldcalib; ordinary default4 unchanged.
+Do not repeat earlier rejected candidates.
+
+**Historical 2026-11-12 performance path (current state above supersedes it):**
+Owner authorizes test installs and short camera performance tests on S21/SM-G991B
+(SDK35) and A56/SM-A566B (SDK37), numerical recording only, no camera images.
+A56 initially rejected its saved calibration; owner explicitly completed/saved a
+new one. Existing participant packages were not copied. Whole-app article OFF/ON
+tests use isolated cache storage and retain only aggregate summaries after closure.
+Current safe changes: BEST_SPEED gzip with exact decoded-byte checks, hidden
+diagnostic redraw suppression retaining visible scaffolds, and user-requested
+orange cursor/FPS in debug builds (release hides diagnostics). Four MNN threads
+and the original two preprocessing slots remain. Two-thread strict fixture parity
+failed; one-slot trial reduced delay but hurt throughput and did not resolve
+S21 recording freshness, so neither candidate was adopted. No gate was loosened.
+S21 ~9-12 callbacks/s vs A56 ~26, with S21 recording age ~319ms vs A56 ~184ms;
+actual scanpath `scroll_input_stale` counts substantiate the 250ms aid gate as a
+blocker, with other exclusions also present. R/D/F/shared references unavailable
+in these process-restarted tests; no accuracy, benefit, endurance or release
+readiness claim. Owner asks recommendation; lead recommends preserving estimator
+and continuing app/camera CPU/scheduling profiling. Ten-second traces on both
+phones now exist: S21 four native workers use29.737CPU-s within9.603s, with843
+surviving MNN-ancestry sched_yield stacks; JSON writer is secondary. Perf sample
+loss is substantial; do not infer exact hotspot shares or merge later stage logs.
+Both profiled full-app runs passed and removed their isolated raw packages.
+Final APK SHA256130cb3831e2ba2935a6ae5b938af814e7df5057ac561d871fc0b3014266fe3bd
+is installed on both phones (debugcursor,4threads,2slots). After usage-limit
+interruption, owner resumed and confirmed S21 face ready. The shell-domain
+affinity-query permission failure was diagnosed; app-owned test-only commands
+work. Eight S21 timed blocks verified masks restored, unchanged calibration,
+healthy recorded packages and deleted isolated raw data. Whole-app CPUs4–7
+placement raised callback rate modestly but did not improve within250ms rate;
+thermal0→3. Not adopted. Three synthetic same-session4thread model fixtures
+were exactly equal before/during placement, with restoration verified; not
+human accuracy evidence. A byte-identical reusable recording encoder saved only
+0.8%CPU on text-heavy synthetic rows despite33%lower allocation, so not adopted.
+Details/receipts: report section 'Resumed CPU-placement and recording checks'.
+Version-matched MediaPipe bytecode confirms per-frame MPImage.close recycles
+upright Bitmap, but native pixel ownership remains unproven; no bitmap-lifetime
+change was made. Camera-free thread timing completed on both: S21four15.88ms
+vs two27.98ms; A56four46.91ms vs two25.34ms. These are isolated/background
+synthetic timings with uncontrolled scheduling, not live-app performance;
+two-thread ramp parity again failed unchanged1e-5, and no candidate was promoted.
+Selective4worker placement completed on BOTH phones with16restorations, unchanged
+calibrations, verified zero-loss packages and deleted isolated raw data. S21 ON:
+callbacks10.15→14.95/s, age323.34→218.55ms, <=250ms camera results2.85→13.55/s.
+A56 ON25.15→25.00/s, OFF27.20→24.64/s: no general affinity benefit. S21thermal0→3,
+A560→0; exploratory short blocks, no human accuracy/endurance claim. Owner rejects
+phone/model allowlists; proposed S21-only patch was stopped BEFORE any source
+edit/SDK install/deployment. Same model must support other phones too. Current
+work: general Android PerformanceHintManager API31+ experiment, defaultdisabled,
+capability/null fallback, same four identified workers, actual inference duration
+versus intended30Hz target, no forced cores. Official AOSP recommends hints over
+static affinity. Implemented/reviewed,171JVM tests and pinned checks pass. Both
+phones now have default-disabled hint APK SHA256fdd1792a2e8b74658ba96024ec04ff30662e249b7bd481be3781d4486afc19f4.
+Seven camera-free native/probe checks pass each: S21 null session (no live hint
+run), A56 active7reports+closed,3fixture parity unchanged1e-5. First A56 live hint
+run mostly no face, excluded despite safe closure/raw deletion. Owner confirmed
+BOTH faces ready again; A56 guarded rerun `performance-hints-live-a56-face-*`
+active. Coverage guard is diagnostic only. Engineer preparing test-only one-step
+more-favorable MNN-worker priority lease/harness fallback using public Android
+API, same model, no forced cores/phone allowlists; not adopted or run yet. See
+report's latest sections and `resume-mnn-placement-*`; aggregation script
+`summarize_mnn_placement.py` corrects a discarded PowerShell age-denominator bug.
+Do not repeat calibration or rejected thread/slot/wholeapp-affinity trials.
+Evidence/checks/limits: docs/app-performance-2026-11-12.md and ignored
+output/app-performance-2026-11-12/. No staging/commit.
 
 **2026-11-09 reading-aids ON/AUTO/OFF modes implemented in software:**
 Replaced the session-only master boolean UI with an immediate radio-mode control.

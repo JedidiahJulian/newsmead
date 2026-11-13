@@ -1429,6 +1429,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             resumeArticleGazeWhenReady()
             return
         }
+        val experimentalThreads = com.newsmead.gaze.mgazenet.SameModelExecutionTrial.requested(requireContext(), arguments)
+        val experimentalLocalizer = com.newsmead.gaze.mgazenet.SameModelExecutionTrial.requestedLocalizer(requireContext(), arguments)
+        val experimentalBackend = com.newsmead.gaze.mgazenet.SameModelExecutionTrial.requestedBackend(requireContext(), arguments)
         val issue = MgazeNetCalibrationStore(requireContext()).compatibilityIssue(binding.root)
         if (issue != null) {
             Toast.makeText(context, issue, Toast.LENGTH_LONG).show()
@@ -1457,6 +1460,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
         val provider = MgazeNetGazeProvider(requireContext(),binding.root,smoothForReading = true,
             rejectBlinks = true, preferStableFrameRate = preferStableFrameRate,
+            experimentalMnnThreads = experimentalThreads, experimentalLocalizer = experimentalLocalizer,
+            experimentalMnnBackend = experimentalBackend,
             maxOutputAgeMs = if (sharedReference != null) StudyConfig.READING_MAX_OUTPUT_AGE_MS else MgazeNetGazeProvider.MAX_OUTPUT_AGE_MS)
         stopScanpathSession("provider_replaced")
         activeBaselineFingerprint = MgazeNetCalibrationStore(requireContext()).fingerprint()

@@ -44,6 +44,12 @@ class CalibrationContractTest {
         assertEquals(864f,MgazeNetAccuracyProtocol.target(frame,8).x,.001f)
         assertEquals(1892.2f,MgazeNetAccuracyProtocol.target(frame,8).y,.001f)
     }
+    @Test fun twoThreadIdentityRejectsPreviousFourThreadCalibration() {
+        val current = identity().canonical()
+        assertTrue(current.contains("MNN3.6.1_CPU2_normal"))
+        assertEquals(identity(), CalibrationIdentity.parse(current))
+        rejected { CalibrationIdentity.parse(current.replace("MNN3.6.1_CPU2_normal", "MNN3.6.1_CPU4_normal")) }
+    }
     @Test fun bundleRejectsLegacyPartialCorruptAndWrongDevice() {
         val id = identity(); val data = CalibrationBundle.encode(CalibrationBundle.Artifact(id,byteArrayOf(1,2),byteArrayOf(3,4)))
         val result = CalibrationBundle.decode(data) { it == id }

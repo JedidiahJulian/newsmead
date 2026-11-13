@@ -88,6 +88,9 @@ class NativePipelineTest {
     @Test fun modelHas258StableFeaturesAndRejectsBadInputBeforeJni() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         Preprocessor().use { prep -> MnnEstimator(context).use { model ->
+            assertEquals("CPU", model.executionBackend)
+            assertEquals(MnnEstimator.RUNTIME, model.runtimeDescription)
+            assertEquals(2, model.performanceHintsSnapshot()["requested_session_threads"])
             val f = SyntheticFixtures.images().first(); val p = prep.prepare(f.frame,f.crops)
             val a = model.infer(p); assertEquals(258,a.size); assertTrue(a.all { it.isFinite() })
             assertArrayEquals(a, model.infer(p), 1e-5f)

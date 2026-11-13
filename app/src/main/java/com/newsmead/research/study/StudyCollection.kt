@@ -49,6 +49,12 @@ object StudyCollection {
         }
         visits.clear(); isolatedTestStorage = directory
     }
+    /** Only this diagnostic's validated private cache root permits execution experiments. */
+    @Synchronized internal fun isIsolatedLivePerformanceStorage(context: Context): Boolean {
+        val path = isolatedTestStorage?.canonicalFile ?: return false
+        return BuildConfig.DEBUG && path.parentFile == context.cacheDir.canonicalFile &&
+            path.name.startsWith("study-device-test-live-perf-") && path.isDirectory
+    }
     @Synchronized fun start(context: Context, participant: String, condition: String, phase: String) {
         check(!maintenance) { "Wait for recovery or transfer preparation to finish." }
         require(participant.isNotBlank() && condition.isNotBlank())

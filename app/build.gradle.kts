@@ -108,6 +108,17 @@ android {
         sourceSets["debug"].manifest.srcFile("src/accountFree/AndroidManifest.xml")
         sourceSets["release"].manifest.srcFile("src/accountFree/AndroidManifest.xml")
     }
+    // Explicit debug GPU diagnostics only; normal builds need no native toolchain.
+    if (providers.gradleProperty("newsmeadMnnGpuProbe").orNull == "true") {
+        val probeLibraries = rootProject.file("output/mnn-gpu-probe-2026-11-13/jniLibs")
+        check(File(probeLibraries, "arm64-v8a/libMNN_CL.so").isFile &&
+            File(probeLibraries, "arm64-v8a/libnewsmead_mnn_gpu_probe.so").isFile) {
+            "Build the optional tools/gaze/mnn_gpu_probe probe before packaging it"
+        }
+        sourceSets["debug"].jniLibs.srcDir(probeLibraries)
+        // This overlay also retains the study build's pre-start collection policy.
+        sourceSets["debug"].manifest.srcFile("src/mnnGpuProbe/AndroidManifest.xml")
+    }
     // Preserve shrinking; extract the pinned native libraries with AGP 8.3.
     packaging { jniLibs { useLegacyPackaging = true } }
 

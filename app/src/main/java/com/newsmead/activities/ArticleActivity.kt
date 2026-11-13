@@ -13,6 +13,9 @@ import com.newsmead.models.Article
 
 class ArticleActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val experimentalThreads = com.newsmead.gaze.mgazenet.SameModelExecutionTrial.requested(this, intent.extras)
+        val experimentalLocalizer = com.newsmead.gaze.mgazenet.SameModelExecutionTrial.requestedLocalizer(this, intent.extras)
+        val experimentalBackend = com.newsmead.gaze.mgazenet.SameModelExecutionTrial.requestedBackend(this, intent.extras)
         super.onCreate(savedInstanceState)
 
         // Initialize viewBinding for ArticleActivity
@@ -37,6 +40,12 @@ class ArticleActivity : AppCompatActivity() {
         // Create bundle to pass article parcelable to article fragment
         val bundle = Bundle()
         bundle.putParcelable("article", article)
+        experimentalThreads?.let {
+            bundle.putBoolean(com.newsmead.gaze.mgazenet.SameModelExecutionTrial.OPT_IN, true)
+            bundle.putInt(com.newsmead.gaze.mgazenet.SameModelExecutionTrial.THREADS, it)
+        }
+        experimentalLocalizer?.let { bundle.putString(com.newsmead.gaze.mgazenet.SameModelExecutionTrial.LOCALIZER, it) }
+        experimentalBackend?.let { bundle.putString(com.newsmead.gaze.mgazenet.SameModelExecutionTrial.BACKEND, it) }
         bundle.putBoolean(com.newsmead.gaze.SharedReadingBaseline.ARGUMENT,
             intent.getBooleanExtra(com.newsmead.gaze.SharedReadingBaseline.ARGUMENT, false))
 

@@ -85,8 +85,8 @@ object StudyConfig {
     /** Draw the active level's name on screen during DEMO_CYCLE recordings. */
     const val SCAFFOLD_DEMO_CAPTION = true
 
-    /** Participant article reading hides researcher diagnostics; numerical capture stays active. */
-    const val GAZE_DEBUG_VISUALS = false
+    /** Researcher debug builds show the gaze cursor/FPS; participant release builds hide them. */
+    val GAZE_DEBUG_VISUALS = BuildConfig.DEBUG
 
     /**
      * Operational age limit for reading coordinates. MGazeNet inference can

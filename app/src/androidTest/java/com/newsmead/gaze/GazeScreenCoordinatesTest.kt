@@ -30,6 +30,34 @@ import kotlin.math.min
 @RunWith(AndroidJUnit4::class)
 class GazeScreenCoordinatesTest {
     @Test
+    fun hiddenDiagnosticsKeepTheLatestPointForExplicitDisplay() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val overlay = GazeOverlayView(InstrumentationRegistry.getInstrumentation().targetContext)
+            overlay.layout(0, 0, 240, 240)
+            val bitmap = Bitmap.createBitmap(240, 240, Bitmap.Config.ARGB_8888)
+            fun alphaAtPoint(): Int {
+                bitmap.eraseColor(Color.TRANSPARENT)
+                overlay.draw(Canvas(bitmap))
+                return Color.alpha(bitmap.getPixel(120, 120))
+            }
+            try {
+                overlay.setGazeScreen(120f, 120f)
+                assertEquals(0, alphaAtPoint())
+                overlay.setDebugVisualsEnabled(true)
+                assertTrue(alphaAtPoint() > 0)
+                overlay.setDebugVisualsEnabled(false)
+                overlay.clearGaze()
+                overlay.setDebugVisualsEnabled(true)
+                assertEquals(0, alphaAtPoint())
+                overlay.setDebugVisualsEnabled(false)
+                overlay.setGazeScreen(120f, 120f)
+                overlay.setDotOnly(true)
+                assertTrue(alphaAtPoint() > 0)
+            } finally { bitmap.recycle() }
+        }
+    }
+
+    @Test
     fun idleReadingLayoutUsesTheSameScreenContract() {
         ActivityScenario.launch(ReadingValidationActivity::class.java).use {
             onView(withId(R.id.nsvValidationText)).check { view, error ->

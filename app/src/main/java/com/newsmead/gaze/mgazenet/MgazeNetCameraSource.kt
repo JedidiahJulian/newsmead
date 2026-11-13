@@ -38,7 +38,11 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private val store: MgazeNetCalibrationStore,
     private val saved: CalibrationBundle.Artifact? = null,
     private val eyelidTelemetryEnabled: Boolean = false,
-    private val preferStableFrameRate: Boolean = false) {
+    private val preferStableFrameRate: Boolean = false,
+    private val experimentalMnnThreads: Int? = null,
+    private val experimentalLocalizer: String? = null,
+    private val experimentalMnnBackend: String? = null) {
+    init { SameModelExecutionTrial.requireAuthorized(context, experimentalMnnThreads, experimentalLocalizer, experimentalMnnBackend) }
     data class Frame(val captureMs: Double, val outputMs: Double, val features: FloatArray?,
         val leftArea: Double, val rightArea: Double, val prediction: FloatArray?, val reason: String,
         val cropSizes: List<List<Int>>?, val posture: MgazeNetPostureGate.Sample?,
@@ -78,7 +82,9 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 check(org.opencv.android.OpenCVLoader.initLocal())
                 check(CalibrationIdentity.hash(context.assets.open("face_landmarker.task").use { it.readBytes() }) == CalibrationIdentity.LOCALIZER)
                 store.verifyNativePersistence()
-                model = MnnEstimator(context)
+                SameModelExecutionTrial.requireAuthorized(context, experimentalMnnThreads, experimentalLocalizer, experimentalMnnBackend)
+                model = MnnEstimator(context, experimentalMnnThreads ?: MnnEstimator.DEFAULT_CPU_THREADS,
+                    experimentalBackend = experimentalMnnBackend)
                 preprocessors = List(PREPROCESSOR_SLOT_COUNT) { Preprocessor() }
                 preprocessors.forEach { availablePreprocessors.add(it) }
                 svr = saved?.let { store.load(it) } ?: SvrCalibration()
@@ -87,8 +93,12 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                         .setModelAssetPath("face_landmarker.task").setDelegate(delegate).build())
                         .setRunningMode(RunningMode.VIDEO).setNumFaces(1).setMinFaceDetectionConfidence(.1f)
                         .setMinTrackingConfidence(.1f).setMinFacePresenceConfidence(.5f).build())
-                landmarker = try { localizer(Delegate.GPU) } catch (_: Exception) {
-                    delegateName = "CPU_initialization_fallback"; localizer(Delegate.CPU)
+                landmarker = when (experimentalLocalizer) {
+                    "CPU" -> { delegateName = "CPU_experimental"; localizer(Delegate.CPU) }
+                    "GPU" -> localizer(Delegate.GPU) // Explicit trials never silently change delegate.
+                    else -> try { localizer(Delegate.GPU) } catch (_: Exception) {
+                        delegateName = "CPU_initialization_fallback"; localizer(Delegate.CPU)
+                    }
                 }
                 main.execute { if (!stopped.get()) bind() }
             } catch (e: Throwable) { error(e) }
@@ -137,14 +147,28 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
             check(captureNs > 0 && captureNs <= SystemClock.elapsedRealtimeNanos()) { "Invalid shared camera timestamp" }
             val shape = listOf(image.width,image.height,image.imageInfo.rotationDegrees)
             val acquisition = "${image.width}x${image.height}:${image.imageInfo.rotationDegrees}:$delegateName"
-            check(saved == null || saved.identity.acquisition == acquisition) { "Camera/localizer configuration changed" }
+            check(saved == null || SameModelExecutionTrial.acquisitionMatches(saved.identity.acquisition, acquisition, experimentalLocalizer)) { "Camera/localizer configuration changed" }
             val bitmap = frames.copy(image)
             val copyFinishedNs = SystemClock.elapsedRealtimeNanos()
             if (signature == null) {
                 signature = shape
                 val metadata = linkedMapOf<String,Any?>(
                     "acquisition" to acquisition,
-                    "model_sha256" to MnnEstimator.MODEL_SHA,"runtime" to MnnEstimator.RUNTIME,
+                    "model_sha256" to MnnEstimator.MODEL_SHA,"runtime" to checkNotNull(model).runtimeDescription,
+                    "performance_hints" to checkNotNull(model).performanceHintsSnapshot(),
+                    "mnn_execution" to checkNotNull(model).executionSnapshot(),
+                    "requested_mnn_backend" to experimentalMnnBackend,
+                    "requested_localizer" to experimentalLocalizer,
+                    "reference_acquisition" to saved?.identity?.acquisition,
+                    "localizer_trial_interpretation" to if (experimentalLocalizer != null)
+                        "Performance exploration only; saved GPU-localizer calibration is an unvalidated reference mapping for changed execution; no compatibility or accuracy claim"
+                        else "ordinary localizer execution",
+                    "same_model_execution_trial" to (experimentalMnnThreads != null),
+                    "requested_session_threads" to checkNotNull(model).performanceHintsSnapshot()["requested_session_threads"],
+                    "reference_calibration_runtime" to MnnEstimator.RUNTIME,
+                    "execution_trial_interpretation" to if (experimentalMnnThreads != null)
+                        "Exploratory performance only; saved calibration is a reference mapping for changed execution; candidate accuracy unvalidated; prior CPU2/CPU4 fixture parity failed the unchanged 1e-5 criterion; feature and accuracy evidence recorded separately; no compatibility or accuracy claim"
+                        else "ordinary CPU${MnnEstimator.DEFAULT_CPU_THREADS} execution; accuracy validation deferred",
                     "face_landmarker_sha256" to "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
                     "localizer" to "Tasks 0.10.29 VIDEO one-face detection=.1 tracking=.1 presence=.5",
                     "delegate" to delegateName,"camera_source_shape_rotation" to shape,
@@ -154,6 +178,8 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                     
                     "android_sdk" to android.os.Build.VERSION.SDK_INT,"opencv" to org.opencv.core.Core.VERSION)
                 if (preferStableFrameRate) {
+                    // Bounds prepared face inputs, not no-face work or main-thread deliveries.
+                    metadata["preprocessor_slot_count"] = preprocessors.size
                     metadata["camera_ae_target_fps_request"] = requestedFpsRange?.let { listOf(it.lower,it.upper) }
                 }
                 main.execute { if (!stopped.get()) ready(metadata) }
@@ -202,6 +228,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                         val finishedNs = SystemClock.elapsedRealtimeNanos()
                         performanceLog.record(
                             face = crops != null,
+                            captureToAnalyzerMs = (analyzerStartedNs - captureNs) / 1e6,
                             copyMs = (copyFinishedNs - analyzerStartedNs) / 1e6,
                             queueMs = (workerStartedNs - queuedNs) / 1e6,
                             localizerMs = (localizerFinishedNs - localizerStartedNs) / 1e6,
@@ -284,6 +311,8 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                 finally {
                     worker.shutdown()
                     main.execute { complete(mapOf("analyzer_arrivals" to arrivals.get(),"observed_busy_drops" to drops.get(),
+                        "performance_hints_final" to model?.performanceHintsSnapshot(),
+                        "mnn_execution_final" to model?.executionSnapshot(),
                         "cameraX_undelivered_frames" to "not_observable","resource_close_errors" to errors)) }
                 }
             }
@@ -293,6 +322,8 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
         private var startedNs = 0L
         private var samples = 0
         private var faceSamples = 0
+        private var captureWaitTotal = 0.0
+        private var captureWaitCount = 0
         private var copyTotal = 0.0
         private var queueTotal = 0.0
         private var localizerTotal = 0.0
@@ -301,12 +332,15 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
         private var predictionTotal = 0.0
         private var total = 0.0
 
-        fun record(face: Boolean, copyMs: Double, queueMs: Double, localizerMs: Double,
+        fun record(face: Boolean, captureToAnalyzerMs: Double, copyMs: Double, queueMs: Double, localizerMs: Double,
             preprocessMs: Double, inferenceMs: Double, predictionMs: Double, totalMs: Double,
             arrivals: Long, drops: Long, nowNs: Long) {
             if (startedNs == 0L) startedNs = nowNs
             samples++
             if (face) faceSamples++
+            if (captureToAnalyzerMs.isFinite() && captureToAnalyzerMs >= 0) {
+                captureWaitTotal += captureToAnalyzerMs; captureWaitCount++
+            }
             copyTotal += copyMs
             queueTotal += queueMs
             localizerTotal += localizerMs
@@ -316,12 +350,15 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
             total += totalMs
             if (nowNs - startedNs < PERFORMANCE_LOG_WINDOW_NS) return
             Log.i(PERFORMANCE_TAG, String.format(Locale.US,
-                "samples=%d face=%d arrivals=%d drops=%d avg_ms copy=%.1f queue=%.1f localizer=%.1f preprocess=%.1f inference=%.1f svr=%.1f total=%.1f",
-                samples,faceSamples,arrivals,drops,copyTotal/samples,queueTotal/samples,localizerTotal/samples,
+                "samples=%d face=%d arrivals=%d drops=%d capture_wait_count=%d avg_ms capture_wait=%s copy=%.1f queue=%.1f localizer=%.1f preprocess=%.1f inference=%.1f svr=%.1f total=%.1f",
+                samples,faceSamples,arrivals,drops,captureWaitCount,
+                if (captureWaitCount > 0) String.format(Locale.US,"%.1f",captureWaitTotal/captureWaitCount) else "unavailable",
+                copyTotal/samples,queueTotal/samples,localizerTotal/samples,
                 preprocessTotal/samples,inferenceTotal/samples,predictionTotal/samples,total/samples))
             startedNs = nowNs
             samples = 0
             faceSamples = 0
+            captureWaitTotal = 0.0; captureWaitCount = 0
             copyTotal = 0.0
             queueTotal = 0.0
             localizerTotal = 0.0

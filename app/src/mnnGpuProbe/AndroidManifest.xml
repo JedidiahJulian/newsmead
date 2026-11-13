@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <!-- Retain the account-free study overlay's pre-start collection policy. -->
+        <service android:name="com.google.firebase.components.ComponentDiscoveryService">
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.crashlytics.CrashlyticsRegistrar"
+                tools:node="remove" />
+        </service>
+        <!-- API 31+ requires declaring access to this public vendor driver. -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+    </application>
+</manifest>

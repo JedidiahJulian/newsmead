@@ -77,14 +77,16 @@ class GazeOverlayView @JvmOverloads constructor(
         screenX = x
         screenY = y
         hasPoint = true
-        postInvalidateOnAnimation()
+        // Participant reading hides the diagnostic dot. Keep its latest position
+        // without scheduling an otherwise empty draw for every camera result.
+        if (debugVisualsEnabled || dotOnly || scaffoldOpacity > 0f) postInvalidateOnAnimation()
     }
 
     /** Clear only the debug gaze dot when the source reports unavailable/stale input. */
     fun clearGaze() {
         if (!hasPoint) return
         hasPoint = false
-        postInvalidateOnAnimation()
+        if (debugVisualsEnabled || dotOnly || scaffoldOpacity > 0f) postInvalidateOnAnimation()
     }
 
     fun setDebugVisualsEnabled(enabled: Boolean) {
@@ -132,7 +134,7 @@ class GazeOverlayView @JvmOverloads constructor(
         val text = String.format(Locale.US, "%.0f fps", fps)
         if (fpsText == text) return
         fpsText = text
-        postInvalidateOnAnimation()
+        if (debugVisualsEnabled && !dotOnly) postInvalidateOnAnimation()
     }
 
     override fun onDetachedFromWindow() {

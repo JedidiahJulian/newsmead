@@ -7,6 +7,7 @@ import java.io.OutputStream
 import java.io.ByteArrayOutputStream
 import java.security.DigestOutputStream
 import java.util.zip.GZIPOutputStream
+import java.util.zip.Deflater
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.security.MessageDigest
@@ -14,6 +15,11 @@ import java.util.UUID
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+
+/** Same gzip framing and sync-flush contract, with the explicit best-speed level. */
+internal class StudyBestSpeedGzipOutputStream(output: OutputStream) : GZIPOutputStream(output, 8192, true) {
+    init { def.setLevel(Deflater.BEST_SPEED) }
+}
 
 /** Local append-only transport. Flush acknowledgement is not an fsync/durability claim.
  * Call recover only at process startup, before creating writers in that root.
@@ -133,7 +139,7 @@ class StudyPackageWriter(
                 partial = checkedChild(packageDirectory, ("chunk_%05d.jsonl" + if (compressChunks) ".gz.partial" else ".partial").format(java.util.Locale.US, chunks.length() + 1))
                 digest = MessageDigest.getInstance("SHA-256")
                 val stored = DigestOutputStream(partial!!.outputStream().buffered(), digest)
-                output = if (compressChunks) GZIPOutputStream(stored, 8192, true) else stored
+                output = if (compressChunks) StudyBestSpeedGzipOutputStream(stored) else stored
                 bytes = 0; chunkRecords = 0; openedNs = System.nanoTime()
                 firstSeq = record.getLong("seq")
             }
