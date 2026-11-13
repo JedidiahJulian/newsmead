@@ -16,6 +16,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.NewsMead"
         tools:targetApi="31">
+        <!-- Allow the GPU face tracker to load a public vendor driver on API 31+. -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
         <activity
             android:name=".activities.SplashActivity"
             android:theme="@style/Theme.App.SplashScreen"

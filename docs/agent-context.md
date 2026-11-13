@@ -1,4 +1,4 @@
-# Agent context — updated 2026-11-13
+# Agent context — updated 2026-11-14
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,68 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**Latest November 14 verification: functional checks are NOT performance acceptance.**
+CPU2-default checkpoint committed as32682a6 on feature/optimization-1 (not pushed
+by the agent). Owner requested quick tests on both phones, then correctly rejected
+calling S21 a performance pass merely because recording/cleanup passed. Human
+fresh CPU2 gaze calibrations were completed/saved on BOTH phones by the owner.
+Do not repeat calibration or start the deferred accuracy study.
+
+Ordinary default (no execution extras)15sOFF→15sON completed BOTH phones:
+S21 OFF16.00callbacks/s,15.80coordinates/s,age227.17ms;
+ON15.40callbacks/s,13.93coordinates/s,age223.33ms. Thermal1→1, noFace0,
+ON19invalid_crops/231camera callbacks. This does NOT reproduce prior CPU-control
+18.59recording-ON or22.25OFF; no performance success/causal regression claim.
+A56 OFF25.27callbacks/s,24.67coordinates/s,age186.05ms;
+ON25.47callbacks/s,25.07coordinates/s,age184.54ms, thermal0→0.
+Both numerical packages/hash/zero-loss/held-provider identity/resumed checks and
+quiesced cleanup passed; calibrations unchanged WITHIN those runs, isolated raw
+deleted. This exercises the cleanup happy path, not its interrupted restart case.
+Each test took~136–137s overall despite only30s timed capture. Evidence:
+`output/cpu2-default-2026-11-13/{s21,a56}-default-smoke-*`.
+
+Investigating one concrete packaging difference: fastest earlier CPU2 control
+was in a debug APK with optional vendor libOpenCL.so access declared for GPU
+experiments; ordinary APK omitted this. Current S21 own-PID28569 TFLite log says
+OpenCL dlopen failed (libvndksupport.so not found), then tries ICD loader. That
+does NOT establish ultimate fallback/backend or prove the FPS cause. Android
+requires explicit vendor-library access for target31+; GPU face tracking can be
+affected independently of the gaze model remaining MNNCPU2. Primary docs:
+https://developer.android.com/guide/topics/manifest/uses-native-library-element
+
+Lead added optional required=false libOpenCL.so access to MAIN AndroidManifest
+as the packaging correction now prepared for a follow-up commit. Normal debug
+build/test/pins pass; focused source/evidence review found no actionable issue;
+APK entry comparison finds ONLY AndroidManifest.xml changed, all executable code,
+models and native libraries byte-identical; optional MNN GPU libraries absent.
+Candidate mainba96ac00ce76fed70544d1dbad29e7a28f247e23c51f0575c8557847d5114df4,
+test1928bafda0bc4667edb164eac760dd851c36cb3a5f0fdc4f89e42db38b65a2f6.
+Artifacts `output/cpu2-opencl-access-2026-11-13/`. S21 run s21-driver-access
+COMPLETED: OFF21.67callbacks/coordinates per second,age196.67ms;
+ON17.73callbacks/s,17.60coordinates/s,age222.96ms. Thermal0→1; noFace0;
+package/hash/zero-loss/calibration/identity/closure/deletion checks pass.
+TFLite now logs OpenCL loaded with dlopen (ownPID9530). This is closer to the
+earlier CPU-control range, not proof that the manifest alone caused the FPS gain;
+baseline thermal1→1, fixed order and short capture remain confounded. Driver
+access success is distinct from performance acceptance. No accuracy claim.
+Both phones now have correctedba96ac00/1928bafd. A56 a56-driver-access COMPLETED:
+OFF24.80callbacks/s,24.60coordinates/s,age185.67ms;
+ON25.60callbacks/coordinates per second,age186.31ms, thermal0→0. Compared with
+its earlier25.47ON, no material short-run change. All package/hash/zero-loss/
+calibration/identity/closure/deletion checks passed. No cameras remain active.
+Gaze remains CPU2; no calibration changes were made by the diagnostics. Keep the
+general optional declaration, not phone/model rules. Human accuracy/endurance
+and causal size of any FPS benefit remain unestablished. Host runner verifies BOTH
+installed app/test hashes, uses ordinary runtime with no execution overrides,
+and stops camera on failure. Never overwrite retained outputs. Corrected source
+manifest and result docs are being committed as a follow-up to32682a6; exact
+commit recorded in output/cpu2-opencl-access-2026-11-13/artifact-receipt.json.
+Pre-existing .idea edit remains unrelated. Both runtime logs and compiled APK
+comparison receipts remain in that ignored directory. Retain the original
+255bbcfd APK/receipt as baseline evidence; future installed-build checks must
+use the corrected ba96ac00 artifact receipt explicitly. Do not claim the earlier
+best18.59ON was fully reproduced or that a15s check proves sustained performance.
 
 **Latest 2026-11-13 decision: owner requests ordinary CPU2 default and Git commit.**
 The owner explicitly supersedes the earlier isolated-only restriction: use the

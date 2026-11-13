@@ -729,3 +729,62 @@ SHA256`255bbcfd5f0f60d66e302b0ad46974599f13baa4dfa2fc6fa856e1ecd6b46728`,
 65,014,266bytes, ARM32/64, minimum Android API24. Both phones have that build;
 no live gaze test or calibration rewrite was performed for this promotion.
 No source changes were made to address the unrelated Firebase test environment.
+
+## November 14 ordinary-default verification and driver-access correction
+
+The owner completed fresh CPU2 gaze calibration on each phone, then authorized
+quick full-app recording checks. The first ordinary build completed recording
+and cleanup checks, but the owner correctly rejected calling the S21 performance
+a pass: its rates were lower than the earlier CPU2 control. These are separate
+functional and performance conclusions.
+
+| Phone/build | Recording OFF callbacks/s | Recording ON callbacks/s | ON coordinates/s | ON mean capture age |
+| --- | ---: | ---: | ---: | ---: |
+| S21 ordinary CPU2, omitted driver declaration | 16.00 | 15.40 | 13.93 | 223.33ms |
+| S21 ordinary CPU2, restored driver declaration | 21.67 | 17.73 | 17.60 | 222.96ms |
+| A56 ordinary CPU2, omitted driver declaration | 25.27 | 25.47 | 25.07 | 184.54ms |
+| A56 ordinary CPU2, restored driver declaration | 24.80 | 25.60 | 25.60 | 186.31ms |
+
+Each row is one fresh process with15sOFF followed by15sON, five-second warmups,
+ordinary article execution and no experimental runtime extras. All four runs
+passed face coverage, held-provider identity before/after timing, no timed
+stopped callbacks, verified numerical package hashes/counts, zero loss, unchanged
+calibration within the run, quiesced provider/writer closure, and deletion of
+isolated raw diagnostic packages. No camera images were saved. The full test took
+roughly136seconds per invocation despite only30seconds of timed capture.
+
+The earlier fast CPU2 control ran inside a probe-enabled debug APK that declared
+optional access to the phone's public OpenCL driver. The ordinary CPU2 APK
+omitted that declaration. Android requires explicit access for vendor non-NDK
+libraries when targeting API31+, and `required=false` permits installation on
+devices without the library. This access can affect the existing GPU face tracker
+independently of MNN CPU gaze execution. [Android native-library declaration](https://developer.android.com/guide/topics/manifest/uses-native-library-element).
+
+The ordinary S21's own-PID28569 TFLite log reported an OpenCL dlopen failure
+(libvndksupport.so unavailable), followed by an ICD loader attempt. That line
+does not prove ultimate OpenGL fallback or identify the inference backend.
+After restoring optional libOpenCL.so access in the MAIN manifest, own-PID9530
+logs report successful OpenCL dlopen. The actual GPU kernel backend is not
+instrumented. APK entry comparison against the first ordinary CPU2 build finds
+ONLY AndroidManifest.xml changed; app code, model assets and native libraries
+are byte-identical. Optional MNN OpenCL/probe libraries remain absent. This is
+the same CPU2 gaze path and the same configured GPU face-tracking options.
+
+The declaration is retained as a general packaging correction for the existing
+GPU tracker, after focused source/evidence review and tests on both phones.
+The S21 rates are closer to the earlier22.25OFF/18.59ON control but do not fully
+reproduce its best result. Baseline S21 thermal status was1→1 versus0→1 for the
+corrected run; A56 was0→0 in both. Fixed order, time, pose and short capture
+confound causal interpretation. Do not attribute the entire increase to the
+manifest, infer sustained performance, or treat these as accuracy results.
+The successful cleanup path was exercised; no interrupted-restart fault was
+deliberately induced.
+
+Both phones now have corrected ordinary CPU2 main APK SHA256
+`ba96ac00ce76fed70544d1dbad29e7a28f247e23c51f0575c8557847d5114df4`,
+test`1928bafda0bc4667edb164eac760dd851c36cb3a5f0fdc4f89e42db38b65a2f6`.
+Evidence: `output/cpu2-default-2026-11-13/{s21,a56}-default-smoke-*` and
+`{s21,a56}-driver-access-default-smoke-*`; build/pins, artifact byte-comparison
+receipt and own-PID runtime logs in `output/cpu2-opencl-access-2026-11-13/`.
+The earlier APK/receipts are retained as baseline evidence. No calibration
+procedure, model precision, timing clock or eligibility threshold was changed.
