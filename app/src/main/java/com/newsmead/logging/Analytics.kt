@@ -23,7 +23,7 @@ import com.newsmead.data.StudyConfig
 object Analytics {
 
     private val analytics: FirebaseAnalytics?
-        get() = if (StudyConfig.BYPASS_LOGIN) null else try {
+        get() = if (StudyConfig.ACCOUNT_FREE_STUDY) null else try {
             Firebase.analytics
         } catch (exception: IllegalStateException) {
             null

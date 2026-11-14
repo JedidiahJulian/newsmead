@@ -81,7 +81,7 @@ class HomeFragment : Fragment(), clickListener {
         this.viewBinding.rvFeed.addItemDecoration(customDivider)
 
         // History Button
-        viewBinding.btnHistory.visibility = if (com.newsmead.data.StudyConfig.BYPASS_LOGIN) View.GONE else View.VISIBLE
+        viewBinding.btnHistory.visibility = if (com.newsmead.data.StudyConfig.ACCOUNT_FREE_STUDY) View.GONE else View.VISIBLE
         this.viewBinding.btnHistory.setOnClickListener {
             // Action
             val action = HomeFragmentDirections.actionHomeFragmentToHistoryFragment()

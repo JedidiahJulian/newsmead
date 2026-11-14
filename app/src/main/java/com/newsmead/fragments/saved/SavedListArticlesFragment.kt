@@ -67,30 +67,6 @@ class SavedListArticlesFragment: Fragment(), clickListener {
             navController.popBackStack()
         }
 
-        // Retrieve data from Firebase Async using coroutines
-        lifecycleScope.launch {
-            try {
-                Log.d("SavedListArticles", "Retrieving data from Firebase for ${args.listId}")
-                val articles = FirebaseHelper.getArticlesFromList(requireContext(), args.listId)
-
-                // Add articles to data
-                data.addAll(articles)
-
-                // Notify the adapter that the dataset has changed
-                Log.d("SavedListArticles", "Updating adapter with ${data.size} articles")
-                adapter.notifyDataSetChanged()
-
-                // Update number of articles
-                val numArticlesText = "${data.size} articles"
-                binding.tvSavedListNumArticles.text = numArticlesText
-
-            } catch (e: Exception) {
-                // Handle exceptions
-                e.printStackTrace()
-            }
-        }
-
-
         return binding.root
     }
 

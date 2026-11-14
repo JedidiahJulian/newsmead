@@ -44,7 +44,7 @@ class ProfileFragment : Fragment() {
         this.viewBinding = FragmentProfileBinding.inflate(layoutInflater)
 
         configureAppearance()
-        if (StudyConfig.BYPASS_LOGIN) {
+        if (StudyConfig.ACCOUNT_FREE_STUDY) {
             viewBinding.constraintLayout.visibility = View.GONE
             viewBinding.btnSave.visibility = View.GONE
             viewBinding.btnLogout.visibility = View.GONE

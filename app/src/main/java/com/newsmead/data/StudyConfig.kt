@@ -11,11 +11,17 @@ import com.newsmead.BuildConfig
 object StudyConfig {
 
     /**
-     * Skip the login gate and account-backed saved/history/telemetry paths.
-     * Configured by accountFreeStudyBuild in app/build.gradle.kts so the manifest
-     * disables collection before SDK startup as well.
+     * Bypass the Firebase login gate in SplashActivity and treat launch as
+     * going straight to the home screen (matching recommendation-gaze-base).
      */
-    const val BYPASS_LOGIN = BuildConfig.ACCOUNT_FREE_STUDY
+    const val BYPASS_LOGIN = true
+
+    /**
+     * Skip account-backed saved/history/profile/telemetry paths in the
+     * dedicated account-free participant study build. False on the panel demo branch
+     * so login (via Profile -> Log Out / Log In) and Saved Lists work.
+     */
+    const val ACCOUNT_FREE_STUDY = BuildConfig.ACCOUNT_FREE_STUDY
 
     /**
      * Serve article content from a bundled local asset instead of NewsData.io.

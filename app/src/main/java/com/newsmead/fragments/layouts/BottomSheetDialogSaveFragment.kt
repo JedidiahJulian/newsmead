@@ -31,6 +31,7 @@ class BottomSheetDialogSaveFragment(
     private lateinit var binding: BottomSheetDialogSaveListBinding
     private lateinit var lists: ArrayList<SavedList>
     private var checkedLists: ArrayList<String> = ArrayList()
+    private var initialCheckedLists: Set<String> = emptySet()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -39,7 +40,7 @@ class BottomSheetDialogSaveFragment(
     ): View {
         this.binding = BottomSheetDialogSaveListBinding.inflate(inflater, container, false)
 
-        lists = PreloadedData.lists
+        lists = ArrayList(PreloadedData.lists)
 
         val adapter = SheetDialogAdapter(lists, this@BottomSheetDialogSaveFragment)
         binding.rvDialogList.adapter = adapter
@@ -49,11 +50,25 @@ class BottomSheetDialogSaveFragment(
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
+                if (lists.isEmpty()) {
+                    val fetchedLists = FirebaseHelper.getListsCollection(requireContext())
+                    if (fetchedLists != null) {
+                        PreloadedData.lists = fetchedLists
+                        withContext(Dispatchers.Main) {
+                            lists.clear()
+                            lists.addAll(fetchedLists)
+                            adapter.notifyDataSetChanged()
+                        }
+                    }
+                }
+
                 // Check if article is already saved to a list
                 val fbCheckedLists = FirebaseHelper.checkIfArticleSavedInLists(requireContext(), article.newsId)
 
                 Log.d("BottomSheetDialogSaveFragment", "Checked lists: $fbCheckedLists")
-                checkedLists.addAll(fbCheckedLists as ArrayList<String>)
+                initialCheckedLists = fbCheckedLists.toSet()
+                checkedLists.clear()
+                checkedLists.addAll(fbCheckedLists)
 
                 // Update UI on the main thread
                 withContext(Dispatchers.Main) {
@@ -77,7 +92,7 @@ class BottomSheetDialogSaveFragment(
 
             lifecycleScope.launch {
                 // Save details here
-                if (checkedLists.isEmpty()) {
+                if (checkedLists.isEmpty() && initialCheckedLists.isEmpty()) {
                     Toast.makeText(context, "No list selected", Toast.LENGTH_SHORT).show()
                 } else {
                     Log.d("BottomSheetDialogSaveFragment", "Saving article to lists...")
@@ -92,7 +107,7 @@ class BottomSheetDialogSaveFragment(
                         Analytics.saveToList(article.newsId, listId)
                         ResearchSession.saveToList(article.newsId, listId)
 
-                        // Add to local database IF listId is offlineArticle
+                        // Add to local database IF listId is offlineArticles
                         if (listId == "offlineArticles") {
                             val offlineId = article.newsId
                             var offlineArticleContent = "Offline Article Content Goes Here (Did not save properly)"
@@ -111,9 +126,9 @@ class BottomSheetDialogSaveFragment(
                         }
                     }
 
-                    // Remove article from unchecked lists
+                    // Remove article from unchecked lists that previously contained it
                     Log.d("BottomSheetDialogSaveFragment", "Removing article from unchecked lists... $checkedLists")
-                    val uncheckedLists = lists.filter { !checkedLists.contains(it.id) }
+                    val uncheckedLists = lists.filter { !checkedLists.contains(it.id) && initialCheckedLists.contains(it.id) }
                     Log.d("BottomSheetDialogSaveFragment", "Unchecked lists: $uncheckedLists")
                     for (list in uncheckedLists) {
                         FirebaseHelper.deleteArticleFromFirestoreList(
@@ -122,16 +137,21 @@ class BottomSheetDialogSaveFragment(
                         Analytics.removeFromList(article.newsId, list.id)
                         ResearchSession.removeFromList(article.newsId, list.id)
 
-                        // Remove from local database IF listId is offlineArticle
-                        if (list.id == "offlineArticle") {
-                            Log.d("BottomSheetDialogSaveFragment", "Removing article ${article.newsId} from offlineArticle")
+                        // Remove from local database IF listId is offlineArticles
+                        if (list.id == "offlineArticles") {
+                            Log.d("BottomSheetDialogSaveFragment", "Removing article ${article.newsId} from offlineArticles")
                             val offlineId = article.newsId
 
                             DatabaseHelper.getNewsArticleDao().deleteNewsArticle(offlineId)
                         }
                     }
 
-                    Toast.makeText(context, "Article saved to ${checkedLists.size} lists", Toast.LENGTH_SHORT).show()
+                    val message = if (checkedLists.isEmpty()) {
+                        "Article removed from lists"
+                    } else {
+                        "Article saved to ${checkedLists.size} lists"
+                    }
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                 }
 
                 dismiss()

@@ -41,31 +41,41 @@ class SavedAllFragment: Fragment(), clickListener {
         val customDivider = CustomDividerItemDecoration(context, R.drawable.line_divider)
         binding.rvSavedAll.addItemDecoration(customDivider)
 
-        // Grab preloaded data
-        val preloadedData =  PreloadedData.savedArticles
-        preloadedData.reverse()
-        data.addAll(preloadedData)
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            // Update Articles Tab
-            val allArticles: ArrayList<Article> = FirebaseHelper.getAllArticlesFromLists(requireContext())
-
-            // Update preloaded data
-            PreloadedData.savedArticles = allArticles
-
-            // Reverse order (To get latest saved articles first)
-            allArticles.reverse()
-
-            withContext(Dispatchers.Main) {
-                // Update Articles Tab
-                data.clear()
-                data.addAll(allArticles)
-                adapter.notifyDataSetChanged()
-            }
-        }
-
+        // Grab preloaded data without mutating PreloadedData.savedArticles in-place
+        val preloadedData = PreloadedData.savedArticles
+        data.addAll(preloadedData.asReversed())
 
         return binding.root
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshSavedArticles()
+    }
+
+    private fun refreshSavedArticles() {
+        val context = context ?: return
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // Update Articles Tab
+                val allArticles: ArrayList<Article> = FirebaseHelper.getAllArticlesFromLists(context)
+
+                // Update preloaded data
+                PreloadedData.savedArticles = ArrayList(allArticles)
+
+                // Reverse order (To get latest saved articles first)
+                val latestFirst = allArticles.asReversed()
+
+                withContext(Dispatchers.Main) {
+                    // Update Articles Tab
+                    data.clear()
+                    data.addAll(latestFirst)
+                    adapter.notifyDataSetChanged()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     override fun onItemClicked(article: Article) {

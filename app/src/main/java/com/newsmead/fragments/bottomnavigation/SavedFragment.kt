@@ -53,11 +53,12 @@ class SavedFragment : Fragment() {
 
         val tabLayout = binding.tlListTabs
         TabLayoutMediator(tabLayout, binding.vpViewPager) { tab, position ->
-            if (StudyConfig.BYPASS_LOGIN) {
+            if (StudyConfig.ACCOUNT_FREE_STUDY) {
                 tab.text = getString(R.string.saved_testing_articles)
-            } else when(position) {
-                0 -> tab.text = "Your Lists"
-                1 -> tab.text = "All"
+            } else when (position) {
+                0 -> tab.text = getString(R.string.saved_your_lists)
+                1 -> tab.text = getString(R.string.saved_all)
+                2 -> tab.text = getString(R.string.saved_testing_articles)
             }
         }.attach()
     }

@@ -55,20 +55,26 @@ class SavedListsFragment: Fragment(), cardListener {
             adapter.notifyDataSetChanged()
         }
 
-        // Retrieve lists from Firestore using coroutines
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val listsCollection = FirebaseHelper.getListsCollection(requireContext())
-                if (listsCollection != null) {
-                    // ListsCollection is not null, fetch the data
-                    // Read later is always first, no need to sort
-                    data.clear()
-                    data.addAll(listsCollection)
+        return binding.root
+    }
 
+    override fun onResume() {
+        super.onResume()
+        refreshLists()
+    }
+
+    private fun refreshLists() {
+        val context = context ?: return
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val listsCollection = FirebaseHelper.getListsCollection(context)
+                if (listsCollection != null) {
                     // Update preloaded data
                     PreloadedData.lists = listsCollection
 
                     withContext(Dispatchers.Main) {
+                        data.clear()
+                        data.addAll(listsCollection)
                         adapter.notifyDataSetChanged()
                     }
                 }
@@ -77,8 +83,6 @@ class SavedListsFragment: Fragment(), cardListener {
                 e.printStackTrace()
             }
         }
-
-        return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {

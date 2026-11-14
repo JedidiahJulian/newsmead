@@ -448,7 +448,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
 
         // Account-backed saving is not available in the account-free study build.
-        binding.btnSaveList.visibility = if (StudyConfig.BYPASS_LOGIN) View.GONE else View.VISIBLE
+        binding.btnSaveList.visibility = if (StudyConfig.ACCOUNT_FREE_STUDY) View.GONE else View.VISIBLE
         // Bottom sheet dialog for saving articles
         binding.btnSaveList.setOnClickListener {
             binding.btnSaveList.isEnabled = false

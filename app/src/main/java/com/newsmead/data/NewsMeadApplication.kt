@@ -24,7 +24,7 @@ class NewsMeadApplication: Application() {
     override fun onCreate() {
         super.onCreate()
         // The account-free manifest removes the component before SDK startup.
-        if (!StudyConfig.BYPASS_LOGIN) {
+        if (!StudyConfig.ACCOUNT_FREE_STUDY) {
             FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(true)
         }
         DatabaseHelper.initDatabase(this)
@@ -35,13 +35,13 @@ class NewsMeadApplication: Application() {
         // every file would be unterminated — which would waste the
         // dropped-record accounting SessionLog does.
         registerActivityLifecycleCallbacks(SessionLifecycle())
-        if (!StudyConfig.BYPASS_LOGIN) {
+        if (!StudyConfig.ACCOUNT_FREE_STUDY) {
             AppLog.setAuthState(if (FirebaseHelper.getUid() == "null") "signed_out" else "signed_in")
         }
 
         // Check if logged in
         // If logged in, then preload data
-        if (!StudyConfig.BYPASS_LOGIN && FirebaseHelper.getUid() != "null") {
+        if (!StudyConfig.ACCOUNT_FREE_STUDY && FirebaseHelper.getUid() != "null") {
             GlobalScope.launch {
                 try {
                     val pairData = FirebaseHelper.getListsAndArticles(this@NewsMeadApplication)

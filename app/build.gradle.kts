@@ -19,8 +19,10 @@ plugins {
     id("kotlin-kapt")
 }
 
-// One switch for the login-free study UI and its pre-start Firebase collection policy.
-val accountFreeStudyBuild = true
+// Default to false so login, profile, history, and account-backed saved lists work;
+// pass -PnewsmeadAccountFreeStudy=true for an account-free participant study build.
+val accountFreeStudyBuild =
+    providers.gradleProperty("newsmeadAccountFreeStudy").orNull?.toBooleanStrictOrNull() ?: false
 
 val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")

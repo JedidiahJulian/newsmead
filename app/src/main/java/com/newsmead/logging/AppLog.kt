@@ -90,7 +90,7 @@ object AppLog {
      * test or a screen falls over.
      */
     private val crashlytics: FirebaseCrashlytics?
-        get() = if (StudyConfig.BYPASS_LOGIN) null else try {
+        get() = if (StudyConfig.ACCOUNT_FREE_STUDY) null else try {
             FirebaseCrashlytics.getInstance()
         } catch (exception: IllegalStateException) {
             null
