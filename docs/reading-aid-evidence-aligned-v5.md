@@ -354,7 +354,7 @@ No camera start, recording, calibration, staging or commit in this verification.
   unshown saved source, rather than presenting a stale, apparently precise marker.
 - Activate after **500 ms of outside-article gaze** (at least three fresh samples),
   or **500 ms of tracking unavailability**. Keep those two reasons distinct.
-  Earlier-row and skipped-row movements **do not activate this bookmark**.
+  Earlier-row and skipped-row movements alone **do not activate this bookmark**.
   The marker freezes at the saved line rather than following the departure.
 - Minimum visibility: 1.5 seconds. Thereafter clear after 1 second of supported
   return to the saved row, or 1.5 seconds of coherent same/next-row reading elsewhere.
@@ -370,6 +370,31 @@ No camera start, recording, calibration, staging or commit in this verification.
 All numerical settings above are engineering/pilot choices. They are not
 published optimal thresholds, confidence probabilities or evidence of benefit.
 Synthetic tests establish software contracts, not reading difficulty or efficacy.
+
+### Bookmark revision — 2026-11-14
+
+The owner approved a supported broad-rereading return-point bookmark and reported
+early AUTO activation, quick clearing after return, and excessive bookmark opacity.
+Current bookmark ruleV5 adds1,500ms of fresh eligible mapped in-article presence
+across rows before arming departure cues, and3,000ms of fresh eligible same/next-row
+presence before dismissal with fresh precise support. Presence is not attentive
+reading. This supersedes the initial Nov14 supported-tail maturity, which could
+discard ordinary line-transition time. Precise stabilized source support remains
+required. Duplicates earn no time; missing/rejected/stale/gapped input breaks runs.
+A complete broad-rereading witness can preserve its precise departure frontier;
+all visits must have trusted mapper support. Sustained reading anywhere, including
+earlier than that frontier, can dismiss it. A5s elapsed visibility limit starts at
+the first fresh article return (or in-article reread activation); tracking noise
+does not extend it. Time before return is excluded, with the30s global age cap
+retained. Generic backward/skipped-row jumps stay
+insufficient. The owner subsequently rejected the47% opacity and requested60% or75%.
+The current marker defaults to75% strength with direct opacity mapping, painted at
+191/255 alpha (about75%), and respects manual/maximum strength controls. These
+are pilot settings. Other aids and frozen scanpath extraction are unchanged.
+See [source diagnosis, boundaries and checks](bookmark-rereading-and-recovery-2026-11-14.md)
+for the updated rules and the reproduced current-Replay regression. Replay now
+includes short450ms row visits and explicit current-profile tests; earlier bookmark
+timing/appearance above is historical where superseded here.
 
 ## What the cited studies actually establish
 
@@ -550,3 +575,24 @@ focused whitespace check passed. Private local build/test summary:
 `output/aid-single-line-bookmark-check-01/summary.json`. No device install or camera capture
 was performed. Physical appearance, actual phone mapping and human reading
 benefit require their own checks. `agent-context.md` records the build checkpoint.
+
+
+### Bookmark progress retention — current14November2026
+
+Owner approved implementation after the rereading-duration review. Current bookmark
+ruleV6/formV3/runtime policy17 has no timed expiry or residence-based clearing.
+It retains the saved frontier during earlier/same-line rereading, dims75%→40% with
+supported rereading progress, and clears on a supported adjacent forward pair at
+or beyond the saved line. A jump or a stationary later-row landing alone is not
+forward reading. The250ms presentation interpolation is separate from reading time.
+
+Established eligibility arming survives brief blink/dropout; departure uses the last
+fresh trustworthy exact source. Stable backward support after a supported forward
+step can trigger before full broad rereading completes; the existing3-row unknown
+error guard is retained. Rejected input breaks spatial history; geometry/operational
+boundaries still invalidate anchors. Focus and frozen extraction are unchanged.
+
+See `bookmark-rereading-and-recovery-2026-11-14.md` and
+`bookmark-rereading-duration-evidence-2026-11-14.md`. Current software/device evidence
+is at `output/bookmark-progress-2026-11-14/`. Earlier bookmark timing references
+above are historical where superseded here.

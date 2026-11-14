@@ -93,7 +93,10 @@ class ReadingAidPolicy(
             if (!allowed(type) || value.maxStrength == 0.0 ||
                 (!value.adaptiveStrength && value.manualStrength == 0.0))
                 clear(type, context.nowMs, "reader_disabled_or_zero_strength", out)
-            else if (type !in listOf(ReadingAidType.NEXT_LINE_START, ReadingAidType.READING_BOOKMARK) &&
+            else if (config.evidenceAlignedV5 && type == ReadingAidType.READING_BOOKMARK && action.bookmarkEvidence != null &&
+                action.strength != bookmarkStrength()) {
+                applyBookmark(ReadingBookmarkPolicy.Change(evidence = action.bookmarkEvidence), context, out)
+            } else if (type !in listOf(ReadingAidType.NEXT_LINE_START, ReadingAidType.READING_BOOKMARK) &&
                 (action.strength > value.maxStrength || !value.adaptiveStrength)) {
                 clear(type, context.nowMs, "reader_strength_changed", out)
             }
@@ -660,10 +663,16 @@ class ReadingAidPolicy(
                     firstCaptureMs = if (sameVisit) prior!!.firstCaptureMs else value.lastCaptureMs)
                 bookmarkPreciseSupport = precise
                 applyBookmark(bookmark.support(precise, supported), supported, out)
+                update.reread?.let { r ->
+                    applyBookmark(bookmark.reread(ReadingAidRereadEvidence("reread:${r.visits.last().id}",
+                        r.visits.map { it.continuation() }, r.visits.minOf { it.band.representativeLine },
+                        r.visits.maxOf { it.band.representativeLine }, value.evidenceAvailableMs,
+                        r.measuredDistinguishability), supported), supported, out)
+                }
             } else if (allowed(ReadingAidType.READING_BOOKMARK)) {
                 bookmarkPreciseSupport = null
                 bookmark.interruptTransition()
-                if (bookmark.savedLine != value.line) bookmark.withholdUncertainSource()
+                // Keep the last reliable location; uncertain current rows cannot replace it.
             }
             if (cFocusAllowed(c)) {
                 focus.support(value, supported, preferences, visit.band)
@@ -691,6 +700,10 @@ class ReadingAidPolicy(
             if (focus.displaySupported(c.nowMs)) applyFocus(focus.currentEvidence(supported, preferences), supported, out)
             else clear(ReadingAidType.FOCUS_REGION, c.nowMs, "no_fresh_focus_support", out, false)
         }
+        active[ReadingAidType.READING_BOOKMARK]?.bookmarkEvidence?.let { evidence ->
+            if (active[ReadingAidType.READING_BOOKMARK]?.strength != bookmarkStrength())
+                applyBookmark(ReadingBookmarkPolicy.Change(evidence = evidence), supported, out)
+        }
         for ((type, action) in active.toMap()) {
             if (!allowed(type)) clear(type, c.nowMs, "reader_disabled_aid", out, false)
             else if (c.nowMs >= action.expiresMs) expire(type, c.nowMs, out)
@@ -715,7 +728,8 @@ class ReadingAidPolicy(
         val continuation = listOfNotNull(support)
         forceGuide(line, first, last, available, evidenceIds, continuation, c, out)
         if (allowed(ReadingAidType.READING_BOOKMARK)) choose(ReadingAidType.READING_BOOKMARK,
-            anchor(c, line), 1.0, first, last, available, emptyList(), evidenceIds,
+            anchor(c, line), LineStartMarkerAppearance.BOOKMARK_DEFAULT_STRENGTH,
+            first, last, available, emptyList(), evidenceIds,
             "MODE_ON_BOOKMARK_PRESENTATION_V1", emptyList(),
             "Reader-selected ON presentation at a current or visible article position; not bookmark-trigger evidence.",
             c, out, continuationEvidence = continuation)
@@ -977,6 +991,7 @@ class ReadingAidPolicy(
             clear(ReadingAidType.FOCUS_REGION, c.nowMs, "word_magnifier_priority", out)
         val strength = if (guideEvidence != null) min(preferences.maxStrength,
             if (preferences.adaptiveStrength) targetStrength else preferences.manualStrength)
+            else if (config.evidenceAlignedV5 && type == ReadingAidType.READING_BOOKMARK) bookmarkStrength()
             else if (type in listOf(ReadingAidType.NEXT_LINE_START, ReadingAidType.READING_BOOKMARK)) 1.0
             else if (focusEvidence != null) min(preferences.maxStrength,
                 if (preferences.adaptiveStrength) focusEvidence.initialStrength else preferences.manualStrength) *
@@ -986,6 +1001,22 @@ class ReadingAidPolicy(
         if (strength <= 0) return
         val focusStyle = preferences.focusStyle.takeIf { currentGuideProfile() && type == ReadingAidType.FOCUS_REGION }
         val old = active[type]
+        if (type == ReadingAidType.READING_BOOKMARK && config.evidenceAlignedV5 && old != null &&
+            old.anchor == anchor && old.bookmarkEvidence != null && bookmarkEvidence != null &&
+            old.bookmarkEvidence.source == bookmarkEvidence.source &&
+            old.bookmarkEvidence.departureReason == bookmarkEvidence.departureReason) {
+            if (old.strength != strength || old.bookmarkEvidence != bookmarkEvidence) {
+                val progressChanged = old.bookmarkEvidence.presentationRereadProgress != bookmarkEvidence.presentationRereadProgress
+                // Reader caps reset interpolation; cue identity and exposure remain continuous.
+                val revised = old.copy(strength = strength, bookmarkEvidence = bookmarkEvidence.copy(
+                    presentationRevision = old.bookmarkEvidence.presentationRevision + if (progressChanged) 0 else 1))
+                active[type] = revised
+                out.add(ReadingAidDecision(ReadingAidDecisionStatus.CHOSEN, revised,
+                    if (progressChanged) "bookmark_progress_presentation_updated" else "bookmark_preferences_presentation_updated",
+                    c.nowMs, events, rule, sources))
+            }
+            return
+        }
         if (old != null && old.strength == strength && old.focusStyle == focusStyle &&
             (old.anchor == anchor || (type == ReadingAidType.CURRENT_SENTENCE &&
                 old.anchor.generation == anchor.generation &&
@@ -1000,7 +1031,8 @@ class ReadingAidPolicy(
                     else "CURRENT_LINE_HIGHLIGHT_V1"
                 ReadingAidType.CURRENT_SENTENCE -> "CURRENT_SENTENCE_CONTEXT_HIGHLIGHT_V1"
                 ReadingAidType.NEXT_LINE_START -> "CONTINUATION_LINE_START_CUE_V1"
-                ReadingAidType.READING_BOOKMARK -> "LAST_READ_LINE_BOOKMARK_V1"
+                ReadingAidType.READING_BOOKMARK -> if (config.evidenceAlignedV5) LineStartMarkerAppearance.BOOKMARK_FORM_ID
+                    else LineStartMarkerAppearance.LEGACY_BOOKMARK_FORM_ID
                 ReadingAidType.WORD_MAGNIFIER -> "CONTEXT_WORD_MAGNIFIER_V1"
                 ReadingAidType.WORD_DEFINITION -> if (currentGuideProfile()) "CONTEXT_WORD_LOOKUP_OFFER_V1" else "CONTEXT_WORD_DEFINITION_V1"
                 ReadingAidType.FOCUS_REGION -> if (currentGuideProfile()) "CONTEXT_FOCUS_REGION_V4" else "CONTEXT_FOCUS_REGION_V1"
@@ -1052,16 +1084,24 @@ class ReadingAidPolicy(
     private fun applyBookmark(change: ReadingBookmarkPolicy.Change, c: ReadingAidContext,
                               out: MutableList<ReadingAidDecision>) {
         change.clearReason?.let { clear(ReadingAidType.READING_BOOKMARK, c.nowMs, it, out, false) }
-        change.evidence?.let { e ->
-            choose(ReadingAidType.READING_BOOKMARK, anchor(c, e.source.line), 1.0,
+        change.evidence?.let { raw ->
+            val e = if (config.evidenceAlignedV5) raw.copy(presentationRereadProgress = bookmark.rereadProgress) else raw
+            choose(ReadingAidType.READING_BOOKMARK, anchor(c, e.source.line),
+                LineStartMarkerAppearance.BOOKMARK_DEFAULT_STRENGTH,
                 e.source.firstCaptureMs, e.departureLastCaptureMs ?: e.source.lastCaptureMs,
                 max(e.source.evidenceAvailableMs, e.departureEvidenceAvailableMs),
-                emptyList(), listOfNotNull(e.source.evidenceId, e.departureSupport?.evidenceId),
-                "A2_LAST_READ_LINE_BOOKMARK_V2", listOf("EB15", "CW12"),
-                "EB15/CW12 known-interruption last-location cue precedents; autonomous outside-article, unavailable-gaze and line-jump triggers on phones are experimental and benefit is unvalidated.",
+                emptyList(), listOfNotNull(e.source.evidenceId, e.departureSupport?.evidenceId) +
+                    e.reread?.visits.orEmpty().map { it.evidenceId },
+                if (config.evidenceAlignedV5) "A2_LAST_READ_LINE_BOOKMARK_V6" else "A2_LAST_READ_LINE_BOOKMARK_V2",
+                if (e.reread != null || e.departureReason == "supported_backward_reading") listOf("EB15", "MV11") else listOf("EB15", "CW12"),
+                "Known-interruption location cues and structured rereading motivate this prototype. Phone departure/rereading triggers, persistence and strength settings require validation.",
                 c, out, bookmarkEvidence = e)
         }
     }
+
+    private fun bookmarkStrength(): Double = min(preferences.maxStrength,
+        if (preferences.adaptiveStrength) LineStartMarkerAppearance.BOOKMARK_DEFAULT_STRENGTH
+        else preferences.manualStrength) * LineStartMarkerAppearance.bookmarkProgressFactor(bookmark.rereadProgress)
 
     private fun clearDynamic(now: Double, reason: String, out: MutableList<ReadingAidDecision>,
                              preserveFocus: Boolean = false) {

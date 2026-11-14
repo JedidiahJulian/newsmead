@@ -40,6 +40,22 @@ class ReadingAidBookmarkTraceTest {
         assertSame(JSONObject.NULL, action(null).bookmarkEvidenceJson())
     }
 
+    @Test fun rereadingKeepsTheDepartureSourceSeparateFromItsCompleteWitness() {
+        val visits = listOf(0, 3, 0, 1, 2).mapIndexed { i, line ->
+            ReadingAidContinuationEvidence("visit:$i", 1, line,
+                i * 200.0, i * 200.0 + 150, i * 200.0 + 150)
+        }
+        val r = ReadingAidRereadEvidence("reread", visits, 0, 3, 950.0)
+        val e = ReadingAidBookmarkEvidence(source, "supported_broad_rereading",
+            visits[2].firstCaptureMs, visits[2].lastCaptureMs, 950.0, 0,
+            departureSupport = visits[2], reread = r)
+        val json = action(e).bookmarkEvidenceJson() as JSONObject
+        assertEquals(3, json.getJSONObject("source").getInt("line"))
+        assertEquals(0, json.getJSONObject("departure_support").getInt("line"))
+        assertEquals(5, json.getJSONObject("reread").getJSONArray("visits").length())
+        assertEquals("reread", json.getJSONObject("reread").getString("evidence_id"))
+    }
+
     @Test fun unavailableDepartureSerializesExplicitNullCaptureAndDeliveryBasis() {
         val json = action(ReadingAidBookmarkEvidence(source, "sustained_gaze_unavailable",
             null, null, 750.0, 2, departureTimeBasis = "delivery_elapsed_time",

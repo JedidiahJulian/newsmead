@@ -1,6 +1,7 @@
 package com.newsmead.gaze.aid.demo
 
 import com.newsmead.gaze.aid.ReadingAidType
+import com.newsmead.gaze.aid.LineStartMarkerAppearance
 
 /** Presentation settings only: no observations, detector events, or policy decisions. */
 object ReadingAidDemoPlan {
@@ -18,7 +19,7 @@ object ReadingAidDemoPlan {
     val stages = listOf(
         Stage(null, 0.0),
         Stage(ReadingAidType.CURRENT_LINE, 0.25),
-        Stage(ReadingAidType.READING_BOOKMARK, 1.0),
+        Stage(ReadingAidType.READING_BOOKMARK, LineStartMarkerAppearance.BOOKMARK_DEFAULT_STRENGTH),
         Stage(ReadingAidType.WORD_DEFINITION, 1.0),
         Stage(ReadingAidType.FOCUS_REGION, 0.5),
         Stage(ReadingAidType.FOCUS_REGION, 1.0),

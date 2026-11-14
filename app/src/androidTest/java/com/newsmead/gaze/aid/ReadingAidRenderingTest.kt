@@ -412,6 +412,7 @@ class ReadingAidRenderingTest {
             val marker = action(SystemClock.elapsedRealtimeNanos() / 1e6 + 5000).copy(
                 aidType = ReadingAidType.READING_BOOKMARK,
                 aidFormId = LineStartMarkerAppearance.BOOKMARK_FORM_ID,
+                strength = LineStartMarkerAppearance.BOOKMARK_DEFAULT_STRENGTH,
                 magnificationScale = null,
             )
             val receipts = mutableListOf<Pair<Boolean, String>>()
@@ -421,18 +422,32 @@ class ReadingAidRenderingTest {
             try {
                 overlay.draw(Canvas(bitmap))
                 var lastPaintedX = -1
+                var defaultAlpha = 0
                 for (y in 0 until height) for (x in 0 until width) {
                     if (android.graphics.Color.alpha(bitmap.getPixel(x, y)) != 0) lastPaintedX = maxOf(lastPaintedX, x)
+                    defaultAlpha = maxOf(defaultAlpha, android.graphics.Color.alpha(bitmap.getPixel(x, y)))
                 }
                 assertTrue("The marker must actually draw", lastPaintedX >= 0)
                 assertTrue("Marker pixels must clear the first letter", lastPaintedX < source.totalPaddingLeft - 3 * density)
                 assertTrue(receipts.contains(true to "canvas_draw_proxy"))
                 assertEquals("example article line", source.text.toString())
+                assertEquals(191, defaultAlpha)
                 val alternate = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                 try {
                     overlay.setActions(source, geometry, 0, listOf(marker.copy(id = "low_strength", strength = 0.1)))
                     overlay.draw(Canvas(alternate))
-                    assertTrue("Marker appearance must be independent of strength", bitmap.sameAs(alternate))
+                    var reducedAlpha = 0
+                    for (y in 0 until height) for (x in 0 until width)
+                        reducedAlpha = maxOf(reducedAlpha, android.graphics.Color.alpha(alternate.getPixel(x, y)))
+                    assertEquals(25, reducedAlpha)
+                    assertFalse("Bookmark opacity must follow strength", bitmap.sameAs(alternate))
+                    val previewDir = java.io.File(context.cacheDir, "bookmark-render-check").apply { mkdirs() }
+                    java.io.File(previewDir, "bookmark-default.png").outputStream().use {
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                    java.io.File(previewDir, "bookmark-low.png").outputStream().use {
+                        alternate.compress(Bitmap.CompressFormat.PNG, 100, it)
+                    }
                 } finally { alternate.recycle() }
             } finally { bitmap.recycle() }
         }

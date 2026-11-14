@@ -35,7 +35,7 @@ class SmoothedReadingAidRuntimeTest {
                     assertEquals(3, settings.getInt("focus_interruption_min_episodes"))
                     assertEquals(30000.0, settings.getDouble("focus_interruption_window_ms"), 0.0)
                     assertEquals(0.85, settings.getDouble("focus_max_surrounding_opacity"), 0.0)
-                    assertEquals(16, configuration.getInt("policy_version"))
+                    assertEquals(17, configuration.getInt("policy_version"))
                     assertEquals(3, settings.getJSONArray("focus_font_rules").length())
                 }
             } finally { runtime.close("font-settings-fixture") }

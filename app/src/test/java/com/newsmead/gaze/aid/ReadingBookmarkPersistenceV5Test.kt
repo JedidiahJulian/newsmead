@@ -4,7 +4,7 @@ import com.newsmead.gaze.scanpath.*
 import org.junit.Assert.*
 import org.junit.Test
 
-/** Deterministic capture-clock settings checks, not human reading validation. */
+/** Historical timed comparison checks, not production persistence or human validation. */
 class ReadingBookmarkPersistenceV5Test {
     private val detector = ScanpathConfig()
     private val geometry = ScanpathGeometry("g", 100.0, 50.0,
@@ -13,7 +13,8 @@ class ReadingBookmarkPersistenceV5Test {
             it * 20.0, it * 20.0 + 20.0) }, ScanpathTextDirection.LTR)
     private fun policy(settings: ReadingBookmarkPersistenceConfig = ReadingBookmarkPersistenceConfig()) =
         // Seed persistence through the explicit legacy comparison route; live V5 disables it.
-        ReadingBookmarkPolicy(detector, settings.copy(allowLineJumpTrigger = true))
+        ReadingBookmarkPolicy(detector, settings.copy(useProgressPersistence = false, allowLineJumpTrigger = true,
+            minimumAnchorSupportMs = 0.0, minimumRecoverySupportMs = 0.0))
     private fun context(t: Double, line: Int? = 3, exclusion: String? = null) =
         ReadingAidContext(1, "g", 8, line, null, null, t, t, t,
             validLiveInput = exclusion == null, geometry = geometry,

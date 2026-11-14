@@ -12,6 +12,144 @@ protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
 
+**2026-11-14 owner-authorized progress bookmark implementation verified/installed:**
+Owner explicitly says implement the evidence-informed design and improve lookaway
+and backreading detection. Current ruleV6/formV3/runtime policy17 removes all current
+time expiry and same/earlier-line residence release. Supported adjacent forward
+passage at/past saved row clears; a jump/stationary later row alone cannot. Progress
+dims75%→40% with the existing250ms visual transition (no reading deadline). Same cue
+id/onset retained; preference revisions immediately apply caps. Exact source must
+be fresh at departure start;1500ms eligibility arming latches through brief breaks.
+After supported forward advance, repeated exact support at least3rows earlier can
+show a backreading cue before the whole broad-reread witness finishes. This retains
+the unknown-error neighbor guard, not an accuracy guarantee. Coarse-only mismatches
+do not replace the saved reliable location; rejected samples still break histories.
+Independent review resolved normal-settling presence bridge, per-cue reset, later
+forward-pair release, mapper-rejection and presentation/exposure issues; no remaining
+findings.90focused software checks passed;1old timed-dismissal expectation updated
+and its rerun passed (91unique checks). Both APKs built. Data-preserving installs
+succeeded on both SM-G991B/SM-A566B.2camera-free native checks passed on SM-A566B:
+actual rendered article + motion-enabled live adapter exercises lookaway, blink,
+backreading, retained/dimmed cue and forward passage; separate pixel render check.
+Synthetic screenshot visually inspected. Evidence and final receipt:
+`output/bookmark-progress-2026-11-14/`. No live camera recording, focus change,
+calibration, frozen extractor/schema edit or commit. This supersedes rejected rules
+below; human/live accuracy remains unestablished by synthetic software checks.
+
+**2026-11-14 latest owner correction: research before bookmark redesign:**
+Owner rejects clearing after sustained reading anywhere: legitimate rereading must
+retain the marker until supported forward reading beyond its line. Then explicitly
+rejects5/10/30s hard expiry, proposes gradual dimming, and requests observed rereading
+duration papers before selecting parameters. No more policy/device changes this
+research turn. Evidence and limits: `docs/bookmark-rereading-duration-evidence-2026-11-14.md`.
+Cane2012 pre-interruption-region rereading5.90s(SD2.94)/highlight3.71(SD2.82);
+Moreno2021 paragraph lookbacks depend on instructions, one condition4.333s(SD7.041);
+Wang2018 sentence rereading young0.934s(SE0.108)/older1.619s(SE0.126).
+These are different aggregates, not episode maxima/percentiles. None validates a
+10s cutoff or fade rate. EyeBookmark2015 measures resumption lag, not total rereading.
+Proposed direction: separate prominence from retained location; dim without deleting
+solely for elapsed time, clear on supported forward progression past marker. Fade
+curve/minimum opacity remain engineering choices, not validated outcomes.
+IMPORTANT installed state: ruleV5 build from`output/bookmark-transient-2026-11-14/`
+passed49focused tests and was installed on BOTH phones before owner correction;
+it still contains the rejected3s-anywhere/5s-return/30s-global rules.10s proposal was
+never coded/installed. New forward-only removal/dimming/no-expiry are NOT implemented.
+Live activation failure remains unresolved; no diagnostic recording requested now.
+
+**Historical rejected ruleV5 persistence correction:**
+Owner reports no live bookmark while Replay works, offers then explicitly declines
+a diagnostic recording, and asks to focus only on distracting bookmark persistence.
+Read-only settings check: both phones AUTO/bookmark enabled/adaptive true/max1.0,
+auto-scroll off. No existing exported aid trace. Live wiring forwards missing input;
+its blink/motion/geometry gates differ from synthetic Replay. Live activation cause
+is unestablished; no recording started and no focus-aid work authorized this turn.
+Current ruleV5 allows3s coherent reading anywhere to release the bookmark, including
+earlier rereading, and imposes5s elapsed from first fresh eligible article return
+(immediate on in-article reread activation). Noise/duplicates cannot extend it;
+away time before return is excluded,30s overall cap retained.75% opacity unchanged.
+Independent review caught/resolved a leftover frontier route hold; boundary test
+added, no remaining findings. Focused timing checks/build in progress at
+`output/bookmark-transient-2026-11-14/`. This supersedes earlier-line retention below.
+
+**2026-11-14 bookmark appearance increased to75%:**
+Owner rejects47% opacity and requests60% or75%; selected75%. Current default strength
+is0.75 and current bookmark opacity now maps directly to255-alpha (191/255default),
+with manual/cap controls retained. Legacy cue240-alpha mapping stays separate.
+No trigger, recovery or escalation change. Demo uses the shared default. Appearance,
+current-profile policy/replay and demo expectations updated. Build and51focused
+software checks pass;2pixel-opacity/demo checks pass per phone. Updated app is
+installed on both phones. Direct A56 Replay shows the stronger marker; automated
+S21 Replay selection was blocked while its screen slept. Owner explicitly says
+testing is excessive for opacity-only edits; stopped further device checks. Future
+minor appearance edits should use a build/one targeted appearance check, scaled to
+risk. Evidence at `output/bookmark-opacity-75-2026-11-14/`.
+This owner-selected appearance supersedes earlier50%strength/47%opacity references.
+
+**2026-11-14 missing bookmark / reading-speed follow-up verified:**
+Owner reports no bookmark in actual Replay and raises short normal line visits.
+Reproduced missing bookmark on SM-G991B real AUTO Replay screen:250ms source
+script cannot meet1500ms maturity. Prior positive Replay tests selected historical
+V4 while Activity usesV5, so earlier supplied-input native tests missed this path.
+Current ruleV4 separates fresh eligible mapped article-presence timing across rows
+from precise stabilized location support (required for source/release). Arming1500ms;
+recovery3000ms same/next-row presence. This is not attentive-reading measurement.
+Missing/rejected/stale/gapped/layout boundaries break runs; duplicates earn no time;
+aged UI ticks preserve established departure readiness without adding credit.
+Precise stale-row reuse is blocked. Current scripts provide2000ms initial/4000ms
+return and a new four450ms-row example. Default strength/formV2 unchanged.
+Independent read-only review found no actionable issue;336focused JVM tests in35
+suites pass. Both debug APKs built;29camera-free native tests pass per SM-G991B
+and SM-A566B, including4real AUTO Replay Activity cases with production mapper,
+chosen/drawn receipts, currentV5/ruleV4 traces, recovery clears and active full-screen
+screenshots. Visually inspected short-visit bookmark on both phones and broad
+rereading on SM-G991B. First native run had1screenshot-observation assertion failure:
+status label reported focus when both aids active; read-only active-controller
+observation fixed the test (production behavior unchanged), rerun29/29perphone.
+Both calibrations and13existing study manifests hash-identical; app-ops show no
+new camera access. No natural-reading capture/calibration performed. Evidence
+`output/bookmark-replay-fix-2026-11-14/`; updated rationale
+`docs/bookmark-rereading-and-recovery-2026-11-14.md`. This follow-up supersedes the
+initial support-tail arming/recovery statement below.
+
+**2026-11-14 bookmark rereading/recovery revision implemented:**
+Owner explicitly approved applying the backward-rereading return-point rule,
+confirmed the reported early/quick-clearing behavior was AUTO, clarified strength
+meant the bookmark, and authorized testing on both connected phones. Source found
+150ms-supported startup anchors without maturity, visibility time consumed while
+away, and fixed1.0 strength/240alpha ignoring strength controls. Added1500ms fresh
+same/next-row arming,3000ms fresh recovery before dismissal, a complete trusted
+broad-rereading witness preserving frontier B, and earlier-reread retention.
+Current bookmark formV2/ruleV3 defaults requested0.5/alpha120(about47%) and honors
+manual/cap settings; legacyV1 and next-line cue appearance remain historical.
+Focused independent review caught/resolved trusted-history loss during normal
+row settling; no remaining findings. Offline builds and328JVM/replay tests pass;
+25camera-free runtime/render/demo tests pass on each SM-G991B and SM-A566B.
+Data-preserving installs succeeded. Both calibration files and13recording
+manifests unchanged; camera app-ops show no new access. No live capture/calibration
+or natural-reading validity claim. Evidence `output/bookmark-update-2026-11-14/`;
+details `docs/bookmark-rereading-and-recovery-2026-11-14.md`. Thresholds remain
+pilot settings. Older proposal/audit statements below are historical where
+superseded by this explicitly authorized implementation.
+
+**2026-11-14 visual-aid trigger defense audit:**
+Owner supplied the current38-slide deck, now `PPT/StabiliRead_THS_ST2_Demo.pptx`,
+and asks for system-design/implementation justifications. Source-linked defense
+notes are `PPT/Visual_Aid_Trigger_Defense_2026-11-14.md`. Current slides29–32
+already distinguish aid evidence and pilot settings. Add GazePrompt2024 as direct
+line-assistance/related word-trigger precedent: line-switch time p=.014; maximum
+word time/error effects nonsignificant(p=.86/.24). Its adjustable fixation rules
+do not validate our1000ms residence rule. Bookmark studies support recovery cues;
+rereading studies motivate focus candidate detection without validating dimming,
+three losses/30s or50/100% strength. AUTO and ON/preview evidence must stay distinct.
+Checked current V5 source and primary papers; no app, PPT, thresholds, device or
+participant-protocol changes. Prichard/Atkins evidence was publisher-abstract-only.
+Follow-up asks about backward-movement bookmark improvement: the same defense
+note records a proposal-only departure-point marker during supported rereading.
+GazePrompt handles revisited lines after stable fixation evidence; EyeBookmark
+tests imposed interruptions, not this extension. Folk/Eskenazi2018 distinguishes
+regression causes; Schotter2014 supports preserving reread access. No automatic
+line-jump trigger was re-enabled and no implementation/threshold was approved.
+
 **Latest November 14 verification: functional checks are NOT performance acceptance.**
 CPU2-default checkpoint committed as32682a6 on feature/optimization-1 (not pushed
 by the agent). Owner requested quick tests on both phones, then correctly rejected
@@ -3520,3 +3658,9 @@ Task context checked during setup (retrieve only if a specific ambiguity remains
 
 At setup, existing uncommitted pilot/analyzer edits were present. Preserve them;
 this agent-framework task does not assess or adopt those edits as its own.
+
+
+Owner wording clarification after implementation: “backreading” means revisiting
+text before the saved frontier; advancement beyond that frontier removes the cue.
+“Retains beyond30s” describes no automatic expiry during an artificial retention
+fixture, never a mandatory30s display/hold. Both phones have ruleV6.

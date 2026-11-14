@@ -91,7 +91,13 @@ data class ReadingAidBookmarkEvidence(
     val departureSupport: ReadingAidContinuationEvidence? = null,
     val departureTimeBasis: String = "capture",
     val departureFirstDeliveryMs: Double? = null,
-    val departureLastDeliveryMs: Double? = null
+    val departureLastDeliveryMs: Double? = null,
+    /** A supported rereading witness, distinct from interruption/lost-input evidence. */
+    val reread: ReadingAidRereadEvidence? = null,
+    /** Presentation progress, not a probability or elapsed-time reading estimate. */
+    val presentationRereadProgress: Double = 0.0,
+    /** Reader preference changes reset opacity interpolation without inventing a new cue. */
+    val presentationRevision: Int = 0
 )
 
 /** Separate source/landing support bounds; candidate IDs do not imply finalized fixations. */

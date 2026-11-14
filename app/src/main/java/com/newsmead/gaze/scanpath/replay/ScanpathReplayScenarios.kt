@@ -30,6 +30,10 @@ object ScanpathReplayScenarios {
             setOf("P13"), setOf("CURRENT_LINE", "READING_BOOKMARK")),
         ReplayScenario("bookmark_tracking_loss", "Bookmark when tracking disappears", "Stable reading line, no-face callbacks with missing coordinates for 900 ms, then return to the saved line.",
             setOf("P13"), setOf("CURRENT_LINE", "READING_BOOKMARK")),
+        ReplayScenario("bookmark_fast_reading", "Bookmark after short line visits", "Four forward line visits of 450 ms each, then looking away. Exercises article-presence arming without a long hold on one line.",
+            setOf("P13"), setOf("CURRENT_LINE", "READING_BOOKMARK")),
+        ReplayScenario("bookmark_backreading", "Bookmark during backward reading", "Forward reading, a supported return to an earlier line, then rereading through and past the saved frontier. The bookmark dims with progress and clears after forward passage.",
+            setOf("P08"), setOf("CURRENT_LINE", "READING_BOOKMARK")),
         ReplayScenario("repeated_interruptions", "Repeated tracking interruptions", "Four distinct no-face gaps with missing coordinates, each followed by supported reading on the saved line; Controls select focus.",
             setOf("P13"), setOf("CURRENT_LINE", "READING_BOOKMARK", "FOCUS_REGION")),
         ReplayScenario("brief_interruptions", "Brief tracking interruptions", "Three no-face gaps shorter than 500 ms, each followed by fresh supported reading on the same line.",
@@ -38,8 +42,8 @@ object ScanpathReplayScenarios {
             setOf("P13"), setOf("CURRENT_LINE", "FOCUS_REGION")),
         ReplayScenario("line_alternation", "Supported line alternation", "Four supported A–B–A–B visits over more than two seconds, ending during the ongoing fourth visit; Controls select focus.",
             setOf("P08"), setOf("CURRENT_LINE", "FOCUS_REGION")),
-        ReplayScenario("broad_reread", "Broad passage rereading", "One normal forward passage, a broad return, and two adjacent forward rereading steps within 15 seconds. No difficulty diagnosis.",
-            setOf("P08"), setOf("CURRENT_LINE", "FOCUS_REGION")),
+        ReplayScenario("broad_reread", "Broad passage rereading: focus and bookmark", "One normal forward passage, a broad return, and two forward rereading steps. Preserves the departure line with a bookmark; focus is independently selectable. No difficulty diagnosis.",
+            setOf("P08"), setOf("CURRENT_LINE", "FOCUS_REGION", "READING_BOOKMARK")),
         ReplayScenario("v5_line_alternation", "Separated line alternation (current)", "Three independent supported A-B-A-B sequences cover current font tiers; anchors are at least three physical rows apart. Requires four visible rows. No difficulty diagnosis.",
             setOf("P08"), setOf("CURRENT_LINE", "FOCUS_REGION")),
         ReplayScenario("v5_adjacent_alternation", "Adjacent line alternation (current negative)", "Three supported adjacent A-B-A-B sequences cover current font tiers; overlapping uncertainty bands must withhold current focus.",
@@ -174,20 +178,26 @@ object ScanpathReplayScenarios {
                 } else if (id == "bookmark_tracking_loss") {
                     val source = visibleRows.values.firstOrNull()?.firstOrNull()
                         ?: impossible("need one fully visible source line")
-                    hold(center(source))
+                    hold(center(source), 2000)
                     for (dt in 0..900 step 50)
                         out.add(ReplayPoint(time + dt, null, null, false, "no_face"))
                     time += 950
-                    hold(center(source), 350)
+                    hold(center(source), 1000)
+                    val next = visibleRows[source.line + 1]?.firstOrNull()
+                        ?: impossible("need a visible following line for bookmark passage")
+                    hold(center(next), 600)
                 } else if (id == "bookmark_lookaway") {
                     val source = visibleRows.values.firstOrNull()?.firstOrNull()
                         ?: impossible("need one fully visible source line")
-                    hold(center(source))
+                    hold(center(source), 2000)
                     val outside = (v.left + v.right) / 2 to v.top - max(2.0, geometry.lineHeightPx)
                     for (dt in 0..650 step 50)
                         out.add(ReplayPoint(time + dt, outside.first, outside.second, false))
                     time += 700
-                    hold(center(source), 350)
+                    hold(center(source), 1000)
+                    val next = visibleRows[source.line + 1]?.firstOrNull()
+                        ?: impossible("need a visible following line for bookmark passage")
+                    hold(center(next), 600)
                 } else {
                     val pair = visibleRows.keys.firstNotNullOfOrNull { source ->
                         val destination = visibleRows.keys.firstOrNull {
@@ -227,15 +237,30 @@ object ScanpathReplayScenarios {
                 }
                 hold(center(path.first), 350)
             }
-            "broad_reread" -> {
+            "bookmark_fast_reading", "bookmark_backreading", "broad_reread" -> {
                 val rows = usable.groupBy { it.line }.filter { (line, _) ->
                     val row = geometry.lines[line]
                     geometry.textOriginY + row.top >= v.top && geometry.textOriginY + row.bottom <= v.bottom
                 }.toSortedMap()
-                val group = rows.keys.toList().windowed(4).firstOrNull { it.last() - it.first() == 3 }
+                val required = if (id == "broad_reread") 4 else 5
+                val group = rows.keys.toList().windowed(required).firstOrNull { it.last() - it.first() == required - 1 }
                     ?: impossible("need four consecutive fully visible rows for broad rereading")
-                listOf(group[0], group[1], group[2], group[3], group[0], group[1], group[2]).forEach {
-                    hold(center(rows.getValue(it).first()), 600)
+                if (id == "bookmark_fast_reading") {
+                    group.take(4).forEach { hold(center(rows.getValue(it).first()), 450) }
+                    val outside = (v.left + v.right) / 2 to v.top - max(2.0, geometry.lineHeightPx)
+                    for (dt in 0..650 step 50)
+                        out.add(ReplayPoint(time + dt, outside.first, outside.second, false))
+                    time += 700
+                    hold(center(rows.getValue(group[3]).first()), 1000)
+                    hold(center(rows.getValue(group[4]).first()), 600)
+                } else if (id == "bookmark_backreading") {
+                    listOf(group[0], group[1], group[2], group[3], group[0], group[1], group[2], group[3], group[4]).forEach {
+                        hold(center(rows.getValue(it).first()), 600)
+                    }
+                } else {
+                    listOf(group[0], group[1], group[2], group[3], group[0], group[1], group[2]).forEach {
+                        hold(center(rows.getValue(it).first()), 600)
+                    }
                 }
             }
             "line_alternation", "v5_line_alternation", "v5_adjacent_alternation" -> {

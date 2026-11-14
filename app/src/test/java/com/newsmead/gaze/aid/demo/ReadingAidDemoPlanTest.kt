@@ -10,7 +10,7 @@ class ReadingAidDemoPlanTest {
         assertEquals(listOf(null, ReadingAidType.CURRENT_LINE, ReadingAidType.READING_BOOKMARK,
             ReadingAidType.WORD_DEFINITION,
             ReadingAidType.FOCUS_REGION, ReadingAidType.FOCUS_REGION), stages.map { it.type })
-        assertEquals(listOf(0.0, 0.25, 1.0, 1.0, 0.5, 1.0), stages.map { it.strength })
+        assertEquals(listOf(0.0, 0.25, 0.75, 1.0, 0.5, 1.0), stages.map { it.strength })
         assertEquals(4000L, ReadingAidDemoPlan.STAGE_MS)
     }
 

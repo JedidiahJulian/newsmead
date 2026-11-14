@@ -36,6 +36,7 @@ class ReadingAidOverlayView(
     private val presentationClockMs: () -> Double = { SystemClock.elapsedRealtimeNanos() / 1e6 },
 ) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val bookmarkOpacity = ReadingBookmarkOpacityMotion()
     private val visible = Rect()
     private val focusVisible = Rect()
     private val origin = IntArray(2)
@@ -124,6 +125,8 @@ class ReadingAidOverlayView(
             return
         }
         val now = presentationClockMs()
+        if (body !== textView || generation != epoch || geometry?.snapshotId != snapshot?.snapshotId ||
+            value.none { it.aidType == ReadingAidType.READING_BOOKMARK }) bookmarkOpacity.clear()
         val nextShape = shape(textView)
         val before = geometry
         val translationCompatible = body === textView && generation == epoch &&
@@ -233,7 +236,15 @@ class ReadingAidOverlayView(
                     receipt(action, false, "guide_background_unavailable", now); continue
                 } else animateGuide(action, view, now)
                 ReadingAidType.NEXT_LINE_START, ReadingAidType.READING_BOOKMARK -> {
-                    paint.color = Color.argb(LineStartMarkerAppearance.ALPHA, 44, 128, 220)
+                    val markerAlpha = if (action.aidType == ReadingAidType.READING_BOOKMARK &&
+                        action.aidFormId == LineStartMarkerAppearance.BOOKMARK_FORM_ID)
+                        LineStartMarkerAppearance.bookmarkAlpha(bookmarkOpacity.move(
+                            "${action.id}:${action.bookmarkEvidence?.presentationRevision ?: 0}", action.strength, now))
+                        else LineStartMarkerAppearance.ALPHA
+                    if (markerAlpha == 0) {
+                        receipt(action, false, "bookmark_alpha_zero", now); continue
+                    }
+                    paint.color = Color.argb(markerAlpha, 44, 128, 220)
                     val textStart = (g.textOriginX + row.left - origin[0]).toFloat()
                     val markerWidth = dp(LineStartMarkerAppearance.WIDTH_DP)
                     val start = if (lineStartMarkerInGutter) textStart - dp(4f) - markerWidth else textStart
@@ -245,6 +256,7 @@ class ReadingAidOverlayView(
                     canvas.drawRoundRect(RectF(start, top.toFloat() - origin[1],
                         (start + markerWidth).coerceAtMost(right),
                         bottom.toFloat() - origin[1]), dp(2f), dp(2f), paint)
+                    if (bookmarkOpacity.isAnimating(now)) postInvalidateOnAnimation()
                 }
                 ReadingAidType.FOCUS_REGION -> {
                     val v4 = action.aidFormId == "CONTEXT_FOCUS_REGION_V4"

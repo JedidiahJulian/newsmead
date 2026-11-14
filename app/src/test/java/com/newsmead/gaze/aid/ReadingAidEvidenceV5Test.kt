@@ -34,6 +34,71 @@ class ReadingAidEvidenceV5Test {
     }
     private fun Session.action(type: ReadingAidType) = policy.activeActions().firstOrNull { it.aidType == type }
 
+    @Test fun completeBroadRereadingBookmarksPreciseFrontierWithFocusDisabled() {
+        for (dt in listOf(50, 100)) {
+        val s = Session(ReadingAidPolicy(ReadingAidPolicyConfig.evidenceAlignedPrototype(),
+            ReaderAidPreferences(focusRegion = false)))
+        s.hold(4, 2000, dt)
+        listOf(5, 6, 7, 4, 5).forEach { s.hold(it, dt = dt) }
+        val early = s.action(ReadingAidType.READING_BOOKMARK)!!
+        assertEquals("supported_backward_reading", early.bookmarkEvidence!!.departureReason)
+        s.hold(6, dt = dt)
+        val marker = s.action(ReadingAidType.READING_BOOKMARK)!!
+        assertEquals(7, marker.anchor.line)
+        assertEquals("supported_backward_reading", marker.bookmarkEvidence!!.departureReason)
+        assertEquals(4, marker.bookmarkEvidence!!.departureSupport!!.line)
+        assertEquals(early.id, marker.id)
+        assertTrue(marker.strength in LineStartMarkerAppearance.BOOKMARK_DIMMED_STRENGTH.. .75)
+        assertNull(s.action(ReadingAidType.FOCUS_REGION))
+        s.hold(6, 3500, dt)
+        assertNotNull("Earlier rereading retains the saved frontier", s.action(ReadingAidType.READING_BOOKMARK))
+        s.hold(7, 600, dt)
+        assertEquals(LineStartMarkerAppearance.BOOKMARK_DIMMED_STRENGTH,
+            s.action(ReadingAidType.READING_BOOKMARK)!!.strength, .00001)
+        s.hold(8, 600, dt)
+        assertNull(s.action(ReadingAidType.READING_BOOKMARK))
+        }
+    }
+
+    @Test fun briefStartupSupportCannotArmBookmarkButEstablishedReadingCan() {
+        val startup = Session(); startup.hold(4, 400)
+        repeat(20) { startup.sample(4, reason = "no_face") }
+        assertNull(startup.action(ReadingAidType.READING_BOOKMARK))
+        val established = Session(); established.hold(4, 2000)
+        repeat(20) { established.sample(4, reason = "no_face") }
+        assertNotNull(established.action(ReadingAidType.READING_BOOKMARK))
+    }
+
+    @Test fun lookAwayAndSameRowResidenceRetainUntilForwardPassage() {
+        val s = Session(); s.hold(4, 2000)
+        repeat(100) { s.sample(4, reason = "no_face") }
+        val marker = s.action(ReadingAidType.READING_BOOKMARK)!!
+        s.hold(4, 2000)
+        assertEquals(marker.id, s.action(ReadingAidType.READING_BOOKMARK)!!.id)
+        s.hold(4, 1500)
+        assertNotNull(s.action(ReadingAidType.READING_BOOKMARK))
+        s.hold(5)
+        assertNull(s.action(ReadingAidType.READING_BOOKMARK))
+    }
+
+    @Test fun bookmarkStrengthTracksReaderCapsAndManualChangesWithoutLosingAnchor() {
+        val s = Session(); s.hold(4, 2000)
+        repeat(15) { s.sample(4, reason = "no_face") }
+        assertEquals(.75, s.action(ReadingAidType.READING_BOOKMARK)!!.strength, 0.0)
+        val initial = s.action(ReadingAidType.READING_BOOKMARK)!!
+        s.policy.updatePreferences(ReaderAidPreferences(maxStrength = .2), s.latest!!)
+        assertEquals(.2, s.action(ReadingAidType.READING_BOOKMARK)!!.strength, 0.0)
+        assertEquals(initial.id, s.action(ReadingAidType.READING_BOOKMARK)!!.id)
+        assertEquals(initial.onsetMs, s.action(ReadingAidType.READING_BOOKMARK)!!.onsetMs, 0.0)
+        assertEquals(1, s.action(ReadingAidType.READING_BOOKMARK)!!.bookmarkEvidence!!.presentationRevision)
+        s.policy.updatePreferences(ReaderAidPreferences(adaptiveStrength = false,
+            manualStrength = .75, maxStrength = .6), s.latest!!)
+        val marker = s.action(ReadingAidType.READING_BOOKMARK)!!
+        assertEquals(.6, marker.strength, 0.0)
+        assertEquals(4, marker.anchor.line)
+        assertEquals("sustained_gaze_unavailable", marker.bookmarkEvidence!!.departureReason)
+    }
+
     @Test fun ordinaryReadingGetsOneLineWithoutScanpathEventAndHasLossGrace() {
         val s = Session(); s.hold(5, 1800)
         val guide = s.action(ReadingAidType.CURRENT_LINE)!!
@@ -202,7 +267,7 @@ class ReadingAidEvidenceV5Test {
                 rawX = -1000.0, rawY = -1000.0, displayX = 40.0, displayY = line * 50.0 + 25))
             s.policy.onObservation(null, s.latest!!)
         }
-        repeat(4) { selected(4) }; repeat(4) { selected(7) }
+        repeat(4) { selected(4) }; repeat(12) { selected(7) }
         assertNull(s.action(ReadingAidType.READING_BOOKMARK))
         repeat(4) {
             s.time += 200
@@ -212,7 +277,9 @@ class ReadingAidEvidenceV5Test {
         }
         assertNotNull(s.action(ReadingAidType.READING_BOOKMARK))
         assertEquals(7, s.action(ReadingAidType.READING_BOOKMARK)!!.anchor.line)
-        repeat(12) { selected(7) }
+        repeat(18) { selected(7) }
+        assertNotNull(s.action(ReadingAidType.READING_BOOKMARK))
+        repeat(4) { selected(8) }
         assertNull(s.action(ReadingAidType.READING_BOOKMARK))
     }
 
@@ -223,7 +290,7 @@ class ReadingAidEvidenceV5Test {
     }
 
     @Test fun outsideDepartureNeeds500msAndFreezesTheLastSupportedLine() {
-        val s = Session(); s.hold(4, 800)
+        val s = Session(); s.hold(4, 2000)
         fun outside() {
             s.time += 50
             val c = context(s.time, 4)
@@ -260,7 +327,7 @@ class ReadingAidEvidenceV5Test {
     }
 
     @Test fun rejectedMapperObservationsCannotPayDownBookmarkReturnTime() {
-        val s = Session(); s.hold(4, 800)
+        val s = Session(); s.hold(4, 2000)
         repeat(12) { s.sample(4, reason = "no_face") }
         assertNotNull(s.action(ReadingAidType.READING_BOOKMARK))
         repeat(60) { i ->
@@ -271,7 +338,9 @@ class ReadingAidEvidenceV5Test {
             s.policy.onObservation(null, s.latest!!)
         }
         assertNotNull("Alternating rejected samples cannot count as 1s accepted return", s.action(ReadingAidType.READING_BOOKMARK))
-        s.hold(4, 1200)
+        s.hold(4, 3200)
+        assertNotNull(s.action(ReadingAidType.READING_BOOKMARK))
+        s.hold(5)
         assertNull(s.action(ReadingAidType.READING_BOOKMARK))
     }
 

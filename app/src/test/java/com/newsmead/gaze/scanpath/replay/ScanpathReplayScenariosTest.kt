@@ -17,7 +17,7 @@ class ScanpathReplayScenariosTest {
             ScanpathRect(90.0 + i % 4 * 100, 120.0 + line * 40,
                 170.0 + i % 4 * 100, 140.0 + line * 40))
     }
-    private val currentFourRowScenarioIds = setOf("broad_reread", "v5_line_alternation")
+    private val currentFourRowScenarioIds = setOf("broad_reread", "v5_line_alternation", "bookmark_fast_reading", "bookmark_backreading")
     private val currentScenarioIds = currentFourRowScenarioIds + "v5_adjacent_alternation"
     private val fourRowGeometry = geometry.copy(visibleRectScreen = geometry.visibleRectScreen.copy(bottom = 360.0),
         lines = (0..5).map { ScanpathLine(it * 20, it * 20 + 19, 0.0, 400.0,
@@ -32,20 +32,22 @@ class ScanpathReplayScenariosTest {
         val candidates = mutableListOf<ScanpathCandidateEvidence?>()
         val samples = mutableListOf<ScanpathSample>()
         lateinit var engine: ScanpathEngine
-        val actions get() = decisions.filter { it.status == ReadingAidDecisionStatus.CHOSEN }.mapNotNull { it.action }
+        val actions get() = decisions.filter { it.status == ReadingAidDecisionStatus.CHOSEN &&
+            it.reason != "bookmark_progress_presentation_updated" }.mapNotNull { it.action }
     }
     private fun run(id: String, focus: Boolean = true, scriptedPoints: List<ReplayPoint>? = null,
                     continuationStrengthProbe: Boolean = false,
                     fixtureGeometry: ScanpathGeometry = geometry,
                     fixtureWords: List<ReplayWord> = words,
                     focusTextSizeDp: Double = 22.0,
+                    forceCurrentProfile: Boolean = false,
                     currentBookmarkProfile: Boolean = id.startsWith("bookmark_") ||
                         id in setOf("repeated_interruptions", "brief_interruptions",
                             "interruption_place_search", "line_alternation")): Result {
         val geometry = fixtureGeometry
         val words = fixtureWords
         val result = Result()
-        val profile = if (id in currentScenarioIds) ReadingAidPolicyConfig.evidenceAlignedPrototype()
+        val profile = if (forceCurrentProfile || id in currentScenarioIds) ReadingAidPolicyConfig.evidenceAlignedPrototype()
             else if (currentBookmarkProfile) ReadingAidPolicyConfig.definitionPrototype()
             else ReadingAidPolicyConfig.experimentalPrototype()
         val policy = ReadingAidPolicy(profile, ReaderAidPreferences(focusRegion = focus,
@@ -199,7 +201,8 @@ class ScanpathReplayScenariosTest {
         val movedWords = fourRowWords.map { it.copy(bounds = translate(it.bounds)) }
         currentScenarioIds.forEach { id ->
             val original = ScanpathReplayScenarios.build(id, fourRowGeometry, fourRowWords)
-            assertTrue(original.all { it.eligible && it.sourceReason == null })
+            assertTrue(original.all { it.sourceReason == null })
+            if (id != "bookmark_fast_reading") assertTrue(original.all { it.eligible })
             assertEquals(original.map { it.copy(x = it.x?.plus(dx), y = it.y?.plus(dy)) },
                 ScanpathReplayScenarios.build(id, moved, movedWords))
         }
@@ -212,7 +215,7 @@ class ScanpathReplayScenariosTest {
         assertTrue(result.actions.none { it.aidType == ReadingAidType.NEXT_LINE_START })
     }
 
-    @Test fun currentBookmarkScenariosRememberObservedSourceAndClearOnReturn() {
+    @Test fun historicalV4BookmarkScenariosRememberObservedSourceAndClearOnReturn() {
         listOf("bookmark_return" to 1, "bookmark_skip" to 0, "bookmark_lookaway" to 0,
             "bookmark_tracking_loss" to 0).forEach { (id, source) ->
             val result = run(id, continuationStrengthProbe = true)
@@ -227,6 +230,41 @@ class ScanpathReplayScenariosTest {
                 it.action?.id == bookmark.id })
             assertTrue(result.active.last().none { it.aidType == ReadingAidType.READING_BOOKMARK })
             assertTrue(result.actions.none { it.aidType == ReadingAidType.NEXT_LINE_START })
+        }
+    }
+
+    @Test fun currentV5DepartureScenariosArmAcrossShortVisitsAndClearAfterRecovery() {
+        for (id in listOf("bookmark_lookaway", "bookmark_tracking_loss", "bookmark_fast_reading", "bookmark_backreading")) {
+            val result = run(id, forceCurrentProfile = true,
+                fixtureGeometry = fourRowGeometry, fixtureWords = fourRowWords)
+            val bookmark = result.actions.single { it.aidType == ReadingAidType.READING_BOOKMARK }
+            assertEquals(id, if (id in setOf("bookmark_fast_reading", "bookmark_backreading")) 3 else 0, bookmark.anchor.line)
+            assertEquals(id, "LAST_READ_LINE_BOOKMARK_V3", bookmark.aidFormId)
+            assertEquals(id, "A2_LAST_READ_LINE_BOOKMARK_V6", bookmark.ruleId)
+            assertEquals(id, 0.75, bookmark.strength, 0.0)
+            assertTrue(id, result.decisions.any { it.status == ReadingAidDecisionStatus.CLEARED &&
+                it.action?.id == bookmark.id })
+            assertTrue(id, result.active.last().none { it.aidType == ReadingAidType.READING_BOOKMARK })
+        }
+    }
+
+    @Test fun currentV5SingleBackwardOrForwardJumpDoesNotCreateBookmark() {
+        for (id in listOf("bookmark_return", "bookmark_skip", "return_sweep", "loss_recovery")) {
+            assertTrue(id, run(id, forceCurrentProfile = true).actions.none {
+                it.aidType == ReadingAidType.READING_BOOKMARK })
+        }
+    }
+
+    @Test fun currentBroadRereadingPreservesDepartureLineWhenFocusIsDisabled() {
+        for (focus in listOf(true, false)) {
+            val result = run("broad_reread", focus = focus,
+                fixtureGeometry = fourRowGeometry, fixtureWords = fourRowWords)
+            val bookmark = result.actions.single { it.aidType == ReadingAidType.READING_BOOKMARK }
+            assertEquals(3, bookmark.anchor.line)
+            assertEquals("supported_backward_reading", bookmark.bookmarkEvidence!!.departureReason)
+            assertNotNull(bookmark.bookmarkEvidence!!.departureSupport)
+            assertTrue(result.active.last().any { it.id == bookmark.id })
+            assertEquals(focus, result.actions.any { it.aidType == ReadingAidType.FOCUS_REGION })
         }
     }
 

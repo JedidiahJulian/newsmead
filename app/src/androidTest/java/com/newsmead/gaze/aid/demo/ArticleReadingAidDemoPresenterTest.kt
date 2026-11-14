@@ -110,15 +110,15 @@ class ArticleReadingAidDemoPresenterTest {
         assertNull(word())
     }
 
-    @Test fun bookmarkPreviewUsesLastReadingLineWithFixedAppearance() = fixture { _, presenter, _ ->
+    @Test fun bookmarkPreviewUsesLastReadingLineWithDefaultStrength() = fixture { _, presenter, _ ->
         presenter.start(); presenter.step(1)
         val source = presenter.activeAction!!.anchor.line
         presenter.step(1)
         val marker = presenter.activeAction!!
         assertEquals(ReadingAidType.READING_BOOKMARK, marker.aidType)
         assertEquals(source, marker.anchor.line)
-        assertEquals("LAST_READ_LINE_BOOKMARK_V1", marker.aidFormId)
-        assertEquals(1.0, marker.strength, 0.0)
+        assertEquals("LAST_READ_LINE_BOOKMARK_V3", marker.aidFormId)
+        assertEquals(0.75, marker.strength, 0.0)
         assertTrue(marker.eventIds.isEmpty())
         assertTrue(marker.evidenceIds.isEmpty())
     }

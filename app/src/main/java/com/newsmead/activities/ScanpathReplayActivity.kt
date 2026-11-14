@@ -222,8 +222,7 @@ class ScanpathReplayActivity : AppCompatActivity() {
                 log?.decision(d)
                 if (d.status == ReadingAidDecisionStatus.CHOSEN && d.action != null) {
                     chosenAids.add(d.action.aidType.name)
-                    lastChoice = if (d.action.aidType in listOf(com.newsmead.gaze.aid.ReadingAidType.NEXT_LINE_START,
-                            com.newsmead.gaze.aid.ReadingAidType.READING_BOOKMARK))
+                    lastChoice = if (d.action.aidType == ReadingAidType.NEXT_LINE_START)
                         "${d.action.aidType.name} fixed visibility" else "${d.action.aidType.name} ${(d.action.strength * 100).toInt()}%"
                 }
                 if (d.action?.aidType == ReadingAidType.FOCUS_REGION) {
