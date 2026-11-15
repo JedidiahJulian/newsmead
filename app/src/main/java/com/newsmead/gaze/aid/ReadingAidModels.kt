@@ -237,7 +237,7 @@ data class ReadingAidPolicyConfig(
         const val FOCUS_STRENGTH_STEP = 0.5
         fun evidenceAlignedPrototype() = ReadingAidPolicyConfig("EVIDENCE_ALIGNED_V5", "EXPERIMENTAL_EVIDENCE_ALIGNED_V5",
             true, wordAidType = ReadingAidType.WORD_DEFINITION, lineStartAidType = ReadingAidType.READING_BOOKMARK,
-            definitionMinObservedMs = 1000.0, evidenceAlignedV5 = true)
+            definitionMinObservedMs = 600.0, evidenceAlignedV5 = true)
         fun definitionPrototype() = ReadingAidPolicyConfig("DEFINITION_PROFILE_V4", "EXPERIMENTAL_DEFINITION_V4",
             true, wordAidType = ReadingAidType.WORD_DEFINITION, lineStartAidType = ReadingAidType.READING_BOOKMARK,
             focusContextRadiusLines = 2)

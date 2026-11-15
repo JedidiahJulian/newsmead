@@ -38,7 +38,7 @@ class ReadingAidPolicy(
         if (config.evidenceAlignedV5) ReadingBookmarkPersistenceConfig() else null)
     private val focus = ReadingFocusPolicy(config, supportDetector, onFocusEpisode)
     private val location = ReadingLocationSupport(rereadWindowMs = config.focusRereadWindowMs,
-        allowMappingOnlyWordResidence = true)
+        allowMappingOnlyWordResidence = true, wordResidenceMs = config.definitionMinObservedMs)
     private var guideSearchId: String? = null
     private var guideSearchUntil = Double.NEGATIVE_INFINITY
     private val guideDirection = ReadingGuideDirectionTracker()
@@ -782,7 +782,7 @@ class ReadingAidPolicy(
                 choose(ReadingAidType.WORD_DEFINITION, anchor(c, word.line, word.startUtf16, word.endUtf16),
                     1.0, word.firstCaptureMs, word.lastCaptureMs, word.evidenceAvailableMs,
                     emptyList(), listOf(value.evidenceId), "A5_FRESH_WORD_RESIDENCE_V5", listOf("H16"),
-                    "H16 word-gaze features predicted self-reported word knowledge in a small desktop L2 sample; 1000 ms, exact phone mapping and lookup benefit are unvalidated pilot choices.",
+                    "H16 word-gaze features predicted self-reported word knowledge in a small desktop L2 sample; ${config.definitionMinObservedMs.toInt()} ms, exact phone mapping and lookup benefit are unvalidated pilot choices.",
                     c, out, continuationEvidence = listOf(value), wordConfidence = word.confidenceProvenance)
             }
         }

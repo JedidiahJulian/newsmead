@@ -249,7 +249,7 @@ class ReadingLocationSupportTest {
         val offers = (0..15).map { h.update(context(it * 100.0, 4), wordBounds = bounds(4)).wordResidence }
             .filterNotNull()
         assertEquals(1, offers.size)
-        assertEquals(1000.0, offers.single().lastCaptureMs - offers.single().firstCaptureMs, 0.0)
+        assertEquals(ReadingLocationSupport.DEFAULT_WORD_RESIDENCE_MS, offers.single().lastCaptureMs - offers.single().firstCaptureMs, 0.0)
         assertEquals("mapping_only_unvalidated", offers.single().confidenceProvenance)
         h.update(context(1600.0, 4, "blink"), wordBounds = bounds(4))
         repeat(16) { assertNull(h.update(context(1700.0 + it * 100, 4), wordBounds = bounds(4)).wordResidence) }

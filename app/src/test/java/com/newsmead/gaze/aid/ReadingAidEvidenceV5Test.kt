@@ -130,7 +130,7 @@ class ReadingAidEvidenceV5Test {
     }
 
     @Test fun wordOfferNeedsFreshSupportedSecondAndDoesNotRepeatAfterExpiryOrLoss() {
-        val s = Session(); s.hold(5, 1100)
+        val s = Session(); s.hold(5, 700)
         assertNull(s.action(ReadingAidType.WORD_DEFINITION))
         repeat(20) { s.policy.onObservation(null, s.latest!!) }
         assertNull(s.action(ReadingAidType.WORD_DEFINITION))
@@ -138,7 +138,7 @@ class ReadingAidEvidenceV5Test {
         val offer = s.action(ReadingAidType.WORD_DEFINITION)!!
         assertEquals("CONTEXT_WORD_LOOKUP_OFFER_V1", offer.aidFormId)
         assertEquals("mapping_only_unvalidated", offer.wordConfidence)
-        assertTrue(offer.lastCaptureMs - offer.firstCaptureMs >= 1000.0)
+        assertTrue(offer.lastCaptureMs - offer.firstCaptureMs >= 600.0)
         s.hold(5, 2000)
         assertNull(s.action(ReadingAidType.WORD_DEFINITION))
         repeat(15) { s.sample(5, reason = "no_face") }

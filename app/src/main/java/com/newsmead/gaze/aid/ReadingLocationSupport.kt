@@ -56,10 +56,14 @@ class ReadingLocationSupport(
     private val minDwellMs: Double = 150.0,
     private val maxGapMs: Double = 250.0,
     private val rereadWindowMs: Double = 15_000.0,
-    private val allowMappingOnlyWordResidence: Boolean = false
+    private val allowMappingOnlyWordResidence: Boolean = false,
+    private val wordResidenceMs: Double = DEFAULT_WORD_RESIDENCE_MS
 ) {
+    companion object {
+        const val DEFAULT_WORD_RESIDENCE_MS = 600.0
+    }
     init {
-        require(listOf(minDwellMs, maxGapMs, rereadWindowMs).all { it.isFinite() && it > 0 })
+        require(listOf(minDwellMs, maxGapMs, rereadWindowMs, wordResidenceMs).all { it.isFinite() && it > 0 })
         require(minDwellMs >= 150.0 && maxGapMs <= 250.0)
     }
     private data class Point(val capture: Double, val y: Double)
@@ -271,7 +275,7 @@ class ReadingLocationSupport(
             word = mapped; wordFirst = t
             if (offeredWord != mapped) offeredWord = null
         }
-        if (t - wordFirst < 1000.0 || offeredWord == mapped) return null
+        if (t - wordFirst < wordResidenceMs || offeredWord == mapped) return null
         offeredWord = mapped
         return ReadingSupportedWordResidence(mapped.line, mapped.start, mapped.end, wordFirst, t, d,
             if (measuredInside) uncertainty!!.provenance else "mapping_only_unvalidated")
