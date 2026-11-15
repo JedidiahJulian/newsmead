@@ -18,6 +18,7 @@ class CameraFrames : AutoCloseable {
     private val matrix = Matrix()
     private val paint = Paint()
     private val canvas = Canvas()
+    private val bounds = RectF()
 
     fun copy(image: ImageProxy): Bitmap {
         val plane = image.planes[0]
@@ -26,7 +27,8 @@ class CameraFrames : AutoCloseable {
     }
 
     internal fun copyRgba(input: ByteBuffer, width: Int, height: Int, stride: Int, rotation: Int): Bitmap {
-        require(width > 0 && height > 0 && stride >= width * 4 && rotation in listOf(0,90,180,270))
+        require(width > 0 && height > 0 && stride >= width * 4 &&
+            (rotation == 0 || rotation == 90 || rotation == 180 || rotation == 270))
         if (row?.width != width || row?.height != height) {
             row?.recycle(); row = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         }
@@ -55,21 +57,23 @@ class CameraFrames : AutoCloseable {
             row!!.setPixels(pixels, 0, width, 0, 0, width, height)
         }
         matrix.reset(); matrix.postRotate(rotation.toFloat())
-        val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
+        bounds.set(0f, 0f, width.toFloat(), height.toFloat())
         matrix.mapRect(bounds)
         val w = bounds.width().toInt(); val h = bounds.height().toInt()
         if (upright == null || upright!!.isRecycled || upright!!.width != w || upright!!.height != h) {
             if (upright?.isRecycled == false) upright?.recycle()
             upright = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         }
-        canvas.setBitmap(upright!!)
+        canvas.setBitmap(upright)
         canvas.apply {
             save(); translate(-bounds.left, -bounds.top); concat(this@CameraFrames.matrix)
             clipRect(0, 0, width, height)
             drawBitmap(row!!, 0f, 0f, paint); restore()
         }
+        canvas.setBitmap(null)
         return upright!!
     }
+
     fun rgb(bitmap: Bitmap): RgbFrame {
         val count = bitmap.width * bitmap.height
         if (pixels.size != count) pixels = IntArray(count)
@@ -82,5 +86,10 @@ class CameraFrames : AutoCloseable {
         }
         return RgbFrame(bitmap.width, bitmap.height, rgb)
     }
-    override fun close() { canvas.setBitmap(null); pixels.fill(0); rgb.fill(0); rgba.fill(0); row?.recycle(); if (upright?.isRecycled == false) upright?.recycle(); row = null; upright = null }
+
+    override fun close() {
+        canvas.setBitmap(null); pixels.fill(0); rgb.fill(0); rgba.fill(0); row?.recycle()
+        if (upright?.isRecycled == false) upright?.recycle()
+        row = null; upright = null
+    }
 }

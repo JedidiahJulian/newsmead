@@ -528,6 +528,64 @@ internal class ReadingFocusPolicy(
             rereadWindowMs = config.focusRereadWindowMs)
     }
 
+    private var hasDiagnosticsSnapshot = false
+    private var diagReasonCode = -1
+    private var diagEpisodes = -1
+    private var diagAlternations = -1
+    private var diagQualifiedCount = -1
+    private var diagLastCreditedEnd = Double.NaN
+    private var diagRereadCount = -1
+    private var diagTextSizeDp = Double.NaN
+    private var diagTypographyId = ""
+    private var diagReturnSampleCount = -1
+    private var diagHasDemand = false
+    private var diagHasAnchor = false
+
+    fun updateDiagnosticsChanged(now: Double): Boolean {
+        val anchorValid = source != null && now - source!!.evidenceAvailableMs in 0.0..config.focusInterruptionWindowMs
+        val reasonCode = when {
+            hasDemand && !anchorValid -> 0
+            hasDemand && !displaySupported(now) -> 1
+            hasDemand -> 2
+            loss?.firstRecoveryDelivery != null -> 3
+            loss != null -> 4
+            else -> 5
+        }
+        val qualifiedCount = episodeDemand?.takeIf { episodeAlive(it, now) }?.qualified?.size ?: 0
+        var rereadCount = 0
+        for (i in rereads.indices) {
+            if (now - rereads[i].confirmedDeliveryMs in 0.0..config.focusRereadWindowMs) rereadCount++
+        }
+        val returnCount = presence?.count?.coerceAtMost(config.focusReturnMinSamples) ?: 0
+        val credited = if (lastCreditedEndCapture.isFinite()) lastCreditedEndCapture else Double.NaN
+        val unchanged = hasDiagnosticsSnapshot &&
+            diagReasonCode == reasonCode &&
+            diagEpisodes == episodes.size &&
+            diagAlternations == alternations.size &&
+            diagQualifiedCount == qualifiedCount &&
+            (diagLastCreditedEnd == credited || (diagLastCreditedEnd.isNaN() && credited.isNaN())) &&
+            diagRereadCount == rereadCount &&
+            diagTextSizeDp == textSizeDp &&
+            diagTypographyId == typography.id &&
+            diagReturnSampleCount == returnCount &&
+            diagHasDemand == hasDemand &&
+            diagHasAnchor == anchorValid
+        if (unchanged) return false
+        hasDiagnosticsSnapshot = true
+        diagReasonCode = reasonCode
+        diagEpisodes = episodes.size
+        diagAlternations = alternations.size
+        diagQualifiedCount = qualifiedCount
+        diagLastCreditedEnd = credited
+        diagRereadCount = rereadCount
+        diagTextSizeDp = textSizeDp
+        diagTypographyId = typography.id
+        diagReturnSampleCount = returnCount
+        diagHasDemand = hasDemand
+        diagHasAnchor = anchorValid
+        return true
+    }
+
     fun diagnostics(now: Double): Map<String, Any> = mapOf(
         "reason" to when {
             hasDemand && (source == null || now - source!!.evidenceAvailableMs !in 0.0..config.focusInterruptionWindowMs) -> "waiting_for_supported_anchor"

@@ -71,6 +71,9 @@ class ArticleReadingAidRuntime(
     private var context = ReadingAidContext(0, "", 0, null, null, null,
         elapsedMs(), null, null, false, focusTextSizeDp = renderedFontDp())
     private val guideResolver = ReadingGuideResolver()
+    private var cachedBodySource: CharSequence? = null
+    private var cachedBodyString: String = ""
+    private var cachedBodySha256: String = ""
     private val pulse = object : Runnable {
         override fun run() {
             if (closed) return
@@ -177,6 +180,7 @@ class ArticleReadingAidRuntime(
                 ?: if (preferences.mode == ReadingAidsMode.ON) firstVisibleLine(value) else null
         } else null
         val inputAllowed = if (compatibleScroll) !suspended && !consulting else context.focusInputAllowed
+        val cachedBody = bodyText()
         context = context.copy(generation = generation.toLong(), geometrySnapshotId = value?.snapshotId ?: "",
             lineCount = value?.lines?.size ?: 0, targetLine = retainedLine, targetWordStartUtf16 = null,
             targetWordEndUtf16 = null, nowMs = elapsedMs(), validLiveInput = false,
@@ -187,13 +191,13 @@ class ArticleReadingAidRuntime(
             bookmarkInputAllowed = if (compatibleScroll) inputAllowed else context.bookmarkInputAllowed,
             guideRange = if (compatibleScroll && retainedLine != null && preferences.lineGuide &&
                 preferences.guideStyle == ReadingGuideStyle.SENTENCE)
-                guideResolver.resolve(body.text.toString(), value, retainedLine) else null,
+                guideResolver.resolve(cachedBody, value, retainedLine) else null,
             focusInputAllowed = inputAllowed,
             focusTextSizeDp = renderedFontDp(),
             targetWordBounds = null)
         trace.record("geometry", context.nowMs, JSONObject().put("generation", generation)
             .put("geometry_snapshot_id", value?.snapshotId ?: JSONObject.NULL)
-            .put("body_sha256", sha256(body.text.toString())).put("line_count", value?.lines?.size ?: 0)
+            .put("body_sha256", bodySha256(cachedBody)).put("line_count", value?.lines?.size ?: 0)
             .put("text_size_px", body.textSize).put("line_height_px", body.lineHeight)
             .put("line_spacing_extra_px", body.lineSpacingExtra)
             .put("line_spacing_multiplier", body.lineSpacingMultiplier)
@@ -219,23 +223,19 @@ class ArticleReadingAidRuntime(
         val valid = !suspended && !consulting && matchingStream && matchingAnalysis && !eyeExcluded && selectedPointValid &&
             sample.eligible && ordered && delivery != null && delivery.isFinite() &&
             delivery >= capture!! && delivery <= now && sample.geometrySnapshotId == snapshot?.snapshotId
-        val settlingExclusion = sample.exclusion in setOf(
-            "geometry_unsettled", "scroll_geometry_unavailable", "scroll_input_stale"
-        )
+        val settlingExclusion = sample.exclusion in SETTLING_EXCLUSIONS
         val interpretationAllowed = !suspended && !consulting && matchingStream && matchingAnalysis &&
             sample.geometrySnapshotId == snapshot?.snapshotId &&
             (sample.exclusion == null || sample.exclusion == "outside_visible_text" || settlingExclusion ||
                 sample.exclusion != "layout_unavailable" &&
                 !sample.exclusion.startsWith("definition_") &&
-                listOf("scroll", "calibration", "control", "pause", "restart", "stop", "camera", "provider_failed", "geometry", "text_change")
-                    .none { sample.exclusion.contains(it) })
+                BLOCKED_EXCLUSION_SUBSTRINGS.none { sample.exclusion.contains(it) })
         // Only translation/unsettled geometry may retain the focus presentation.
         // Menus, consultation, calibration and provider/screen stops must remove it.
         if (!matchingStream || !matchingAnalysis || sample.exclusion?.let { reason ->
                 !settlingExclusion && reason != "scroll" &&
                     (reason == "layout_unavailable" || reason.startsWith("definition_") ||
-                        listOf("calibration", "control", "pause", "restart", "stop", "camera", "provider_failed", "text_change")
-                            .any { reason.contains(it) })
+                        CLEAR_HOLD_EXCLUSION_SUBSTRINGS.any { reason.contains(it) })
             } == true) overlay.clearFocusScrollHold()
         val effectiveLine = sample.line ?: if (settlingExclusion) {
             context.targetLine?.takeIf { isLineFullyVisible(it, snapshot) }
@@ -251,7 +251,7 @@ class ArticleReadingAidRuntime(
             guideRange = if ((valid || settlingExclusion) && effectiveLine != null &&
                 preferences.enabled && preferences.lineGuide &&
                 preferences.guideStyle == ReadingGuideStyle.SENTENCE)
-                guideResolver.resolve(body.text.toString(), snapshot, effectiveLine) else null,
+                guideResolver.resolve(bodyText(), snapshot, effectiveLine) else null,
             focusInputAllowed = interpretationAllowed, focusTextSizeDp = renderedFontDp(),
             locationUncertainty = measuredLocationUncertainty,
             targetWordBounds = wordBounds(sample.line, sample.wordStartUtf16, sample.wordEndUtf16))
@@ -399,8 +399,10 @@ class ArticleReadingAidRuntime(
     fun focusDiagnostics(): Map<String, Any> = policy.focusDiagnostics(context.nowMs)
 
     private fun decisions(values: List<ReadingAidDecision>) {
-        trace.context(context)
-        values.forEach { trace.decision(it); onDecision(it) }
+        if (values.isNotEmpty()) {
+            trace.context(context)
+            values.forEach { trace.decision(it); onDecision(it) }
+        }
         recordFocusStatus()
         val actions = if (closed || suspended || consulting || !renderAids) emptyList() else policy.activeActions()
         overlay.allowFocusScrollHold = (config.configId == "DEFINITION_PROFILE_V4" || config.evidenceAlignedV5) && renderAids &&
@@ -422,12 +424,33 @@ class ArticleReadingAidRuntime(
     }
 
     private fun recordFocusStatus() {
+        if (!policy.focusDiagnosticsChanged(context.nowMs)) return
         val detail = JSONObject(policy.focusDiagnostics(context.nowMs))
         val signature = detail.toString()
         if (signature != lastFocusStatus) {
             lastFocusStatus = signature
             trace.record("focus_activation_state", context.nowMs, detail)
         }
+    }
+
+    private fun bodyText(): String {
+        val current = body.text
+        if (current !is android.text.Editable && current === cachedBodySource) return cachedBodyString
+        val text = current.toString()
+        if (current !== cachedBodySource || text != cachedBodyString) {
+            cachedBodySource = current
+            cachedBodyString = text
+            cachedBodySha256 = ""
+        }
+        return text
+    }
+
+    private fun bodySha256(text: String): String {
+        if (text == cachedBodyString) {
+            if (cachedBodySha256.isEmpty()) cachedBodySha256 = sha256(text)
+            return cachedBodySha256
+        }
+        return sha256(text)
     }
 
     private fun updateDockVisibility() {
@@ -664,6 +687,15 @@ class ArticleReadingAidRuntime(
 
     private fun checkMain() = check(Looper.myLooper() == Looper.getMainLooper())
     companion object {
+        private val SETTLING_EXCLUSIONS = setOf(
+            "geometry_unsettled", "scroll_geometry_unavailable", "scroll_input_stale"
+        )
+        private val BLOCKED_EXCLUSION_SUBSTRINGS = listOf(
+            "scroll", "calibration", "control", "pause", "restart", "stop", "camera", "provider_failed", "geometry", "text_change"
+        )
+        private val CLEAR_HOLD_EXCLUSION_SUBSTRINGS = listOf(
+            "calibration", "control", "pause", "restart", "stop", "camera", "provider_failed", "text_change"
+        )
         private fun elapsedMs() = SystemClock.elapsedRealtimeNanos() / 1e6
         private fun sha256(text: String) = MessageDigest.getInstance("SHA-256")
             .digest(text.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }

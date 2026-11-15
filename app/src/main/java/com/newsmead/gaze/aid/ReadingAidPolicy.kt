@@ -188,6 +188,8 @@ class ReadingAidPolicy(
         return out
     }
 
+    fun focusDiagnosticsChanged(nowMs: Double): Boolean = focus.updateDiagnosticsChanged(nowMs)
+
     fun focusDiagnostics(nowMs: Double): Map<String, Any> = focus.diagnostics(nowMs)
 
     fun onEvent(event: ScanpathEvent, latestFinalizedFixation: ScanpathFixation?,

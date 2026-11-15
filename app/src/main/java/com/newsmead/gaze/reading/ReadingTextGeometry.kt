@@ -30,14 +30,14 @@ internal class ReadingTextGeometryReader {
     private var cachedLineHeight = 0
     private var cachedLines: List<ReadingLine> = emptyList()
     private var cachedDirection = ReadingTextDirection.UNKNOWN
+    private val visible = Rect()
+    private val location = IntArray(2)
 
     fun invalidate() { cachedLayout = null }
 
     fun read(view: TextView): ReadingTextGeometry? {
         val layout = view.layout ?: return null
-        val visible = Rect()
         if (!view.getVisibleRectOnScreen(visible)) visible.setEmpty()
-        val location = IntArray(2)
         view.getLocationOnScreen(location)
         if (layout !== cachedLayout || view.lineHeight != cachedLineHeight) {
             cachedLayout = layout

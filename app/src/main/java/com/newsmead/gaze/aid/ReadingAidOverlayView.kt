@@ -39,6 +39,7 @@ class ReadingAidOverlayView(
     private val bookmarkOpacity = ReadingBookmarkOpacityMotion()
     private val visible = Rect()
     private val focusVisible = Rect()
+    private val drawRect = RectF()
     private val origin = IntArray(2)
     private val textLocation = IntArray(2)
     private var body: TextView? = null
@@ -53,15 +54,38 @@ class ReadingAidOverlayView(
         val fadeTop: Boolean, val fadeBottom: Boolean, val fadeFraction: Float)
     private val gradients = mutableMapOf<GradientKey, Shader>()
     private var threeLineValidatedRows: List<com.newsmead.gaze.scanpath.ScanpathLine>? = null
+    private var validatedFocusLayout: Layout? = null
+    private var validatedFocusRows: List<com.newsmead.gaze.scanpath.ScanpathLine>? = null
+    private var validatedFocusText: CharSequence? = null
+    private var cachedBodySource: CharSequence? = null
+    private var cachedBodyText: String = ""
+    private var bodyTextDirty = false
     private var guideTextChanged = false
     private var guideInvalidatedRows: List<com.newsmead.gaze.scanpath.ScanpathLine>? = null
-    private var guideDrawShape: List<Any?>? = null
+    private var hasGuideDrawShape = false
+    private var guideDrawText: CharSequence? = null
+    private var guideDrawWidth = 0
+    private var guideDrawTextSize = 0f
+    private var guideDrawTextScaleX = 0f
+    private var guideDrawTypeface: android.graphics.Typeface? = null
+    private var guideDrawLetterSpacing = 0f
+    private var guideDrawLineSpacingExtra = 0f
+    private var guideDrawLineSpacingMultiplier = 0f
+    private var guideDrawPadLeft = 0
+    private var guideDrawPadRight = 0
+    private var guideDrawPadTop = 0
+    private var guideDrawPadBottom = 0
+    private var guideDrawLayoutWidth = -1
     private val guideTextWatcher = object : TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+            bodyTextDirty = true
             guideTextChanged = true
             guideInvalidatedRows = geometry?.lines
             threeLineValidatedLayout = null
+            validatedFocusLayout = null
+            validatedFocusRows = null
+            validatedFocusText = null
             threeLineMotion.clear()
         }
         override fun afterTextChanged(s: Editable?) = Unit
@@ -84,7 +108,21 @@ class ReadingAidOverlayView(
     private val focusOnset = ReadingFocusOnset()
     private var lastFocus: ReadingAidAction? = null
     private var lastClearBand: ReadingFocusMotion.Band? = null
-    private var bodyShape: List<Any?>? = null
+    private var hasBodyShape = false
+    private var shapeBodyText: String = ""
+    private var shapeWidth = 0
+    private var shapeTextSize = 0f
+    private var shapeTextScaleX = 0f
+    private var shapeTypeface: android.graphics.Typeface? = null
+    private var shapeLetterSpacing = 0f
+    private var shapeLineSpacingExtra = 0f
+    private var shapeLineSpacingMultiplier = 0f
+    private var shapePadLeft = 0
+    private var shapePadRight = 0
+    private var shapePadTop = 0
+    private var shapePadBottom = 0
+    private var shapeLayoutWidth: Int? = null
+    private var shapeLayout: Layout? = null
     private data class FocusHold(val source: ReadingAidAction, val untilMs: Double,
         val band: ReadingFocusMotion.Band)
     private var focusHold: FocusHold? = null
@@ -106,15 +144,83 @@ class ReadingAidOverlayView(
         super.onDetachedFromWindow()
     }
 
-    private fun shape(view: TextView): List<Any?> = listOf(view.text.toString(), view.width,
-        view.textSize, view.textScaleX, view.typeface, view.letterSpacing, view.lineSpacingExtra,
-        view.lineSpacingMultiplier, view.totalPaddingLeft, view.totalPaddingRight,
-        view.totalPaddingTop, view.totalPaddingBottom, view.layout?.width, view.layout)
+    private fun bodyText(view: TextView): String {
+        val text = view.text
+        if (!bodyTextDirty && text !is Editable && text === cachedBodySource) return cachedBodyText
+        val resolved = text.toString()
+        cachedBodySource = text
+        cachedBodyText = resolved
+        bodyTextDirty = false
+        return resolved
+    }
 
-    private fun drawShape(view: TextView): List<Any?> = listOf(view.text, view.width,
-        view.textSize, view.textScaleX, view.typeface, view.letterSpacing, view.lineSpacingExtra,
-        view.lineSpacingMultiplier, view.totalPaddingLeft, view.totalPaddingRight,
-        view.totalPaddingTop, view.totalPaddingBottom, view.layout?.width)
+    private fun matchesBodyShape(view: TextView, bodyText: String, includeLayout: Boolean): Boolean =
+        hasBodyShape &&
+            shapeBodyText == bodyText &&
+            shapeWidth == view.width &&
+            shapeTextSize == view.textSize &&
+            shapeTextScaleX == view.textScaleX &&
+            shapeTypeface == view.typeface &&
+            shapeLetterSpacing == view.letterSpacing &&
+            shapeLineSpacingExtra == view.lineSpacingExtra &&
+            shapeLineSpacingMultiplier == view.lineSpacingMultiplier &&
+            shapePadLeft == view.totalPaddingLeft &&
+            shapePadRight == view.totalPaddingRight &&
+            shapePadTop == view.totalPaddingTop &&
+            shapePadBottom == view.totalPaddingBottom &&
+            shapeLayoutWidth == view.layout?.width &&
+            (!includeLayout || shapeLayout == view.layout)
+
+    private fun recordBodyShape(view: TextView, bodyText: String) {
+        hasBodyShape = true
+        shapeBodyText = bodyText
+        shapeWidth = view.width
+        shapeTextSize = view.textSize
+        shapeTextScaleX = view.textScaleX
+        shapeTypeface = view.typeface
+        shapeLetterSpacing = view.letterSpacing
+        shapeLineSpacingExtra = view.lineSpacingExtra
+        shapeLineSpacingMultiplier = view.lineSpacingMultiplier
+        shapePadLeft = view.totalPaddingLeft
+        shapePadRight = view.totalPaddingRight
+        shapePadTop = view.totalPaddingTop
+        shapePadBottom = view.totalPaddingBottom
+        shapeLayoutWidth = view.layout?.width
+        shapeLayout = view.layout
+    }
+
+    private fun matchesGuideDrawShape(view: TextView): Boolean =
+        hasGuideDrawShape &&
+            guideDrawText == view.text &&
+            guideDrawWidth == view.width &&
+            guideDrawTextSize == view.textSize &&
+            guideDrawTextScaleX == view.textScaleX &&
+            guideDrawTypeface == view.typeface &&
+            guideDrawLetterSpacing == view.letterSpacing &&
+            guideDrawLineSpacingExtra == view.lineSpacingExtra &&
+            guideDrawLineSpacingMultiplier == view.lineSpacingMultiplier &&
+            guideDrawPadLeft == view.totalPaddingLeft &&
+            guideDrawPadRight == view.totalPaddingRight &&
+            guideDrawPadTop == view.totalPaddingTop &&
+            guideDrawPadBottom == view.totalPaddingBottom &&
+            guideDrawLayoutWidth == (view.layout?.width ?: -1)
+
+    private fun recordGuideDrawShape(view: TextView) {
+        hasGuideDrawShape = true
+        guideDrawText = view.text
+        guideDrawWidth = view.width
+        guideDrawTextSize = view.textSize
+        guideDrawTextScaleX = view.textScaleX
+        guideDrawTypeface = view.typeface
+        guideDrawLetterSpacing = view.letterSpacing
+        guideDrawLineSpacingExtra = view.lineSpacingExtra
+        guideDrawLineSpacingMultiplier = view.lineSpacingMultiplier
+        guideDrawPadLeft = view.totalPaddingLeft
+        guideDrawPadRight = view.totalPaddingRight
+        guideDrawPadTop = view.totalPaddingTop
+        guideDrawPadBottom = view.totalPaddingBottom
+        guideDrawLayoutWidth = view.layout?.width ?: -1
+    }
 
     init { isClickable = false; isFocusable = false }
 
@@ -125,10 +231,11 @@ class ReadingAidOverlayView(
             return
         }
         val now = presentationClockMs()
-        val nextShape = shape(textView)
+        val currentBodyText = bodyText(textView)
         val before = geometry
+        val sameFullShape = matchesBodyShape(textView, currentBodyText, includeLayout = true)
         val translationCompatible = body === textView && generation == epoch &&
-            before != null && snapshot != null && bodyShape == nextShape &&
+            before != null && snapshot != null && sameFullShape &&
             ReadingFocusMotion.compatibleTranslation(before, snapshot)
         if (body !== textView || generation != epoch ||
             (!translationCompatible && geometry?.snapshotId != snapshot?.snapshotId) ||
@@ -138,7 +245,7 @@ class ReadingAidOverlayView(
         // An equivalent Layout replacement while converting the text buffer is harmless.
         // Actual reflow changes the body shape or physical row metrics and resets motion.
         val threeLineCompatible = body === textView && generation == epoch && before != null && snapshot != null &&
-            bodyShape?.dropLast(1) == nextShape.dropLast(1) &&
+            (sameFullShape || matchesBodyShape(textView, currentBodyText, includeLayout = false)) &&
             ReadingFocusMotion.compatibleTranslation(before, snapshot)
         if (!threeLineCompatible || oldLineStyle != newLineStyle) threeLineMotion.clear()
         val freshFocus = value.firstOrNull { it.aidType == ReadingAidType.FOCUS_REGION &&
@@ -152,7 +259,7 @@ class ReadingAidOverlayView(
             (nextStyle != null && nextStyle != focusOnset.style)) clearFocusScrollHold()
         if (freshFocus != null) {
             focusHold = null; heldReceipts.clear()
-            focusOnset.animateAllStyles = freshFocus.configId in setOf("EVIDENCE_ALIGNED_V5", "DEMO_EVIDENCE_ALIGNED_V5")
+            focusOnset.animateAllStyles = freshFocus.configId in ALL_STYLES_ONSET_CONFIGS
             focusOnset.select(nextStyle)
         }
         else if (translationCompatible && allowFocusScrollHold && ReadingFocusMotion.translated(before!!, snapshot!!)) {
@@ -172,12 +279,19 @@ class ReadingAidOverlayView(
             } else clearFocusScrollHold()
         }
         if (freshFocus == null && focusHold == null) clearFocusScrollHold()
-        if (body !== textView) clearGuideSpan()
+        if (body !== textView) {
+            clearGuideSpan()
+            validatedFocusLayout = null
+            validatedFocusRows = null
+            validatedFocusText = null
+        }
         body = textView; geometry = snapshot; generation = epoch; actions = value.toList()
-        bodyShape = nextShape
+        recordBodyShape(textView, currentBodyText)
         updateGuideSpan()
-        val activeIds = actions.map { it.id }.toSet()
-        receipts.removeAll { it.substringBefore('|') !in activeIds }
+        if (receipts.isNotEmpty()) {
+            val activeIds = actions.mapTo(HashSet(actions.size)) { it.id }
+            receipts.removeAll { it.substringBefore('|') !in activeIds }
+        }
         postInvalidateOnAnimation()
     }
 
@@ -194,7 +308,8 @@ class ReadingAidOverlayView(
             abs(textLocation[0] + view.totalPaddingLeft - view.scrollX - g.textOriginX) < 1 &&
             abs(textLocation[1] + view.totalPaddingTop - view.scrollY - g.textOriginY) < 1 &&
             layout.lineCount == g.lines.size
-        for (action in actions.filter { it.aidType != ReadingAidType.WORD_MAGNIFIER && it.aidType != ReadingAidType.WORD_DEFINITION }) {
+        for (action in actions) {
+            if (action.aidType == ReadingAidType.WORD_MAGNIFIER || action.aidType == ReadingAidType.WORD_DEFINITION) continue
             val reason = when {
                 action.expiresMs <= now -> "expired_before_draw"
                 action.anchor.generation != generation || action.anchor.geometrySnapshotId != g?.snapshotId -> "stale_anchor"
@@ -226,8 +341,8 @@ class ReadingAidOverlayView(
                         continue
                     } else if (action.aidFormId != "CURRENT_LINE_HIGHLIGHT_GRAY_V1") {
                         paint.color = Color.argb((80 * action.strength).toInt(), 244, 211, 94)
-                        canvas.drawRoundRect(RectF(left, top.toFloat() - origin[1], right,
-                            bottom.toFloat() - origin[1]), dp(4f), dp(4f), paint)
+                        drawRect.set(left, top.toFloat() - origin[1], right, bottom.toFloat() - origin[1])
+                        canvas.drawRoundRect(drawRect, dp(4f), dp(4f), paint)
                     } else if (!guideSpanDrawEligible(action)) {
                         receipt(action, false, "guide_background_unavailable", now); continue
                     }
@@ -254,9 +369,10 @@ class ReadingAidOverlayView(
                     if (lineStartMarkerInGutter && (start < left || textStart - dp(4f) > right)) {
                         receipt(action, false, "line_start_gutter_not_visible", now); continue
                     }
-                    canvas.drawRoundRect(RectF(start, top.toFloat() - origin[1],
+                    drawRect.set(start, top.toFloat() - origin[1],
                         (start + markerWidth).coerceAtMost(right),
-                        bottom.toFloat() - origin[1]), dp(2f), dp(2f), paint)
+                        bottom.toFloat() - origin[1])
+                    canvas.drawRoundRect(drawRect, dp(2f), dp(2f), paint)
                     if (bookmarkOpacity.isAnimating(now)) postInvalidateOnAnimation()
                 }
                 ReadingAidType.FOCUS_REGION -> {
@@ -309,7 +425,7 @@ class ReadingAidOverlayView(
         val hold = focusHold
         if (!presentingFocus && hold == null) clearFocusScrollHold()
         if (hold != null && hold.untilMs <= now) { clearFocusScrollHold(); return }
-        if (hold != null && compatible && g != null && bodyShape == shape(view) &&
+        if (hold != null && compatible && g != null && matchesBodyShape(view, bodyText(view), includeLayout = true) &&
             geometryMatchesLayout(view, g) &&
             abs(g.visibleRectScreen.top - visible.top) < 1 &&
             abs(g.visibleRectScreen.bottom - visible.bottom) < 1 &&
@@ -354,12 +470,22 @@ class ReadingAidOverlayView(
 
     private fun geometryMatchesLayout(view: TextView, g: ScanpathGeometry): Boolean {
         val layout = view.layout ?: return false
-        return layout.lineCount == g.lines.size && g.lines.indices.all { i ->
+        val text = view.text
+        if (validatedFocusLayout === layout && validatedFocusRows === g.lines &&
+            validatedFocusText === text && (text !is Editable || !bodyTextDirty)) return true
+        if (layout.lineCount != g.lines.size) return false
+        for (i in g.lines.indices) {
             val line = g.lines[i]
-            layout.getLineStart(i) == line.startUtf16 && layout.getLineEnd(i) == line.endUtf16 &&
-                abs(layout.getLineLeft(i) - line.left) < 1 && abs(layout.getLineRight(i) - line.right) < 1 &&
-                abs(layout.getLineTop(i) - line.top) < 1 && abs(layout.getLineBottom(i) - line.bottom) < 1
+            if (layout.getLineStart(i) != line.startUtf16 || layout.getLineEnd(i) != line.endUtf16 ||
+                abs(layout.getLineLeft(i) - line.left) >= 1 || abs(layout.getLineRight(i) - line.right) >= 1 ||
+                abs(layout.getLineTop(i) - line.top) >= 1 || abs(layout.getLineBottom(i) - line.bottom) >= 1) {
+                return false
+            }
         }
+        validatedFocusLayout = layout
+        validatedFocusRows = g.lines
+        validatedFocusText = text
+        return true
     }
 
     private fun drawFocus(canvas: Canvas, view: TextView, appearance: ReadingFocusAppearance.Appearance,
@@ -429,7 +555,8 @@ class ReadingAidOverlayView(
         threeLineDrawn = false
         threeLineValidatedLayout = null
         threeLineValidatedRows = null
-        guideDrawShape = null
+        hasGuideDrawShape = false
+        guideDrawText = null
         guideTextChanged = false
         guideInvalidatedRows = null
         gradients.clear()
@@ -472,7 +599,7 @@ class ReadingAidOverlayView(
             lineAction = action
             if (guideInvalidatedRows !== g.lines)
                 guideTextChanged = false
-            guideDrawShape = drawShape(view)
+            recordGuideDrawShape(view)
             threeLineDrawn = false
             threeLineMotion.move(target, presentationClockMs(),
                 evidence.threeLine?.transitionMs ?: ReadingThreeLineGuideMotion.TRANSITION_MS,
@@ -543,7 +670,7 @@ class ReadingAidOverlayView(
         val wrapper = lineBackground ?: return false
         if (view.background !== wrapper || lineAction !== action) return false
         val layout = view.layout ?: return false
-        if (guideTextChanged || guideDrawShape != drawShape(view) || layout.lineCount != g.lines.size) {
+        if (guideTextChanged || !matchesGuideDrawShape(view) || layout.lineCount != g.lines.size) {
             threeLineMotion.clear()
             return false
         }
@@ -650,6 +777,10 @@ class ReadingAidOverlayView(
         if (receipts.add("${action.id}|$drawn|$reason")) onRender(action, drawn, reason, now)
     }
     private fun dp(value: Float) = value * resources.displayMetrics.density
+
+    companion object {
+        private val ALL_STYLES_ONSET_CONFIGS = setOf("EVIDENCE_ALIGNED_V5", "DEMO_EVIDENCE_ALIGNED_V5")
+    }
 }
 
 /** Reserved non-text strip: magnification never covers the source paragraph. */

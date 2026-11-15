@@ -37,7 +37,19 @@ class ArticleReadingSession(
     private var geometryChangedMs = Double.POSITIVE_INFINITY
     private val geometryTimeline = ReadingGeometryTimeline()
     private var controlledAutoScroll = false
-    private var layoutSignature: List<Any?>? = null
+    private var hasLayoutSignature = false
+    private var sigWidth = 0
+    private var sigHeight = 0
+    private var sigTextSize = 0f
+    private var sigTextScaleX = 0f
+    private var sigLetterSpacing = 0f
+    private var sigTypeface: android.graphics.Typeface? = null
+    private var sigLineSpacingExtra = 0f
+    private var sigLineSpacingMultiplier = 0f
+    private var sigPadLeft = 0
+    private var sigPadTop = 0
+    private var sigPadRight = 0
+    private var sigPadBottom = 0
     private var active = true
     private var closed = false
     private val consultation = ConsultationCaptureGate()
@@ -89,11 +101,8 @@ class ArticleReadingSession(
             geometryTimeline.clear()
             return
         }
-        val signature = listOf(textView.width, textView.height, textView.textSize, textView.textScaleX,
-            textView.letterSpacing, textView.typeface, textView.lineSpacingExtra, textView.lineSpacingMultiplier,
-            textView.totalPaddingLeft, textView.totalPaddingTop, textView.totalPaddingRight, textView.totalPaddingBottom)
-        val sameLayout = !motionCompensatedAids || signature == layoutSignature
-        layoutSignature = signature
+        val sameLayout = !motionCompensatedAids || matchesLayoutSignature(textView)
+        if (motionCompensatedAids) updateLayoutSignature(textView)
         if (current == geometry && sameLayout) {
             if (motionCompensatedAids) snapshotId?.let { geometryTimeline.record(now, current.snapshot(it)) }
             return
@@ -269,6 +278,37 @@ class ArticleReadingSession(
         active = false
         closed = true
         textView.removeTextChangedListener(textWatcher)
+    }
+
+    private fun matchesLayoutSignature(view: TextView): Boolean =
+        hasLayoutSignature &&
+            sigWidth == view.width &&
+            sigHeight == view.height &&
+            sigTextSize == view.textSize &&
+            sigTextScaleX == view.textScaleX &&
+            sigLetterSpacing == view.letterSpacing &&
+            sigTypeface == view.typeface &&
+            sigLineSpacingExtra == view.lineSpacingExtra &&
+            sigLineSpacingMultiplier == view.lineSpacingMultiplier &&
+            sigPadLeft == view.totalPaddingLeft &&
+            sigPadTop == view.totalPaddingTop &&
+            sigPadRight == view.totalPaddingRight &&
+            sigPadBottom == view.totalPaddingBottom
+
+    private fun updateLayoutSignature(view: TextView) {
+        hasLayoutSignature = true
+        sigWidth = view.width
+        sigHeight = view.height
+        sigTextSize = view.textSize
+        sigTextScaleX = view.textScaleX
+        sigLetterSpacing = view.letterSpacing
+        sigTypeface = view.typeface
+        sigLineSpacingExtra = view.lineSpacingExtra
+        sigLineSpacingMultiplier = view.lineSpacingMultiplier
+        sigPadLeft = view.totalPaddingLeft
+        sigPadTop = view.totalPaddingTop
+        sigPadRight = view.totalPaddingRight
+        sigPadBottom = view.totalPaddingBottom
     }
 
     private fun checkMainThread() = check(Looper.myLooper() == Looper.getMainLooper())

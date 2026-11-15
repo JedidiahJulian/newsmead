@@ -39,11 +39,21 @@ object GazeGeometry {
         return crops(x, y, width, height)
     }
 
-    fun crops(x: DoubleArray, y: DoubleArray, width: Int, height: Int): Crops? {
-        if (width <= 0 || height <= 0 || x.size != LANDMARK_COUNT || y.size != LANDMARK_COUNT) return null
+    fun crops(x: DoubleArray, y: DoubleArray, width: Int, height: Int): Crops? =
+        crops(x, y, width, height, DoubleArray(LANDMARK_COUNT), DoubleArray(LANDMARK_COUNT))
+
+    internal fun crops(
+        x: DoubleArray,
+        y: DoubleArray,
+        width: Int,
+        height: Int,
+        px: DoubleArray,
+        py: DoubleArray,
+    ): Crops? {
+        if (width <= 0 || height <= 0 || x.size != LANDMARK_COUNT || y.size != LANDMARK_COUNT ||
+            px.size != LANDMARK_COUNT || py.size != LANDMARK_COUNT
+        ) return null
         // np.round uses ties-to-even; roundToInt is not equivalent.
-        val px = DoubleArray(LANDMARK_COUNT)
-        val py = DoubleArray(LANDMARK_COUNT)
         var minX = Double.POSITIVE_INFINITY
         var maxX = Double.NEGATIVE_INFINITY
         var minY = Double.POSITIVE_INFINITY
@@ -66,7 +76,9 @@ object GazeGeometry {
         maxX = maxX.coerceAtMost(width.toDouble())
         minY = minY.coerceAtLeast(0.0)
         maxY = maxY.coerceAtMost(height.toDouble())
-        if (MOUTH_INDICES.sumOf { py[it] } / MOUTH_INDICES.size >= height) return null
+        var mouthSum = 0.0
+        for (i in MOUTH_INDICES) mouthSum += py[i]
+        if (mouthSum / MOUTH_INDICES.size >= height) return null
         val delta = (abs(maxX - minX) - abs(maxY - minY)) / 4.0
         val fx = (minX + delta).coerceAtLeast(0.0).toInt()
         val fy = (minY - delta).coerceAtLeast(0.0).toInt()
@@ -89,7 +101,7 @@ object GazeGeometry {
         if (!inBounds(leftEye) || !inBounds(rightEye) || clip(face, width, height) == null) return null
         fun area(indices: IntArray): Double {
             var sum = 0.0
-            indices.indices.forEach { i ->
+            for (i in indices.indices) {
                 val a = indices[i]
                 val b = indices[(i + 1) % indices.size]
                 sum += px[a] * py[b] - py[a] * px[b]

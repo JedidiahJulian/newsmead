@@ -197,13 +197,23 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private val scanpathAidsEnabled: Boolean
         get() = StudyConfig.SCANPATH_READING_AIDS && !StudyConfig.GAZE_TOUCH_VALIDATION
     private val scanpathCounts = mutableMapOf<String, Int>()
+    private var lastPreDrawAidTickNs = 0L
     private val scanpathGeometryListener = ViewTreeObserver.OnPreDrawListener {
-        studyVisit?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to StudyConfig.GAZE_DEBUG_VISUALS), binding.nsvArticleText)
-        studyVisit?.exclude("tts", ::textToSpeech.isInitialized && textToSpeech.isSpeaking)
+        studyVisit?.let { visit ->
+            visit.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to StudyConfig.GAZE_DEBUG_VISUALS), binding.nsvArticleText)
+            visit.exclude("tts", ::textToSpeech.isInitialized && textToSpeech.isSpeaking)
+        }
         articleAutoScroll?.onPreDraw()
         scanpathSession?.checkGeometry()
         mahalanobisReadingSession?.checkGeometry()
-        readingAidRuntime?.tick()
+        val runtime = readingAidRuntime
+        if (runtime != null) {
+            val nowNs = SystemClock.elapsedRealtimeNanos()
+            if (nowNs - lastPreDrawAidTickNs >= 80_000_000L) {
+                lastPreDrawAidTickNs = nowNs
+                runtime.tick()
+            }
+        }
         true
     }
     private val measurementGeometryListener = ViewTreeObserver.OnPreDrawListener {

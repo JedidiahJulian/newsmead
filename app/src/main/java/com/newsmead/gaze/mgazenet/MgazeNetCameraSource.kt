@@ -67,13 +67,18 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private var svr: SvrCalibration? = null
     private val frames = CameraFrames()
     @Volatile private var clockReady = false
-    private var signature: List<Int>? = null
+    private var signatureSet = false
+    private var sigWidth = 0
+    private var sigHeight = 0
+    private var sigRotation = 0
     private var lastTimestamp = -1L
     private var delegateName = "GPU"
     private var requestedFpsRange: Range<Int>? = null
     private val performanceLog = PerformanceLog()
     private val landmarkX = DoubleArray(478)
     private val landmarkY = DoubleArray(478)
+    private val cropPx = DoubleArray(478)
+    private val cropPy = DoubleArray(478)
 
     fun start() {
         worker.execute {
@@ -145,108 +150,132 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
         try {
             val captureNs = image.imageInfo.timestamp
             check(captureNs > 0 && captureNs <= SystemClock.elapsedRealtimeNanos()) { "Invalid shared camera timestamp" }
-            val shape = listOf(image.width,image.height,image.imageInfo.rotationDegrees)
-            val acquisition = "${image.width}x${image.height}:${image.imageInfo.rotationDegrees}:$delegateName"
-            check(saved == null || SameModelExecutionTrial.acquisitionMatches(saved.identity.acquisition, acquisition, experimentalLocalizer)) { "Camera/localizer configuration changed" }
-            val bitmap = frames.copy(image)
+            val imageWidth = image.width
+            val imageHeight = image.height
+            val rotationDegrees = image.imageInfo.rotationDegrees
+            val bitmap = try { frames.copy(image) } finally { image.close() }
             val copyFinishedNs = SystemClock.elapsedRealtimeNanos()
-            if (signature == null) {
-                signature = shape
-                val metadata = linkedMapOf<String,Any?>(
-                    "acquisition" to acquisition,
-                    "model_sha256" to MnnEstimator.MODEL_SHA,"runtime" to checkNotNull(model).runtimeDescription,
-                    "performance_hints" to checkNotNull(model).performanceHintsSnapshot(),
-                    "mnn_execution" to checkNotNull(model).executionSnapshot(),
-                    "requested_mnn_backend" to experimentalMnnBackend,
-                    "requested_localizer" to experimentalLocalizer,
-                    "reference_acquisition" to saved?.identity?.acquisition,
-                    "localizer_trial_interpretation" to if (experimentalLocalizer != null)
-                        "Performance exploration only; saved GPU-localizer calibration is an unvalidated reference mapping for changed execution; no compatibility or accuracy claim"
-                        else "ordinary localizer execution",
-                    "same_model_execution_trial" to (experimentalMnnThreads != null),
-                    "requested_session_threads" to checkNotNull(model).performanceHintsSnapshot()["requested_session_threads"],
-                    "reference_calibration_runtime" to MnnEstimator.RUNTIME,
-                    "execution_trial_interpretation" to if (experimentalMnnThreads != null)
-                        "Exploratory performance only; saved calibration is a reference mapping for changed execution; candidate accuracy unvalidated; prior CPU2/CPU4 fixture parity failed the unchanged 1e-5 criterion; feature and accuracy evidence recorded separately; no compatibility or accuracy claim"
-                        else "ordinary CPU${MnnEstimator.DEFAULT_CPU_THREADS} execution; accuracy validation deferred",
-                    "face_landmarker_sha256" to "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
-                    "localizer" to "Tasks 0.10.29 VIDEO one-face detection=.1 tracking=.1 presence=.5",
-                    "delegate" to delegateName,"camera_source_shape_rotation" to shape,
-                    "upright_size" to listOf(bitmap.width,bitmap.height),"mirrored" to false,
-                    "pixel_contract" to "RGBA unpack; upright RGB; OpenCV uint8 INTER_LINEAR /255 NCHW; only right eye flipped",
-                    "camera_clock" to "REALTIME verified","output_clock" to "main_callback_delivery_elapsedRealtimeNanos",
-                    
-                    "android_sdk" to android.os.Build.VERSION.SDK_INT,"opencv" to org.opencv.core.Core.VERSION)
-                if (preferStableFrameRate) {
-                    // Bounds prepared face inputs, not no-face work or main-thread deliveries.
-                    metadata["preprocessor_slot_count"] = preprocessors.size
-                    metadata["camera_ae_target_fps_request"] = requestedFpsRange?.let { listOf(it.lower,it.upper) }
+                if (!signatureSet) {
+                    val acq = "${imageWidth}x${imageHeight}:$rotationDegrees:$delegateName"
+                    check(saved == null || SameModelExecutionTrial.acquisitionMatches(saved.identity.acquisition, acq, experimentalLocalizer)) {
+                        "Camera/localizer configuration changed"
+                    }
+                    signatureSet = true
+                    sigWidth = imageWidth
+                    sigHeight = imageHeight
+                    sigRotation = rotationDegrees
+                    val shape = listOf(imageWidth, imageHeight, rotationDegrees)
+                    val metadata = linkedMapOf<String,Any?>(
+                        "acquisition" to acq,
+                        "model_sha256" to MnnEstimator.MODEL_SHA,"runtime" to checkNotNull(model).runtimeDescription,
+                        "performance_hints" to checkNotNull(model).performanceHintsSnapshot(),
+                        "mnn_execution" to checkNotNull(model).executionSnapshot(),
+                        "requested_mnn_backend" to experimentalMnnBackend,
+                        "requested_localizer" to experimentalLocalizer,
+                        "reference_acquisition" to saved?.identity?.acquisition,
+                        "localizer_trial_interpretation" to if (experimentalLocalizer != null)
+                            "Performance exploration only; saved GPU-localizer calibration is an unvalidated reference mapping for changed execution; no compatibility or accuracy claim"
+                            else "ordinary localizer execution",
+                        "same_model_execution_trial" to (experimentalMnnThreads != null),
+                        "requested_session_threads" to checkNotNull(model).performanceHintsSnapshot()["requested_session_threads"],
+                        "reference_calibration_runtime" to MnnEstimator.RUNTIME,
+                        "execution_trial_interpretation" to if (experimentalMnnThreads != null)
+                            "Exploratory performance only; saved calibration is a reference mapping for changed execution; candidate accuracy unvalidated; prior CPU2/CPU4 fixture parity failed the unchanged 1e-5 criterion; feature and accuracy evidence recorded separately; no compatibility or accuracy claim"
+                            else "ordinary CPU${MnnEstimator.DEFAULT_CPU_THREADS} execution; accuracy validation deferred",
+                        "face_landmarker_sha256" to "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+                        "localizer" to "Tasks 0.10.29 VIDEO one-face detection=.1 tracking=.1 presence=.5",
+                        "delegate" to delegateName,"camera_source_shape_rotation" to shape,
+                        "upright_size" to listOf(bitmap.width,bitmap.height),"mirrored" to false,
+                        "pixel_contract" to "RGBA unpack; upright RGB; OpenCV uint8 INTER_LINEAR /255 NCHW; only right eye flipped",
+                        "camera_clock" to "REALTIME verified","output_clock" to "main_callback_delivery_elapsedRealtimeNanos",
+
+                        "android_sdk" to android.os.Build.VERSION.SDK_INT,"opencv" to org.opencv.core.Core.VERSION)
+                    if (preferStableFrameRate) {
+                        // Bounds prepared face inputs, not no-face work or main-thread deliveries.
+                        metadata["preprocessor_slot_count"] = preprocessors.size
+                        metadata["camera_ae_target_fps_request"] = requestedFpsRange?.let { listOf(it.lower,it.upper) }
+                    }
+                    main.execute { if (!stopped.get()) ready(metadata) }
+                } else {
+                    check(sigWidth == imageWidth && sigHeight == imageHeight && sigRotation == rotationDegrees) {
+                        "Camera dimensions or orientation changed; new calibration required"
+                    }
+                    if (saved != null) {
+                        val acq = "${imageWidth}x${imageHeight}:$rotationDegrees:$delegateName"
+                        check(SameModelExecutionTrial.acquisitionMatches(saved.identity.acquisition, acq, experimentalLocalizer)) {
+                            "Camera/localizer configuration changed"
+                        }
+                    }
                 }
-                main.execute { if (!stopped.get()) ready(metadata) }
-            } else check(signature == shape) { "Camera dimensions or orientation changed; new calibration required" }
-            val videoMs = captureNs/1_000_000
-            check(videoMs > lastTimestamp) { "Nonmonotonic MediaPipe capture clock" }
-            lastTimestamp = videoMs
-            val mp = BitmapImageBuilder(bitmap).build()
-            try {
-                // Localization stays serial on the analyzer, while CPU inference for
-                // the prior frame can run concurrently on the worker.
-                val localizerStartedNs = SystemClock.elapsedRealtimeNanos()
-                val detected = landmarker!!.detectForVideo(mp,videoMs)
-                val localizerFinishedNs = SystemClock.elapsedRealtimeNanos()
-                val landmarks = detected.faceLandmarks().firstOrNull()
-                val points = landmarks?.takeIf { it.size == landmarkX.size }
-                points?.forEachIndexed { index, point ->
-                    landmarkX[index] = point.x().toDouble()
-                    landmarkY[index] = point.y().toDouble()
-                }
-                // Immutable scalars are captured per frame before the analyzer arrays are reused.
-                // This telemetry does not alter pinned crop arithmetic or calibration eligibility.
-                val eyelids = if (eyelidTelemetryEnabled) points?.let { MgazeNetEyelidGeometry.from(
-                    landmarkX, landmarkY, bitmap.width, bitmap.height) } else null
-                val crops = points?.let { GazeGeometry.crops(landmarkX,landmarkY,bitmap.width,bitmap.height) }
-                val reason = when { landmarks == null -> "no_face"; crops == null -> "invalid_crops"; else -> "features" }
-                val posture = crops?.let { MgazeNetPostureGate.from(it,bitmap.width,bitmap.height) }
-                val preprocessor = if (crops == null) null else availablePreprocessors.poll()
-                if (crops != null && preprocessor == null) {
-                    drops.incrementAndGet()
-                    return
-                }
-                val preprocessStartedNs = SystemClock.elapsedRealtimeNanos()
-                val inputs = if (crops == null) null else preprocessor!!.prepare(bitmap,crops)
-                val preprocessFinishedNs = SystemClock.elapsedRealtimeNanos()
-                val queuedNs = SystemClock.elapsedRealtimeNanos()
-                worker.execute {
+                val videoMs = captureNs/1_000_000
+                check(videoMs > lastTimestamp) { "Nonmonotonic MediaPipe capture clock" }
+                lastTimestamp = videoMs
+                val mp = BitmapImageBuilder(bitmap).build()
+                try {
+                    val localizerStartedNs = SystemClock.elapsedRealtimeNanos()
+                    val detected = landmarker!!.detectForVideo(mp,videoMs)
+                    val localizerFinishedNs = SystemClock.elapsedRealtimeNanos()
+                    val landmarks = detected.faceLandmarks().firstOrNull()
+                    val points = landmarks?.takeIf { it.size == landmarkX.size }
+                    points?.forEachIndexed { index, point ->
+                        landmarkX[index] = point.x().toDouble()
+                        landmarkY[index] = point.y().toDouble()
+                    }
+                    // Immutable scalars are captured per frame before the analyzer arrays are reused.
+                    // This telemetry does not alter pinned crop arithmetic or calibration eligibility.
+                    val eyelids = if (eyelidTelemetryEnabled) points?.let { MgazeNetEyelidGeometry.from(
+                        landmarkX, landmarkY, bitmap.width, bitmap.height) } else null
+                    val crops = points?.let { GazeGeometry.crops(landmarkX,landmarkY,bitmap.width,bitmap.height,cropPx,cropPy) }
+                    val reason = when { landmarks == null -> "no_face"; crops == null -> "invalid_crops"; else -> "features" }
+                    val posture = crops?.let { MgazeNetPostureGate.from(it,bitmap.width,bitmap.height) }
+                    val preprocessor = if (crops == null) null else availablePreprocessors.poll()
+                    if (crops != null && preprocessor == null) {
+                        drops.incrementAndGet()
+                        return
+                    }
+                    var queuedToWorker = false
                     try {
-                        if (stopped.get()) return@execute
-                        val workerStartedNs = SystemClock.elapsedRealtimeNanos()
-                        val inferenceStartedNs = SystemClock.elapsedRealtimeNanos()
-                        val features = inputs?.let { model!!.infer(it) }
-                        val inferenceFinishedNs = SystemClock.elapsedRealtimeNanos()
-                        val prediction = try { features?.let { if (svr!!.trained) svr!!.predict(it) else null } }
-                            catch (e: Throwable) { features?.fill(0f); throw e }
-                        val finishedNs = SystemClock.elapsedRealtimeNanos()
-                        performanceLog.record(
-                            face = crops != null,
-                            captureToAnalyzerMs = (analyzerStartedNs - captureNs) / 1e6,
-                            copyMs = (copyFinishedNs - analyzerStartedNs) / 1e6,
-                            queueMs = (workerStartedNs - queuedNs) / 1e6,
-                            localizerMs = (localizerFinishedNs - localizerStartedNs) / 1e6,
-                            preprocessMs = (preprocessFinishedNs - preprocessStartedNs) / 1e6,
-                            inferenceMs = (inferenceFinishedNs - inferenceStartedNs) / 1e6,
-                            predictionMs = (finishedNs - inferenceFinishedNs) / 1e6,
-                            totalMs = (finishedNs - analyzerStartedNs) / 1e6,
-                            arrivals = arrivals.get(),
-                            drops = drops.get(),
-                            nowNs = finishedNs,
-                        )
-                        deliver(captureNs,features,crops,posture,prediction,reason,eyelids)
-                    } catch (e: Throwable) { error(e) }
-                    finally { preprocessor?.let { availablePreprocessors.offer(it) } }
-                }
-            } finally { mp.close() }
+                        // BitmapImageContainer.close() recycles bitmap; extract inputs before mp.close().
+                        val preprocessStartedNs = SystemClock.elapsedRealtimeNanos()
+                        val inputs = if (crops == null) null else preprocessor!!.prepare(bitmap, crops)
+                        val preprocessFinishedNs = SystemClock.elapsedRealtimeNanos()
+                        val queuedNs = SystemClock.elapsedRealtimeNanos()
+                        worker.execute {
+                            try {
+                                if (stopped.get()) return@execute
+                                val workerStartedNs = SystemClock.elapsedRealtimeNanos()
+                                val inferenceStartedNs = SystemClock.elapsedRealtimeNanos()
+                                val features = inputs?.let { model!!.infer(it) }
+                                val inferenceFinishedNs = SystemClock.elapsedRealtimeNanos()
+                                val prediction = try { features?.let { if (svr!!.trained) svr!!.predict(it) else null } }
+                                    catch (e: Throwable) { features?.fill(0f); throw e }
+                                val finishedNs = SystemClock.elapsedRealtimeNanos()
+                                performanceLog.record(
+                                    face = crops != null,
+                                    captureToAnalyzerMs = (analyzerStartedNs - captureNs) / 1e6,
+                                    copyMs = (copyFinishedNs - analyzerStartedNs) / 1e6,
+                                    queueMs = (workerStartedNs - queuedNs) / 1e6,
+                                    localizerMs = (localizerFinishedNs - localizerStartedNs) / 1e6,
+                                    preprocessMs = (preprocessFinishedNs - preprocessStartedNs) / 1e6,
+                                    inferenceMs = (inferenceFinishedNs - inferenceStartedNs) / 1e6,
+                                    predictionMs = (finishedNs - inferenceFinishedNs) / 1e6,
+                                    totalMs = (finishedNs - analyzerStartedNs) / 1e6,
+                                    arrivals = arrivals.get(),
+                                    drops = drops.get(),
+                                    nowNs = finishedNs,
+                                )
+                                deliver(captureNs,features,crops,posture,prediction,reason,eyelids)
+                            } catch (e: Throwable) { error(e) }
+                            finally {
+                                preprocessor?.let { availablePreprocessors.offer(it) }
+                            }
+                        }
+                        queuedToWorker = true
+                    } finally {
+                        if (!queuedToWorker) preprocessor?.let { availablePreprocessors.offer(it) }
+                    }
+                } finally { mp.close() }
         } catch (e: Throwable) { error(e) }
-        finally { image.close() }
     }
 
     private fun deliver(captureNs: Long, features: FloatArray?, crops: GazeGeometry.Crops?,

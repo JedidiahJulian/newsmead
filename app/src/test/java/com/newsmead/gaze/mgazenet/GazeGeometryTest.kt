@@ -17,15 +17,16 @@ class GazeGeometryTest {
     }
     @Test fun primitiveCoordinatePathMatchesLandmarkPath() {
         val points = points()
-        assertEquals(
-            GazeGeometry.crops(points,100,100),
-            GazeGeometry.crops(
-                DoubleArray(points.size) { points[it].x },
-                DoubleArray(points.size) { points[it].y },
-                100,
-                100,
-            ),
-        )
+        val x = DoubleArray(points.size) { points[it].x }
+        val y = DoubleArray(points.size) { points[it].y }
+        assertEquals(GazeGeometry.crops(points,100,100), GazeGeometry.crops(x, y, 100, 100))
+        val px = DoubleArray(points.size) { 9999.0 }
+        val py = DoubleArray(points.size) { -9999.0 }
+        assertEquals(GazeGeometry.crops(points,100,100), GazeGeometry.crops(x, y, 100, 100, px, py))
+        val shifted = points().apply { this[33] = GazeGeometry.Landmark(.31, .41) }
+        val sx = DoubleArray(shifted.size) { shifted[it].x }
+        val sy = DoubleArray(shifted.size) { shifted[it].y }
+        assertEquals(GazeGeometry.crops(shifted,100,100), GazeGeometry.crops(sx, sy, 100, 100, px, py))
     }
     @Test fun halfPixelUsesEvenRounding() {
         val p = points(); p[33] = GazeGeometry.Landmark(.305, .4)

@@ -3,6 +3,7 @@ package com.newsmead.gaze.mgazenet
 import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.test.platform.app.InstrumentationRegistry
+import com.google.mediapipe.framework.image.BitmapImageBuilder
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -73,6 +74,87 @@ class NativePipelineTest {
         assertArrayEquals(packedInputs.right,bitmapInputs.right,0f)
         assertArrayEquals(packedInputs.rect,bitmapInputs.rect,0f)
         bitmap.recycle()
+    }
+    @Test fun bitmapAndPackedRgbSubCropPreprocessingAreExactlyEquivalent() {
+        val width = 16
+        val height = 12
+        val pixels = IntArray(width * height) { i ->
+            val x = i % width
+            val y = i / width
+            Color.rgb((x * 17 + y * 5) and 255, (y * 23 + x * 3) and 255, ((x + y) * 19) and 255)
+        }
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+            setPixels(pixels, 0, width, 0, 0, width, height)
+        }
+        val packed = ByteArray(pixels.size * 3)
+        pixels.forEachIndexed { index, color ->
+            packed[index * 3] = Color.red(color).toByte()
+            packed[index * 3 + 1] = Color.green(color).toByte()
+            packed[index * 3 + 2] = Color.blue(color).toByte()
+        }
+        val crops = GazeGeometry.Crops(
+            face = GazeGeometry.Box(3, 2, 11, 9),
+            left = GazeGeometry.Box(1, 3, 5, 4),
+            right = GazeGeometry.Box(8, 2, 6, 5),
+            leftOpenness = 12.0,
+            rightOpenness = 14.0,
+        )
+        val packedInputs = Preprocessor().use { prep ->
+            prep.prepare(RgbFrame(width, height, packed), crops).let {
+                Preprocessor.Inputs(it.face.copyOf(), it.left.copyOf(), it.right.copyOf(), it.rect.copyOf())
+            }
+        }
+        val bitmapInputs = Preprocessor().use { prep ->
+            prep.prepare(bitmap, crops).let {
+                Preprocessor.Inputs(it.face.copyOf(), it.left.copyOf(), it.right.copyOf(), it.rect.copyOf())
+            }
+        }
+        assertArrayEquals(packedInputs.face, bitmapInputs.face, 0f)
+        assertArrayEquals(packedInputs.left, bitmapInputs.left, 0f)
+        assertArrayEquals(packedInputs.right, bitmapInputs.right, 0f)
+        assertArrayEquals(packedInputs.rect, bitmapInputs.rect, 0f)
+        bitmap.recycle()
+    }
+    @Test fun preprocessingBeforeMediaPipeCloseMatchesPackedRgbAndRecyclesOnClose() {
+        val raw = ByteArray(480 * 640 * 4)
+        for (i in 0 until 480 * 640) {
+            raw[i * 4] = ((i * 7) and 255).toByte()
+            raw[i * 4 + 1] = ((i * 13 + 31) and 255).toByte()
+            raw[i * 4 + 2] = ((i * 29 + 97) and 255).toByte()
+            raw[i * 4 + 3] = 255.toByte()
+        }
+        val crops = GazeGeometry.Crops(
+            face = GazeGeometry.Box(40, 60, 260, 260),
+            left = GazeGeometry.Box(90, 120, 72, 54),
+            right = GazeGeometry.Box(190, 120, 72, 54),
+            leftOpenness = 100.0,
+            rightOpenness = 100.0,
+        )
+        CameraFrames().use { frames ->
+            val bitmap = frames.copyRgba(ByteBuffer.wrap(raw), 640, 480, 640 * 4, 90)
+            val mp = BitmapImageBuilder(bitmap).build()
+            val expected = Preprocessor().use { prep ->
+                prep.prepare(frames.rgb(bitmap), crops).let {
+                    Preprocessor.Inputs(it.face.copyOf(), it.left.copyOf(), it.right.copyOf(), it.rect.copyOf())
+                }
+            }
+            val actual = try {
+                Preprocessor().use { prep ->
+                    prep.prepare(bitmap, crops).let {
+                        Preprocessor.Inputs(it.face.copyOf(), it.left.copyOf(), it.right.copyOf(), it.rect.copyOf())
+                    }
+                }
+            } finally {
+                mp.close()
+            }
+            assertTrue(bitmap.isRecycled)
+            assertArrayEquals(expected.face, actual.face, 0f)
+            assertArrayEquals(expected.left, actual.left, 0f)
+            assertArrayEquals(expected.right, actual.right, 0f)
+            assertArrayEquals(expected.rect, actual.rect, 0f)
+            val next = frames.copyRgba(ByteBuffer.wrap(raw), 640, 480, 640 * 4, 90)
+            assertFalse(next.isRecycled)
+        }
     }
     @Test fun externallyRecycledUprightBitmapIsRecreatedBeforeTheNextFrame() {
         val raw = byteArrayOf(10,5,7,-1,20,5,7,-1)
