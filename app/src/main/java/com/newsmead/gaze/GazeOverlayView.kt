@@ -4,15 +4,20 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.View
 import android.widget.TextView
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.exp
 
 /**
  * Debug overlay for Stage 4: draws the current gaze point (given in full-screen
@@ -29,9 +34,43 @@ class GazeOverlayView @JvmOverloads constructor(
     defStyle: Int = 0,
 ) : View(context, attrs, defStyle) {
 
+    enum class CursorStyle { DOT, REGION }
+
     private val gazePaint = fillPaint(
         Color.argb(GAZE_DOT_ALPHA, GAZE_DOT_RED, GAZE_DOT_GREEN, GAZE_DOT_BLUE),
     )
+    private val regionRadiusPx = dp(GAZE_REGION_RADIUS_DP)
+    private val regionRingStrokePx = dp(GAZE_REGION_RING_STROKE_DP)
+    private val regionOuterRadiusPx = (regionRadiusPx + dp(GAZE_REGION_HALO_WIDTH_DP)).coerceAtLeast(1f)
+    private val regionMatrix = Matrix()
+    private val regionShader = run {
+        // Keep the center completely transparent so article text underneath remains untouched.
+        val haloStartFrac = ((regionRadiusPx - regionRingStrokePx * 0.5f) / regionOuterRadiusPx).coerceIn(0f, 0.97f)
+        val haloPeakFrac = (regionRadiusPx / regionOuterRadiusPx).coerceIn(haloStartFrac + 0.01f, 0.99f)
+        RadialGradient(
+            0f,
+            0f,
+            regionOuterRadiusPx,
+            intArrayOf(
+                Color.argb(0, GAZE_REGION_RED, GAZE_REGION_GREEN, GAZE_REGION_BLUE),
+                Color.argb(0, GAZE_REGION_RED, GAZE_REGION_GREEN, GAZE_REGION_BLUE),
+                Color.argb(GAZE_REGION_HALO_ALPHA, GAZE_REGION_RED, GAZE_REGION_GREEN, GAZE_REGION_BLUE),
+                Color.argb(0, GAZE_REGION_RED, GAZE_REGION_GREEN, GAZE_REGION_BLUE),
+            ),
+            floatArrayOf(0f, haloStartFrac, haloPeakFrac, 1f),
+            Shader.TileMode.CLAMP,
+        )
+    }
+    private val regionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        shader = regionShader
+    }
+    private val regionRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(GAZE_REGION_RED, GAZE_REGION_GREEN, GAZE_REGION_BLUE)
+        style = Paint.Style.STROKE
+        strokeWidth = regionRingStrokePx
+    }
+    private val regionVisual = GazeRegionVisualState()
     private val wordPaint = fillPaint(Color.argb(82, 244, 211, 94))
     private val linePaint = fillPaint(Color.argb(58, 244, 211, 94))
     private val focusPaint = fillPaint(Color.argb(112, 0, 0, 0))
@@ -58,6 +97,7 @@ class GazeOverlayView @JvmOverloads constructor(
     private var hasPoint = false
     private var screenX = 0f
     private var screenY = 0f
+    private var cursorStyle = CursorStyle.DOT
     private var fpsText: String? = null
     private var captionText: String? = null
     private var debugVisualsEnabled = false
@@ -72,26 +112,43 @@ class GazeOverlayView @JvmOverloads constructor(
         isFocusable = false
     }
 
+    /** Switch between pinpoint DOT (validation/comparison) and feathered REGION (article reading). */
+    fun setCursorStyle(style: CursorStyle) {
+        if (cursorStyle == style) return
+        cursorStyle = style
+        regionVisual.reset()
+        postInvalidateOnAnimation()
+    }
+
     /** Set the current gaze point in full-screen pixels. */
     fun setGazeScreen(x: Float, y: Float) {
         screenX = x
         screenY = y
         hasPoint = true
+        if (cursorStyle == CursorStyle.REGION) {
+            regionVisual.setTarget(x, y)
+        }
         // Participant reading hides the diagnostic dot. Keep its latest position
         // without scheduling an otherwise empty draw for every camera result.
         if (debugVisualsEnabled || dotOnly || scaffoldOpacity > 0f) postInvalidateOnAnimation()
     }
 
-    /** Clear only the debug gaze dot when the source reports unavailable/stale input. */
+    /** Clear only the debug gaze dot or fade out the gaze region when input is unavailable/stale. */
     fun clearGaze() {
         if (!hasPoint) return
         hasPoint = false
+        if (cursorStyle == CursorStyle.REGION) {
+            regionVisual.clear()
+        }
         if (debugVisualsEnabled || dotOnly || scaffoldOpacity > 0f) postInvalidateOnAnimation()
     }
 
     fun setDebugVisualsEnabled(enabled: Boolean) {
         if (debugVisualsEnabled == enabled) return
         debugVisualsEnabled = enabled
+        if (!enabled && cursorStyle == CursorStyle.REGION) {
+            regionVisual.reset()
+        }
         postInvalidateOnAnimation()
     }
 
@@ -139,12 +196,13 @@ class GazeOverlayView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         fadeAnimator?.cancel()
+        regionVisual.reset()
         super.onDetachedFromWindow()
     }
 
     private var dotOnly = false
 
-    /** Researcher recording view: retain the orange dot, suppress all other overlays. */
+    /** Researcher recording view: retain the gaze cursor, suppress all other overlays. */
     fun setDotOnly(enabled: Boolean) {
         if (dotOnly == enabled) return
         dotOnly = enabled
@@ -158,9 +216,29 @@ class GazeOverlayView @JvmOverloads constructor(
         if (!dotOnly) captionText?.let { canvas.drawText(it, 24f, 104f, captionPaint) }
         if (!debugVisualsEnabled && !dotOnly) return
         if (!dotOnly) fpsText?.let { canvas.drawText(it, 24f, 60f, fpsPaint) }
+        if (cursorStyle == CursorStyle.REGION) {
+            drawRegion(canvas)
+            return
+        }
         if (!hasPoint) return
         getLocationOnScreen(loc)
         canvas.drawCircle(screenX - loc[0], screenY - loc[1], radius, gazePaint)
+    }
+
+    private fun drawRegion(canvas: Canvas) {
+        val keepAnimating = regionVisual.step(System.nanoTime())
+        if (regionVisual.visible) {
+            getLocationOnScreen(loc)
+            val drawX = regionVisual.renderX - loc[0]
+            val drawY = regionVisual.renderY - loc[1]
+            regionMatrix.setTranslate(drawX, drawY)
+            regionShader.setLocalMatrix(regionMatrix)
+            regionPaint.alpha = (255 * regionVisual.alpha).toInt().coerceIn(0, 255)
+            regionRingPaint.alpha = (GAZE_REGION_RING_ALPHA * regionVisual.alpha).toInt().coerceIn(0, 255)
+            canvas.drawCircle(drawX, drawY, regionOuterRadiusPx, regionPaint)
+            canvas.drawCircle(drawX, drawY, regionRadiusPx, regionRingPaint)
+        }
+        if (keepAnimating) postInvalidateOnAnimation()
     }
 
     private fun drawScaffold(canvas: Canvas) {
@@ -340,6 +418,14 @@ class GazeOverlayView @JvmOverloads constructor(
         const val GAZE_DOT_RED = 255
         const val GAZE_DOT_GREEN = 64
         const val GAZE_DOT_BLUE = 0
+        const val GAZE_REGION_RADIUS_DP = 26f
+        const val GAZE_REGION_RING_STROKE_DP = 1.5f
+        const val GAZE_REGION_RING_ALPHA = 135
+        const val GAZE_REGION_HALO_WIDTH_DP = 3f
+        const val GAZE_REGION_HALO_ALPHA = 50
+        const val GAZE_REGION_RED = 120
+        const val GAZE_REGION_GREEN = 144
+        const val GAZE_REGION_BLUE = 156
         private const val WORD_ALPHA = 82
         private const val LINE_ALPHA = 58
         private const val FOCUS_ALPHA = 112
@@ -347,5 +433,92 @@ class GazeOverlayView @JvmOverloads constructor(
         private const val REENTRY_CUE_ALPHA = 230
         private const val FOCUS_RADIUS_LINES = 2
         private const val FADE_DURATION_MS = 400L
+    }
+}
+
+/**
+ * Display-only exponential glide and fade state for [GazeOverlayView.CursorStyle.REGION].
+ * Never mutates recorded coordinates, scanpath state, or aid triggers.
+ */
+internal class GazeRegionVisualState(
+    private val glideRateHz: Float = 14f,
+    private val fadeInRateHz: Float = 12f,
+    private val fadeOutRateHz: Float = 8f,
+) {
+    var hasTarget = false; private set
+    var hasRenderPoint = false; private set
+    var targetX = 0f; private set
+    var targetY = 0f; private set
+    var renderX = 0f; private set
+    var renderY = 0f; private set
+    var alpha = 0f; private set
+    private var lastStepNs = 0L
+
+    val visible: Boolean get() = hasRenderPoint && alpha > MIN_VISIBLE_ALPHA
+
+    fun setTarget(x: Float, y: Float) {
+        targetX = x
+        targetY = y
+        hasTarget = true
+        if (!hasRenderPoint) {
+            renderX = x
+            renderY = y
+            hasRenderPoint = true
+        }
+    }
+
+    fun clear() {
+        hasTarget = false
+    }
+
+    fun reset() {
+        hasTarget = false
+        hasRenderPoint = false
+        alpha = 0f
+        lastStepNs = 0L
+    }
+
+    /** Advances glide/fade for one display frame; returns true while further animation frames are needed. */
+    fun step(nowNs: Long): Boolean {
+        val dtSec = if (lastStepNs == 0L || nowNs <= lastStepNs) {
+            DEFAULT_FRAME_DT_SEC
+        } else {
+            ((nowNs - lastStepNs) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
+        }
+        lastStepNs = nowNs
+
+        val goalAlpha = if (hasTarget) 1f else 0f
+        val alphaRate = if (hasTarget) fadeInRateHz else fadeOutRateHz
+        val alphaFactor = 1f - exp(-dtSec * alphaRate)
+        alpha += (goalAlpha - alpha) * alphaFactor
+        if (abs(goalAlpha - alpha) <= SNAP_ALPHA_EPS) {
+            alpha = goalAlpha
+        }
+
+        if (!hasTarget && alpha <= MIN_VISIBLE_ALPHA) {
+            alpha = 0f
+            hasRenderPoint = false
+            lastStepNs = 0L
+            return false
+        }
+
+        if (hasTarget && hasRenderPoint) {
+            val posFactor = 1f - exp(-dtSec * glideRateHz)
+            renderX += (targetX - renderX) * posFactor
+            renderY += (targetY - renderY) * posFactor
+            if (abs(targetX - renderX) <= SNAP_PX_EPS) renderX = targetX
+            if (abs(targetY - renderY) <= SNAP_PX_EPS) renderY = targetY
+        }
+
+        val alphaMoving = abs(goalAlpha - alpha) > SNAP_ALPHA_EPS
+        val posMoving = hasTarget && (abs(targetX - renderX) > SNAP_PX_EPS || abs(targetY - renderY) > SNAP_PX_EPS)
+        return alphaMoving || posMoving
+    }
+
+    private companion object {
+        const val DEFAULT_FRAME_DT_SEC = 1f / 60f
+        const val MIN_VISIBLE_ALPHA = 0.01f
+        const val SNAP_ALPHA_EPS = 0.01f
+        const val SNAP_PX_EPS = 0.5f
     }
 }

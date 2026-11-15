@@ -1214,7 +1214,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             !isResumed || launchedCalibration || articleGazeSink != null ||
             SystemClock.elapsedRealtime() < gazeRestartNotBeforeMs) return
 
-        val overlay = GazeOverlayView(requireContext())
+        val overlay = GazeOverlayView(requireContext()).apply {
+            setCursorStyle(GazeOverlayView.CursorStyle.REGION)
+        }
         gazeOverlay = overlay
         (binding.root as ViewGroup).addView(
             overlay,
