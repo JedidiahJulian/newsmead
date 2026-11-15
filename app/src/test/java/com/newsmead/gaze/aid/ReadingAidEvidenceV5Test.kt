@@ -353,4 +353,70 @@ class ReadingAidEvidenceV5Test {
         s.policy.tick(c.copy(geometrySnapshotId = "changed", geometry = geometry.copy(snapshotId = "changed")))
         assertTrue(s.policy.activeActions().isEmpty())
     }
+
+    @Test fun compatibleScrollRetainsVisibleAidsThroughSettleAndPreservesRereadFocusDemand() {
+        val s = Session()
+        s.hold(4, 2000)
+        listOf(5, 6, 7, 4, 5, 6).forEach { s.hold(it) }
+        val guideBefore = s.action(ReadingAidType.CURRENT_LINE)!!
+        val bookmarkBefore = s.action(ReadingAidType.READING_BOOKMARK)!!
+        val focusBefore = s.action(ReadingAidType.FOCUS_REGION)!!
+        assertEquals(6, guideBefore.anchor.line)
+        assertEquals(7, bookmarkBefore.anchor.line)
+        assertEquals(6, focusBefore.anchor.line)
+
+        // Manual scroll shifts textOriginY by -100px; lines 4..7 remain inside visibleRectScreen (0..700).
+        s.time += 50
+        val scrolledGeometry = geometry.copy(snapshotId = "g2", textOriginY = -100.0)
+        val scrollCtx = s.latest!!.copy(
+            geometrySnapshotId = "g2",
+            nowMs = s.time,
+            validLiveInput = false,
+            geometry = scrolledGeometry,
+            rawSample = null
+        )
+        s.policy.onCompatibleScroll(scrollCtx)
+        s.policy.tick(scrollCtx)
+        assertEquals(guideBefore.id, s.action(ReadingAidType.CURRENT_LINE)!!.id)
+        assertEquals("g2", s.action(ReadingAidType.CURRENT_LINE)!!.anchor.geometrySnapshotId)
+        assertEquals(bookmarkBefore.id, s.action(ReadingAidType.READING_BOOKMARK)!!.id)
+        assertEquals("g2", s.action(ReadingAidType.READING_BOOKMARK)!!.anchor.geometrySnapshotId)
+        assertEquals(focusBefore.id, s.action(ReadingAidType.FOCUS_REGION)!!.id)
+        assertEquals("g2", s.action(ReadingAidType.FOCUS_REGION)!!.anchor.geometrySnapshotId)
+
+        // 150ms of geometry_unsettled samples after manual scroll must not wipe active aids.
+        repeat(3) {
+            s.time += 50
+            val unsettledSample = ScanpathSample(s.time, s.time, 40.0, 225.0, null, null, null,
+                "g2", false, "geometry_unsettled")
+            val unsettledCtx = scrollCtx.copy(nowMs = s.time, captureMs = s.time,
+                evidenceAvailableMs = s.time, rawSample = unsettledSample)
+            s.policy.onObservation(null, unsettledCtx)
+        }
+        assertNotNull(s.action(ReadingAidType.CURRENT_LINE))
+        assertNotNull(s.action(ReadingAidType.READING_BOOKMARK))
+        assertNotNull(s.action(ReadingAidType.FOCUS_REGION))
+
+        // Scrolling far enough that lines 6 and 7 leave the viewport clears their anchors
+        // while preserving the reread focus demand so it re-anchors on a newly visible line.
+        s.time += 50
+        val farScrolled = geometry.copy(snapshotId = "g3", textOriginY = -400.0)
+        val farCtx = scrollCtx.copy(geometrySnapshotId = "g3", nowMs = s.time, geometry = farScrolled)
+        s.policy.onCompatibleScroll(farCtx)
+        assertNull(s.action(ReadingAidType.CURRENT_LINE))
+        assertNull(s.action(ReadingAidType.READING_BOOKMARK))
+        assertNull(s.action(ReadingAidType.FOCUS_REGION))
+        repeat(4) {
+            s.time += 50
+            val settleSample = ScanpathSample(s.time, s.time, 40.0, 125.0, 10, 1000, 1008,
+                "g3", true, null)
+            val settleCtx = ReadingAidContext(1, "g3", 14, 10, 1000, 1008, s.time, s.time, s.time,
+                true, farScrolled, 40.0, settleSample)
+            s.policy.onObservation(null, settleCtx)
+        }
+        val reanchoredFocus = s.action(ReadingAidType.FOCUS_REGION)!!
+        assertEquals(10, reanchoredFocus.anchor.line)
+        assertEquals("g3", reanchoredFocus.anchor.geometrySnapshotId)
+        assertEquals("A4_BROAD_REREADING_V5", reanchoredFocus.ruleId)
+    }
 }

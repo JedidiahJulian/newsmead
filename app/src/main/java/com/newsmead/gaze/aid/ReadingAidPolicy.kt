@@ -119,6 +119,77 @@ class ReadingAidPolicy(
         return out
     }
 
+    fun onCompatibleScroll(context: ReadingAidContext): List<ReadingAidDecision> {
+        if (epoch != null && epoch!!.first != context.generation) {
+            return reset(context, preserveCompletedFocus = false)
+        }
+        val out = mutableListOf<ReadingAidDecision>()
+        epoch = context.generation to context.geometrySnapshotId
+        continuationFloor = context.captureMs ?: context.nowMs
+        if (config.evidenceAlignedV5) {
+            location.onCompatibleScroll(context.generation, context.geometrySnapshotId, context.nowMs)
+        }
+        bookmarkPreciseSupport = null
+        val bookmarkVisible = bookmark.savedLine?.let { fullyVisible(it, context) } != false
+        bookmark.onCompatibleScroll(context.generation, context.geometrySnapshotId, bookmarkVisible)
+        val focusLine = active[ReadingAidType.FOCUS_REGION]?.anchor?.line
+        val focusVisible = focusLine != null && fullyVisible(focusLine, context)
+        focus.onCompatibleScroll(context.nowMs, context.generation, context.geometrySnapshotId, focusVisible)
+        wordVisit = null; cycle = null; lineResidence = null; segment = null
+        resetContinuation()
+        markerLanding = null
+        lastContinuationCapture = Double.NEGATIVE_INFINITY
+        for ((type, action) in active.toMap()) {
+            when (type) {
+                ReadingAidType.WORD_MAGNIFIER, ReadingAidType.WORD_DEFINITION ->
+                    clear(type, context.nowMs, "geometry_changed", out, applyCooldown = false)
+                ReadingAidType.CURRENT_LINE, ReadingAidType.CURRENT_SENTENCE -> {
+                    val rangeValid = type != ReadingAidType.CURRENT_SENTENCE || action.guideRange != null
+                    if (allowed(type) && fullyVisible(action.anchor.line, context) && rangeValid) {
+                        val refreshedGuide = action.guideEvidence?.let { ge ->
+                            val neededGrace = (context.nowMs - ge.lastSupportedDeliveryMs).coerceAtLeast(0.0) + 750.0
+                            ge.copy(lossGraceMs = maxOf(ge.lossGraceMs, neededGrace))
+                        }
+                        val refreshedExpires = refreshedGuide?.let {
+                            it.lastSupportedDeliveryMs + it.lossGraceMs + it.exitMs
+                        } ?: maxOf(action.expiresMs, context.nowMs + config.aidTtlMs)
+                        active[type] = action.copy(
+                            anchor = action.anchor.copy(geometrySnapshotId = context.geometrySnapshotId),
+                            guideEvidence = refreshedGuide,
+                            expiresMs = refreshedExpires
+                        )
+                    } else {
+                        clear(type, context.nowMs, "geometry_changed", out, applyCooldown = false)
+                    }
+                }
+                ReadingAidType.READING_BOOKMARK, ReadingAidType.NEXT_LINE_START -> {
+                    if (allowed(type) && fullyVisible(action.anchor.line, context) &&
+                        (type != ReadingAidType.READING_BOOKMARK || bookmarkVisible)) {
+                        active[type] = action.copy(
+                            anchor = action.anchor.copy(geometrySnapshotId = context.geometrySnapshotId)
+                        )
+                    } else {
+                        if (type == ReadingAidType.READING_BOOKMARK) bookmark.reset()
+                        clear(type, context.nowMs, "geometry_changed", out, applyCooldown = false)
+                    }
+                }
+                ReadingAidType.FOCUS_REGION -> {
+                    if (config.evidenceAlignedV5 && allowed(type) && focusVisible) {
+                        active[type] = action.copy(
+                            anchor = action.anchor.copy(geometrySnapshotId = context.geometrySnapshotId)
+                        )
+                    } else {
+                        clear(type, context.nowMs, "geometry_changed", out, applyCooldown = false)
+                    }
+                }
+            }
+        }
+        if (preferences.mode == ReadingAidsMode.ON) {
+            forceEnabledPresentations(null, context, out)
+        }
+        return out
+    }
+
     fun focusDiagnostics(nowMs: Double): Map<String, Any> = focus.diagnostics(nowMs)
 
     fun onEvent(event: ScanpathEvent, latestFinalizedFixation: ScanpathFixation?,
@@ -631,6 +702,25 @@ class ReadingAidPolicy(
             forceEnabledPresentations(null, c, out)
             return out
         }
+        if (c.rawSample?.exclusion in setOf("geometry_unsettled", "scroll_geometry_unavailable", "scroll_input_stale")) {
+            if (active[ReadingAidType.FOCUS_REGION]?.let { fullyVisible(it.anchor.line, c) } == true) {
+                focus.holdDuringScrollSettle(c.nowMs)
+            }
+            for (type in listOf(ReadingAidType.CURRENT_LINE, ReadingAidType.CURRENT_SENTENCE)) {
+                val action = active[type] ?: continue
+                val ge = action.guideEvidence ?: continue
+                if (fullyVisible(action.anchor.line, c)) {
+                    val neededGrace = (c.nowMs - ge.lastSupportedDeliveryMs).coerceAtLeast(0.0) + 750.0
+                    if (neededGrace > ge.lossGraceMs) {
+                        val refreshed = ge.copy(lossGraceMs = neededGrace)
+                        active[type] = action.copy(
+                            guideEvidence = refreshed,
+                            expiresMs = refreshed.lastSupportedDeliveryMs + refreshed.lossGraceMs + refreshed.exitMs
+                        )
+                    }
+                }
+            }
+        }
         val update = location.update(c, c.locationUncertainty, c.targetWordBounds)
         val visit = update.current
         val mapperSample = c.presentationSample
@@ -718,6 +808,7 @@ class ReadingAidPolicy(
         val line = visit?.band?.representativeLine
             ?.takeIf { fullyVisible(it, c) }
             ?: c.rawSample?.line?.takeIf { c.validLiveInput && fullyVisible(it, c) }
+            ?: c.targetLine?.takeIf { fullyVisible(it, c) }
             ?: c.geometry!!.lines.indices.firstOrNull { fullyVisible(it, c) }
             ?: return
         val support = visit?.continuation()

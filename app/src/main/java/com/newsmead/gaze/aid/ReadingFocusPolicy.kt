@@ -96,6 +96,33 @@ internal class ReadingFocusPolicy(
         observedLine = null; observedSegment = null; observedLineQualified = false
     }
     fun interruptReading() { lastCapture = null }
+    /** Compatible vertical translation: row indices are unchanged, so keep qualified demands and visible anchor. */
+    fun onCompatibleScroll(nowMs: Double, generation: Long, geometrySnapshotId: String, sourceLineVisible: Boolean) {
+        val nextEpoch = generation to geometrySnapshotId
+        if (supportEpoch != null && supportEpoch?.first == generation) supportEpoch = nextEpoch
+        if (rereadEpoch != null && rereadEpoch?.first == generation) rereadEpoch = nextEpoch
+        loss = null; presence = null; armed = false
+        recoveryTail = null; recoveryEpoch = null
+        lastCapture = null
+        breakLineSequence()
+        if (config.evidenceAlignedV5 && source != null && sourceEpoch?.first == generation && sourceLineVisible) {
+            sourceEpoch = nextEpoch
+            if (nowMs.isFinite() && nowMs >= 0.0) {
+                lastPresenceDelivery = maxOf(lastPresenceDelivery, nowMs)
+            }
+        } else {
+            source = null
+            sourceEpoch = null
+            lastSupportedCapture = Double.NEGATIVE_INFINITY
+            lastSupportedDelivery = Double.NEGATIVE_INFINITY
+            lastPresenceDelivery = Double.NEGATIVE_INFINITY
+        }
+    }
+    fun holdDuringScrollSettle(nowMs: Double) {
+        if (source != null && hasDemand && nowMs.isFinite() && nowMs >= 0.0) {
+            lastPresenceDelivery = maxOf(lastPresenceDelivery, nowMs)
+        }
+    }
     /** Row indices in a reread witness cannot survive text reflow. */
     fun invalidateReread() {
         rereadDemand = null; lastReread = null; rereads.clear(); rereadEpoch = null

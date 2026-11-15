@@ -101,6 +101,12 @@ class ReadingLocationSupport(
         lastDelivery = Double.NEGATIVE_INFINITY; lastNow = Double.NEGATIVE_INFINITY
     }
 
+    fun onCompatibleScroll(generation: Long, geometrySnapshotId: String, nowMs: Double) {
+        interrupt()
+        epoch = generation to geometrySnapshotId
+        if (nowMs.isFinite() && nowMs >= lastNow) lastNow = nowMs
+    }
+
     /** wordBounds, when provided, is the exact mapped word's screen-pixel rectangle. */
     fun update(c: ReadingAidContext, uncertainty: ReadingLocationUncertainty? = null,
         wordBounds: ScanpathRect? = null): ReadingLocationUpdate {

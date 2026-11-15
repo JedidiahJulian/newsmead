@@ -124,6 +124,19 @@ internal class ReadingBookmarkPolicy(
         trusted.clear(); anchorPrevious = null; anchorCreditMs = 0.0; maturityPresenceLast = null
     }
 
+    fun onCompatibleScroll(generation: Long, geometrySnapshotId: String, lineStillVisible: Boolean) {
+        val nextKey = generation to geometrySnapshotId
+        if (!lineStillVisible || (contextKey != null && contextKey!!.first != generation)) {
+            reset()
+            contextKey = nextKey
+            return
+        }
+        contextKey = nextKey
+        interruptTransition()
+        clearOutside()
+        clearLoss()
+    }
+
     /** A different coarse row without mapper agreement cannot become a precise saved line. */
     fun withholdUncertainSource() {
         if (persistence == null || shown) return
@@ -458,7 +471,8 @@ internal class ReadingBookmarkPolicy(
                 c.nowMs - t > maximumSupportIntervalMs && d != null && d.isFinite() &&
                 d >= t && d <= c.nowMs && d >= lastDelivery
             if (!progressMode && !agedRetainedCapture && s?.exclusion !in setOf("no_face", "invalid_crops", "eye_area", "stale",
-                    "invalid_prediction", "coordinate_unavailable", "outside_visible_text")) anchorArmed = false
+                    "invalid_prediction", "coordinate_unavailable", "outside_visible_text",
+                    "geometry_unsettled", "scroll_geometry_unavailable", "scroll_input_stale")) anchorArmed = false
             return
         }
         t!!; line!!

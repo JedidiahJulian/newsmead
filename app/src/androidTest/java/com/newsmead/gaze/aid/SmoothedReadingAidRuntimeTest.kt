@@ -321,4 +321,61 @@ class SmoothedReadingAidRuntimeTest {
             } finally { runtime.close("fixture") }
         }
     }
+
+    @Test fun v5ManualScrollRetainsVisibleLineGuideAndFocusThroughSettlingWindow() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+            val root = FrameLayout(ctx).apply { setBackgroundColor(Color.WHITE) }
+            val body = TextView(ctx).apply {
+                text = (1..30).joinToString("\n") { "Article paragraph line number $it with words." }
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 22f)
+            }
+            val overlay = ReadingAidOverlayView(ctx, lineStartMarkerInGutter = true)
+            root.addView(body, FrameLayout.LayoutParams(800, 900))
+            root.addView(overlay, FrameLayout.LayoutParams(800, 900))
+            root.measure(View.MeasureSpec.makeMeasureSpec(800, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(900, View.MeasureSpec.EXACTLY))
+            root.layout(0, 0, 800, 900)
+            val runtime = ArticleReadingAidRuntime(body, ReadingAidWordView(ctx), overlay,
+                config = ReadingAidPolicyConfig.evidenceAlignedPrototype(),
+                preferences = ReaderAidPreferences(mode = ReadingAidsMode.ON, lineGuide = true, focusRegion = true),
+                inputSource = ReadingAidInputSource.SYNTHETIC_REPLAY,
+                coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED)
+            try {
+                val initial = ScanpathTextGeometryReader().read(body)!!.forEngine("v5-scroll-before")
+                runtime.geometry(0, initial)
+                val targetLine = 4
+                val row = initial.lines[targetLine]
+                val at = SystemClock.elapsedRealtimeNanos() / 1e6 - 5.0
+                runtime.input(0, ScanpathSample(at, at + 1.0, null, null, targetLine, row.startUtf16, row.endUtf16,
+                    initial.snapshotId, displayX = initial.textOriginX + (row.left + row.right) / 2,
+                    displayY = initial.textOriginY + (row.top + row.bottom) / 2,
+                    coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED))
+                assertTrue(runtime.activeActions().any { it.aidType == ReadingAidType.CURRENT_LINE && it.anchor.line == targetLine })
+                assertTrue(runtime.activeActions().any { it.aidType == ReadingAidType.FOCUS_REGION && it.anchor.line == targetLine })
+
+                body.scrollTo(0, body.lineHeight)
+                val scrolled = ScanpathTextGeometryReader().read(body)!!.forEngine("v5-scroll-after")
+                assertNotEquals(initial.textOriginY, scrolled.textOriginY)
+                runtime.geometry(0, scrolled)
+
+                val settledAt = SystemClock.elapsedRealtimeNanos() / 1e6 - 1.0
+                val scrolledRow = scrolled.lines[targetLine]
+                runtime.input(0, ScanpathSample(settledAt, settledAt + 0.5, null, null, null, null, null,
+                    scrolled.snapshotId, eligible = false, exclusion = "geometry_unsettled",
+                    displayX = scrolled.textOriginX + (scrolledRow.left + scrolledRow.right) / 2,
+                    displayY = scrolled.textOriginY + (scrolledRow.top + scrolledRow.bottom) / 2,
+                    coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED))
+
+                val lineAfter = runtime.activeActions().firstOrNull { it.aidType == ReadingAidType.CURRENT_LINE }
+                val focusAfter = runtime.activeActions().firstOrNull { it.aidType == ReadingAidType.FOCUS_REGION }
+                assertNotNull("CURRENT_LINE must survive compatible manual scroll and settling frame", lineAfter)
+                assertNotNull("FOCUS_REGION must survive compatible manual scroll and settling frame", focusAfter)
+                assertEquals("v5-scroll-after", lineAfter!!.anchor.geometrySnapshotId)
+                assertEquals(targetLine, lineAfter.anchor.line)
+                assertEquals("v5-scroll-after", focusAfter!!.anchor.geometrySnapshotId)
+                assertEquals(targetLine, focusAfter.anchor.line)
+            } finally { runtime.close("v5-scroll-fixture") }
+        }
+    }
 }

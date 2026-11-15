@@ -125,13 +125,14 @@ class ReadingAidOverlayView(
             return
         }
         val now = presentationClockMs()
-        if (body !== textView || generation != epoch || geometry?.snapshotId != snapshot?.snapshotId ||
-            value.none { it.aidType == ReadingAidType.READING_BOOKMARK }) bookmarkOpacity.clear()
         val nextShape = shape(textView)
         val before = geometry
         val translationCompatible = body === textView && generation == epoch &&
             before != null && snapshot != null && bodyShape == nextShape &&
             ReadingFocusMotion.compatibleTranslation(before, snapshot)
+        if (body !== textView || generation != epoch ||
+            (!translationCompatible && geometry?.snapshotId != snapshot?.snapshotId) ||
+            value.none { it.aidType == ReadingAidType.READING_BOOKMARK }) bookmarkOpacity.clear()
         val oldLineStyle = actions.firstOrNull(::isAnimatedLineGuide)?.aidFormId
         val newLineStyle = value.firstOrNull(::isAnimatedLineGuide)?.aidFormId
         // An equivalent Layout replacement while converting the text buffer is harmless.
@@ -479,22 +480,32 @@ class ReadingAidOverlayView(
             lineBackground?.invalidateSelf()
             return
         }
-        clearGuideSpan()
-        if (g == null || action == null) return
-        val row = g.lines.getOrNull(action.anchor.line) ?: return
+        clearLineBackground()
+        if (g == null || action == null) { clearGuideSpan(); return }
+        val row = g.lines.getOrNull(action.anchor.line) ?: run { clearGuideSpan(); return }
         val start = action.guideRange?.startUtf16 ?: row.startUtf16
         val end = action.guideRange?.endUtf16 ?: row.endUtf16
         if (start < 0 || end <= start || end > view.text.length ||
             (action.aidType == ReadingAidType.CURRENT_SENTENCE && action.guideRange == null) ||
-            !action.strength.isFinite() || action.strength <= 0) return
+            !action.strength.isFinite() || action.strength <= 0) { clearGuideSpan(); return }
         if (view.text !is Spannable) view.setText(SpannableString(view.text), TextView.BufferType.SPANNABLE)
+        val spannable = view.text as Spannable
+        val existing = guideSpan
+        if (existing != null && spannable.getSpanStart(existing) == start && spannable.getSpanEnd(existing) == end) {
+            return
+        }
+        existing?.let { spannable.removeSpan(it) }
         val span = GuideBackgroundSpan({
-            val alpha = action.guideEvidence?.let { (255 * it.opacityAt(presentationClockMs())).roundToInt() }
-                ?: (80 * action.strength.coerceIn(0.0, 1.0)).toInt()
+            val current = actions.firstOrNull(::isBackgroundGuide)
+            val alpha = current?.guideEvidence?.let { (255 * it.opacityAt(presentationClockMs())).roundToInt() }
+                ?: (80 * (current?.strength ?: 0.0).coerceIn(0.0, 1.0)).toInt()
             Color.argb(alpha, 128, 128, 128)
-        }) { guideSpanDrawEligible(action) }
+        }) {
+            val current = actions.firstOrNull(::isBackgroundGuide)
+            current != null && !isAnimatedLineGuide(current) && guideSpanDrawEligible(current)
+        }
         guideSpan = span
-        (view.text as Spannable).setSpan(span, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        spannable.setSpan(span, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         view.invalidate()
     }
 
