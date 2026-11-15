@@ -40,7 +40,8 @@
         android:layout_marginBottom="48dp"
         android:textColor="#B26A00"
         android:textSize="16sp"
-        android:text="" />
+        android:text=""
+        android:visibility="gone" />
 
     <Button
         android:id="@+id/startButton"
@@ -72,15 +73,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:lineSpacingExtra="4dp"
+            android:lineSpacingExtra="6dp"
             android:textColor="@color/light_text"
-            android:textSize="16sp" />
+            android:textSize="17sp" />
 
         <Button
             android:id="@+id/btnAccept"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="24dp"
             android:text="@string/calib_accept" />
 
         <Button
@@ -96,6 +97,27 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="@string/calib_redo_all" />
+
+        <Button
+            android:id="@+id/btnToggleDetails"
+            style="?attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Show details"
+            android:textColor="#555555"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/gateDetailsText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:lineSpacingExtra="3dp"
+            android:textColor="#555555"
+            android:textSize="13sp"
+            android:visibility="gone" />
 
         </LinearLayout>
 

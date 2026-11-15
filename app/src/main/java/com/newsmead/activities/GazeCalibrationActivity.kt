@@ -39,7 +39,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
     private var verification = -1
     private var checkStart = Double.NaN
     private var checkAttempt = 1
-    private var postFitPostureWarningUntil = Double.NEGATIVE_INFINITY
+    @Volatile private var postFitPostureWarningUntil = Double.NEGATIVE_INFINITY
+    private var detailsExpanded = false
     private val checkPredictions = ArrayList<Pair<Float,Float>>()
     private val checkResults = ArrayList<MgazeNetCalibrationQualityGate.Check>()
     private val summaries = ArrayList<String>()
@@ -68,6 +69,11 @@ class GazeCalibrationActivity : AppCompatActivity() {
         }
         binding.btnAccept.setOnClickListener { save() }
         binding.btnRedoAll.setOnClickListener { discardAndPrepareRetry() }
+        binding.btnToggleDetails.setOnClickListener {
+            detailsExpanded = !detailsExpanded
+            binding.gateDetailsText.visibility = if (detailsExpanded) View.VISIBLE else View.GONE
+            binding.btnToggleDetails.text = if (detailsExpanded) "Hide details" else "Show details"
+        }
         binding.btnRedoWorst.visibility = View.GONE
         binding.btnRedoAll.visibility = View.GONE
 
@@ -216,14 +222,10 @@ class GazeCalibrationActivity : AppCompatActivity() {
             if (s != null && verification < 0) {
                 if (s.tick(now)) showTarget()
                 if (s.phase == MgazeNetCalibrationSession.Phase.FAILED) { stop("Target capture timed out. Nothing was saved."); return }
-                if (s.phase == MgazeNetCalibrationSession.Phase.COLLECT) {
-                    binding.statusText.text = when {
-                        s.showPostureWarning(now) && s.index < 0 -> "Hold the phone and your head steady · recollecting practice"
-                        s.showPostureWarning(now) -> "Return to the practice posture"
-                        s.fillingTemporalWindow(now) -> "${s.count} / ${MgazeNetCalibrationSession.SAMPLES_PER_TARGET} stable samples · spreading across 3 seconds"
-                        s.index < 0 -> "${s.count} / ${MgazeNetCalibrationSession.SAMPLES_PER_TARGET} posture-reference samples"
-                        else -> "${s.count} / ${MgazeNetCalibrationSession.SAMPLES_PER_TARGET} stable samples"
-                    }
+                if (s.phase == MgazeNetCalibrationSession.Phase.COLLECT || s.phase == MgazeNetCalibrationSession.Phase.POST) {
+                    val paused = s.phase == MgazeNetCalibrationSession.Phase.COLLECT && s.showPostureWarning(now)
+                    binding.calibrationView.setPosturePaused(paused)
+                    if (!paused) binding.calibrationView.setTargetProgress(s.targetProgress(now))
                 }
                 if (s.phase == MgazeNetCalibrationSession.Phase.FITTING && !fitting) {
                     fitting = true; binding.calibrationView.hideTarget(); binding.progressText.text = "Fitting calibration…"
@@ -235,13 +237,18 @@ class GazeCalibrationActivity : AppCompatActivity() {
                     }
                 }
             } else if (verification in 0..5) {
-                when (MgazeNetPostFitTiming.decision(checkStart, now, checkPredictions.size,
-                    checkAttempt, comparisonSpec == null)) {
-                    MgazeNetPostFitTiming.Decision.WAIT -> Unit
-                    MgazeNetPostFitTiming.Decision.EXTEND ->
-                        binding.statusText.text = if (now < postFitPostureWarningUntil)
-                            "Return to the calibration posture" else
-                            "More usable samples needed: ${checkPredictions.size} / ${MgazeNetCalibrationQualityGate.MIN_SAMPLES_PER_CHECK}. Keep looking at this target."
+                val paused = now < postFitPostureWarningUntil
+                binding.calibrationView.setPosturePaused(paused)
+                val decision = MgazeNetPostFitTiming.decision(checkStart, now, checkPredictions.size,
+                    checkAttempt, comparisonSpec == null)
+                if (!paused || decision == MgazeNetPostFitTiming.Decision.COMPLETE) {
+                    binding.calibrationView.setTargetProgress(
+                        if (decision == MgazeNetPostFitTiming.Decision.COMPLETE) 1f
+                        else MgazeNetPostFitTiming.progress(checkStart, now, checkPredictions.size, comparisonSpec == null)
+                    )
+                }
+                when (decision) {
+                    MgazeNetPostFitTiming.Decision.WAIT, MgazeNetPostFitTiming.Decision.EXTEND -> Unit
                     MgazeNetPostFitTiming.Decision.COMPLETE -> {
                         recordCheckAttempt(now, "completed")
                         finishCheck()
@@ -276,7 +283,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
         val p = checkTarget(); val local = identity!!.viewport.toLocal(p.x,p.y)
         binding.progressText.text = if (checkAttempt > 1) "Retry ${checkSpec(verification).label}" else
             if (verification == 0) "Near-centre repeat" else "Validation $verification of 5"
-        binding.statusText.text = "Keep looking at the target"
+        binding.statusText.text = ""
         binding.calibrationView.onNextTargetDraw { if (active) checkStart = MgazeNetCameraSource.now() }
         binding.calibrationView.showTarget(local.x,local.y,1800)
     }
@@ -286,7 +293,6 @@ class GazeCalibrationActivity : AppCompatActivity() {
             !frame.eligible) return
         if (session?.postureAccepted(frame.posture) != true) {
             postFitPostureWarningUntil = frame.outputMs + 1_000.0
-            binding.statusText.text = "Return to the calibration posture"
             return
         }
         postFitPostureWarningUntil = Double.NEGATIVE_INFINITY
@@ -295,7 +301,6 @@ class GazeCalibrationActivity : AppCompatActivity() {
         val y = p[1]*identity!!.screenHeight
         if (x.isFinite() && y.isFinite()) {
             checkPredictions.add(x to y)
-            binding.statusText.text = "Usable samples: ${checkPredictions.size} / ${MgazeNetCalibrationQualityGate.MIN_SAMPLES_PER_CHECK}. Keep looking at the target."
         }
     }
     private fun recordCheckAttempt(now: Double, outcome: String) {
@@ -351,8 +356,13 @@ class GazeCalibrationActivity : AppCompatActivity() {
             stop("Calibration quality check failed. Nothing was saved. ${report.failures.joinToString("; ")}")
             return
         }
+        detailsExpanded = false
         binding.gatePanel.visibility = View.VISIBLE
-        binding.gateText.text = qualitySummary(report)
+        binding.gateText.text = minimalQualitySummary(report)
+        binding.gateDetailsText.text = qualitySummary(report)
+        binding.gateDetailsText.visibility = View.GONE
+        binding.btnToggleDetails.visibility = View.VISIBLE
+        binding.btnToggleDetails.text = "Show details"
         binding.btnAccept.visibility = if (report.passed) View.VISIBLE else View.GONE
         binding.btnAccept.isEnabled = report.passed
         binding.btnRedoAll.visibility = if (report.passed) View.GONE else View.VISIBLE
@@ -457,6 +467,21 @@ class GazeCalibrationActivity : AppCompatActivity() {
         else -> error("Invalid post-fit check index")
     }
 
+    private fun minimalQualitySummary(report: MgazeNetCalibrationQualityGate.Report): String {
+        val headline = if (report.passed) "Calibration passed" else "Recalibration needed"
+        val accuracy = if (report.median2dCm.isFinite() && report.worst2dCm.isFinite()) {
+            String.format(Locale.US, "Typical error: %.2f cm  ·  Worst: %.2f cm", report.median2dCm, report.worst2dCm)
+        } else {
+            "Insufficient usable validation samples."
+        }
+        val decision = if (report.passed) {
+            "Saving will replace your previous calibration."
+        } else {
+            report.failures.joinToString("\n") { "• $it" } + "\n\nPrevious calibration was kept."
+        }
+        return "$headline\n\n$accuracy\n\n$decision"
+    }
+
     private fun qualitySummary(report: MgazeNetCalibrationQualityGate.Report): String {
         fun value(number: Double) = if (number.isFinite()) String.format(Locale.US,"%.3f",number) else "unavailable"
         val heading = if (report.passed) "Calibration quality: PASS" else "Calibration quality: RETRY REQUIRED"
@@ -483,7 +508,11 @@ class GazeCalibrationActivity : AppCompatActivity() {
         active = false
         handler.removeCallbacksAndMessages(null)
         session?.close(); session = null
+        detailsExpanded = false
         binding.gatePanel.visibility = View.GONE
+        binding.gateDetailsText.visibility = View.GONE
+        binding.btnToggleDetails.visibility = View.GONE
+        binding.btnToggleDetails.text = "Show details"
         binding.progressText.text = "Discarding this run…"
         val closing = source
         source = null

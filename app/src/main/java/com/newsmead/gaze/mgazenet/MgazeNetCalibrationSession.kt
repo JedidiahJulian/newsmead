@@ -75,6 +75,17 @@ class MgazeNetCalibrationSession(val identity: CalibrationIdentity) : AutoClosea
     fun fillingTemporalWindow(now: Double) = phase == Phase.COLLECT && count >= SAMPLES_PER_TARGET &&
         now < onset+SETTLE_MS+SAMPLE_WINDOW_MS
 
+    /** Read-only completion fraction in 0..1 for the active target, bounded by sample count and window time. */
+    fun targetProgress(now: Double): Float = when {
+        phase == Phase.POST || phase == Phase.FITTING || phase == Phase.COMPLETE -> 1f
+        phase != Phase.COLLECT || !onset.isFinite() || !now.isFinite() -> 0f
+        else -> {
+            val sampleFraction = (count.toDouble() / SAMPLES_PER_TARGET).coerceIn(0.0, 1.0)
+            val timeFraction = ((now - (onset + SETTLE_MS)) / SAMPLE_WINDOW_MS).coerceIn(0.0, 1.0)
+            minOf(sampleFraction, timeFraction).toFloat()
+        }
+    }
+
     /** Returns true when a different target must be drawn. */
     fun tick(now: Double): Boolean {
         if (phase == Phase.COLLECT && now >= onset+TARGET_TIMEOUT_MS) {

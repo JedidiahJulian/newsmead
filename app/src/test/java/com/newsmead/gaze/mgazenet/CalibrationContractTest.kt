@@ -115,4 +115,20 @@ class CalibrationContractTest {
         assertEquals(1,s.count)
         s.close()
     }
+    @Test fun targetProgressTracksBothSampleCountAndWindowTimeTo100Percent() {
+        val s = MgazeNetCalibrationSession(identity()); s.begin()
+        assertEquals(0f, s.targetProgress(0.0), 0f)
+        s.drawn(0.0)
+        assertEquals(0f, s.targetProgress(1499.0), 0f)
+        val features = FloatArray(258)
+        for (i in 0 until 15) s.sample(1550.0 + i * 50, 1551.0 + i * 50, features, 11.0, 11.0, posture())
+        assertEquals(15f / 45f, s.targetProgress(3000.0), 0.001f)
+        for (i in 15 until 45) s.sample(1550.0 + i * 50, 1551.0 + i * 50, features, 11.0, 11.0, posture())
+        assertEquals(45, s.count)
+        assertTrue(s.targetProgress(4499.0) < 1f)
+        assertFalse(s.tick(4500.0))
+        assertEquals(MgazeNetCalibrationSession.Phase.POST, s.phase)
+        assertEquals(1f, s.targetProgress(4500.0), 0f)
+        s.close()
+    }
 }

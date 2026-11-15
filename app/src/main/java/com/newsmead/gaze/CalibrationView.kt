@@ -5,6 +5,8 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.View
 import android.view.animation.DecelerateInterpolator
@@ -33,16 +35,24 @@ class CalibrationView @JvmOverloads constructor(
     private var targetY: Float? = null
     private var appearProgress = 1f
     private var confirmProgress = 0f
+    private var targetProgress = 0f
+    private var posturePaused = false
     private var focusRadiusDp = CONTRACT_END_RADIUS_DP
     private var appearAnimator: ValueAnimator? = null
     private var confirmAnimator: ValueAnimator? = null
     private var focusAnimator: ValueAnimator? = null
     private var miniStates: List<MiniDotState> = emptyList()
     private var pendingTargetDraw: (() -> Unit)? = null
+    private val meterRect = RectF()
+    private val posturePillRect = RectF()
 
     /** Acknowledge actual drawing; callers still account separately for attention/settle time. */
     fun onNextTargetDraw(callback: () -> Unit) { pendingTargetDraw = callback }
 
+    private val meterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = METER_COLOR
+        style = Paint.Style.FILL
+    }
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = RING_COLOR
         style = Paint.Style.STROKE
@@ -73,6 +83,16 @@ class CalibrationView @JvmOverloads constructor(
         color = CONFIRM_COLOR
         style = Paint.Style.FILL
     }
+    private val posturePillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = POSTURE_AMBER_COLOR
+        style = Paint.Style.FILL
+    }
+    private val postureTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = POSTURE_TEXT_SP * resources.displayMetrics.scaledDensity
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
     private val miniPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
@@ -82,6 +102,8 @@ class CalibrationView @JvmOverloads constructor(
         targetX = x
         targetY = y
         confirmProgress = 0f
+        targetProgress = 0f
+        posturePaused = false
         appearProgress = 0f
         appearAnimator?.cancel()
         appearAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -115,8 +137,25 @@ class CalibrationView @JvmOverloads constructor(
         confirmAnimator?.cancel()
         focusAnimator?.cancel()
         focusRadiusDp = CONTRACT_END_RADIUS_DP
+        targetProgress = 0f
+        posturePaused = false
         targetX = null
         targetY = null
+        invalidate()
+    }
+
+    /** Update the clockwise radial completion sweep (0..1) inside the outer scope circle. */
+    fun setTargetProgress(progress: Float) {
+        val clamped = if (progress.isFinite()) progress.coerceIn(0f, 1f) else 0f
+        if (clamped == targetProgress) return
+        targetProgress = clamped
+        invalidate()
+    }
+
+    /** Highlight the outer scope ring in amber and show a compact posture pill near the target. */
+    fun setPosturePaused(paused: Boolean) {
+        if (paused == posturePaused) return
+        posturePaused = paused
         invalidate()
     }
 
@@ -146,6 +185,14 @@ class CalibrationView @JvmOverloads constructor(
         val y = targetY ?: return
         val scale = APPEAR_START_SCALE - (APPEAR_START_SCALE - 1f) * appearProgress
         val alpha = (255 * appearProgress).toInt()
+        val ringRadiusPx = RING_RADIUS_DP * density * scale
+        // Draw the clockwise progress sweep inside the scope circle behind the red dot and black reticle.
+        if (targetProgress > 0f) {
+            meterPaint.alpha = alpha
+            meterRect.set(x - ringRadiusPx, y - ringRadiusPx, x + ringRadiusPx, y + ringRadiusPx)
+            canvas.drawArc(meterRect, -90f, 360f * targetProgress, true, meterPaint)
+        }
+        ringPaint.color = if (posturePaused) POSTURE_AMBER_COLOR else RING_COLOR
         ringPaint.alpha = alpha
         dotPaint.alpha = alpha
         focusOutlinePaint.alpha = alpha
@@ -155,14 +202,38 @@ class CalibrationView @JvmOverloads constructor(
         // black reticle over it so every alignment mark remains high-contrast.
         canvas.drawCircle(x, y, focusRadiusDp * density, dotPaint)
         canvas.drawCircle(x, y, focusRadiusDp * density, focusOutlinePaint)
-        canvas.drawCircle(x, y, RING_RADIUS_DP * density * scale, ringPaint)
+        canvas.drawCircle(x, y, ringRadiusPx, ringPaint)
         drawCrosshair(canvas, x, y, scale)
         drawCenterCross(canvas, x, y)
+        if (posturePaused) {
+            drawPosturePill(canvas, x, y, ringRadiusPx, alpha)
+        }
         pendingTargetDraw?.let { callback -> pendingTargetDraw = null; post { callback() } }
         if (confirmProgress > 0f) {
             confirmPaint.alpha = (200 * confirmProgress).toInt()
             canvas.drawCircle(x, y, RING_RADIUS_DP * density, confirmPaint)
         }
+    }
+
+    private fun drawPosturePill(canvas: Canvas, x: Float, y: Float, ringRadiusPx: Float, alpha: Int) {
+        val textWidth = postureTextPaint.measureText(POSTURE_LABEL)
+        val fm = postureTextPaint.fontMetrics
+        val textHeight = fm.descent - fm.ascent
+        val pillWidth = textWidth + 2f * PILL_H_PADDING_DP * density
+        val pillHeight = textHeight + 2f * PILL_V_PADDING_DP * density
+        val gap = PILL_GAP_DP * density
+        val margin = PILL_EDGE_MARGIN_DP * density
+        val left = (x - pillWidth / 2f).coerceIn(margin, maxOf(margin, width - pillWidth - margin))
+        val placeBelow = y < height * TOP_ROW_Y_FRACTION ||
+            y - ringRadiusPx - gap - pillHeight < PILL_TOP_CLEARANCE_DP * density
+        val top = if (placeBelow) y + ringRadiusPx + gap else y - ringRadiusPx - gap - pillHeight
+        posturePillRect.set(left, top, left + pillWidth, top + pillHeight)
+        val radius = pillHeight / 2f
+        posturePillPaint.alpha = alpha
+        postureTextPaint.alpha = alpha
+        canvas.drawRoundRect(posturePillRect, radius, radius, posturePillPaint)
+        val textY = posturePillRect.centerY() - (fm.ascent + fm.descent) / 2f
+        canvas.drawText(POSTURE_LABEL, posturePillRect.centerX(), textY, postureTextPaint)
     }
 
     /** Four separated arms keep the exact centre unobstructed, like a hit-marker. */
@@ -227,9 +298,20 @@ class CalibrationView @JvmOverloads constructor(
         private const val MINI_GAP_DP = 6f
         private const val MINI_TOP_DP = 64f
 
+        private const val POSTURE_LABEL = "Return to practice posture"
+        private const val POSTURE_TEXT_SP = 12f
+        private const val PILL_H_PADDING_DP = 12f
+        private const val PILL_V_PADDING_DP = 5f
+        private const val PILL_GAP_DP = 10f
+        private const val PILL_EDGE_MARGIN_DP = 12f
+        private const val PILL_TOP_CLEARANCE_DP = 64f
+        private const val TOP_ROW_Y_FRACTION = 0.28f
+
         // Contrast-first colors for the light reading-surface background.
-        private val RING_COLOR = Color.parseColor("#37474F")
+        private val RING_COLOR = Color.parseColor("#1A1A1A")
         private val DOT_COLOR = Color.parseColor("#FF0000")
+        private val METER_COLOR = Color.parseColor("#CFD8DC")
+        private val POSTURE_AMBER_COLOR = Color.parseColor("#B26A00")
         private val CONFIRM_COLOR = Color.parseColor("#2E7D32")
         private val MINI_PENDING_COLOR = Color.parseColor("#BDBDBD")
         private val MINI_CURRENT_COLOR = Color.parseColor("#C62828")

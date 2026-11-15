@@ -35,4 +35,16 @@ object MgazeNetPostFitTiming {
         if (nowMs < checkStartMs + EXTENDED_CAPTURE_END_MS + OUTPUT_GRACE_MS) return Decision.EXTEND
         return if (attempt < MAX_ATTEMPTS) Decision.RETRY else Decision.FAILED
     }
+
+    /** Read-only completion fraction in 0..1 aligned with [decision] completion. */
+    fun progress(checkStartMs: Double, nowMs: Double, usableSamples: Int,
+        allowLocalRetry: Boolean): Float {
+        if (!checkStartMs.isFinite() || !nowMs.isFinite() || nowMs < checkStartMs + SETTLE_MS) return 0f
+        val endWithGrace = (if (allowLocalRetry) CAPTURE_END_MS else COMPARISON_CAPTURE_END_MS) + OUTPUT_GRACE_MS
+        val timeFraction = ((nowMs - (checkStartMs + SETTLE_MS)) / (endWithGrace - SETTLE_MS)).coerceIn(0.0, 1.0)
+        if (!allowLocalRetry) return timeFraction.toFloat()
+        val sampleFraction = (usableSamples.toDouble() / MgazeNetCalibrationQualityGate.MIN_SAMPLES_PER_CHECK)
+            .coerceIn(0.0, 1.0)
+        return minOf(timeFraction, sampleFraction).toFloat()
+    }
 }

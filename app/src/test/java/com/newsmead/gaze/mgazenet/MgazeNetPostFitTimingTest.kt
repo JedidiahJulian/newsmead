@@ -40,4 +40,14 @@ class MgazeNetPostFitTimingTest {
         assertFalse(timing.accepts(start, start + 5_499.0, start + 5_750.0, false))
         assertTrue(timing.accepts(start, start + 5_499.0, start + 5_749.0, false))
     }
+
+    @Test fun postFitProgressAlignsWithCompletionAndRespectsSampleShortfall() {
+        val start = 1_000.0
+        val timing = MgazeNetPostFitTiming
+        assertEquals(0f, timing.progress(start, start + 2_999.0, 12, true), 0f)
+        assertEquals(0.5f, timing.progress(start, start + 5_125.0, 12, true), 0.001f)
+        assertEquals(1f, timing.progress(start, start + 7_250.0, 12, true), 0f)
+        assertEquals(8f / 12f, timing.progress(start, start + 7_250.0, 8, true), 0.001f)
+        assertEquals(1f, timing.progress(start, start + 5_750.0, 10, false), 0f)
+    }
 }
