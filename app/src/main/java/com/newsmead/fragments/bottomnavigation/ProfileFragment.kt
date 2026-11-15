@@ -54,12 +54,19 @@ class ProfileFragment : Fragment() {
 
         // Connect to Firebase Auth
         this.auth = FirebaseAuth.getInstance()
-
-        // Fill Email Field
-        this.viewBinding.etEmail.setText(this.auth.currentUser?.email)
+        applyAuthUi()
 
         // Buttons
         this.viewBinding.btnLogout.setOnClickListener {
+            if (com.newsmead.fragments.account.GuestLoginPrompt.isGuest()) {
+                val host = activity ?: return@setOnClickListener
+                com.newsmead.fragments.account.GuestLoginPrompt.openAccount(
+                    host,
+                    allowBack = false,
+                    clearTask = true
+                )
+                return@setOnClickListener
+            }
             this.viewBinding.btnLogout.isEnabled = false
             Analytics.logout()
             ResearchSession.authEvent("log_out", success = true)
@@ -96,6 +103,31 @@ class ProfileFragment : Fragment() {
             updateProfile(password, confirmPassword)
         }
 
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!StudyConfig.ACCOUNT_FREE_STUDY) {
+            applyAuthUi()
+        }
+    }
+
+    private fun applyAuthUi() {
+        val guest = com.newsmead.fragments.account.GuestLoginPrompt.isGuest()
+        if (guest) {
+            viewBinding.constraintLayout.visibility = View.GONE
+            viewBinding.btnSave.visibility = View.GONE
+            viewBinding.btnLogout.visibility = View.VISIBLE
+            viewBinding.btnLogout.setText(R.string.profile_login_or_signup)
+            viewBinding.tvProfileSubtitle.setText(R.string.profile_guest_subtitle)
+        } else {
+            viewBinding.constraintLayout.visibility = View.VISIBLE
+            viewBinding.btnSave.visibility = View.VISIBLE
+            viewBinding.btnLogout.visibility = View.VISIBLE
+            viewBinding.btnLogout.setText(R.string.profile_logout)
+            viewBinding.tvProfileSubtitle.setText(R.string.profile_subtitle)
+            viewBinding.etEmail.setText(auth.currentUser?.email)
+        }
     }
 
     private fun configureAppearance() {

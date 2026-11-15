@@ -51,7 +51,6 @@ class FirebaseHelper {
 
         suspend fun getListsCollection(context: Context): ArrayList<SavedList>? = coroutineScope {
             if (currentUid == "null") {
-                Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
                 return@coroutineScope null
             }
 
@@ -125,7 +124,6 @@ class FirebaseHelper {
 
         suspend fun getAllArticlesFromLists(context: Context): ArrayList<Article> = coroutineScope {
             if (currentUid == "null") {
-                Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
                 return@coroutineScope ArrayList<Article>()
             }
 
@@ -360,8 +358,8 @@ class FirebaseHelper {
 
         suspend fun getArticleIdsFromList(context: Context, listId: String): List<String> = suspendCoroutine { continuation ->
             if (currentUid == "null") {
-                Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
                 continuation.resume(emptyList())
+                return@suspendCoroutine
             }
 
             val articleIds = mutableListOf<String>()
@@ -386,8 +384,8 @@ class FirebaseHelper {
 
         suspend fun getArticlesFromList(context: Context, listId: String): List<Article> = suspendCoroutine { continuation ->
             if (currentUid == "null") {
-                Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
                 continuation.resume(emptyList())
+                return@suspendCoroutine
             }
 
             val articles = mutableListOf<Article>()
@@ -424,9 +422,7 @@ class FirebaseHelper {
         }
 
         suspend fun getHistory(context: Context): List<Article> = coroutineScope {
-            if (StudyConfig.ACCOUNT_FREE_STUDY) return@coroutineScope emptyList()
-            if (currentUid == "null") {
-                Toast.makeText(context, "Please login to view history", Toast.LENGTH_SHORT).show()
+            if (StudyConfig.ACCOUNT_FREE_STUDY || currentUid == "null") {
                 return@coroutineScope emptyList()
             }
 
@@ -469,11 +465,7 @@ class FirebaseHelper {
         }
 
         suspend fun checkIfArticleSavedInLists(context: Context, articleId: String): List<String> {
-            if (StudyConfig.ACCOUNT_FREE_STUDY) return emptyList()
-            if (currentUid == "null") {
-                Toast.makeText(context, "Please login to view/create a list", Toast.LENGTH_SHORT).show()
-                return emptyList()
-            }
+            if (StudyConfig.ACCOUNT_FREE_STUDY || currentUid == "null") return emptyList()
 
             val firestore = getFirestoreInstance()
             val userListsRef = firestore.collection("users").document(currentUid).collection("lists")

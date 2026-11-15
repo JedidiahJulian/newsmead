@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.core.os.bundleOf
 import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
+import com.newsmead.activities.AccountActivity
 import com.newsmead.activities.MainActivity
 import com.newsmead.R
 import com.newsmead.data.FirebaseHelper
@@ -74,6 +75,20 @@ class LogInFragment : Fragment() {
             transaction.replace(R.id.flAccountContainer, signUpFragment)
             transaction.addToBackStack(null)
             transaction.commit()
+        }
+        this.viewBinding.btnAccGuest.setOnClickListener {
+            val host = activity ?: return@setOnClickListener
+            PreloadedData.clearData()
+            AppLog.setAuthState("guest")
+            ResearchSession.authEvent("guest_enter", success = true)
+            if (host.intent?.getBooleanExtra(AccountActivity.EXTRA_ALLOW_BACK_TO_GUEST, false) == true) {
+                host.finish()
+            } else {
+                val intent = Intent(host, MainActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                host.startActivity(intent)
+                host.finish()
+            }
         }
         this.viewBinding.btnAccLogIn.setOnClickListener {
 
@@ -198,6 +213,7 @@ class LogInFragment : Fragment() {
         if (!isAdded) return
         this.viewBinding.btnAccLogIn.isEnabled = enabled
         this.viewBinding.btnAccCreate.isEnabled = enabled
+        this.viewBinding.btnAccGuest.isEnabled = enabled
     }
 
     /**

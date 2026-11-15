@@ -65,6 +65,11 @@ class SavedListsFragment: Fragment(), cardListener {
 
     private fun refreshLists() {
         val context = context ?: return
+        if (com.newsmead.fragments.account.GuestLoginPrompt.isGuest()) {
+            data.clear()
+            adapter.notifyDataSetChanged()
+            return
+        }
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val listsCollection = FirebaseHelper.getListsCollection(context)
@@ -90,6 +95,13 @@ class SavedListsFragment: Fragment(), cardListener {
 
         // Button for Create New List
         binding.btnCreateList.setOnClickListener {
+            if (com.newsmead.fragments.account.GuestLoginPrompt.isGuest()) {
+                com.newsmead.fragments.account.GuestLoginPrompt.show(
+                    requireActivity(),
+                    com.newsmead.R.string.guest_login_prompt_lists
+                )
+                return@setOnClickListener
+            }
             val newListDialog = NewListDialog(requireContext()) { newListName ->
                 lifecycleScope.launch {
                     // Add new list to database

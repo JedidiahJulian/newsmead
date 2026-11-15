@@ -11,10 +11,11 @@ import com.newsmead.BuildConfig
 object StudyConfig {
 
     /**
-     * Bypass the Firebase login gate in SplashActivity and treat launch as
-     * going straight to the home screen (matching recommendation-gaze-base).
+     * When true, skip the Firebase login gate in SplashActivity and launch directly
+     * into MainActivity. False restores the startup LogIn screen (with a
+     * per-session Continue as Guest option).
      */
-    const val BYPASS_LOGIN = true
+    const val BYPASS_LOGIN = false
 
     /**
      * Skip account-backed saved/history/profile/telemetry paths in the

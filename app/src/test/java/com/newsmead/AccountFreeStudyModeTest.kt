@@ -11,7 +11,7 @@ import org.junit.Test
 
 class AccountFreeStudyModeTest {
     @Test fun loginAndSavedListsAreEnabledByDefaultOnPanelDemoBranch() {
-        assertTrue("SplashActivity initial login screen should stay bypassed on launch", StudyConfig.BYPASS_LOGIN)
+        assertFalse("SplashActivity startup login gate should be enabled on panel demo branch", StudyConfig.BYPASS_LOGIN)
         assertFalse("Panel demo build must enable Firebase login and saved lists by default", StudyConfig.ACCOUNT_FREE_STUDY)
     }
 

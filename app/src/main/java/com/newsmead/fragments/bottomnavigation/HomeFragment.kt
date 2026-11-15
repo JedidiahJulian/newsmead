@@ -83,6 +83,13 @@ class HomeFragment : Fragment(), clickListener {
         // History Button
         viewBinding.btnHistory.visibility = if (com.newsmead.data.StudyConfig.ACCOUNT_FREE_STUDY) View.GONE else View.VISIBLE
         this.viewBinding.btnHistory.setOnClickListener {
+            if (com.newsmead.fragments.account.GuestLoginPrompt.isGuest()) {
+                com.newsmead.fragments.account.GuestLoginPrompt.show(
+                    requireActivity(),
+                    R.string.guest_login_prompt_history
+                )
+                return@setOnClickListener
+            }
             // Action
             val action = HomeFragmentDirections.actionHomeFragmentToHistoryFragment()
 

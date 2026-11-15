@@ -40,6 +40,15 @@ class BottomSheetDialogSaveFragment(
     ): View {
         this.binding = BottomSheetDialogSaveListBinding.inflate(inflater, container, false)
 
+        if (com.newsmead.fragments.account.GuestLoginPrompt.isGuest()) {
+            dismissAllowingStateLoss()
+            com.newsmead.fragments.account.GuestLoginPrompt.show(
+                requireActivity(),
+                com.newsmead.R.string.guest_login_prompt_save
+            )
+            return this.binding.root
+        }
+
         lists = ArrayList(PreloadedData.lists)
 
         val adapter = SheetDialogAdapter(lists, this@BottomSheetDialogSaveFragment)

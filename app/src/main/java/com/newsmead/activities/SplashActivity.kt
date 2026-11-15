@@ -31,15 +31,15 @@ class SplashActivity : AppCompatActivity() {
         val viewBinding = ActivitySplashBinding.inflate(layoutInflater)
         setContentView(viewBinding.root)
 
-        if (StudyConfig.BYPASS_LOGIN) {
+        if (StudyConfig.BYPASS_LOGIN || StudyConfig.ACCOUNT_FREE_STUDY) {
             navigateToMainActivity()
             return
         }
         auth = Firebase.auth
         val user = auth.currentUser
         if (user == null) {
-            // Never signed in on this device: go straight to sign-up, as before.
-            goToAccount(signUp = true, notice = null)
+            // No signed-in account: open the login screen (with Sign Up and Guest options).
+            goToAccount(signUp = false, notice = null)
             return
         }
 

@@ -11,6 +11,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.android.material.tabs.TabLayout
 import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.newsmead.R
 import com.newsmead.activities.AccountActivity
@@ -47,6 +48,7 @@ class LocalStudyArticlesDeviceTest {
             ActivityScenario.launch(AccountActivity::class.java).use { accountScenario ->
                 accountScenario.onActivity { activity ->
                     assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.btnAccLogIn)?.visibility)
+                    assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.btnAccGuest)?.visibility)
                     val createBtn = checkNotNull(activity.findViewById<View>(R.id.btnAccCreate))
                     assertEquals(View.VISIBLE, createBtn.visibility)
                     createBtn.performClick()
@@ -57,6 +59,7 @@ class LocalStudyArticlesDeviceTest {
                     logBtn.performClick()
                     activity.supportFragmentManager.executePendingTransactions()
                     assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.btnAccLogIn)?.visibility)
+                    assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.btnAccGuest)?.visibility)
                 }
             }
         }
@@ -90,12 +93,18 @@ class LocalStudyArticlesDeviceTest {
             }
             instrumentation.waitForIdleSync()
             scenario.onActivity { activity ->
+                val subtitle = checkNotNull(activity.findViewById<TextView>(R.id.tvProfileSubtitle))
+                val logoutBtn = checkNotNull(activity.findViewById<TextView>(R.id.btnLogout))
                 if (StudyConfig.ACCOUNT_FREE_STUDY) {
-                    val subtitle = checkNotNull(activity.findViewById<TextView>(R.id.tvProfileSubtitle))
                     assertEquals(activity.getString(R.string.profile_study_subtitle), subtitle.text.toString())
+                } else if (FirebaseAuth.getInstance().currentUser == null) {
+                    assertEquals(activity.getString(R.string.profile_guest_subtitle), subtitle.text.toString())
+                    assertEquals(View.GONE, activity.findViewById<View>(R.id.btnSave)?.visibility)
+                    assertEquals(View.VISIBLE, logoutBtn.visibility)
+                    assertEquals(activity.getString(R.string.profile_login_or_signup), logoutBtn.text.toString())
                 } else {
                     assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.btnSave)?.visibility)
-                    assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.btnLogout)?.visibility)
+                    assertEquals(View.VISIBLE, logoutBtn.visibility)
                 }
                 assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.swDarkmode)?.visibility)
                 activity.findViewById<View>(R.id.savedFragment).performClick()

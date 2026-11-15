@@ -451,6 +451,13 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         binding.btnSaveList.visibility = if (StudyConfig.ACCOUNT_FREE_STUDY) View.GONE else View.VISIBLE
         // Bottom sheet dialog for saving articles
         binding.btnSaveList.setOnClickListener {
+            if (com.newsmead.fragments.account.GuestLoginPrompt.isGuest()) {
+                com.newsmead.fragments.account.GuestLoginPrompt.show(
+                    requireActivity(),
+                    R.string.guest_login_prompt_save
+                )
+                return@setOnClickListener
+            }
             binding.btnSaveList.isEnabled = false
             binding.btnSaveList.isClickable = false
             val bodyContent = binding.tvArticleText.text.toString()

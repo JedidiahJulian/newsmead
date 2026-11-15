@@ -194,5 +194,18 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/btnAccLogIn" />
 
+        <Button
+            android:id="@+id/btnAccGuest"
+            style="@style/ButtonMedium_Text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/common_margin"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="@dimen/common_margin"
+            android:text="@string/log_in_continue_guest_btn"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btnAccCreate" />
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 </ScrollView>

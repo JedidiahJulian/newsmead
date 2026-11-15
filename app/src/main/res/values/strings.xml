@@ -86,6 +86,14 @@
     <string name="log_in_forgot_password">Forgot password?</string>
     <string name="log_in_btn">Log in</string>
     <string name="log_in_create_account_btn">Create an Account</string>
+    <string name="log_in_continue_guest_btn">Continue as Guest</string>
+    <string name="guest_login_prompt_title">Log in required</string>
+    <string name="guest_login_prompt_save">Log in or create an account to save articles to your lists.</string>
+    <string name="guest_login_prompt_lists">Log in or create an account to create and view saved lists.</string>
+    <string name="guest_login_prompt_history">Log in or create an account to view your reading history.</string>
+    <string name="guest_login_prompt_action">Log In</string>
+    <string name="guest_login_prompt_cancel">Not Now</string>
+    <string name="guest_saved_all_notice">Browsing as guest. Log in from Profile to view saved articles.</string>
     <string name="reset_password_title">Reset password</string>
     <string name="reset_password_message">Enter the email address for your account. We\'ll send you a link to reset your password.</string>
     <string name="reset_password_send">Send link</string>
@@ -173,6 +181,8 @@
     <string name="profile_password">Password</string>
     <string name="profile_save">Save Changes</string>
     <string name="profile_logout">Logout</string>
+    <string name="profile_guest_subtitle">Browsing as guest</string>
+    <string name="profile_login_or_signup">Log In / Sign Up</string>
 
     <string name="profile_darkmode">Dark Mode</string>
 

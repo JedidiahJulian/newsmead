@@ -33,9 +33,14 @@ class AccountActivity : AppCompatActivity() {
 
     @SuppressLint("MissingSuperCall")
     override fun onBackPressed() {
-
         if (supportFragmentManager.backStackEntryCount > 0) {
             supportFragmentManager.popBackStack()
+        } else if (intent?.getBooleanExtra(EXTRA_ALLOW_BACK_TO_GUEST, false) == true) {
+            finish()
         }
+    }
+
+    companion object {
+        const val EXTRA_ALLOW_BACK_TO_GUEST = "allow_back_to_guest"
     }
 }

@@ -22,10 +22,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class SavedAllFragment: Fragment(), clickListener {
+    private lateinit var binding: FragmentSavedAllBinding
     private lateinit var data: ArrayList<Article>
     private lateinit var adapter: ArticleAdapter
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        val binding = FragmentSavedAllBinding.inflate(inflater, container, false)
+        binding = FragmentSavedAllBinding.inflate(inflater, container, false)
 
         // Data generation
         data = ArrayList()
@@ -55,6 +56,14 @@ class SavedAllFragment: Fragment(), clickListener {
 
     private fun refreshSavedArticles() {
         val context = context ?: return
+        if (com.newsmead.fragments.account.GuestLoginPrompt.isGuest()) {
+            data.clear()
+            adapter.notifyDataSetChanged()
+            binding.tvLocalArticleNotice.setText(R.string.guest_saved_all_notice)
+            binding.tvLocalArticleNotice.visibility = View.VISIBLE
+            return
+        }
+        binding.tvLocalArticleNotice.visibility = View.GONE
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             try {
                 // Update Articles Tab
