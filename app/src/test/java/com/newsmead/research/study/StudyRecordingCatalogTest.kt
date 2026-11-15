@@ -236,4 +236,16 @@ class StudyRecordingCatalogTest {
         }
     }
 
+    @Test fun selectForDeletionExcludesUnselectedLinkedBaselines() {
+        val root = root()
+        fixture(root, "joint", phase = "reading_baseline", attempt = "attempt")
+        fixture(root, "a", "visit-a", reference = "attempt", coordinateReference = coordinateLink())
+        val catalog = StudyRecordingCatalog.load(root)
+        val article = catalog.recordings.single { it.first.phase == "reading" }
+        assertEquals(setOf("a", "joint"), StudyRecordingCatalog.select(catalog, setOf(article.id)).packageIds)
+        val deletion = StudyRecordingCatalog.selectForDeletion(catalog, setOf(article.id))
+        assertEquals(setOf("a"), deletion.packageIds)
+        assertEquals(setOf("session-a"), deletion.sessionIds)
+    }
+
 }

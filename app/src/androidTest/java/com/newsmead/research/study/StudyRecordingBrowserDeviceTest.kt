@@ -149,6 +149,85 @@ class StudyRecordingBrowserDeviceTest {
         main { StudyCollection.start(context, "synthetic-browser", "guard-check", "reading") }
         try { background { StudyCollection.catalog(context) }; fail("Active run must block browsing") }
         catch (_: IllegalStateException) { }
+        try { background { StudyCollection.delete(context, setOf(group.id)) }; fail("Active run must block deletion") }
+        catch (_: IllegalStateException) { }
+    }
+
+    @Test fun deleteSelectedKeepsUnselectedAndBaselineWhileDeleteAllClearsStorage() {
+        val reading = StudyArticleReading()
+        val reopened = StudyArticleReading()
+        val attempt = "synthetic-delete-attempt"
+        val calibration = "synthetic-delete-calibration"
+        val collector = MahalanobisBaselineCollector(MahalanobisConfig(minimumRetainedWindows = 2, minimumBaselineDurationMs = 0))
+        collector.add(RdfFeatureVector(10_000, 0, 10_000, RdfValues(1.0, .2, 3.0)))
+        collector.add(RdfFeatureVector(10_500, 500, 10_500, RdfValues(2.0, .3, 4.0)))
+        val fit = collector.freeze()
+        val profile = ParticipantReadingBaseline.Entry("synthetic-delete", attempt, calibration, requireNotNull(fit.profile))
+        lateinit var baseline: StudyVisit
+        lateinit var first: StudyVisit
+        lateinit var other: StudyVisit
+        main {
+            StudyCollection.start(context, "synthetic-delete", "delete-test", "reading")
+            baseline = open("rdf_baseline", StudyJson.obj("baseline_attempt_id" to attempt,
+                "baseline_participant_code" to profile.participantCode, "calibration_id" to calibration))
+            baseline.record("rdf_baseline_fit", StudyJson.obj("fit" to fit, "baseline_attempt_id" to attempt))
+            baseline.finish("synthetic_baseline_ready")
+            fun article(identity: StudyArticleReading): StudyVisit {
+                val visit = open("reading", identity.nextSegment("synthetic-same-article"))
+                identity.opened(visit.id)
+                visit.baseline(profile)
+                val epoch = visit.providerStarted(calibration)
+                visit.observation(epoch, MgazeNetGazeProvider.Observation(null, SystemClock.elapsedRealtimeNanos(), 1,
+                    "stopped", arrivals = 0, busyDrops = 0), 1080, 1920, 0)
+                visit.finish("synthetic_article_ready")
+                return visit
+            }
+            first = article(reading); other = article(reopened)
+            StudyCollection.stop("synthetic_fixtures_ready")
+        }
+        visits.forEach { assertTrue(it.awaitClosed(10_000)) }
+        val receiptDir = StudyCollection.lateReceiptRoot(context).apply { mkdirs() }
+        val selectedReceipt = File(receiptDir, "${first.id}-late.json").apply {
+            writeText(StudyJson.obj("session_id" to first.id, "provider_epoch_id" to "ep-1").toString())
+        }
+        val keptReceipt = File(receiptDir, "${other.id}-late.json").apply {
+            writeText(StudyJson.obj("session_id" to other.id, "provider_epoch_id" to "ep-2").toString())
+        }
+        assertNotNull(background { StudyCollection.export(context) })
+        val staging = File(context.cacheDir, "research-export")
+        assertTrue(staging.listFiles()?.isNotEmpty() == true)
+        val orphanDir = File(StudyCollection.root(context), "orphan-partial").apply { mkdirs() }
+        File(orphanDir, "chunk_00001.jsonl.partial").writeText("partial")
+
+        ActivityScenario.launch(StudyCollectionActivity::class.java).use { scenario ->
+            background { Unit }; instrumentation.waitForIdleSync()
+            onView(withText(containsString("Recording ID: ${reading.id}"))).perform(scrollTo(), click())
+            onView(withText("Delete selected recordings")).perform(scrollTo(), click())
+            onView(withText("Delete")).perform(click())
+            background { Unit }; instrumentation.waitForIdleSync()
+
+            assertFalse(selectedReceipt.exists())
+            assertTrue(keptReceipt.exists())
+            assertFalse(staging.exists())
+            val remaining = background { StudyCollection.catalog(context) }.recordings
+            assertEquals(2, remaining.size)
+            assertTrue(remaining.any { it.first.phase == "rdf_baseline" })
+            assertTrue(remaining.any { it.first.readingId == reopened.id })
+            assertFalse(remaining.any { it.first.readingId == reading.id })
+
+            onView(withText("Delete all saved recordings")).perform(scrollTo(), click())
+            onView(withText("Delete all")).perform(click())
+            background { Unit }; instrumentation.waitForIdleSync()
+
+            assertTrue(background { StudyCollection.catalog(context) }.recordings.isEmpty())
+            assertFalse(orphanDir.exists())
+            assertFalse(keptReceipt.exists())
+            assertEquals(0, StudyCollection.root(context).listFiles()?.size ?: 0)
+            scenario.onActivity { activity ->
+                assertTrue(descendants(activity.window.decorView).filterIsInstance<TextView>().any {
+                    it.text.toString().contains("0 saved recording(s)") })
+            }
+        }
     }
 
     private fun open(phase: String, metadata: JSONObject) = requireNotNull(StudyCollection.open(context, phase, metadata)).also { visits.add(it) }

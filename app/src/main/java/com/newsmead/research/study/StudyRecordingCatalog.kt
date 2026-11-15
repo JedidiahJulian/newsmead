@@ -26,6 +26,7 @@ object StudyRecordingCatalog {
     }
     data class Catalog(val recordings: List<Recording>, val warnings: List<String>)
     data class Selection(val packageIds: Set<String>, val includedReferenceIds: Set<String>, val warnings: List<String>)
+    data class DeleteSelection(val packageIds: Set<String>, val sessionIds: Set<String>)
     private val safeName = Regex("[A-Za-z0-9_-]+")
     private val safeFile = Regex("[A-Za-z0-9_.-]+")
     private val baselinePhases = setOf("rdf_baseline", "reading_baseline")
@@ -96,6 +97,14 @@ object StudyRecordingCatalog {
             }
         }
         return Selection(ids, included, warnings.toList())
+    }
+
+    /** Returns only the selected recordings' own packages/sessions; unselected baselines stay intact. */
+    fun selectForDeletion(catalog: Catalog, recordingIds: Set<String>): DeleteSelection {
+        require(recordingIds.isNotEmpty()) { "Select at least one recording." }
+        require(catalog.recordings.map { it.id }.toSet().containsAll(recordingIds)) { "Recording list changed. Refresh and select again." }
+        val selected = catalog.recordings.filter { it.id in recordingIds }.flatMap { it.packages }
+        return DeleteSelection(selected.map { it.id }.toSet(), selected.map { it.session }.toSet())
     }
 
     private fun read(directory: File, manifestFile: File): Package {

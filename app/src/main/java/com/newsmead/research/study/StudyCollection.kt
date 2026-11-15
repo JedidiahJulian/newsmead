@@ -28,6 +28,7 @@ import java.util.zip.ZipOutputStream
 object StudyCollection {
     data class Run(val participant: String, val condition: String, val phase: String, val id: String,
         val installation: String, val clockDomain: String)
+    data class DeleteResult(val deletedPackages: Int, val deletedReceipts: Int, val freedBytes: Long)
     private val processClockDomain = UUID.randomUUID().toString()
     private val visits = mutableListOf<StudyVisit>()
     private val io = Executors.newSingleThreadExecutor()
@@ -163,6 +164,85 @@ object StudyCollection {
             type = "application/zip"; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }, "Transfer study packages")
         } finally { maintenanceGate.release(); maintenance = false }
+    }
+
+    /** Deletes selected recordings (or all saved packages, late receipts, and cached export ZIPs when null). */
+    fun delete(context: Context, recordingIds: Set<String>? = null): DeleteResult {
+        val closing = claimMaintenance()
+        try {
+            check(closing.all { it.awaitClosed(10_000) }) { "Recording is still closing. Try deleting again shortly." }
+            val root = root(context)
+            val rootCanonical = root.canonicalFile
+            val receiptRoot = lateReceiptRoot(context)
+            val receiptCanonical = receiptRoot.canonicalFile
+            require(receiptCanonical.parentFile == storage(context).canonicalFile)
+            var deletedPackages = 0
+            var deletedReceipts = 0
+            var freedBytes = 0L
+            val deletedSessions: Set<String>?
+            if (recordingIds != null) {
+                StudyRecordingCatalog.validatePaths(root)
+                val selection = StudyRecordingCatalog.selectForDeletion(StudyRecordingCatalog.load(root), recordingIds)
+                deletedSessions = selection.sessionIds
+                selection.packageIds.forEach { id ->
+                    val directory = StudyRecordingCatalog.directory(root, id)
+                    if (directory.exists()) {
+                        freedBytes += deleteCheckedTree(directory, rootCanonical)
+                        deletedPackages++
+                    }
+                }
+                if (receiptRoot.isDirectory) {
+                    receiptRoot.listFiles()?.filter { it.isFile && it.extension == "json" }?.forEach { file ->
+                        StudyRecordingCatalog.file(receiptRoot, file.name)
+                        val sessionId = runCatching { JSONObject(file.readText(Charsets.UTF_8)).optString("session_id") }.getOrNull()
+                        if (sessionId != null && sessionId in selection.sessionIds) {
+                            freedBytes += deleteCheckedTree(file, receiptCanonical)
+                            deletedReceipts++
+                        }
+                    }
+                }
+            } else {
+                deletedSessions = null
+                if (root.isDirectory) {
+                    root.listFiles()?.forEach { child ->
+                        val isDir = child.isDirectory
+                        freedBytes += deleteCheckedTree(child, rootCanonical)
+                        if (isDir) deletedPackages++
+                    }
+                }
+                if (receiptRoot.isDirectory) {
+                    receiptRoot.listFiles()?.forEach { child ->
+                        val isFile = child.isFile
+                        freedBytes += deleteCheckedTree(child, receiptCanonical)
+                        if (isFile) deletedReceipts++
+                    }
+                }
+            }
+            val exportStaging = File(context.cacheDir, "research-export")
+            if (exportStaging.exists()) {
+                freedBytes += deleteCheckedTree(exportStaging, context.cacheDir.canonicalFile)
+            }
+            pruneClosedVisits(deletedSessions)
+            return DeleteResult(deletedPackages, deletedReceipts, freedBytes)
+        } finally { maintenanceGate.release(); maintenance = false }
+    }
+
+    @Synchronized private fun pruneClosedVisits(deletedSessions: Set<String>?) {
+        if (deletedSessions == null) visits.removeAll { it.awaitClosed(0) }
+        else visits.removeAll { it.id in deletedSessions && it.awaitClosed(0) }
+    }
+
+    private fun deleteCheckedTree(entry: File, expectedParentCanonical: File): Long {
+        require(entry.canonicalFile.parentFile == expectedParentCanonical) { "Path escapes study storage" }
+        val bytes = fileBytes(entry)
+        check(entry.deleteRecursively()) { "Could not delete ${entry.name}." }
+        return bytes
+    }
+
+    private fun fileBytes(entry: File): Long = when {
+        entry.isFile -> entry.length()
+        entry.isDirectory -> entry.listFiles()?.sumOf(::fileBytes) ?: 0L
+        else -> 0L
     }
     private fun sha(file: File): String {
         val digest = java.security.MessageDigest.getInstance("SHA-256")

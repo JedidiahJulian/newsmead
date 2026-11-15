@@ -123,6 +123,40 @@ class StudyCollectionActivity : AppCompatActivity() {
                 }
             }
         }
+        button("Delete selected recordings") {
+            val ids = selected.toSet()
+            val loaded = catalog
+            if (StudyCollection.run != null) { status.text = "Stop recording before deleting." }
+            else if (ids.isEmpty() || loaded == null) { selectionStatus.text = "Select at least one recording." }
+            else {
+                val chosen = loaded.recordings.filter { it.id in ids }
+                val packageCount = chosen.sumOf { it.packages.size }
+                val mb = formatMb(chosen.sumOf { it.bytes })
+                AlertDialog.Builder(this)
+                    .setTitle("Delete selected recordings?")
+                    .setMessage(
+                        "Permanently delete ${chosen.size} selected recording(s) ($packageCount package(s), $mb MB) and cached export ZIPs from this phone?\n\n" +
+                            "Linked source baselines are kept unless you selected them too. Un-transferred data cannot be recovered."
+                    )
+                    .setPositiveButton("Delete") { _, _ -> performDelete(ids, "Deleting selected recordings…") }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }
+        button("Delete all saved recordings") {
+            if (StudyCollection.run != null) { status.text = "Stop recording before deleting." }
+            else {
+                AlertDialog.Builder(this)
+                    .setTitle("Delete all saved recordings?")
+                    .setMessage(
+                        "Permanently delete ALL saved study packages, late receipts, and cached export ZIPs from this phone?\n\n" +
+                            "Any un-transferred data cannot be recovered."
+                    )
+                    .setPositiveButton("Delete all") { _, _ -> performDelete(null, "Deleting all saved recordings…") }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }
         setContentView(ScrollView(this).apply { fitsSystemWindows = true; addView(root) }); refresh()
         if (StudyCollection.run == null) loadRecordings() else clearRecordings()
     }
@@ -174,11 +208,24 @@ class StudyCollectionActivity : AppCompatActivity() {
         }.distinct().joinToString(", ")
         val coordinate = recording.packages.map { it.coordinateReference?.packageId ?: "none" }.distinct().joinToString(", ")
         return "$label • ${first.participant}\nArticle ID: $article\nR/D/F reference ID: $references\nCoordinate source package: $coordinate\n$date • $duration\n" +
-            "${String.format(Locale.ROOT, "%.2f MB", recording.bytes / 1_000_000.0)} • ${recording.packages.size} segment(s) • " +
+            "${formatMb(recording.bytes)} MB • ${recording.packages.size} segment(s) • " +
             recording.packages.map { it.status }.distinct().joinToString(", ") +
             "\n" + if (recording.legacy) "Legacy transport session: ${first.session}"
             else "Recording ID: ${first.readingId ?: first.session}"
     }
+    private fun performDelete(ids: Set<String>?, progressText: String) {
+        status.text = progressText
+        StudyCollection.background {
+            val result = runCatching { StudyCollection.delete(applicationContext, ids) }
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) result.onSuccess { res ->
+                    status.text = "Deleted ${res.deletedPackages} package(s) and ${res.deletedReceipts} receipt(s) (${formatMb(res.freedBytes)} MB freed)."
+                    refresh(); loadRecordings()
+                }.onFailure { status.text = it.message ?: "Deletion failed." }
+            }
+        }
+    }
+    private fun formatMb(bytes: Long): String = String.format(Locale.ROOT, "%.2f", bytes / 1_000_000.0)
     private fun updateSelection() {
         val loaded = catalog ?: return
         val plan = if (selected.isEmpty()) null else StudyRecordingCatalog.select(loaded, selected)
