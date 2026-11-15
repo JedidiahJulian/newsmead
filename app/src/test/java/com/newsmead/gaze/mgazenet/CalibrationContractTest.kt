@@ -17,6 +17,8 @@ class CalibrationContractTest {
         assertEquals(13,id.targets.distinct().size)
         assertEquals(listOf(1,5,9,12,16,19,27,30,34,37,41,45,23),
             CalibrationIdentity.UPSTREAM_GRID_INDICES)
+        assertEquals(600L, CalibrationIdentity.TARGET_CUE_MS)
+        assertEquals(800, MgazeNetCalibrationSession.SETTLE_MS)
         assertTrue(CalibrationIdentity.TARGET_CUE_MS < MgazeNetCalibrationSession.SETTLE_MS)
         assertEquals(3000,MgazeNetCalibrationSession.SAMPLE_WINDOW_MS)
         assertTrue(CalibrationIdentity.TARGET_FRACTIONS.all { (x, y) ->
@@ -47,8 +49,10 @@ class CalibrationContractTest {
     @Test fun twoThreadIdentityRejectsPreviousFourThreadCalibration() {
         val current = identity().canonical()
         assertTrue(current.contains("MNN3.6.1_CPU2_normal"))
+        assertTrue(current.contains("cue600_onsetsettle800"))
         assertEquals(identity(), CalibrationIdentity.parse(current))
         rejected { CalibrationIdentity.parse(current.replace("MNN3.6.1_CPU2_normal", "MNN3.6.1_CPU4_normal")) }
+        rejected { CalibrationIdentity.parse(current.replace("cue600_onsetsettle800", "cue1200_onsetsettle1500")) }
     }
     @Test fun bundleRejectsLegacyPartialCorruptAndWrongDevice() {
         val id = identity(); val data = CalibrationBundle.encode(CalibrationBundle.Artifact(id,byteArrayOf(1,2),byteArrayOf(3,4)))
@@ -69,13 +73,13 @@ class CalibrationContractTest {
         var now = 0.0
         for (target in -1 until identity().targets.size) {
             assertEquals(target,session.index); session.drawn(now)
-            session.sample(now+1499,now+1500,source,11.0,11.0,posture()); assertEquals(0,session.count)
-            session.sample(now+1500,now+1501,source,10.0,11.0,posture()); assertEquals(0,session.count)
-            for (i in 0..59) session.sample(now+1550+i*50,now+1551+i*50,source,11.0,11.0,posture())
+            session.sample(now+799,now+800,source,11.0,11.0,posture()); assertEquals(0,session.count)
+            session.sample(now+800,now+801,source,10.0,11.0,posture()); assertEquals(0,session.count)
+            for (i in 0..59) session.sample(now+850+i*50,now+851+i*50,source,11.0,11.0,posture())
             assertEquals(45,session.count)
             assertEquals(MgazeNetCalibrationSession.Phase.COLLECT,session.phase)
-            assertFalse(session.tick(now+4501))
-            val advanced = session.tick(now+5101)
+            assertFalse(session.tick(now+3801))
+            val advanced = session.tick(now+4401)
             if (target == identity().targets.lastIndex) {
                 assertFalse(advanced)
                 assertEquals(MgazeNetCalibrationSession.Phase.FITTING,session.phase)
@@ -119,16 +123,16 @@ class CalibrationContractTest {
         val s = MgazeNetCalibrationSession(identity()); s.begin()
         assertEquals(0f, s.targetProgress(0.0), 0f)
         s.drawn(0.0)
-        assertEquals(0f, s.targetProgress(1499.0), 0f)
+        assertEquals(0f, s.targetProgress(799.0), 0f)
         val features = FloatArray(258)
-        for (i in 0 until 15) s.sample(1550.0 + i * 50, 1551.0 + i * 50, features, 11.0, 11.0, posture())
-        assertEquals(15f / 45f, s.targetProgress(3000.0), 0.001f)
-        for (i in 15 until 45) s.sample(1550.0 + i * 50, 1551.0 + i * 50, features, 11.0, 11.0, posture())
+        for (i in 0 until 15) s.sample(850.0 + i * 50, 851.0 + i * 50, features, 11.0, 11.0, posture())
+        assertEquals(15f / 45f, s.targetProgress(2300.0), 0.001f)
+        for (i in 15 until 45) s.sample(850.0 + i * 50, 851.0 + i * 50, features, 11.0, 11.0, posture())
         assertEquals(45, s.count)
-        assertTrue(s.targetProgress(4499.0) < 1f)
-        assertFalse(s.tick(4500.0))
+        assertTrue(s.targetProgress(3799.0) < 1f)
+        assertFalse(s.tick(3800.0))
         assertEquals(MgazeNetCalibrationSession.Phase.POST, s.phase)
-        assertEquals(1f, s.targetProgress(4500.0), 0f)
+        assertEquals(1f, s.targetProgress(3800.0), 0f)
         s.close()
     }
 }

@@ -170,7 +170,7 @@ class MgazeNetCalibrationSession(val identity: CalibrationIdentity) : AutoClosea
     }
 
     companion object {
-        const val SETTLE_MS = 1500
+        const val SETTLE_MS = 800
         const val SAMPLE_WINDOW_MS = 3000
         const val POST_MS = 500
         const val TARGET_TIMEOUT_MS = 30000

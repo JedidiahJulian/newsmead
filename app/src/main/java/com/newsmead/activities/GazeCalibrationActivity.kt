@@ -285,7 +285,8 @@ class GazeCalibrationActivity : AppCompatActivity() {
             if (verification == 0) "Near-centre repeat" else "Validation $verification of 5"
         binding.statusText.text = ""
         binding.calibrationView.onNextTargetDraw { if (active) checkStart = MgazeNetCameraSource.now() }
-        binding.calibrationView.showTarget(local.x,local.y,1800)
+        val cueMs = if (comparisonSpec == null) 700L else 1800L
+        binding.calibrationView.showTarget(local.x, local.y, cueMs)
     }
     private fun observeCheck(frame: MgazeNetCameraSource.Frame) {
         if (verification !in 0..5 || !MgazeNetPostFitTiming.accepts(checkStart, frame.captureMs, frame.outputMs,
@@ -492,8 +493,13 @@ class GazeCalibrationActivity : AppCompatActivity() {
             "Worst repeat: ${value(report.worstRepeatCm)} cm (limit ${MgazeNetCalibrationQualityGate.MAX_WORST_REPEAT_CM} cm)\n" +
             "Posture-rejected frames: ${session?.postureRejected ?: 0}; practice restarts: ${session?.practiceRestarts ?: 0}\n" +
             "Stable training candidates: ${session?.trainingCandidates ?: 0}; selected: ${CalibrationIdentity.FIT_TARGET_COUNT*CalibrationIdentity.SAMPLES_PER_TARGET}\n" +
-            "Post-fit capture: ${((MgazeNetPostFitTiming.CAPTURE_END_MS - MgazeNetPostFitTiming.SETTLE_MS) / 1000).toInt()} seconds after settling; " +
-            if (comparisonSpec == null) "up to ${((MgazeNetPostFitTiming.EXTENDED_CAPTURE_END_MS - MgazeNetPostFitTiming.SETTLE_MS) / 1000).toInt()} seconds and one same-location retry for low sample count" else "fixed comparison timing"
+            "Post-fit capture: " + if (comparisonSpec == null) {
+                "${((MgazeNetPostFitTiming.CAPTURE_END_MS - MgazeNetPostFitTiming.SETTLE_MS) / 1000).toInt()} seconds after settling; " +
+                    "up to ${((MgazeNetPostFitTiming.EXTENDED_CAPTURE_END_MS - MgazeNetPostFitTiming.SETTLE_MS) / 1000).toInt()} seconds and one same-location retry for low sample count"
+            } else {
+                String.format(Locale.US, "%.1f seconds after settling; fixed comparison timing",
+                    (MgazeNetPostFitTiming.COMPARISON_CAPTURE_END_MS - MgazeNetPostFitTiming.COMPARISON_SETTLE_MS) / 1000.0)
+            }
         val decision = if (report.passed) {
             "This guardrail passed. Saving will replace the previous calibration. The separate nine-point check remains the accuracy evaluation."
         } else {
