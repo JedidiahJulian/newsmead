@@ -185,9 +185,11 @@ class ArticleScanpathSession(
             ScanpathTextGeometry(it.textOriginX, it.textOriginY, it.visibleRectScreen,
                 it.lineHeightPx, it.lines, it.textDirection ?: ScanpathTextDirection.UNKNOWN)
         } else current
+        val nowMs = elapsedMs()
         val freshMotionInput = !motionCompensatedAids || (capture != null &&
-            observation.outputMs >= capture && observation.outputMs <= elapsedMs() &&
-            elapsedMs() - capture <= MAX_MOTION_INPUT_AGE_MS)
+            observation.outputMs >= capture && observation.outputMs <= nowMs &&
+            observation.outputMs - capture <= MAX_MOTION_INPUT_AGE_MS &&
+            nowMs - observation.outputMs <= MAX_UI_DELIVERY_AGE_MS)
         val consultationReason = consultation.exclusion(capture)
         val target = if (valid && settled && captureGeometry != null && freshMotionInput && consultationReason == null)
             words.targetAt(textView, captureGeometry, x!!, y!!) else TextTarget.INVALID
@@ -296,7 +298,8 @@ class ArticleScanpathSession(
         // Engineering resource guard, not a reading or difficulty threshold.
         const val MAX_HISTORY_FIXATIONS = 512
         const val MAX_CAPTURE_GEOMETRY_AGE_MS = 100.0
-        const val MAX_MOTION_INPUT_AGE_MS = 250.0
+        const val MAX_MOTION_INPUT_AGE_MS = com.newsmead.data.StudyConfig.READING_MAX_OUTPUT_AGE_MS
+        const val MAX_UI_DELIVERY_AGE_MS = 250.0
         private fun elapsedMs() = SystemClock.elapsedRealtimeNanos() / 1e6
     }
 }

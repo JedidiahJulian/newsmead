@@ -292,7 +292,18 @@ class ReadingBookmarkRereadV5Test {
         assertEquals(3, bookmark.source.line)
         assertEquals(1800.0, bookmark.source.lastCaptureMs, 0.0)
         val stale = currentPolicy(); established(stale)
-        assertNull(loss(stale, 2200))
+        assertNotNull("A delivery gap is itself unavailable gaze", loss(stale, 2200))
+    }
+
+    @Test fun compatibleScrollCancelsPendingUnavailableClockUntilFreshReading() {
+        val p = currentPolicy(); established(p)
+        val last = context(1800.0)
+        assertNull(p.input(last.copy(nowMs = 2100.0), 250.0, 500.0).evidence)
+        p.onCompatibleScroll(1, "translated", true)
+        val translated = last.copy(nowMs = 2800.0, geometrySnapshotId = "translated",
+            geometry = geometry.copy(snapshotId = "translated"),
+            rawSample = last.rawSample!!.copy(geometrySnapshotId = "translated"))
+        assertNull(p.input(translated, 250.0, 500.0).evidence)
     }
 
     @Test fun currentBackwardDepartureNeedsForwardSupportAndStableBroadEarlierVisit() {
@@ -375,7 +386,7 @@ class ReadingBookmarkRereadV5Test {
         assertEquals(0.5, p.rereadProgress, 0.0)
     }
 
-    @Test fun currentRawMapperRejectionBreaksBackwardWitnessButPreservesArmedSource() {
+    @Test fun currentMappingUncertaintyPreservesSupportedBackwardHistoryAndArmedSource() {
         for (reason in listOf("unassigned_line", "unassigned_word", "ambiguous_line", "ambiguous_word")) {
             val p = currentPolicy(); established(p, 3)
             support(p, 1900.0, 2000.0, 4, "frontier")
@@ -383,8 +394,132 @@ class ReadingBookmarkRereadV5Test {
             assertEquals(reason, 4, p.savedLine)
             assertEquals(reason, true, p.auditSnapshot()["anchor_armed"])
             assertNull(reason, support(p, 2100.0, 2200.0, 0, "earlier").evidence)
-            assertNull(reason, support(p, 2100.0, 2300.0, 0, "earlier").evidence)
+            assertEquals(reason, "supported_backward_reading",
+                support(p, 2100.0, 2300.0, 0, "earlier").evidence!!.departureReason)
         }
+    }
+
+    private fun delayedContext(
+        capture: Double?,
+        delivery: Double,
+        now: Double = delivery,
+        line: Int? = 3,
+        exclusion: String? = null,
+        x: Double? = 100.0,
+        y: Double? = line?.let { it * 20.0 + 10.0 } ?: 100.0
+    ): ReadingAidContext {
+        val tracked = exclusion == null && line != null
+        val sample = ScanpathSample(
+            capture ?: delivery, delivery, x, y, line, line?.times(10), line?.times(10)?.plus(5),
+            "g", tracked, exclusion,
+            displayX = x, displayY = y,
+            coordinateStream = ScanpathCoordinateStream.CALIBRATED_RAW
+        )
+        return ReadingAidContext(
+            1, "g", 8, line, line?.times(10), line?.times(10)?.plus(5),
+            now, capture, delivery, tracked, geometry, 40.0, sample,
+            locationUncertainty = if (tracked) ReadingLocationUncertainty(2.0, 2.0, "test") else null,
+            targetWordBounds = line?.let { ScanpathRect(10.0, it * 20.0, 90.0, it * 20.0 + 20.0) }
+        )
+    }
+
+    @Test fun currentLiveLatencyAndInterFrameUiTicksPreserveAnchorAndBackwardAndLookaway() {
+        val backwardPolicy = ReadingAidPolicy(ReadingAidPolicyConfig.evidenceAlignedPrototype())
+        for (c in 100..2200 step 100) {
+            val d = c + 300.0
+            val ctx = delayedContext(c.toDouble(), d, d, line = 3)
+            backwardPolicy.onObservation(null, ctx)
+            backwardPolicy.tick(ctx.copy(nowMs = d + 100.0))
+        }
+        // Advance 1 row (3 -> 4), step back 2 rows temporarily (4 -> 2), then reach -3 (line 1).
+        for (c in 2300..2700 step 100) {
+            val d = c + 300.0
+            val ctx = delayedContext(c.toDouble(), d, d, line = 4)
+            backwardPolicy.onObservation(null, ctx)
+            backwardPolicy.tick(ctx.copy(nowMs = d + 100.0))
+        }
+        for (c in 2800..3100 step 100) {
+            val d = c + 300.0
+            val ctx = delayedContext(c.toDouble(), d, d, line = 2)
+            backwardPolicy.onObservation(null, ctx)
+            assertNull(backwardPolicy.activeActions().firstOrNull { it.aidType == ReadingAidType.READING_BOOKMARK })
+            backwardPolicy.tick(ctx.copy(nowMs = d + 100.0))
+        }
+        for (c in 3200..3600 step 100) {
+            val d = c + 300.0
+            backwardPolicy.onObservation(null, delayedContext(c.toDouble(), d, d, line = 1))
+        }
+        val backward = backwardPolicy.activeActions()
+            .firstOrNull { it.aidType == ReadingAidType.READING_BOOKMARK }?.bookmarkEvidence
+        assertNotNull(backward)
+        assertEquals(4, backward!!.source.line)
+        assertEquals("supported_backward_reading", backward.departureReason)
+
+        // New session: 300ms pipeline latency + UI ticks, then look away (`no_face` for 500ms).
+        val awayPolicy = ReadingAidPolicy(ReadingAidPolicyConfig.evidenceAlignedPrototype())
+        for (c in 100..2000 step 100) {
+            val d = c + 300.0
+            val ctx = delayedContext(c.toDouble(), d, d, line = 5)
+            awayPolicy.onObservation(null, ctx)
+            awayPolicy.tick(ctx.copy(nowMs = d + 100.0))
+        }
+        for (d in 2400..2900 step 100) {
+            val lossCtx = delayedContext(null, d.toDouble(), d.toDouble(), line = null,
+                exclusion = "no_face", x = null, y = null)
+            awayPolicy.onObservation(null, lossCtx)
+        }
+        val away = awayPolicy.activeActions()
+            .firstOrNull { it.aidType == ReadingAidType.READING_BOOKMARK }?.bookmarkEvidence
+        assertNotNull(away)
+        assertEquals(5, away!!.source.line)
+        assertEquals("sustained_gaze_unavailable", away.departureReason)
+    }
+
+    @Test fun currentLookawayBridgesSettlingOutsideShortBlinkAndNoFaceWhileRejectingUnbridgedGap() {
+        // Case A: unsettled in-text frame -> outside_visible_text (150ms step) -> brief blink -> no_face.
+        val p = currentPolicy()
+        for (c in 100..1800 step 100) {
+            val d = c + 300.0
+            val ctx = delayedContext(c.toDouble(), d, d, line = 4)
+            p.input(ctx, 250.0, 500.0)
+            p.support(ReadingAidContinuationEvidence("v$c", 1, 4, 100.0, c.toDouble(), d), ctx)
+        }
+        assertNull(p.input(delayedContext(1900.0, 2200.0, line = 4), 250.0, 500.0).evidence)
+        assertNull(p.input(delayedContext(2000.0, 2300.0, line = null, exclusion = "outside_visible_text", x = -20.0, y = -20.0), 250.0, 500.0).evidence)
+        assertNull(p.input(delayedContext(2150.0, 2450.0, line = null, exclusion = "outside_visible_text", x = -20.0, y = -20.0), 250.0, 500.0).evidence)
+        assertNull(p.input(delayedContext(2300.0, 2600.0, line = null, exclusion = "blink", x = 100.0, y = 100.0), 250.0, 500.0).evidence)
+        assertNull(p.input(delayedContext(null, 2700.0, line = null, exclusion = "no_face", x = null, y = null), 250.0, 500.0).evidence)
+        for (d in 2800..3000 step 100) assertNull(p.input(delayedContext(null, d.toDouble(),
+            line = null, exclusion = "no_face", x = null, y = null), 250.0, 500.0).evidence)
+        val ev = p.input(delayedContext(null, 3100.0, line = null, exclusion = "no_face", x = null, y = null), 250.0, 500.0).evidence
+        assertNotNull(ev)
+        assertEquals(4, ev!!.source.line)
+        assertEquals("sustained_gaze_unavailable", ev.departureReason)
+
+        // Case B: A400ms delivery gap starts unavailable time after the250ms freshness allowance.
+        val unbridged = currentPolicy()
+        established(unbridged, 4)
+        assertNotNull(loss(unbridged, 2200))
+
+        // Case C: Pure outside_visible_text under 300ms pipeline latency fires outside-article bookmark.
+        val outsidePolicy = currentPolicy()
+        for (c in 100..1800 step 100) {
+            val d = c + 300.0
+            val ctx = delayedContext(c.toDouble(), d, d, line = 4)
+            outsidePolicy.input(ctx, 250.0, 500.0)
+            outsidePolicy.support(ReadingAidContinuationEvidence("o$c", 1, 4, 100.0, c.toDouble(), d), ctx)
+        }
+        var outsideEv: ReadingAidBookmarkEvidence? = null
+        for (c in 1950..2550 step 150) {
+            val d = c + 300.0
+            outsideEv = outsidePolicy.input(
+                delayedContext(c.toDouble(), d, d, line = null, exclusion = "outside_visible_text", x = -25.0, y = -25.0),
+                250.0, 500.0
+            ).evidence ?: outsideEv
+        }
+        assertNotNull(outsideEv)
+        assertEquals(4, outsideEv!!.source.line)
+        assertEquals("sustained_raw_outside_article", outsideEv.departureReason)
     }
 
 }

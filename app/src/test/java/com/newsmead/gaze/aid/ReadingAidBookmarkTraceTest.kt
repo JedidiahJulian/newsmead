@@ -72,4 +72,13 @@ class ReadingAidBookmarkTraceTest {
         assertEquals(200.0, json.getJSONObject("source").getDouble("last_capture_ms"), 0.0)
     }
 
+    @Test fun timeoutBoundsAreElapsedTimesWithoutInventingDeliveredObservations() {
+        val json = action(ReadingAidBookmarkEvidence(source, "sustained_gaze_unavailable",
+            null, null, 1000.0, 0, departureTimeBasis = "elapsed_gaze_unavailability",
+            departureFirstElapsedMs = 460.0, departureLastElapsedMs = 1000.0)).bookmarkEvidenceJson() as JSONObject
+        assertTrue(json.isNull("departure_first_delivery_ms"))
+        assertTrue(json.isNull("departure_last_delivery_ms"))
+        assertEquals(460.0, json.getDouble("departure_first_elapsed_ms"), 0.0)
+        assertEquals(1000.0, json.getDouble("departure_last_elapsed_ms"), 0.0)
+    }
 }

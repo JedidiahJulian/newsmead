@@ -14,6 +14,8 @@ internal fun ReadingAidAction.bookmarkEvidenceJson(): Any {
         .put("departure_time_basis", evidence.departureTimeBasis)
         .put("departure_first_delivery_ms", evidence.departureFirstDeliveryMs ?: JSONObject.NULL)
         .put("departure_last_delivery_ms", evidence.departureLastDeliveryMs ?: JSONObject.NULL)
+        .put("departure_first_elapsed_ms", evidence.departureFirstElapsedMs ?: JSONObject.NULL)
+        .put("departure_last_elapsed_ms", evidence.departureLastElapsedMs ?: JSONObject.NULL)
         .put("departure_support", evidence.departureSupport?.bookmarkSupportJson() ?: JSONObject.NULL)
         .put("presentation_reread_progress", evidence.presentationRereadProgress)
         .put("presentation_revision", evidence.presentationRevision)

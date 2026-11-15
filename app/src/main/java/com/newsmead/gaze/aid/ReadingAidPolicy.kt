@@ -42,7 +42,6 @@ class ReadingAidPolicy(
     private var guideSearchId: String? = null
     private var guideSearchUntil = Double.NEGATIVE_INFINITY
     private val guideDirection = ReadingGuideDirectionTracker()
-    private var bookmarkPreciseSupport: ReadingAidContinuationEvidence? = null
     private var lastAudit: Map<String, Any?>? = null
     private fun audit(c: ReadingAidContext, invalidation: Boolean = false) {
         val sink = onAudit ?: return
@@ -129,7 +128,6 @@ class ReadingAidPolicy(
         if (config.evidenceAlignedV5) {
             location.onCompatibleScroll(context.generation, context.geometrySnapshotId, context.nowMs)
         }
-        bookmarkPreciseSupport = null
         val bookmarkVisible = bookmark.savedLine?.let { fullyVisible(it, context) } != false
         bookmark.onCompatibleScroll(context.generation, context.geometrySnapshotId, bookmarkVisible)
         val focusLine = active[ReadingAidType.FOCUS_REGION]?.anchor?.line
@@ -693,7 +691,7 @@ class ReadingAidPolicy(
             (preferences.mode != ReadingAidsMode.ON && (!c.bookmarkInputAllowed || !c.focusInputAllowed)) ||
             !continuationGeometryValid(c)) {
             clearAll(c.nowMs, "operational_or_geometry_boundary", out)
-            location.reset(); guideDirection.reset(); bookmark.reset(); bookmarkPreciseSupport = null
+            location.reset(); guideDirection.reset(); bookmark.reset()
             if (!preferences.enabled || preferences.maxStrength == 0.0 ||
                 (!preferences.adaptiveStrength && preferences.manualStrength == 0.0)) focus.reset() else focus.pause()
             return out
@@ -723,12 +721,6 @@ class ReadingAidPolicy(
         }
         val update = location.update(c, c.locationUncertainty, c.targetWordBounds)
         val visit = update.current
-        val mapperSample = c.presentationSample
-        val bookmarkMapperUsable = c.validLiveInput && mapperSample?.eligible == true && mapperSample.exclusion == null
-        if (update.fresh && !bookmarkMapperUsable) {
-            bookmarkPreciseSupport = null
-            bookmark.interruptTransition()
-        }
         val supported = c.copy(targetLine = visit?.band?.representativeLine ?: c.targetLine,
             validLiveInput = update.fresh || visit != null)
         if (cFocusAllowed(c)) focus.input(supported) else {
@@ -736,33 +728,19 @@ class ReadingAidPolicy(
         }
         if (allowed(ReadingAidType.READING_BOOKMARK))
             applyBookmark(bookmark.input(supported, config.maxEvidenceAgeMs, config.bookmarkTrackingLossMs), supported, out)
-        else { bookmark.reset(); bookmarkPreciseSupport = null
+        else { bookmark.reset()
             clear(ReadingAidType.READING_BOOKMARK, c.nowMs, "reader_disabled_bookmark", out, false) }
         if (update.fresh && visit != null) {
             val value = visit.continuation()
-            // The single-line bookmark requires agreement with the exact line mapper;
-            // coarse nearest-row support alone must not silently become a precise marker.
-            if (allowed(ReadingAidType.READING_BOOKMARK) && bookmarkMapperUsable && mapperSample?.line == value.line) {
-                val prior = bookmarkPreciseSupport
-                val preciseId = "bookmark:${value.evidenceId}"
-                val sameVisit = prior != null && prior.evidenceId == preciseId && prior.segment == value.segment &&
-                    value.lastCaptureMs - prior.lastCaptureMs in 0.0..supportDetector.maxSampleGapMs
-                // An accepted interval starts at its first accepted observation; a long
-                // coarse visit cannot backfill time across rejected mapper observations.
-                val precise = value.copy(evidenceId = preciseId,
-                    firstCaptureMs = if (sameVisit) prior!!.firstCaptureMs else value.lastCaptureMs)
-                bookmarkPreciseSupport = precise
-                applyBookmark(bookmark.support(precise, supported), supported, out)
+            if (allowed(ReadingAidType.READING_BOOKMARK)) {
+                // The same fresh stabilized visit supplies both the guide and bookmark.
+                applyBookmark(bookmark.support(value.copy(evidenceId = "bookmark:${value.evidenceId}"), supported), supported, out)
                 update.reread?.let { r ->
                     applyBookmark(bookmark.reread(ReadingAidRereadEvidence("reread:${r.visits.last().id}",
                         r.visits.map { it.continuation() }, r.visits.minOf { it.band.representativeLine },
                         r.visits.maxOf { it.band.representativeLine }, value.evidenceAvailableMs,
                         r.measuredDistinguishability), supported), supported, out)
                 }
-            } else if (allowed(ReadingAidType.READING_BOOKMARK)) {
-                bookmarkPreciseSupport = null
-                bookmark.interruptTransition()
-                // Keep the last reliable location; uncertain current rows cannot replace it.
             }
             if (cFocusAllowed(c)) {
                 focus.support(value, supported, preferences, visit.band)
@@ -1183,7 +1161,7 @@ class ReadingAidPolicy(
                 max(e.source.evidenceAvailableMs, e.departureEvidenceAvailableMs),
                 emptyList(), listOfNotNull(e.source.evidenceId, e.departureSupport?.evidenceId) +
                     e.reread?.visits.orEmpty().map { it.evidenceId },
-                if (config.evidenceAlignedV5) "A2_LAST_READ_LINE_BOOKMARK_V6" else "A2_LAST_READ_LINE_BOOKMARK_V2",
+                if (config.evidenceAlignedV5) "A2_LAST_READ_LINE_BOOKMARK_V9" else "A2_LAST_READ_LINE_BOOKMARK_V2",
                 if (e.reread != null || e.departureReason == "supported_backward_reading") listOf("EB15", "MV11") else listOf("EB15", "CW12"),
                 "Known-interruption location cues and structured rereading motivate this prototype. Phone departure/rereading triggers, persistence and strength settings require validation.",
                 c, out, bookmarkEvidence = e)
@@ -1204,7 +1182,6 @@ class ReadingAidPolicy(
 
     private fun resetEvidence(preserveBookmark: Boolean = false, preserveFocus: Boolean = false) {
         if (config.evidenceAlignedV5) location.reset()
-        bookmarkPreciseSupport = null
         guideSearchId = null; guideSearchUntil = Double.NEGATIVE_INFINITY
         guideDirection.reset()
         if (preserveFocus) focus.interruptReading() else focus.reset()

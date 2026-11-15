@@ -61,6 +61,7 @@ class ReadingLocationSupport(
 ) {
     companion object {
         const val DEFAULT_WORD_RESIDENCE_MS = 600.0
+        private const val MAX_PIPELINE_AGE_MS = 650.0
     }
     init {
         require(listOf(minDwellMs, maxGapMs, rereadWindowMs, wordResidenceMs).all { it.isFinite() && it > 0 })
@@ -143,7 +144,7 @@ class ReadingLocationSupport(
         // Repeated delivery/capture callbacks cannot add dwell or erase a supported visit.
         if (t == seenCapture) { lastDelivery = d; return ReadingLocationUpdate(current, false) }
         seenCapture = t
-        if (c.nowMs - t > 250.0 || c.nowMs - d > 250.0) {
+        if (c.nowMs - d > 250.0 || d - t > MAX_PIPELINE_AGE_MS) {
             lastDelivery = d; interrupt(); return ReadingLocationUpdate(null, false)
         }
         if (lastCapture.isFinite() && t - lastCapture > maxGapMs) interrupt()

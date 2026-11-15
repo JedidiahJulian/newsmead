@@ -69,7 +69,7 @@ class ScanpathReplayBookmarkDeviceTest {
             }
             val records = checkNotNull(finished.trace).readLines().map(::JSONObject)
             val configuration = records.first().getJSONObject("detail").getJSONObject("configuration").toString()
-            assertTrue(id, configuration.contains("A2_LAST_READ_LINE_BOOKMARK_V6"))
+            assertTrue(id, configuration.contains("A2_LAST_READ_LINE_BOOKMARK_V9"))
             val decisions = records.filter { it.optString("kind") == "decision" }.map { it.getJSONObject("detail") }
             val bookmark = decisions.first { it.optString("status") == "CHOSEN" &&
                 it.optJSONObject("action")?.optString("aid_type") == "READING_BOOKMARK" }.getJSONObject("action")

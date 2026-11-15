@@ -97,7 +97,10 @@ data class ReadingAidBookmarkEvidence(
     /** Presentation progress, not a probability or elapsed-time reading estimate. */
     val presentationRereadProgress: Double = 0.0,
     /** Reader preference changes reset opacity interpolation without inventing a new cue. */
-    val presentationRevision: Int = 0
+    val presentationRevision: Int = 0,
+    /** Elapsed absence boundaries can be established by UI timeout without a delivered sample. */
+    val departureFirstElapsedMs: Double? = null,
+    val departureLastElapsedMs: Double? = null
 )
 
 /** Separate source/landing support bounds; candidate IDs do not imply finalized fixations. */

@@ -240,7 +240,7 @@ class ScanpathReplayScenariosTest {
             val bookmark = result.actions.single { it.aidType == ReadingAidType.READING_BOOKMARK }
             assertEquals(id, if (id in setOf("bookmark_fast_reading", "bookmark_backreading")) 3 else 0, bookmark.anchor.line)
             assertEquals(id, "LAST_READ_LINE_BOOKMARK_V3", bookmark.aidFormId)
-            assertEquals(id, "A2_LAST_READ_LINE_BOOKMARK_V6", bookmark.ruleId)
+            assertEquals(id, "A2_LAST_READ_LINE_BOOKMARK_V9", bookmark.ruleId)
             assertEquals(id, 0.75, bookmark.strength, 0.0)
             assertTrue(id, result.decisions.any { it.status == ReadingAidDecisionStatus.CLEARED &&
                 it.action?.id == bookmark.id })

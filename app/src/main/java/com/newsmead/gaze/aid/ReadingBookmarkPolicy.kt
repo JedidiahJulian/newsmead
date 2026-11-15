@@ -58,6 +58,17 @@ internal class ReadingBookmarkPolicy(
     private var presenceFirst: Double? = null
     private var presenceLast: Double? = null
     private val maximumSupportIntervalMs = 250.0
+    private val maximumPipelineLatencyMs = 650.0
+    private val maxAwayBlinkGapMs = 350.0
+    private var sourceBridgeDeliveryMs = Double.NEGATIVE_INFINITY
+    private var awayFirstDeliveryMs: Double? = null
+    private var awayLastDeliveryMs: Double? = null
+    private var pauseFirstDeliveryMs: Double? = null
+    private var awayCreditMs = 0.0
+    private var previousAwayCreditable = false
+    private var lastReadingDeliveryMs = Double.NEGATIVE_INFINITY
+    private var unavailableFirstMs: Double? = null
+    private var unavailableSampleCount = 0
     private data class Trusted(val value: ReadingAidContinuationEvidence, val mature: Boolean)
     private val trusted = linkedMapOf<String, Trusted>()
     private var anchorPrevious: ReadingAidContinuationEvidence? = null
@@ -97,6 +108,10 @@ internal class ReadingBookmarkPolicy(
         "presence_first_ms" to presenceFirst, "presence_last_ms" to presenceLast,
         "anchor_credit_ms" to anchorCreditMs, "anchor_presence_credit_ms" to anchorCreditMs,
         "anchor_armed" to anchorArmed, "last_inside_line" to lastInsideLine,
+        "away_credit_ms" to awayCreditMs, "pause_first_delivery_ms" to pauseFirstDeliveryMs,
+        "forward_source" to forwardSource,
+        "last_reading_delivery_ms" to lastReadingDeliveryMs,
+        "unavailable_first_ms" to unavailableFirstMs,
         "recovery_credit_ms" to recoveryCreditMs, "recovery_presence_credit_ms" to recoveryCreditMs, "reread_bookmark" to rereadBookmark)
 
     fun reset() {
@@ -109,13 +124,33 @@ internal class ReadingBookmarkPolicy(
         maturityPresenceLast = null; lastInsideLine = null
         recoveryFloor = Double.NEGATIVE_INFINITY; rereadBookmark = false; lastRereadEnd = Double.NEGATIVE_INFINITY
         lastSupport = Double.NEGATIVE_INFINITY; lastInput = Double.NEGATIVE_INFINITY
-        clearOutside(); clearLoss()
+        sourceBridgeDeliveryMs = Double.NEGATIVE_INFINITY
+        pauseFirstDeliveryMs = null
+        lastReadingDeliveryMs = Double.NEGATIVE_INFINITY; unavailableFirstMs = null; unavailableSampleCount = 0
+        clearAwayAll()
         lastNow = Double.NEGATIVE_INFINITY; lastDelivery = Double.NEGATIVE_INFINITY
     }
 
-    private fun clearLoss() { lossFirstDelivery = null; lossLastDelivery = null; lossCount = 0 }
+    private fun clearLoss() {
+        lossFirstDelivery = null; lossLastDelivery = null; lossCount = 0
+        if (!progressMode) {
+            awayFirstDeliveryMs = null; awayLastDeliveryMs = null
+        }
+    }
 
-    private fun clearOutside() { outsideFirst = null; outsideLast = null; outsideCount = 0 }
+    private fun clearOutside() {
+        outsideFirst = null; outsideLast = null; outsideCount = 0
+        if (!progressMode) {
+            awayFirstDeliveryMs = null; awayLastDeliveryMs = null
+        }
+    }
+
+    private fun clearAwayAll() {
+        lossFirstDelivery = null; lossLastDelivery = null; lossCount = 0
+        outsideFirst = null; outsideLast = null; outsideCount = 0
+        awayFirstDeliveryMs = null; awayLastDeliveryMs = null
+        awayCreditMs = 0.0; previousAwayCreditable = false
+    }
 
     /** Preserve the saved location/cue, but never infer a transition across missing input. */
     fun interruptTransition() {
@@ -133,6 +168,7 @@ internal class ReadingBookmarkPolicy(
         }
         contextKey = nextKey
         interruptTransition()
+        lastReadingDeliveryMs = Double.NEGATIVE_INFINITY; unavailableFirstMs = null; unavailableSampleCount = 0
         clearOutside()
         clearLoss()
     }
@@ -144,7 +180,8 @@ internal class ReadingBookmarkPolicy(
         maturityPresenceLast = null; lastInsideLine = null
         trusted.clear(); anchorPrevious = null; anchorCreditMs = 0.0; anchorArmed = false
         lastSupport = Double.NEGATIVE_INFINITY
-        clearOutside(); clearLoss(); clearRelease(); clearPresence()
+        sourceBridgeDeliveryMs = Double.NEGATIVE_INFINITY
+        clearAwayAll(); clearRelease(); clearPresence()
     }
 
     private fun clearPresence() { presenceFirst = null; presenceLast = null }
@@ -180,20 +217,19 @@ internal class ReadingBookmarkPolicy(
     fun support(value: ReadingAidContinuationEvidence, c: ReadingAidContext): Change {
         if (persistence == null) return support(value)
         persistenceBoundary(c)?.let { return it }
+        val delivery = c.presentationSample?.deliveryMs ?: value.evidenceAvailableMs
         val valid = c.nowMs.isFinite() && c.nowMs >= 0.0 && c.validLiveInput &&
             value.line in 0 until c.lineCount && value.firstCaptureMs.isFinite() &&
             value.lastCaptureMs.isFinite() && value.evidenceAvailableMs.isFinite() &&
             value.firstCaptureMs >= 0.0 && value.lastCaptureMs >= value.firstCaptureMs &&
             value.evidenceAvailableMs >= value.lastCaptureMs && c.nowMs >= value.evidenceAvailableMs &&
-            c.nowMs - value.lastCaptureMs <= maximumSupportIntervalMs &&
+            c.nowMs - delivery <= maximumSupportIntervalMs &&
+            delivery - value.lastCaptureMs <= maximumPipelineLatencyMs &&
             c.nowMs >= lastNow &&
-            (!progressMode || c.presentationSample?.let {
-                it.eligible && it.exclusion == null && it.line == value.line
-            } == true) &&
             c.presentationSample?.let { supportedMappingExclusion(it.exclusion) &&
                 it.geometrySnapshotId == c.geometrySnapshotId && it.captureMs == value.lastCaptureMs &&
-                it.deliveryMs?.let { delivery -> delivery.isFinite() &&
-                    delivery >= value.lastCaptureMs && delivery <= c.nowMs } == true } != false
+                it.deliveryMs?.let { d -> d.isFinite() &&
+                    d >= value.lastCaptureMs && d <= c.nowMs } == true } != false
         if (!valid) { interruptTransition(); if (!progressMode) anchorArmed = false; return Change() }
         if (value.lastCaptureMs <= lastSupport) return Change()
         if (!shown) {
@@ -207,7 +243,7 @@ internal class ReadingBookmarkPolicy(
                 presenceLast == value.lastCaptureMs
             // Maturity is a presence clock; spatial stabilization still gates this exact anchor.
             anchorArmed = (progressMode && anchorArmed) || anchorCreditMs >= persistence.minimumAnchorSupportMs
-            if (previous != null && (previous.segment != value.segment ||
+            if (previous != null && ((previous.segment != value.segment && !bridge) ||
                     (value.firstCaptureMs - previous.lastCaptureMs > maximumSupportIntervalMs && !bridge))) {
                 trusted.clear(); forwardSource = null; backwardCandidate = null
             }
@@ -220,11 +256,14 @@ internal class ReadingBookmarkPolicy(
                 supportedBackwardDeparture(value, c, previous)?.let { return it }
             }
             val change = support(value)
+            source?.let {
+                sourceBridgeDeliveryMs = maxOf(sourceBridgeDeliveryMs, it.evidenceAvailableMs)
+            }
             if (change.evidence != null) { shownAt = c.nowMs; recoveryFloor = value.lastCaptureMs; clearRelease() }
             return change
         }
         lastSupport = value.lastCaptureMs
-        clearOutside(); clearLoss()
+        clearAwayAll()
         val prior = source ?: return Change()
         if (progressMode) return progressSupport(value, prior)
         val returning = if (rereadBookmark) value.line >= prior.line else value.line == prior.line
@@ -278,9 +317,10 @@ internal class ReadingBookmarkPolicy(
         return Change()
     }
 
-    /** Exact adjacent support is required: neither a raw row nor a jumped-to row proves passage. */
+    /** Adjacent stabilized support proves passage; a jumped-to row alone cannot. */
     private fun adjacent(a: ReadingAidContinuationEvidence?, b: ReadingAidContinuationEvidence): Boolean =
-        a != null && a.segment == b.segment && b.line == a.line + 1 &&
+        a != null && b.line == a.line + 1 &&
+            (a.segment == b.segment || (presenceFirst?.let { it <= a.lastCaptureMs } == true && presenceLast == b.lastCaptureMs)) &&
             b.firstCaptureMs > a.lastCaptureMs &&
             (b.firstCaptureMs - a.lastCaptureMs <= maximumSupportIntervalMs ||
                 (presenceFirst?.let { it <= a.lastCaptureMs } == true && presenceLast == b.lastCaptureMs))
@@ -303,6 +343,7 @@ internal class ReadingBookmarkPolicy(
             shown = false; shownAt = null; returnedAt = null; landing = null
             resetCueProgress()
             source = value; comparison = value; clearRelease()
+            sourceBridgeDeliveryMs = value.evidenceAvailableMs
             rereadBookmark = false; anchorPrevious = null; forwardSource = null; backwardCandidate = null
             trusted.clear()
             return Change(clearReason = "supported_forward_passage")
@@ -313,7 +354,9 @@ internal class ReadingBookmarkPolicy(
     private fun supportedBackwardDeparture(value: ReadingAidContinuationEvidence, c: ReadingAidContext,
                                            previous: ReadingAidContinuationEvidence?): Change? {
         val frontier = forwardSource
-        if (frontier != null && value.segment == frontier.segment && value.line <= frontier.line - 3 &&
+        val continuous = frontier != null && (value.segment == frontier.segment ||
+            (presenceFirst?.let { it <= frontier.lastCaptureMs } == true && presenceLast == value.lastCaptureMs))
+        if (frontier != null && continuous && value.line <= frontier.line - 3 &&
             value.firstCaptureMs > frontier.lastCaptureMs) {
             val candidate = backwardCandidate
             backwardCandidate = value
@@ -326,7 +369,7 @@ internal class ReadingBookmarkPolicy(
                 returnedAt = c.nowMs; rereadBookmark = true; recoveryFloor = value.lastCaptureMs
                 resetCueProgress(value.line)
                 lastRereadEnd = value.lastCaptureMs
-                clearOutside(); clearLoss(); clearRelease()
+                clearAwayAll(); clearRelease()
                 return Change(ReadingAidBookmarkEvidence(frontier, "supported_backward_reading",
                     value.firstCaptureMs, value.lastCaptureMs, value.evidenceAvailableMs, 0,
                     departureSupport = value))
@@ -334,14 +377,14 @@ internal class ReadingBookmarkPolicy(
             return null
         }
         backwardCandidate = null
-        if (adjacent(previous, value)) forwardSource = value
-        else if (frontier != null && value.line == frontier.line && value.segment == frontier.segment)
-            forwardSource = value
+        if (anchorArmed && adjacent(previous, value)) forwardSource = value
+        else if (frontier != null && continuous && value.line <= frontier.line)
+            forwardSource = frontier
         else if (previous != null && value.line != previous.line) forwardSource = null
         return null
     }
 
-    /** Shared coarse witness may identify a departure, but only stored exact support anchors it. */
+    /** A complete supported visit history can identify a broad rereading departure. */
     fun reread(e: ReadingAidRereadEvidence, c: ReadingAidContext): Change {
         val settings = persistence ?: return Change()
         persistenceBoundary(c)?.let { return it }
@@ -351,9 +394,10 @@ internal class ReadingBookmarkPolicy(
             e.lastLine !in e.firstLine until c.lineCount) return Change()
         val visits = e.visits
         val current = c.presentationSample
-        if (current == null || !current.eligible || current.exclusion != null ||
+        if (current == null || !supportedMappingExclusion(current.exclusion) ||
+            (!progressMode && (!current.eligible || current.exclusion != null || current.line != visits.last().line)) ||
             current.geometrySnapshotId != c.geometrySnapshotId ||
-            current.captureMs != visits.last().lastCaptureMs || current.line != visits.last().line ||
+            current.captureMs != visits.last().lastCaptureMs ||
             current.deliveryMs?.let { it.isFinite() && it >= visits.last().lastCaptureMs && it <= c.nowMs } != true)
             return Change()
         if (visits.first().firstCaptureMs <= lastRereadEnd ||
@@ -365,7 +409,7 @@ internal class ReadingBookmarkPolicy(
                 it.evidenceAvailableMs > e.confirmedDeliveryMs } ||
             visits.zipWithNext().any { (a, b) -> a.lastCaptureMs >= b.firstCaptureMs } ||
             visits.last().lastCaptureMs != lastSupport ||
-            c.nowMs - visits.last().lastCaptureMs !in 0.0..maximumSupportIntervalMs ||
+            e.confirmedDeliveryMs - visits.last().lastCaptureMs !in 0.0..maximumPipelineLatencyMs ||
             (!progressMode && visits.last().lastCaptureMs - visits.first().firstCaptureMs > settings.maxAgeMs)) return Change()
         fun exact(v: ReadingAidContinuationEvidence): Trusted? = trusted["bookmark:${v.evidenceId}"]?.takeIf {
             it.value.segment == v.segment && it.value.line == v.line &&
@@ -388,7 +432,7 @@ internal class ReadingBookmarkPolicy(
             recoveryFloor = visits.last().lastCaptureMs
             rereadBookmark = true; lastRereadEnd = visits.last().lastCaptureMs
             if (progressMode) resetCueProgress(back.line)
-            clearOutside(); clearLoss(); clearRelease()
+            clearAwayAll(); clearRelease()
             return Change(ReadingAidBookmarkEvidence(precise.value, "supported_broad_rereading",
                 back.firstCaptureMs, back.lastCaptureMs, e.confirmedDeliveryMs, 0,
                 departureSupport = back, reread = e))
@@ -456,11 +500,18 @@ internal class ReadingBookmarkPolicy(
         val valid = s != null && s.eligible && s.exclusion == null && line != null &&
             line in 0 until c.lineCount && s.geometrySnapshotId == c.geometrySnapshotId &&
             c.nowMs.isFinite() && c.nowMs >= lastNow && t != null && t.isFinite() && t >= 0.0 &&
-            c.nowMs - t in 0.0..maximumSupportIntervalMs && t >= lastInput &&
             d != null && d.isFinite() && d >= t && d <= c.nowMs && d >= lastDelivery &&
+            c.nowMs - d in 0.0..maximumSupportIntervalMs &&
+            d - t in 0.0..maximumPipelineLatencyMs &&
+            t >= lastInput &&
             rect != null && x?.isFinite() == true && y?.isFinite() == true &&
             x in rect.left..rect.right && y in rect.top..rect.bottom
         if (!valid) {
+            val uiTick = s != null && t != null && t.isFinite() && t == lastInput &&
+                d != null && d.isFinite() && d == lastDelivery &&
+                c.nowMs.isFinite() && c.nowMs >= lastNow &&
+                c.nowMs - d in 0.0..maximumSupportIntervalMs
+            if (uiTick) return
             maturityPresenceLast = null; anchorCreditMs = 0.0
             if (settings.minimumRecoverySupportMs > 0.0) clearRelease()
             // A UI tick can age the last coordinate before the provider reports its loss.
@@ -468,8 +519,8 @@ internal class ReadingBookmarkPolicy(
             val agedRetainedCapture = s != null && s.eligible && s.exclusion == null &&
                 s.geometrySnapshotId == c.geometrySnapshotId && t != null && t.isFinite() &&
                 t == lastInput && c.nowMs.isFinite() && c.nowMs >= lastNow &&
-                c.nowMs - t > maximumSupportIntervalMs && d != null && d.isFinite() &&
-                d >= t && d <= c.nowMs && d >= lastDelivery
+                d != null && d.isFinite() && d >= t && d <= c.nowMs && d >= lastDelivery &&
+                (c.nowMs - d > maximumSupportIntervalMs || d - t > maximumPipelineLatencyMs)
             if (!progressMode && !agedRetainedCapture && s?.exclusion !in setOf("no_face", "invalid_crops", "eye_area", "stale",
                     "invalid_prediction", "coordinate_unavailable", "outside_visible_text",
                     "geometry_unsettled", "scroll_geometry_unavailable", "scroll_input_stale")) anchorArmed = false
@@ -479,8 +530,12 @@ internal class ReadingBookmarkPolicy(
         val previous = maturityPresenceLast
         if (previous != t) {
             val delta = previous?.let { t - it }
-            if (delta != null && delta in 0.0..maximumSupportIntervalMs) anchorCreditMs += delta
-            else anchorCreditMs = 0.0
+            if (delta != null) {
+                if (delta in 0.0..maximumSupportIntervalMs) anchorCreditMs += delta
+                else anchorCreditMs = 0.0
+            } else {
+                anchorCreditMs = 0.0
+            }
             maturityPresenceLast = t
             anchorArmed = (progressMode && anchorArmed) || anchorCreditMs >= settings.minimumAnchorSupportMs
         }
@@ -508,37 +563,179 @@ internal class ReadingBookmarkPolicy(
         recoveryPresenceLast = t; recoveryPresenceLine = line
     }
 
+    /** Missing callbacks remain unavailable on UI pulses until fresh gaze or an operational boundary. */
+    private fun confirmUnavailable(nowMs: Double, lossMs: Double): Change {
+        val first = unavailableFirstMs ?: return Change()
+        val saved = source ?: return Change()
+        if (shown || !anchorArmed || nowMs - first < lossMs) return Change()
+        shown = true; shownAt = nowMs; recoveryFloor = nowMs
+        resetCueProgress(); clearRelease(); clearAwayAll()
+        return Change(ReadingAidBookmarkEvidence(saved, "sustained_gaze_unavailable",
+            null, null, nowMs, unavailableSampleCount, departureTimeBasis = "elapsed_gaze_unavailability",
+            departureFirstElapsedMs = first, departureLastElapsedMs = nowMs))
+    }
+
+    private fun readyAtLastReading(): Boolean = anchorArmed && source?.let {
+        // The bookmark remembers confirmed progress after the transient guide has faded.
+        lastReadingDeliveryMs >= it.evidenceAvailableMs
+    } == true
+
+    /** Current AUTO clocks use selected coordinates for presence and stabilized visits for location. */
+    private fun progressInput(c: ReadingAidContext, lossMs: Double): Change {
+        persistenceBoundary(c)?.let { return it }
+        val s = c.presentationSample
+        val t = s?.captureMs
+        val d = s?.deliveryMs
+        val missing = s?.exclusion in setOf("no_face", "invalid_crops", "eye_area", "stale",
+            "invalid_prediction", "coordinate_unavailable")
+        val clockValid = c.nowMs.isFinite() && c.nowMs >= 0.0 && c.nowMs >= lastNow &&
+            d != null && d.isFinite() && d >= 0.0 && d <= c.nowMs && d >= lastDelivery &&
+            (t == null && missing || t != null && t.isFinite() && t >= 0.0 && t <= d && t >= lastInput) &&
+            c.nowMs - d <= maximumSupportIntervalMs &&
+            (missing || t != null && d - t <= maximumPipelineLatencyMs) &&
+            s?.geometrySnapshotId == c.geometrySnapshotId
+        if (!clockValid) {
+            interruptTransition(); clearAwayAll(); pauseFirstDeliveryMs = null
+            // Aged repeats from UI ticks pause clocks without revoking established readiness.
+            val agedTick = s != null && t == lastInput && d == lastDelivery &&
+                c.nowMs.isFinite() && c.nowMs >= lastNow && d != null && c.nowMs > d
+            if (!agedTick) {
+                anchorArmed = false
+                if (!shown) source = null
+                sourceBridgeDeliveryMs = Double.NEGATIVE_INFINITY
+                lastReadingDeliveryMs = Double.NEGATIVE_INFINITY; unavailableFirstMs = null; unavailableSampleCount = 0
+            } else if (readyAtLastReading() && (missing || supportedMappingExclusion(s?.exclusion))) {
+                if (unavailableFirstMs == null) unavailableFirstMs = d!! + maximumSupportIntervalMs
+            }
+            if (c.nowMs.isFinite()) lastNow = maxOf(lastNow, c.nowMs)
+            return confirmUnavailable(c.nowMs, lossMs)
+        }
+        d!!
+        lastNow = c.nowMs
+        // UI ticks and duplicate callbacks cannot earn presence or departure credit.
+        if (d == lastDelivery) return Change()
+        val previousDelivery = lastDelivery
+        lastDelivery = d
+        if (!missing && t == lastInput) return Change()
+        if (t != null) lastInput = maxOf(lastInput, t)
+        val rect = c.geometry?.visibleRectScreen
+        val x = s!!.processingX; val y = s.processingY
+        val point = rect != null && x?.isFinite() == true && y?.isFinite() == true
+        val inside = point && x!! in rect!!.left..rect.right && y!! in rect.top..rect.bottom
+        val reading = inside && supportedMappingExclusion(s.exclusion)
+        if (reading) {
+            clearAwayAll()
+            unavailableFirstMs = null; unavailableSampleCount = 0; lastReadingDeliveryMs = d
+            val previous = maturityPresenceLast
+            val pause = pauseFirstDeliveryMs
+            val resumedBriefPause = pause != null && d - pause <= maxAwayBlinkGapMs
+            if (previous != null && t!! - previous in 0.0..maximumSupportIntervalMs) {
+                anchorCreditMs += t - previous
+            } else if (!resumedBriefPause) {
+                interruptTransition()
+            }
+            pauseFirstDeliveryMs = null
+            if (presenceFirst == null) presenceFirst = t
+            presenceLast = t; maturityPresenceLast = t; lastInsideLine = s.line
+            anchorArmed = anchorArmed || anchorCreditMs >= persistence!!.minimumAnchorSupportMs
+            if (source?.let { d - it.evidenceAvailableMs <= maxAwayBlinkGapMs } == true)
+                sourceBridgeDeliveryMs = d
+            return Change()
+        }
+        val blink = s.exclusion == "blink" || s.exclusion == "eye_state_unavailable"
+        val settling = s.exclusion in setOf("geometry_unsettled", "scroll_geometry_unavailable", "scroll_input_stale")
+        if (blink || settling) {
+            unavailableFirstMs = null; unavailableSampleCount = 0
+            if (pauseFirstDeliveryMs == null) pauseFirstDeliveryMs = d
+            maturityPresenceLast = null; clearRelease()
+            if (d - pauseFirstDeliveryMs!! <= maxAwayBlinkGapMs) {
+                if (sourceBridgeDeliveryMs.isFinite() && d - sourceBridgeDeliveryMs <= maximumSupportIntervalMs &&
+                    source?.let { d - it.evidenceAvailableMs <= maxAwayBlinkGapMs } == true)
+                    sourceBridgeDeliveryMs = d
+                if (blink && awayLastDeliveryMs?.let { d - it <= maximumSupportIntervalMs } == true) {
+                    awayLastDeliveryMs = d
+                    previousAwayCreditable = false
+                } else clearAwayAll()
+                return Change()
+            }
+            interruptTransition(); clearAwayAll()
+            return Change()
+        }
+        pauseFirstDeliveryMs = null
+        val outside = s.exclusion == "outside_visible_text" && point && !inside
+        if (missing && readyAtLastReading()) {
+            if (unavailableFirstMs == null) unavailableFirstMs = minOf(d, previousDelivery + maximumSupportIntervalMs)
+            unavailableSampleCount++
+            confirmUnavailable(c.nowMs, lossMs).takeIf { it.evidence != null }?.let { return it }
+        } else if (!outside) { unavailableFirstMs = null; unavailableSampleCount = 0 }
+        // Actual missing input breaks spatial movement history immediately.
+        interruptTransition()
+        if ((!missing && !outside) || shown || source == null || !anchorArmed) {
+            clearAwayAll()
+            return Change()
+        }
+        val previousAway = awayLastDeliveryMs
+        val continuing = previousAway != null && d - previousAway in 0.0..maximumSupportIntervalMs
+        val freshSource = readyAtLastReading() || d - sourceBridgeDeliveryMs in 0.0..maximumSupportIntervalMs
+        if (!continuing) {
+            clearAwayAll()
+            if (!freshSource) return Change()
+            awayFirstDeliveryMs = d
+            outsideFirst = t
+        } else if (previousAwayCreditable) {
+            awayCreditMs += d - previousAway!!
+        }
+        awayLastDeliveryMs = d; previousAwayCreditable = true; lossCount++
+        if (awayCreditMs < lossMs || lossCount < detector.minFixationSamples) return Change()
+        val prior = source!!
+        shown = true; shownAt = c.nowMs; recoveryFloor = c.nowMs; resetCueProgress()
+        val evidence = if (missing) ReadingAidBookmarkEvidence(prior, "sustained_gaze_unavailable",
+            null, null, d, lossCount, departureTimeBasis = "delivery_elapsed_time_excluding_blinks",
+            departureFirstDeliveryMs = awayFirstDeliveryMs, departureLastDeliveryMs = d)
+        else ReadingAidBookmarkEvidence(prior,
+            if (s.coordinateStream == ScanpathCoordinateStream.CALIBRATED_RAW) "sustained_raw_outside_article"
+            else "sustained_smoothed_outside_article", outsideFirst, t, d, lossCount,
+            departureTimeBasis = "delivery_elapsed_time_excluding_blinks",
+            departureFirstDeliveryMs = awayFirstDeliveryMs, departureLastDeliveryMs = d)
+        clearAwayAll()
+        return Change(evidence)
+    }
+
     fun input(c: ReadingAidContext, maxAgeMs: Double, lossMs: Double): Change {
+        if (progressMode) return progressInput(c, lossMs)
         if (persistence != null) {
             persistenceBoundary(c)?.let { return it }
             val sample = c.presentationSample
             val rect = c.geometry?.takeIf { it.snapshotId == c.geometrySnapshotId }?.visibleRectScreen
             val t = sample?.captureMs
+            val d = sample?.deliveryMs
             val x = sample?.processingX; val y = sample?.processingY
-            if (!c.nowMs.isFinite() || c.nowMs < lastNow ||
-                sample == null || (progressMode && sample.exclusion != null) ||
-                !supportedMappingExclusion(sample.exclusion) ||
-                sample.geometrySnapshotId != c.geometrySnapshotId ||
-                x?.isFinite() != true || y?.isFinite() != true || rect == null ||
-                x !in rect.left..rect.right || y !in rect.top..rect.bottom ||
-                sample.captureMs?.let { it.isFinite() && it >= 0 && it <= c.nowMs &&
-                    c.nowMs - it <= maximumSupportIntervalMs } != true ||
-                sample.deliveryMs?.let { it.isFinite() && it >= (sample.captureMs ?: Double.POSITIVE_INFINITY) &&
-                    it <= c.nowMs && it >= lastDelivery } != true ||
-                (t != null && t < lastInput)) {
-                interruptTransition()
-            } else if (t != presenceLast) {
-                // A duplicate is neutral only after freshness and validity have been checked.
-                if (presenceLast == null || t!! - presenceLast!! > maximumSupportIntervalMs) {
-                    clearRelease(); trusted.clear(); anchorPrevious = null; anchorCreditMs = 0.0
-                    forwardSource = null; backwardCandidate = null
-                    presenceFirst = t
+            val uiTick = sample != null && t != null && t.isFinite() && t == lastInput &&
+                d != null && d.isFinite() && d == lastDelivery &&
+                c.nowMs.isFinite() && c.nowMs >= lastNow &&
+                c.nowMs - d in 0.0..maximumSupportIntervalMs
+            if (!uiTick) {
+                if (!c.nowMs.isFinite() || c.nowMs < lastNow || sample == null ||
+                    !supportedMappingExclusion(sample.exclusion) ||
+                    sample.geometrySnapshotId != c.geometrySnapshotId ||
+                    x?.isFinite() != true || y?.isFinite() != true || rect == null ||
+                    x !in rect.left..rect.right || y !in rect.top..rect.bottom ||
+                    t == null || !t.isFinite() || t < 0 || t < lastInput ||
+                    d == null || !d.isFinite() || d < t || d > c.nowMs || d < lastDelivery ||
+                    c.nowMs - d > maximumSupportIntervalMs || d - t > maximumPipelineLatencyMs) {
+                    interruptTransition()
+                } else if (t != presenceLast) {
+                    if (presenceLast == null || t - presenceLast!! > maximumSupportIntervalMs) {
+                        clearRelease(); trusted.clear(); anchorPrevious = null; anchorCreditMs = 0.0
+                        forwardSource = null; backwardCandidate = null
+                        presenceFirst = t
+                    }
+                    presenceLast = t
                 }
-                presenceLast = t
             }
             observeEligiblePresence(c)
         }
-        if (!c.nowMs.isFinite() || c.nowMs < 0 || c.nowMs < lastNow) { clearLoss(); clearOutside(); return Change() }
+        if (!c.nowMs.isFinite() || c.nowMs < 0 || c.nowMs < lastNow) { clearAwayAll(); return Change() }
         lastNow = c.nowMs
         val s = c.presentationSample ?: return confirmLoss(c.nowMs, lossMs)
         val delivery = s.deliveryMs
@@ -547,63 +744,51 @@ internal class ReadingBookmarkPolicy(
             delivery >= lastDelivery && (capture == null || (capture.isFinite() && capture >= 0 && capture <= delivery))
         val missing = s.exclusion in setOf("no_face", "invalid_crops", "eye_area", "stale",
             "invalid_prediction", "coordinate_unavailable")
-        // Loss duration belongs to delivery/elapsed time. The watchdog repeats its last capture.
-        if (missing && c.bookmarkInputAllowed &&
-            s.geometrySnapshotId == c.geometrySnapshotId && clockValid) {
+        // Historical comparison clocks retain delivery-based missingness and capture-based outside runs.
+        if (missing && c.bookmarkInputAllowed && s.geometrySnapshotId == c.geometrySnapshotId && clockValid) {
             val repeated = lossFirstDelivery != null && delivery == lossLastDelivery
-            if (!repeated && c.nowMs - delivery!! > maxAgeMs) {
-                clearLoss(); clearOutside(); return Change()
-            }
+            if (!repeated && c.nowMs - delivery!! > maxAgeMs) { clearAwayAll(); return Change() }
             lastDelivery = delivery!!
             clearOutside(); interruptTransition()
             if (source != null && delivery >= source!!.evidenceAvailableMs) {
-                if (lossFirstDelivery == null) {
-                    if (progressMode && delivery - source!!.evidenceAvailableMs !in 0.0..maxAgeMs) return Change()
-                    lossFirstDelivery = delivery
-                }
+                if (lossFirstDelivery == null) lossFirstDelivery = delivery
                 if (!repeated) { lossLastDelivery = delivery; lossCount++ }
                 return confirmLoss(c.nowMs, lossMs)
             }
-            clearLoss(); return Change()
+            clearAwayAll(); return Change()
         }
         clearLoss()
-        if (!clockValid || s.exclusion == "invalid_clock") { clearOutside(); return Change() }
+        if (!clockValid || s.exclusion == "invalid_clock") { clearAwayAll(); return Change() }
         lastDelivery = delivery!!
         val t = s.captureMs
-        // Repeated policy calls for one input cannot count it twice or erase its run.
         if (t?.isFinite() == true && t == lastInput) return Change()
         val ordered = t?.isFinite() == true && t > lastInput
         if (t?.isFinite() == true) lastInput = maxOf(lastInput, t)
         val d = s.deliveryMs
-        val g = c.geometry
-        val v = g?.visibleRectScreen
+        val v = c.geometry?.visibleRectScreen
         val x = s.processingX; val y = s.processingY
         val outside = ordered && c.bookmarkInputAllowed &&
             s.exclusion == "outside_visible_text" && s.geometrySnapshotId == c.geometrySnapshotId &&
-            d?.isFinite() == true && t!! <= d && d <= c.nowMs && c.nowMs - t <= maxAgeMs &&
+            d!!.isFinite() && t!! <= d && d <= c.nowMs &&
+            c.nowMs - d <= maxAgeMs && d - t <= maxAgeMs &&
             x?.isFinite() == true && y?.isFinite() == true && v != null &&
             (x < v.left || x > v.right || y < v.top || y > v.bottom)
-        if (!outside) { clearOutside(); return Change() }
-        t!!; d!!
+        if (!outside) { clearAwayAll(); return Change() }
+        t!!
         if (outsideLast == null || t - outsideLast!! > detector.maxSampleGapMs) {
             outsideFirst = t; outsideCount = 0
-            if (progressMode && source?.let { t - it.lastCaptureMs !in 0.0..maxAgeMs } != false) {
-                clearOutside(); return Change()
-            }
         }
         outsideLast = t; outsideCount++
         val prior = source ?: return Change()
         if (shown || (persistence != null && (!anchorArmed ||
-                (!progressMode && persistence.minimumAnchorSupportMs > 0.0 && lastInsideLine != prior.line))) || t <= prior.lastCaptureMs || outsideFirst!! <= prior.lastCaptureMs ||
-            outsideCount < detector.minFixationSamples || t - outsideFirst!! <
-                (if (persistence != null) lossMs else detector.minFixationMs))
-            return Change()
+                (persistence.minimumAnchorSupportMs > 0.0 && lastInsideLine != prior.line))) ||
+            t <= prior.lastCaptureMs || outsideFirst!! <= prior.lastCaptureMs ||
+            outsideCount < detector.minFixationSamples ||
+            t - outsideFirst!! < (if (persistence != null) lossMs else detector.minFixationMs)) return Change()
         shown = true; landing = null
-        if (progressMode) resetCueProgress()
         if (persistence != null) { shownAt = c.nowMs; recoveryFloor = t; clearRelease() }
         val reason = if (s.coordinateStream == ScanpathCoordinateStream.CALIBRATED_RAW)
             "sustained_raw_outside_article" else "sustained_smoothed_outside_article"
-        return Change(ReadingAidBookmarkEvidence(prior, reason,
-            outsideFirst!!, t, d, outsideCount))
+        return Change(ReadingAidBookmarkEvidence(prior, reason, outsideFirst!!, t, d, outsideCount))
     }
 }

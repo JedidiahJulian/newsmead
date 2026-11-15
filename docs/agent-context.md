@@ -1,4 +1,4 @@
-# Agent context — updated 2026-11-14
+# Agent context — updated 2026-11-15
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,69 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-11-15 bookmark retains confirmed source after highlight has already faded:**
+Owner confirms V8 normal lookaway now works on A56, then asks about looking away
+after the highlight was already gone. V9/runtime policy20 retains the last
+confirmed location through fresh unsettled in-text gaze until a new line is
+supported or the article view is invalidated. Transient guide age no longer
+invalidates bookmark memory; unknown gaze never assigns a new source line.
+Departure timing, arming, backward witness and forward-passage release retained.
+Source export explicitly says retained last confirmed visit, with no source-age
+expiry. All750gaze JVM tests, frozen protocol and both APK builds pass. A56 passed
+5camera-free actual-mapper/live-adapter journeys, including faded highlight then
+outside lookaway to the earlier confirmed row. Synthetic screenshot visually
+checked. Independent review no findings under this explicit memory contract.
+Both installed app/test APK hashes and calibration preservation verified. S21
+received the same update; its device checks were not repeated after the preceding
+keyguard-blocked run. Human V8 success is an owner observation; V9 edge checks are
+synthetic software evidence. No commit. Latest receipt:
+`output/bookmark-lookaway-live-gap-2026-11-15/retained-source-v9/receipt.json`.
+
+**2026-11-15 live lookaway timeout correction installed; A56 camera-free checks pass:**
+Owner reports A56 looking away leaves highlight briefly visible, then no bookmark.
+New AUTO regressions reproduce both single watchdog-stale callback followed by
+UI pulses and complete coordinate-callback silence. Earlier V7 tests supplied
+repeated loss callbacks and missed this contract. RuleV8/runtime policy19 keeps
+an elapsed unavailable clock after250ms without fresh input;500ms sustained
+absence can show the saved line without another callback. Readiness is checked
+at the last supported reading before loss; ongoing unsettled gaze cannot refresh
+an obsolete source. Fresh reading, explicit blink/settling and invalid/operational
+boundaries cancel/reset the clock; compatible scroll clears pending timeout.
+Elapsed absence bounds are exported separately from actual callback deliveries.
+All750gaze JVM tests, frozen protocol verification and both APK builds pass.
+Independent review timestamp finding fixed with an export regression; no remaining
+findings. A56 passed4camera-free live-adapter journeys, including expired highlight
+with visible saved-line marker and one-shot watchdog. Synthetic handoff screenshot
+visually checked. Both phones received identical verified APKs; calibration hashes
+and camera-access durations preserved. S21's one bounded4-test run failed setup
+because keyguard was showing and reading surface was hidden; no behavior result
+or retry. Owner subsequently reports normal-reading A56 lookaway works. Prior edits preserved;
+no commit. Evidence `output/bookmark-lookaway-live-gap-2026-11-15/receipt.json`.
+
+**2026-11-15 highlight-driven bookmark verified and installed on both phones:**
+Owner authorizes shared-highlight bookmark support, resilient arming and testing
+both connected phones. Current ruleV7/runtime policy18 accepts the fresh stabilized
+location visit independently of exact mapper agreement.1500ms in-article capture
+credit survives brief pauses up to350ms, with zero blink/pause/duplicate credit.
+Only armed adjacent forward support promotes the backreading frontier; a larger
+jump needs adjacent continuation from its landing. Three-row settled backward
+return triggers; existing progress dimming and forward-passage release remain.
+Unified500ms departure credit uses delivery intervals across outside/missing
+signals, with zero blink credit; in-text coordinates reset the departure episode.
+Source bridging is bounded350ms from its stabilized support plus250ms fresh-input
+allowance (exported maximum600ms). Baseline10AUTO contract methods reproduced3
+failures (mapper disagreement, blink credit, regressed-clock source reuse).
+Candidate13contract methods and all746gaze JVM tests pass; frozen protocol and
+both APK builds pass. Independent review identified stale-source refresh and
+duplicate outside captures, fixed with regressions; final review no findings.
+Both SM-G991B and SM-A566B passed8camera-free device checks each, exercising actual
+rendered text, live motion adapter/mapper and AUTO Replay. Saved-row screenshots
+visually checked in dark/light modes. Installed app/test hashes verified; both
+calibration hashes and camera-access durations preserved. Human gaze accuracy and
+natural-reading response reliability remain unmeasured. Initial owner edits
+preserved; no commit. Evidence and package hashes:
+`output/bookmark-highlight-2026-11-15/receipt.json`.
 
 **2026-11-14 owner-authorized progress bookmark implementation verified/installed:**
 Owner explicitly says implement the evidence-informed design and improve lookaway
