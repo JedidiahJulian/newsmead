@@ -77,5 +77,36 @@ class ArticleHeaderScrollTest {
         }
     }
 
+    @Test fun downwardScrollHidesFooterAndUpwardScrollRestoresItWithoutBlankGap() {
+        AutoScrollAttachedFixture().use { f ->
+            lateinit var behavior: ArticleFooterScrollBehavior
+            var rootHeight = 0
+            f.onMain {
+                rootHeight = f.binding.root.height
+                behavior = ArticleFooterScrollBehavior(f.binding.nsvArticleText, f.binding.bottomAppBar)
+                assertTrue(f.binding.bottomAppBar.getVisibleRectOnScreen(Rect()))
+                f.binding.nsvArticleText.scrollBy(0, 400)
+            }
+            f.waitPosted(300)
+            f.onMain {
+                assertEquals(View.INVISIBLE, f.binding.bottomAppBar.visibility)
+                assertFalse(f.binding.bottomAppBar.getVisibleRectOnScreen(Rect()))
+                assertEquals(rootHeight, f.binding.articleScrollingLayout.bottom)
+                f.binding.nsvArticleText.scrollBy(0, -400)
+            }
+            f.waitPosted(450)
+            f.onMain {
+                assertEquals(View.VISIBLE, f.binding.bottomAppBar.visibility)
+                val footer = Rect()
+                assertTrue(f.binding.bottomAppBar.getVisibleRectOnScreen(footer))
+                val margin = (f.binding.bottomAppBar.layoutParams as android.view.ViewGroup.MarginLayoutParams).bottomMargin
+                assertEquals("Footer bottomMargin must restore to 0", 0, margin)
+                assertEquals("Reading container must meet restored footer flush",
+                    f.binding.bottomAppBar.top, f.binding.articleScrollingLayout.bottom)
+                behavior.detach()
+            }
+        }
+    }
+
     private fun textY(view: View): Int = IntArray(2).also(view::getLocationOnScreen)[1]
 }

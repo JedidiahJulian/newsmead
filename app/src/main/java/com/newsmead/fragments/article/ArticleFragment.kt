@@ -190,6 +190,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var aidPreferences = ReaderAidPreferences(wordMagnifier = false)
     private var readingAidControls: BottomSheetDialog? = null
     private var articleAutoScroll: ArticleAutoScrollController? = null
+    private var footerScrollBehavior: ArticleFooterScrollBehavior? = null
     private var articleOptionsDialog: AlertDialog? = null
     private val readerControlGate = ReadingAidControlGate()
     private var controlsRuntime: ArticleReadingAidRuntime? = null
@@ -906,6 +907,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         }
         articleAutoScroll?.close()
         articleAutoScroll = null
+        footerScrollBehavior?.detach()
+        footerScrollBehavior = null
         binding.nsvArticleText.onUserTouch = null
         dismissReaderControls()
         cancelTextResize()
@@ -1136,25 +1139,14 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        // Add bottom app bar logic (it must stick and then only disappear
-        // once it reaches recommendations
-        // binding.btnArticleRecommendations.post {
-        //     val btnLocation = IntArray(2)
-        //     binding.btnArticleRecommendations.getLocationOnScreen(btnLocation)
-        //     val btnY = btnLocation[1]
-        //     val nestedScrollView = binding.nsvArticleText
-        //     val bottomAppBar = binding.bottomAppBar
-        //     nestedScrollView.setOnScrollChangeListener(NestedScrollView.OnScrollChangeListener { _, _, scrollY, _, _ ->
-        //         Log.d("Y_COORDINATE", "btnY: $btnY scrollY: $scrollY")
-        //         // Check if the scroll position is past the Y-coordinate of btnArticleRecommendations
-        //         if (scrollY > btnY -1000) {
-        //             Log.d("SCROLL", "Hiding Bottom App Bar")
-        //             bottomAppBar.performHide()
-        //         } else {
-        //             bottomAppBar.performShow()
-        //         }
-        //     })
-        // }
+        super.onViewCreated(view, savedInstanceState)
+        if (!sharedBaselineMode) {
+            footerScrollBehavior = ArticleFooterScrollBehavior(
+                binding.nsvArticleText,
+                binding.bottomAppBar,
+                isAutoScrolling = { articleAutoScroll?.isMoving == true },
+            )
+        }
     }
 
     private fun addBottomAppBarListeners() {
@@ -1688,6 +1680,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             return
         }
         stopArticleDemo("replaced")
+        footerScrollBehavior?.show()
         demoCameraSuppressed = true
         resumeGazeAfterStop = false
         scaffoldDemoHandler.removeCallbacksAndMessages(null)

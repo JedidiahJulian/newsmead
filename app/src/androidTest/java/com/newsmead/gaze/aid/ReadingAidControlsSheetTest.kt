@@ -154,19 +154,19 @@ class ReadingAidControlsSheetTest {
                 val menu = ReadingAidControlsSheet.show(activity, value, { value = it },
                     supportsHideGazeCursor = true)
                 try {
-                    val hideCursor = menu.findViewById<SwitchMaterial>(R.id.readingAidMenuHideGazeCursor)!!
-                    assertFalse(hideCursor.isChecked)
+                    val showCursor = menu.findViewById<SwitchMaterial>(R.id.readingAidMenuHideGazeCursor)!!
+                    assertTrue(showCursor.isChecked)
                     menu.findViewById<MaterialRadioButton>(R.id.readingAidModeOff)!!.performClick()
-                    assertTrue("Hide gaze cursor stays enabled even when aids are off", hideCursor.isEnabled)
-                    hideCursor.performClick()
+                    assertTrue("Show gaze cursor stays enabled even when aids are off", showCursor.isEnabled)
+                    showCursor.performClick()
                     assertTrue(value.hideGazeCursor)
-                    assertTrue(hideCursor.isChecked)
+                    assertFalse(showCursor.isChecked)
                 } finally { menu.dismiss() }
 
                 val reopened = ReadingAidControlsSheet.show(activity, value, { value = it },
                     supportsHideGazeCursor = true)
                 try {
-                    assertTrue(reopened.findViewById<SwitchMaterial>(R.id.readingAidMenuHideGazeCursor)!!.isChecked)
+                    assertFalse(reopened.findViewById<SwitchMaterial>(R.id.readingAidMenuHideGazeCursor)!!.isChecked)
                 } finally { reopened.dismiss() }
 
                 val overlay = com.newsmead.gaze.GazeOverlayView(activity).apply {
@@ -188,6 +188,34 @@ class ReadingAidControlsSheetTest {
                 val restoredBmp = android.graphics.Bitmap.createBitmap(200, 200, android.graphics.Bitmap.Config.ARGB_8888)
                 overlay.draw(android.graphics.Canvas(restoredBmp))
                 assertTrue("Restored cursor draws pixels again", restoredBmp.getPixel(100, 100) != 0)
+            }
+        }
+    }
+
+    @Test fun inlineCustomizeDrawersAndCloseWorkCleanly() {
+        ActivityScenario.launch(ScanpathReplayActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                var value = ReaderAidPreferences()
+                val menu = ReadingAidControlsSheet.show(activity, value, { value = it },
+                    supportsAutoScroll = true, supportsHideGazeCursor = true)
+                try {
+                    val guideOptions = menu.findViewById<android.view.View>(R.id.readingAidGuideOptions)!!
+                    val focusOptions = menu.findViewById<android.view.View>(R.id.readingAidFocusOptions)!!
+                    val advancedSection = menu.findViewById<android.view.View>(R.id.readingAidAdvancedSection)!!
+                    assertEquals(android.view.View.GONE, guideOptions.visibility)
+                    assertEquals(android.view.View.GONE, focusOptions.visibility)
+                    assertEquals(android.view.View.GONE, advancedSection.visibility)
+
+                    menu.findViewById<android.view.View>(R.id.readingAidGuideRow)!!.performClick()
+                    assertEquals(android.view.View.VISIBLE, guideOptions.visibility)
+                    menu.findViewById<android.view.View>(R.id.readingAidFocusRow)!!.performClick()
+                    assertEquals(android.view.View.VISIBLE, focusOptions.visibility)
+                    menu.findViewById<android.view.View>(R.id.readingAidMenuAdvanced)!!.performClick()
+                    assertEquals(android.view.View.VISIBLE, advancedSection.visibility)
+
+                    menu.findViewById<android.view.View>(R.id.readingAidMenuClose)!!.performClick()
+                    assertFalse(menu.isShowing)
+                } finally { menu.dismiss() }
             }
         }
     }

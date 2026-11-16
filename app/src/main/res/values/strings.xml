@@ -395,7 +395,7 @@
     <string name="article_loading_full">Loading the full article…</string>
 
     <string name="reading_aids_option">Reading aids</string>
-    <string name="reading_aid_entry_short">Aids</string>
+    <string name="reading_aid_entry_short">Visuals</string>
     <string name="article_options">Article options</string>
     <string name="reading_aid_menu_opacity">Guide opacity: %1$.1f%%</string>
     <string name="reading_aid_menu_guide">Reading guide</string>
@@ -414,6 +414,16 @@
     <string name="reading_aid_menu_focus_fade">Fade surrounding text</string>
     <string name="reading_aid_menu_focus_dark">Dark surroundings</string>
     <string name="reading_aid_menu_hide_gaze_cursor">Hide gaze cursor</string>
+    <string name="reading_aid_menu_show_gaze_cursor">Show gaze cursor</string>
+    <string name="reading_aid_section_keep_place">KEEP YOUR PLACE</string>
+    <string name="reading_aid_section_focus">READ WITH FOCUS</string>
+    <string name="reading_aid_section_controls">READING CONTROLS</string>
+    <string name="reading_aid_menu_customize_format">%1$s · Customize</string>
+    <string name="reading_aid_menu_bookmark_subtitle">Find your place again</string>
+    <string name="reading_aid_menu_definitions_subtitle">Understand unfamiliar words</string>
+    <string name="reading_aids_mode_off_short">Off</string>
+    <string name="reading_aids_mode_auto_short">Auto</string>
+    <string name="reading_aids_mode_on_short">On</string>
     <string name="reading_aid_menu_advanced">Advanced settings</string>
     <string name="reading_aid_menu_strength_help">Strength settings are relative levels, not opacity. The reading bookmark has fixed visibility.</string>
     <string name="reading_aid_menu_cap">Maximum strength setting: %1$d%%</string>

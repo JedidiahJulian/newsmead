@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="reading_aids_sheet_bg">#FFF5F5FA</color>
+    <color name="reading_aids_card_bg">#FFFFFFFF</color>
+    <color name="reading_aids_tint_surface">#FFEBEBF7</color>
+    <color name="reading_aids_switch_track_off">#FFD6D6E2</color>
+    <color name="reading_aids_switch_thumb_off">#FFFFFFFF</color>
+</resources>

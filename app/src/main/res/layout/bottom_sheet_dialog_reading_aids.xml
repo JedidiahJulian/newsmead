@@ -1,0 +1,768 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_reading_aids_sheet"
+    android:orientation="vertical"
+    android:paddingHorizontal="20dp"
+    android:paddingTop="14dp"
+    android:paddingBottom="20dp">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="@font/arial_bold"
+            android:text="@string/reading_aids_option"
+            android:textColor="?primaryTextColor"
+            android:textSize="20sp" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/readingAidMenuClose"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="-12dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/definition_close"
+            android:padding="13dp"
+            android:scaleType="fitCenter"
+            app:srcCompat="@drawable/ic_definition_close"
+            app:tint="?primaryIconColor" />
+    </LinearLayout>
+
+    <!-- Mode segmented control -->
+    <RadioGroup
+        android:id="@+id/readingAidModeGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_reading_aids_segmented_track"
+        android:orientation="horizontal"
+        android:padding="4dp">
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:id="@+id/readingAidModeOff"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_reading_aids_segmented_tab"
+            android:button="@null"
+            android:fontFamily="@font/arial_regular"
+            android:gravity="center"
+            android:text="@string/reading_aids_mode_off_short"
+            android:textColor="@color/reading_aids_segmented_text"
+            android:textSize="15sp" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:id="@+id/readingAidModeAuto"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_reading_aids_segmented_tab"
+            android:button="@null"
+            android:fontFamily="@font/arial_regular"
+            android:gravity="center"
+            android:text="@string/reading_aids_mode_auto_short"
+            android:textColor="@color/reading_aids_segmented_text"
+            android:textSize="15sp" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:id="@+id/readingAidModeOn"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_reading_aids_segmented_tab"
+            android:button="@null"
+            android:fontFamily="@font/arial_regular"
+            android:gravity="center"
+            android:text="@string/reading_aids_mode_on_short"
+            android:textColor="@color/reading_aids_segmented_text"
+            android:textSize="15sp" />
+    </RadioGroup>
+
+    <!-- Scrollable sections -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:layout_weight="1"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- KEEP YOUR PLACE -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/arial_bold"
+                android:letterSpacing="0.06"
+                android:text="@string/reading_aid_section_keep_place"
+                android:textColor="?secondaryTextColor"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_reading_aids_card"
+                android:orientation="vertical">
+
+                <!-- Reading guide row -->
+                <LinearLayout
+                    android:id="@+id/readingAidGuideRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:minHeight="68dp"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="10dp">
+
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_reading_aids_icon_tile">
+
+                        <ImageView
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:layout_gravity="center"
+                            android:importantForAccessibility="no"
+                            app:srcCompat="@drawable/sort_nofill_weight400"
+                            app:tint="@color/cobalt_100" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
+                        android:layout_marginEnd="8dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/arial_regular"
+                            android:text="@string/reading_aid_menu_guide"
+                            android:textColor="?primaryTextColor"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/readingAidGuideSubtitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:fontFamily="@font/arial_regular"
+                            android:textColor="?secondaryTextColor"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/readingAidMenuGuide"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/reading_aid_menu_guide"
+                        android:minHeight="48dp"
+                        app:thumbTint="@color/reading_aids_switch_thumb"
+                        app:trackTint="@color/reading_aids_switch_track" />
+                </LinearLayout>
+
+                <!-- Inline Reading guide options -->
+                <LinearLayout
+                    android:id="@+id/readingAidGuideOptions"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="68dp"
+                    android:paddingEnd="14dp"
+                    android:paddingBottom="10dp"
+                    android:visibility="gone">
+
+                    <RadioGroup
+                        android:id="@+id/readingAidGuideStyleGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <com.google.android.material.radiobutton.MaterialRadioButton
+                            android:id="@+id/readingAidMenuThreeLine"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/arial_regular"
+                            android:minHeight="44dp"
+                            android:text="@string/reading_aid_menu_three_line"
+                            android:textColor="?primaryTextColor"
+                            android:textSize="14sp"
+                            app:buttonTint="@color/cobalt_100" />
+
+                        <com.google.android.material.radiobutton.MaterialRadioButton
+                            android:id="@+id/readingAidMenuLine"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/arial_regular"
+                            android:minHeight="44dp"
+                            android:text="@string/reading_aid_menu_line"
+                            android:textColor="?primaryTextColor"
+                            android:textSize="14sp"
+                            app:buttonTint="@color/cobalt_100" />
+
+                        <com.google.android.material.radiobutton.MaterialRadioButton
+                            android:id="@+id/readingAidMenuSentence"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/arial_regular"
+                            android:minHeight="44dp"
+                            android:text="@string/reading_aid_menu_sentence"
+                            android:textColor="?primaryTextColor"
+                            android:textSize="14sp"
+                            app:buttonTint="@color/cobalt_100" />
+                    </RadioGroup>
+
+                    <TextView
+                        android:id="@+id/readingAidGuideHelp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:fontFamily="@font/arial_regular"
+                        android:textColor="?secondaryTextColor"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="68dp"
+                    android:layout_marginEnd="14dp"
+                    android:alpha="0.5"
+                    android:background="?dividerColor" />
+
+                <!-- Reading bookmark row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="68dp"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="10dp">
+
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_reading_aids_icon_tile">
+
+                        <ImageView
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:layout_gravity="center"
+                            android:importantForAccessibility="no"
+                            app:srcCompat="@drawable/bookmark_nofill_weight400"
+                            app:tint="@color/cobalt_100" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
+                        android:layout_marginEnd="8dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/arial_regular"
+                            android:text="@string/reading_aid_menu_bookmark"
+                            android:textColor="?primaryTextColor"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:fontFamily="@font/arial_regular"
+                            android:text="@string/reading_aid_menu_bookmark_subtitle"
+                            android:textColor="?secondaryTextColor"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/readingAidMenuBookmark"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/reading_aid_menu_bookmark"
+                        android:minHeight="48dp"
+                        app:thumbTint="@color/reading_aids_switch_thumb"
+                        app:trackTint="@color/reading_aids_switch_track" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- READ WITH FOCUS -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:fontFamily="@font/arial_bold"
+                android:letterSpacing="0.06"
+                android:text="@string/reading_aid_section_focus"
+                android:textColor="?secondaryTextColor"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_reading_aids_card"
+                android:orientation="vertical">
+
+                <!-- Focus window row -->
+                <LinearLayout
+                    android:id="@+id/readingAidFocusRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:minHeight="68dp"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="10dp">
+
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_reading_aids_icon_tile">
+
+                        <ImageView
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:layout_gravity="center"
+                            android:importantForAccessibility="no"
+                            app:srcCompat="@drawable/ic_reading_aid_focus"
+                            app:tint="@color/cobalt_100" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
+                        android:layout_marginEnd="8dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/arial_regular"
+                            android:text="@string/reading_aid_menu_focus"
+                            android:textColor="?primaryTextColor"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/readingAidFocusSubtitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:fontFamily="@font/arial_regular"
+                            android:textColor="?secondaryTextColor"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/readingAidMenuFocus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/reading_aid_menu_focus"
+                        android:minHeight="48dp"
+                        app:thumbTint="@color/reading_aids_switch_thumb"
+                        app:trackTint="@color/reading_aids_switch_track" />
+                </LinearLayout>
+
+                <!-- Inline Focus window options -->
+                <LinearLayout
+                    android:id="@+id/readingAidFocusOptions"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="68dp"
+                    android:paddingEnd="14dp"
+                    android:paddingBottom="10dp"
+                    android:visibility="gone">
+
+                    <RadioGroup
+                        android:id="@+id/readingAidFocusStyleGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <com.google.android.material.radiobutton.MaterialRadioButton
+                            android:id="@+id/readingAidMenuFocusFade"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/arial_regular"
+                            android:minHeight="44dp"
+                            android:text="@string/reading_aid_menu_focus_fade"
+                            android:textColor="?primaryTextColor"
+                            android:textSize="14sp"
+                            app:buttonTint="@color/cobalt_100" />
+
+                        <com.google.android.material.radiobutton.MaterialRadioButton
+                            android:id="@+id/readingAidMenuFocusDark"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/arial_regular"
+                            android:minHeight="44dp"
+                            android:text="@string/reading_aid_menu_focus_dark"
+                            android:textColor="?primaryTextColor"
+                            android:textSize="14sp"
+                            app:buttonTint="@color/cobalt_100" />
+                    </RadioGroup>
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="68dp"
+                    android:layout_marginEnd="14dp"
+                    android:alpha="0.5"
+                    android:background="?dividerColor" />
+
+                <!-- Word definitions row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="68dp"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="10dp">
+
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_reading_aids_icon_tile">
+
+                        <ImageView
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:layout_gravity="center"
+                            android:importantForAccessibility="no"
+                            app:srcCompat="@drawable/ic_reading_aid_definitions"
+                            app:tint="@color/cobalt_100" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
+                        android:layout_marginEnd="8dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/arial_regular"
+                            android:text="@string/reading_aid_menu_definitions"
+                            android:textColor="?primaryTextColor"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:fontFamily="@font/arial_regular"
+                            android:text="@string/reading_aid_menu_definitions_subtitle"
+                            android:textColor="?secondaryTextColor"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/readingAidMenuDefinitions"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/reading_aid_menu_definitions"
+                        android:minHeight="48dp"
+                        app:thumbTint="@color/reading_aids_switch_thumb"
+                        app:trackTint="@color/reading_aids_switch_track" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- READING CONTROLS -->
+            <TextView
+                android:id="@+id/readingAidControlsHeader"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:fontFamily="@font/arial_bold"
+                android:letterSpacing="0.06"
+                android:text="@string/reading_aid_section_controls"
+                android:textColor="?secondaryTextColor"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:id="@+id/readingAidControlsCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_reading_aids_card"
+                android:orientation="vertical">
+
+                <!-- Auto-scroll row -->
+                <LinearLayout
+                    android:id="@+id/readingAidAutoScrollRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="58dp"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="8dp">
+
+                    <ImageView
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:importantForAccessibility="no"
+                        app:srcCompat="@drawable/ic_reading_aid_autoscroll"
+                        app:tint="?primaryIconColor" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
+                        android:layout_marginEnd="8dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/arial_regular"
+                            android:text="@string/reading_aid_menu_auto_scroll"
+                            android:textColor="?primaryTextColor"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/readingAidAutoScrollSubtitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:fontFamily="@font/arial_regular"
+                            android:textColor="?secondaryTextColor"
+                            android:textSize="12sp"
+                            android:visibility="gone" />
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/readingAidMenuAutoScroll"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/reading_aid_menu_auto_scroll"
+                        android:minHeight="48dp"
+                        app:thumbTint="@color/reading_aids_switch_thumb"
+                        app:trackTint="@color/reading_aids_switch_track" />
+                </LinearLayout>
+
+                <View
+                    android:id="@+id/readingAidControlsDivider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="52dp"
+                    android:layout_marginEnd="14dp"
+                    android:alpha="0.5"
+                    android:background="?dividerColor" />
+
+                <!-- Show gaze cursor row -->
+                <LinearLayout
+                    android:id="@+id/readingAidCursorRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="58dp"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="8dp">
+
+                    <ImageView
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:importantForAccessibility="no"
+                        app:srcCompat="@drawable/visibility_nofill_weight400"
+                        app:tint="?primaryIconColor" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
+                        android:layout_marginEnd="8dp"
+                        android:layout_weight="1"
+                        android:fontFamily="@font/arial_regular"
+                        android:text="@string/reading_aid_menu_show_gaze_cursor"
+                        android:textColor="?primaryTextColor"
+                        android:textSize="16sp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/readingAidMenuHideGazeCursor"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/reading_aid_menu_show_gaze_cursor"
+                        android:minHeight="48dp"
+                        app:thumbTint="@color/reading_aids_switch_thumb"
+                        app:trackTint="@color/reading_aids_switch_track" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Advanced settings row -->
+            <LinearLayout
+                android:id="@+id/readingAidMenuAdvanced"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:minHeight="48dp"
+                android:orientation="horizontal"
+                android:paddingHorizontal="4dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/arial_regular"
+                    android:text="@string/reading_aid_menu_advanced"
+                    android:textColor="?highTextEmphasis"
+                    android:textSize="15sp" />
+
+                <ImageView
+                    android:id="@+id/readingAidAdvancedChevron"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no"
+                    app:srcCompat="@drawable/ic_reading_aid_chevron_right"
+                    app:tint="?highTextEmphasis" />
+            </LinearLayout>
+
+            <!-- Collapsible Advanced settings card -->
+            <LinearLayout
+                android:id="@+id/readingAidAdvancedSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="4dp"
+                android:background="@drawable/bg_reading_aids_card"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:layout_weight="1"
+                        android:fontFamily="@font/arial_regular"
+                        android:text="@string/reading_aids_adaptive"
+                        android:textColor="?primaryTextColor"
+                        android:textSize="15sp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/readingAidMenuAdaptive"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        app:thumbTint="@color/reading_aids_switch_thumb"
+                        app:trackTint="@color/reading_aids_switch_track" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:fontFamily="@font/arial_regular"
+                    android:text="@string/reading_aid_menu_strength_help"
+                    android:textColor="?secondaryTextColor"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/readingAidOpacityInfo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:fontFamily="@font/arial_regular"
+                    android:textColor="?secondaryTextColor"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/readingAidCapLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:fontFamily="@font/arial_regular"
+                    android:labelFor="@id/readingAidMenuCap"
+                    android:textColor="?primaryTextColor"
+                    android:textSize="14sp" />
+
+                <SeekBar
+                    android:id="@+id/readingAidMenuCap"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:max="100"
+                    android:progressTint="@color/cobalt_100"
+                    android:thumbTint="@color/cobalt_100" />
+
+                <TextView
+                    android:id="@+id/readingAidStrengthLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:fontFamily="@font/arial_regular"
+                    android:labelFor="@id/readingAidMenuStrength"
+                    android:textColor="?primaryTextColor"
+                    android:textSize="14sp" />
+
+                <SeekBar
+                    android:id="@+id/readingAidMenuStrength"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:max="100"
+                    android:progressTint="@color/cobalt_100"
+                    android:thumbTint="@color/cobalt_100" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Pinned Done button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/readingAidMenuDone"
+        style="@style/ButtonMedium_Solid"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_marginTop="12dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:text="@string/reading_aid_menu_done"
+        app:cornerRadius="26dp" />
+</LinearLayout>
