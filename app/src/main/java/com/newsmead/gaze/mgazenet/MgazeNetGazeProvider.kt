@@ -13,6 +13,25 @@ import com.newsmead.gaze.physicalDisplaySize
 
 internal enum class MgazeNetStopAction { START_CLOSE, WAIT_FOR_CLOSE, ALREADY_CLOSED }
 
+internal enum class MgazeNetStartupTimeout { INITIALIZATION, FIRST_OUTPUT }
+
+/** Separates slow model construction from a camera that binds but never supplies output. */
+internal object MgazeNetStartupTimeoutPolicy {
+    const val INITIALIZATION_TIMEOUT_MS = 60_000.0
+    const val FIRST_OUTPUT_TIMEOUT_MS = 20_000.0
+
+    fun expired(providerStartedMs: Double, cameraBoundMs: Double, lastOutputMs: Double,
+        nowMs: Double): MgazeNetStartupTimeout? {
+        if (lastOutputMs >= 0 || !nowMs.isFinite()) return null
+        if (cameraBoundMs >= 0) {
+            return if (nowMs - cameraBoundMs > FIRST_OUTPUT_TIMEOUT_MS)
+                MgazeNetStartupTimeout.FIRST_OUTPUT else null
+        }
+        return if (providerStartedMs >= 0 && nowMs - providerStartedMs > INITIALIZATION_TIMEOUT_MS)
+            MgazeNetStartupTimeout.INITIALIZATION else null
+    }
+}
+
 /** Keeps every terminal callback behind the one asynchronous source close. */
 internal class MgazeNetStopCompletionQueue {
     private enum class State { OPEN, CLOSING, CLOSED }
@@ -76,6 +95,8 @@ class MgazeNetGazeProvider(
     var onFps: ((Float) -> Unit)? = null
     private var fpsStart = 0.0
     private var fpsCount = 0
+    private var providerStartedMs = -1.0
+    private var cameraBoundMs = -1.0
     private var deliverySequence = 0L
     private val displaySize = Point()
     private var liveOutput: MgazeNetLiveOutput? = null
@@ -89,7 +110,8 @@ class MgazeNetGazeProvider(
             onFailure?.invoke("A fresh MGazeNet calibration is required."); return
         }
         this.owner = owner; owner.lifecycle.addObserver(this)
-        lastCapture = -1.0; lastOutput = -1.0; fpsStart = MgazeNetCameraSource.now(); fpsCount = 0
+        lastCapture = -1.0; lastOutput = -1.0; providerStartedMs = MgazeNetCameraSource.now()
+        cameraBoundMs = -1.0; fpsStart = providerStartedMs; fpsCount = 0
         deliverySequence = 0L
         val identity = saved.identity
         val output = MgazeNetLiveOutput(identity.screenWidth, identity.screenHeight,
@@ -99,6 +121,9 @@ class MgazeNetGazeProvider(
             onMetadata?.invoke(metadata + mapOf("prefer_stable_frame_rate" to preferStableFrameRate,
                 "smooth_for_reading" to smoothForReading, "reject_blinks" to rejectBlinks,
                 "output_max_age_ms" to maxOutputAgeMs,
+                "startup_provider_to_camera_bound_ms" to (cameraBoundMs - providerStartedMs),
+                "startup_initialization_timeout_ms" to MgazeNetStartupTimeoutPolicy.INITIALIZATION_TIMEOUT_MS,
+                "startup_first_output_timeout_ms" to MgazeNetStartupTimeoutPolicy.FIRST_OUTPUT_TIMEOUT_MS,
                 "smoothing_min_cutoff" to MgazeNetReadingSmoother.MIN_CUTOFF,
                 "smoothing_beta" to MgazeNetReadingSmoother.BETA))
         }, result = { frame ->
@@ -122,7 +147,11 @@ class MgazeNetGazeProvider(
                 if (now-fpsStart >= 1000) { onFps?.invoke((fpsCount*1000/(now-fpsStart)).toFloat()); fpsStart=now; fpsCount=0 }
             }
         }, failed = ::fail, store = store, saved = saved, eyelidTelemetryEnabled = rejectBlinks,
-            preferStableFrameRate = preferStableFrameRate, experimentalMnnThreads = experimentalMnnThreads,
+            preferStableFrameRate = preferStableFrameRate, cameraBound = { boundMs ->
+                cameraBoundMs = boundMs
+                fpsStart = boundMs
+                fpsCount = 0
+            }, experimentalMnnThreads = experimentalMnnThreads,
             experimentalLocalizer = experimentalLocalizer, experimentalMnnBackend = experimentalMnnBackend).also { it.start() }
         handler.post(watchdog)
     }
@@ -130,7 +159,15 @@ class MgazeNetGazeProvider(
         override fun run() {
             if (source == null) return
             val now = MgazeNetCameraSource.now()
-            if (lastOutput < 0 && now - fpsStart > 20000) { fail("MGazeNet initialization timed out."); return }
+            when (MgazeNetStartupTimeoutPolicy.expired(providerStartedMs, cameraBoundMs, lastOutput, now)) {
+                MgazeNetStartupTimeout.INITIALIZATION -> {
+                    fail("MGazeNet initialization timed out before camera startup."); return
+                }
+                MgazeNetStartupTimeout.FIRST_OUTPUT -> {
+                    fail("MGazeNet camera output timed out after startup."); return
+                }
+                null -> Unit
+            }
             if (fresh && now-lastCapture > maxOutputAgeMs) {
                 fresh = false
                 liveOutput?.expire()

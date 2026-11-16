@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.os.PowerManager
+import android.util.Log
 import android.view.FrameMetrics
 import android.view.Window
 import android.widget.Toast
@@ -73,6 +74,19 @@ class ArticleFullAppPerformanceDeviceTest {
         val order = (args.getString("newsmeadPerfOrder") ?: "OFF,ON,ON,OFF")
             .split(',').map { it.trim().uppercase(java.util.Locale.ROOT) }
         require(order.size in 2..8 && order.all { it == "OFF" || it == "ON" } && order.toSet().size == 2)
+        val presenceArgument = args.getString("newsmeadPerfPresenceOrder")
+        val presenceOrder = presenceArgument?.split(',')?.map {
+            it.trim().uppercase(java.util.Locale.ROOT)
+        } ?: List(order.size) { "PRESENT" }
+        require(presenceOrder.size == order.size && presenceOrder.all { it == "ABSENT" || it == "PRESENT" }) {
+            "newsmeadPerfPresenceOrder must match phase count and contain only ABSENT or PRESENT"
+        }
+        require(presenceOrder.indices.none { presenceOrder[it] == "ABSENT" && order[it] != "OFF" }) {
+            "Face-absent diagnosis is recording-OFF only"
+        }
+        require(presenceArgument == null || !sameModelTrial) {
+            "Presence diagnosis uses only the ordinary configured model"
+        }
         val cpuMasks = args.getString("newsmeadPerfCpuMasks")?.split(',')?.map {
             it.trim().lowercase(java.util.Locale.ROOT)
         }
@@ -121,10 +135,14 @@ class ArticleFullAppPerformanceDeviceTest {
         main { check(StudyCollection.run == null) { "Stop the existing researcher run before this diagnostic." } }
         val summary = JSONObject().put("schema", "newsmead_full_app_performance_v1")
             .put("recording_order", JSONArray(order)).put("warmup_seconds", warmup)
+            .put("presence_order", JSONArray(presenceOrder))
             .put("timed_seconds_requested", duration).put("recording_only_condition", placementScope == null)
-            .put("changed_variables", JSONArray(listOfNotNull("numerical study recording", placementScope)))
+            .put("changed_variables", JSONArray(listOfNotNull("numerical study recording",
+                if (presenceArgument != null) "operator-presented face visibility" else null, placementScope)))
             .put("interpretation", "Live article pipeline timing; neither accuracy nor human reading validity")
-            .put("benchmark_coverage_guard", "Each timed block requires at least one coordinate result and no_face ratio <=0.20; diagnostic coverage only, not an accuracy or study eligibility threshold")
+            .put("benchmark_coverage_guard", if (presenceArgument == null)
+                "Each timed block requires at least one coordinate result and no_face ratio <=0.20; diagnostic coverage only, not an accuracy or study eligibility threshold"
+                else "PRESENT blocks require coordinate output and no_face ratio <=0.20; ABSENT blocks require no_face ratio >=0.80; diagnostic scene coverage only, not accuracy or study eligibility")
             .put("device_model", android.os.Build.MODEL).put("sdk", android.os.Build.VERSION.SDK_INT)
             .put("requested_mnn_cpu_threads", if (requestedBackend == "OPENCL") JSONObject.NULL else configuredThreads)
             .put("cpu_reference_thread_count", configuredThreads)
@@ -162,7 +180,9 @@ class ArticleFullAppPerformanceDeviceTest {
             }
             main { StudyCollection.useIsolatedStorageForTest(context, storage); isolated = true }
             order.forEachIndexed { index, condition ->
+                val expectedPresence = presenceOrder[index]
                 val phase = JSONObject().put("index", index).put("recording", condition)
+                    .put("expected_presence", expectedPresence)
                 phases.put(phase)
                 val cpuLease = cpuMasks?.let { masks ->
                     val metadata = JSONObject(); phase.put("cpu_placement", metadata)
@@ -195,7 +215,7 @@ class ArticleFullAppPerformanceDeviceTest {
                 var providerContinuityValid = true
                 val closed = CountDownLatch(1)
                 val stats = Counters()
-                val faceReadiness = FaceReadiness()
+                val presenceReadiness = PresenceReadiness(expectedPresence == "PRESENT")
                 phase.put("face_preflight", JSONObject().put("status", "not_started"))
                 val probe = LatenessProbe(stats)
                 var measuredWindow: Window? = null
@@ -253,7 +273,7 @@ class ArticleFullAppPerformanceDeviceTest {
                                 val originalCost = now() - before
                                 if (!observation.timeoutWatchdog && observation.reason == "coordinate" &&
                                     observation.captureMs != null) pipelineReady = true
-                                faceReadiness.observation(observation, before)
+                                presenceReadiness.observation(observation, before)
                                 stats.observation(observation, originalCost, before)
                             }
                         }
@@ -276,6 +296,7 @@ class ArticleFullAppPerformanceDeviceTest {
                         check(providerFailure == null) { "Provider failed before processing readiness: $providerFailure" }
                         check(ready) { "No complete gaze-processing observation before startup deadline" }
                     }
+                    if (presenceArgument != null) promptForPresence(expectedPresence)
                     SystemClock.sleep(warmup * 1000)
                     if (sameModelTrial) {
                         val actual = onModelWorker(live) { model ->
@@ -317,7 +338,7 @@ class ArticleFullAppPerformanceDeviceTest {
                         }
                         summary.put("localizer_execution_actual", JSONObject(actual))
                     }
-                    awaitFaceReadiness(faceReadiness, phase)
+                    awaitPresenceReadiness(presenceReadiness, expectedPresence, phase) { stats.failure }
                     if (cpuLease != null) {
                         cpuLease.apply()
                     }
@@ -374,6 +395,7 @@ class ArticleFullAppPerformanceDeviceTest {
                             val source = checkNotNull(field(live, "source")) { "Live camera source unavailable after warmup" }
                             phase.put("preprocessor_slot_count", (field(source, "preprocessors") as List<*>).size)
                             stats.start(now(), duration * 1000.0); probe.start()
+                            Log.i(TEST_TAG, "phase_start index=$index presence=$expectedPresence recording=$condition")
                         }
                     }
                     phase.put("provider_identity_before_timing", sameProvider)
@@ -382,6 +404,7 @@ class ArticleFullAppPerformanceDeviceTest {
                     SystemClock.sleep(duration * 1000)
                     main {
                         stats.end = now(); probe.stop(); phase.put("timing", stats.json())
+                        Log.i(TEST_TAG, "phase_end index=$index presence=$expectedPresence recording=$condition")
                         sameProvider = measuredFragment?.isResumed == true &&
                             field(checkNotNull(measuredFragment), "gazeProvider") === live
                     }
@@ -394,8 +417,13 @@ class ArticleFullAppPerformanceDeviceTest {
                     check(stats.cameraResults > 0) { "No timed camera results; check permission, face setup and camera availability." }
                     val coverage = stats.json()
                     val noFaceRatio = coverage.optDouble("no_face_ratio_camera_results", 1.0)
-                    check(noFaceRatio.isFinite() && noFaceRatio <= 0.20 && coverage.optDouble("coordinate_hz", 0.0) > 0.0) {
-                        "Insufficient face/coordinate coverage for a gaze-performance comparison; block rejected, check face setup"
+                    val coverageAccepted = if (expectedPresence == "PRESENT") {
+                        noFaceRatio.isFinite() && noFaceRatio <= 0.20 && coverage.optDouble("coordinate_hz", 0.0) > 0.0
+                    } else {
+                        noFaceRatio.isFinite() && noFaceRatio >= 0.80
+                    }
+                    check(coverageAccepted) {
+                        "Scene coverage did not match expected presence=$expectedPresence; block rejected, check camera setup"
                     }
                 } catch (problem: Throwable) {
                     phaseFailure = problem
@@ -554,10 +582,19 @@ class ArticleFullAppPerformanceDeviceTest {
     }
     private fun fragments(items: List<Fragment>): List<Fragment> = items.flatMap { listOf(it) + fragments(it.childFragmentManager.fragments) }
     private fun field(target: Any, name: String): Any? = target.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(target)
-    private fun awaitFaceReadiness(readiness: FaceReadiness, phase: JSONObject) {
+    private fun promptForPresence(expectedPresence: String) = main {
+        val message = if (expectedPresence == "PRESENT")
+            "Look toward this phone's front camera"
+        else "Move completely out of this phone's front camera view"
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    }
+
+    private fun awaitPresenceReadiness(readiness: PresenceReadiness, expectedPresence: String, phase: JSONObject,
+        providerFailure: () -> String?) {
         val started = now()
-        val deadline = started + FaceReadiness.WAIT_MS
+        val deadline = started + PresenceReadiness.WAIT_MS
         var ready = false
+        var failure: String? = null
         var finalState = JSONObject()
         var prompt: Toast? = null
         var nextPromptAt = started
@@ -565,27 +602,38 @@ class ArticleFullAppPerformanceDeviceTest {
             while (true) {
                 main {
                     val at = now()
+                    failure = providerFailure()
                     ready = readiness.isReady(at)
                     finalState = readiness.snapshot(at)
                     if (!ready && at >= nextPromptAt) {
                         prompt?.cancel()
-                        prompt = Toast.makeText(context, "Keep looking toward this phone’s front camera", Toast.LENGTH_LONG)
+                        if (expectedPresence == "ABSENT") {
+                            prompt = Toast.makeText(context, "Stay completely out of this phone's front camera view", Toast.LENGTH_LONG)
+                        } else {
+                            prompt = Toast.makeText(context, "Keep looking toward this phone's front camera", Toast.LENGTH_LONG)
+                        }
                         prompt?.show()
                         nextPromptAt = at + 4_000
                     }
                 }
                 val remaining = deadline - now()
-                if (ready || remaining <= 0) break
+                if (ready || failure != null || remaining <= 0) break
                 SystemClock.sleep(minOf(100L, remaining.toLong().coerceAtLeast(1L)))
             }
         } finally { main { prompt?.cancel() } }
-        phase.put("face_preflight", finalState.put("status", if (ready) "ready" else "timeout")
-            .put("waited_ms", now() - started).put("maximum_wait_ms", FaceReadiness.WAIT_MS)
-            .put("required_continuous_face_present_ms", FaceReadiness.CONTINUOUS_MS)
-            .put("maximum_observation_gap_and_age_ms", FaceReadiness.GAP_MS)
-            .put("definition", "Timestamped non-watchdog camera observations: reason != no_face, including blink; no_face, nonmonotonic capture time or >500ms camera gap resets the run. Latest capture must be 0..500ms old")
+        phase.put("face_preflight", finalState.put("status", when {
+            ready -> "ready"
+            failure != null -> "provider_failed"
+            else -> "timeout"
+        })
+            .put("waited_ms", now() - started).put("maximum_wait_ms", PresenceReadiness.WAIT_MS)
+            .put("expected_presence", expectedPresence)
+            .put("required_continuous_matching_scene_ms", PresenceReadiness.CONTINUOUS_MS)
+            .put("maximum_observation_gap_and_age_ms", PresenceReadiness.GAP_MS)
+            .put("definition", "Timestamped non-watchdog camera observations must continuously match expected face presence; mismatch, nonmonotonic capture time or >500ms camera gap resets the run. Latest capture must be 0..500ms old")
             .put("interpretation", "Prior-to-intervention setup check only; not accuracy, tracking eligibility or a relaxed timed coverage guard"))
-        check(ready) { "Face setup preflight timed out after 20 seconds; no intervention or timed block started. Keep looking toward this phone's front camera." }
+        check(failure == null) { "Provider failed before scene preflight: $failure" }
+        check(ready) { "Scene setup preflight timed out after 20 seconds; expected presence=$expectedPresence." }
     }
     /** Queued behind construction, before close; never imposes a startup snapshot deadline. */
     private fun postModelReference(provider: MgazeNetGazeProvider): Future<MnnEstimator?> {
@@ -685,21 +733,23 @@ class ArticleFullAppPerformanceDeviceTest {
     }
 
     /** Main-thread only. Stores reason/timing state; no coordinates or features. */
-    private class FaceReadiness {
+    private class PresenceReadiness(private val expectedPresent: Boolean) {
         private var runStart: Double? = null
         private var lastCapture: Double? = null
         private var lastFacePresent = false
+        private var lastMatches = false
         fun observation(observation: MgazeNetGazeProvider.Observation, arrival: Double) {
             if (observation.timeoutWatchdog) return
             val capture = observation.captureMs ?: return
             if (!capture.isFinite() || capture <= 0 || capture > arrival) {
-                runStart = null; lastFacePresent = false; return
+                runStart = null; lastFacePresent = false; lastMatches = false; return
             }
             val previous = lastCapture
             val interrupted = previous == null || capture <= previous || capture - previous > GAP_MS || arrival - capture > GAP_MS
             lastCapture = capture
             lastFacePresent = observation.reason != "no_face"
-            if (!lastFacePresent) runStart = null
+            lastMatches = lastFacePresent == expectedPresent
+            if (!lastMatches) runStart = null
             else if (interrupted || runStart == null) runStart = capture
         }
         fun isReady(at: Double): Boolean {
@@ -707,12 +757,13 @@ class ArticleFullAppPerformanceDeviceTest {
             val age = at - capture
             if (age !in 0.0..GAP_MS) { runStart = null; return false }
             val start = runStart ?: return false
-            return lastFacePresent && capture - start >= CONTINUOUS_MS
+            return lastMatches && capture - start >= CONTINUOUS_MS
         }
         fun snapshot(at: Double) = JSONObject()
-            .put("continuous_face_present_ms", runStart?.let { start -> lastCapture?.let { it - start } } ?: 0.0)
+            .put("continuous_matching_scene_ms", runStart?.let { start -> lastCapture?.let { it - start } } ?: 0.0)
             .put("latest_observation_age_ms", lastCapture?.let { at - it } ?: JSONObject.NULL)
             .put("latest_observation_face_present", lastFacePresent)
+            .put("latest_observation_matches_expected", lastMatches)
             .put("time_basis", "Camera captureMs and elapsedRealtime main polling, milliseconds")
         companion object {
             const val WAIT_MS = 20_000L
@@ -792,4 +843,6 @@ class ArticleFullAppPerformanceDeviceTest {
             handler.postAtTime(this, expected)
         }
     }
+
+    companion object { private const val TEST_TAG = "NewsMeadPerfTest" }
 }

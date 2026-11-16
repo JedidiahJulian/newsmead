@@ -39,6 +39,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private val saved: CalibrationBundle.Artifact? = null,
     private val eyelidTelemetryEnabled: Boolean = false,
     private val preferStableFrameRate: Boolean = false,
+    private val cameraBound: (Double) -> Unit = {},
     private val experimentalMnnThreads: Int? = null,
     private val experimentalLocalizer: String? = null,
     private val experimentalMnnBackend: String? = null) {
@@ -58,6 +59,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     private val failedOnce = AtomicBoolean(false)
     private val drops = AtomicLong()
     private val arrivals = AtomicLong()
+    private val singleFlight = MgazeNetSingleFlightGate()
     private var provider: ProcessCameraProvider? = null
     private var analysis: ImageAnalysis? = null
     private var model: MnnEstimator? = null
@@ -140,6 +142,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                     "Shared camera clock unavailable; accuracy capture is not supported by this build on this configuration."
                 }
                 clockReady = true
+                cameraBound(now())
             } catch (e: Throwable) { error(e) }
         },main)
     }
@@ -228,10 +231,14 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                     val crops = points?.let { GazeGeometry.crops(landmarkX,landmarkY,bitmap.width,bitmap.height,cropPx,cropPy) }
                     val reason = when { landmarks == null -> "no_face"; crops == null -> "invalid_crops"; else -> "features" }
                     val posture = crops?.let { MgazeNetPostureGate.from(it,bitmap.width,bitmap.height) }
-                    val preprocessor = if (crops == null) null else availablePreprocessors.poll()
-                    if (crops != null && preprocessor == null) {
+                    if (!singleFlight.tryAcquire()) {
                         drops.incrementAndGet()
                         return
+                    }
+                    val preprocessor = if (crops == null) null else availablePreprocessors.poll()
+                    if (crops != null && preprocessor == null) {
+                        singleFlight.release()
+                        throw IllegalStateException("Single-flight preprocessor unavailable")
                     }
                     var queuedToWorker = false
                     try {
@@ -268,11 +275,15 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
                             } catch (e: Throwable) { error(e) }
                             finally {
                                 preprocessor?.let { availablePreprocessors.offer(it) }
+                                singleFlight.release()
                             }
                         }
                         queuedToWorker = true
                     } finally {
-                        if (!queuedToWorker) preprocessor?.let { availablePreprocessors.offer(it) }
+                        if (!queuedToWorker) {
+                            preprocessor?.let { availablePreprocessors.offer(it) }
+                            singleFlight.release()
+                        }
                     }
                 } finally { mp.close() }
         } catch (e: Throwable) { error(e) }
@@ -399,7 +410,7 @@ class MgazeNetCameraSource(private val context: Context, private val owner: Life
     }
 
     companion object {
-        private const val PREPROCESSOR_SLOT_COUNT = 2
+        private const val PREPROCESSOR_SLOT_COUNT = 1
         private const val PERFORMANCE_LOG_WINDOW_NS = 2_000_000_000L
         private const val PERFORMANCE_TAG = "MGazeNetPerf"
         fun now() = SystemClock.elapsedRealtimeNanos()/1e6
