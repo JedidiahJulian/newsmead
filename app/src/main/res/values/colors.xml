@@ -5,17 +5,18 @@
     <color name="white">#FFFFFFFF</color>
 
     <!--    color modes-->
-    <color name="dark">@color/black_200</color>
-    <color name="dark_btn">@color/black_100</color>
-    <color name="dark_btn_emphasis">@color/true_black</color>
-    <color name="dark_text">@color/white</color>
-    <color name="dark_subtext">@color/gray_200</color>
+    <!-- Reader choices stay fixed even when the system appearance changes. -->
+    <color name="dark">#23231F</color>
+    <color name="dark_btn">#2F2E28</color>
+    <color name="dark_btn_emphasis">#423B27</color>
+    <color name="dark_text">#F4F0E5</color>
+    <color name="dark_subtext">#C3BEB0</color>
 
-    <color name="light">@color/white</color>
+    <color name="light">#FAF8F2</color>
     <color name="light_btn">@color/gold_20</color>
     <color name="light_btn_emphasis">@color/gold_60</color>
-    <color name="light_text">@color/black_100</color>
-    <color name="light_subtext">@color/gray_100</color>
+    <color name="light_text">#292821</color>
+    <color name="light_subtext">#69655B</color>
 
     <color name="sepia">#FFF5EED9</color>
     <color name="sepia_btn">#FFEBDEB5</color>
@@ -24,16 +25,16 @@
     <color name="sepia_subtext">@color/gray_100</color>
 
     <!--    Secondary colors      -->
-    <color name="gold_100">#FFFCEB4F</color>
-    <color name="gold_60">#FFFDF395</color>
-    <color name="gold_20">#FFFEFBDC</color>
-    <color name="gold_10">#FFFFFDED</color>
-    <color name="gold_200">#FFE6D000</color>
-    <color name="gold_300">#FFAF9503</color>
+    <color name="gold_100">#C7A044</color>
+    <color name="gold_60">#E8CF83</color>
+    <color name="gold_20">#F5E9BD</color>
+    <color name="gold_10">#FAF8F2</color>
+    <color name="gold_200">#C7A044</color>
+    <color name="gold_300">#80620D</color>
 
-    <!--    Accent colors      -->
-    <color name="cobalt_100">#FF494BB0</color>
-    <color name="cobalt_50">#FF9293D0</color>
+    <!-- Legacy names retained for existing callers; both now follow the palette. -->
+    <color name="cobalt_100">@color/palette_primary</color>
+    <color name="cobalt_50">@color/palette_outline_strong</color>
 
     <!--    Neutral colors      -->
     <color name="gray_100">#FF666666</color>
@@ -54,7 +55,7 @@
     <color name="transparent">#00000000</color>
 
     <!-- CheckBox button tint colors -->
-    <color name="checkbox_checked_color">@color/cobalt_100</color>
-    <color name="checkbox_unchecked_color">@color/gray_100</color>
+    <color name="checkbox_checked_color">@color/palette_primary</color>
+    <color name="checkbox_unchecked_color">@color/palette_muted</color>
 
 </resources>

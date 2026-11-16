@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/cobalt_100" android:state_checked="true" android:state_enabled="true" />
-    <item android:color="@color/cobalt_50" android:state_checked="true" android:state_enabled="false" />
+    <item android:color="@color/palette_primary" android:state_checked="true" android:state_enabled="true" />
+    <item android:color="@color/palette_primary_disabled" android:state_checked="true" android:state_enabled="false" />
     <item android:color="@color/reading_aids_switch_track_off" />
 </selector>

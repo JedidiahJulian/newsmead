@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="palette_background">#23231F</color>
+    <color name="palette_surface">#2F2E28</color>
+    <color name="palette_surface_variant">#38372F</color>
+    <color name="palette_on_surface">#F4F0E5</color>
+    <color name="palette_muted">#C3BEB0</color>
+    <color name="palette_primary">#E8CF83</color>
+    <color name="palette_on_primary">#292821</color>
+    <color name="palette_primary_disabled">#69655B</color>
+    <color name="palette_soft">#423B27</color>
+    <color name="palette_on_soft">#F4F0E5</color>
+    <color name="palette_action">#E8CF83</color>
+    <color name="palette_on_action">#292821</color>
+    <color name="palette_brand">#E8CF83</color>
+    <color name="palette_outline">#565348</color>
+    <color name="palette_outline_strong">#8E8878</color>
+    <color name="palette_ripple">#29E8CF83</color>
+    <color name="palette_primary_ripple">#33292821</color>
+    <color name="palette_inverse_surface">#F4F0E5</color>
+    <color name="palette_on_inverse_surface">#292821</color>
+    <color name="palette_inverse_primary">#80620D</color>
+    <color name="palette_control_off">#69655B</color>
+    <color name="palette_control_thumb_off">#F4F0E5</color>
+</resources>

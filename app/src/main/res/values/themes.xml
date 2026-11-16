@@ -1,70 +1,125 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Set Material roles as well as custom roles so default controls share the palette. -->
+    <style name="Base.Theme.NewsMead.Palette" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/palette_primary</item>
+        <item name="colorOnPrimary">@color/palette_on_primary</item>
+        <item name="colorPrimaryContainer">@color/palette_soft</item>
+        <item name="colorOnPrimaryContainer">@color/palette_on_soft</item>
+        <item name="colorSecondary">@color/palette_action</item>
+        <item name="colorOnSecondary">@color/palette_on_action</item>
+        <item name="colorSecondaryContainer">@color/palette_soft</item>
+        <item name="colorOnSecondaryContainer">@color/palette_on_soft</item>
+        <item name="colorTertiary">@color/palette_action</item>
+        <item name="colorOnTertiary">@color/palette_on_action</item>
+        <item name="colorTertiaryContainer">@color/palette_soft</item>
+        <item name="colorOnTertiaryContainer">@color/palette_on_soft</item>
+        <item name="android:colorBackground">@color/palette_background</item>
+        <item name="colorOnBackground">@color/palette_on_surface</item>
+        <item name="colorSurface">@color/palette_surface</item>
+        <item name="colorOnSurface">@color/palette_on_surface</item>
+        <item name="colorSurfaceVariant">@color/palette_surface_variant</item>
+        <item name="colorSurfaceBright">@color/palette_surface</item>
+        <item name="colorSurfaceDim">@color/palette_surface_variant</item>
+        <item name="colorSurfaceContainer">@color/palette_surface</item>
+        <item name="colorSurfaceContainerLow">@color/palette_background</item>
+        <item name="colorSurfaceContainerHigh">@color/palette_surface_variant</item>
+        <item name="colorSurfaceContainerLowest">@color/palette_surface</item>
+        <item name="colorSurfaceContainerHighest">@color/palette_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/palette_muted</item>
+        <item name="colorSurfaceInverse">@color/palette_inverse_surface</item>
+        <item name="colorOnSurfaceInverse">@color/palette_on_inverse_surface</item>
+        <item name="colorPrimaryInverse">@color/palette_inverse_primary</item>
+        <item name="colorOutline">@color/palette_outline_strong</item>
+        <item name="colorOutlineVariant">@color/palette_outline</item>
+        <item name="colorAccent">@color/palette_action</item>
+        <item name="colorControlActivated">@color/palette_primary</item>
+        <item name="colorControlNormal">@color/palette_muted</item>
+        <item name="colorControlHighlight">@color/palette_ripple</item>
+        <item name="android:statusBarColor">@color/palette_background</item>
+        <item name="android:navigationBarColor">@color/palette_background</item>
+        <item name="android:textColorPrimary">@color/palette_text_primary</item>
+        <item name="android:textColorSecondary">@color/palette_text_secondary</item>
+        <item name="android:textColorTertiary">@color/palette_text_secondary</item>
+        <item name="android:textColorPrimaryDisableOnly">@color/palette_text_primary</item>
+        <item name="android:textColorHint">@color/palette_text_secondary</item>
+        <item name="android:textColorAlertDialogListItem">@color/palette_text_primary</item>
+        <item name="android:textColorPrimaryInverse">@color/palette_text_inverse</item>
+        <item name="android:textColorSecondaryInverse">@color/palette_text_inverse</item>
+        <item name="android:textColorTertiaryInverse">@color/palette_text_inverse</item>
+        <item name="android:textColorPrimaryInverseDisableOnly">@color/palette_text_inverse</item>
+        <item name="android:textColorHintInverse">@color/palette_text_inverse</item>
+        <item name="android:textColorLink">@color/palette_action</item>
+        <item name="android:textColorLinkInverse">@color/palette_inverse_primary</item>
+        <item name="android:textColorHighlight">@color/palette_soft</item>
+    </style>
+
     <!-- Base application theme. -->
-    <style name="Base.Theme.NewsMead" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Base.Theme.NewsMead" parent="Base.Theme.NewsMead.Palette">
         <!-- Customize your light theme here. -->
         <!-- Notification bar -->
-        <item name="colorPrimaryDark">@color/white</item> <!-- NOTE: Refer to primaryBackgroundColor -->
+        <item name="colorPrimaryDark">@color/palette_background</item> <!-- NOTE: Refer to primaryBackgroundColor -->
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
 
         <!-- Application colors -->
-        <item name="primaryTextColor">@color/black</item>
-        <item name="secondaryTextColor">@color/gray_100</item>
+        <item name="primaryTextColor">@color/palette_on_surface</item>
+        <item name="secondaryTextColor">@color/palette_muted</item>
 
-        <item name="primaryBackgroundColor">@color/white</item>
+        <item name="primaryBackgroundColor">@color/palette_background</item>
         <item name="transparentColor">@color/transparent</item>
 
-        <item name="primaryIconColor">@color/black</item>
-        <item name="secondaryIconColor">@color/gray_100</item>
+        <item name="primaryIconColor">@color/palette_on_surface</item>
+        <item name="secondaryIconColor">@color/palette_muted</item>
 
-        <item name="primaryButtonTextColor">@color/white</item>
-        <item name="primaryButtonBgColor">@color/gray_100</item>
-        <item name="primaryButtonRippleColor">@color/gray_200</item>
+        <item name="primaryButtonTextColor">@color/palette_on_primary</item>
+        <item name="primaryButtonBgColor">@color/palette_primary</item>
+        <item name="primaryButtonRippleColor">@color/palette_primary_ripple</item>
 
-        <item name="secondaryButtonTextColor">@color/black_100</item>
-        <item name="secondaryButtonBgColor">@color/gray_300</item>
-        <item name="secondaryButtonIconColor">@color/black</item>
+        <item name="secondaryButtonTextColor">@color/palette_on_soft</item>
+        <item name="secondaryButtonBgColor">@color/palette_soft</item>
+        <item name="secondaryButtonIconColor">@color/palette_on_soft</item>
 
-        <item name="dividerColor">@color/divider_color</item>
-        <item name="shimmerColor">@color/gray_200</item>
-        <item name="cardBackgroundColor">@color/gray_300</item>
-        <item name="cardBackgroundColorPrimary">@color/gold_20</item>
+        <item name="dividerColor">@color/palette_outline</item>
+        <item name="shimmerColor">@color/palette_control_off</item>
+        <item name="cardBackgroundColor">@color/palette_surface</item>
+        <item name="cardBackgroundColorPrimary">@color/palette_soft</item>
 
         <!--component colors-->
-        <item name="lowEmphasisColor">@color/gold_20</item>
-        <item name="midEmphasisColor">@color/gold_60</item>
-        <item name="highEmphasisColor">@color/cobalt_100</item>
+        <item name="lowEmphasisColor">@color/palette_soft</item>
+        <item name="midEmphasisColor">@color/palette_soft</item>
+        <item name="highEmphasisColor">@color/palette_primary</item>
 
-        <item name="lowBackground">@color/gray_300</item>
-        <item name="midBackground">@color/white</item>
-        <item name="highBackground">@color/black_100</item>
+        <item name="lowBackground">@color/palette_surface_variant</item>
+        <item name="midBackground">@color/palette_background</item>
+        <item name="highBackground">@color/palette_on_surface</item>
 
-        <item name="lowTextEmphasis">@color/gray_100</item>
-        <item name="highTextEmphasis">@color/cobalt_100</item>
+        <item name="lowTextEmphasis">@color/palette_muted</item>
+        <item name="highTextEmphasis">@color/palette_action</item>
 
-        <item name="iconColorDefault">@color/gray_150</item>
-        <item name="iconColorStar">@color/cobalt_100</item>
+        <item name="iconColorDefault">@color/palette_muted</item>
+        <item name="iconColorStar">@color/palette_action</item>
 
-        <item name="buttonRippleGold">@color/gold_100</item>
-        <item name="buttonRippleCobalt">@color/cobalt_100</item>
-        <item name="buttonRippleGray">@color/gray_200</item>
+        <item name="buttonRippleGold">@color/palette_ripple</item>
+        <item name="buttonRippleCobalt">@color/palette_ripple</item>
+        <item name="buttonRippleGray">@color/palette_ripple</item>
 
-        <item name="navBarColor">@color/gold_10</item>
-        <item name="navBarIconColor">@color/black_100</item>
-        <item name="navBarTextColor">@color/black_100</item>
-        <item name="navBarIndicatorColor">@color/gold_60</item>
+        <item name="navBarColor">@color/palette_background</item>
+        <item name="navBarIconColor">@color/palette_on_surface</item>
+        <item name="navBarTextColor">@color/palette_on_surface</item>
+        <item name="navBarIndicatorColor">@color/palette_soft</item>
 
-        <item name="listReadLaterBackground">@color/gold_20</item>
-        <item name="listOfflineBackground">@color/gray_300</item>
-        <item name="listReadLaterStroke">@color/gold_200</item>
-        <item name="listOfflineStroke">@color/gray_200</item>
-        <item name="listDefaultStroke">@color/gray_250</item>
-        <item name="listNumTextColor">@color/gray_100</item>
+        <item name="listReadLaterBackground">@color/palette_soft</item>
+        <item name="listOfflineBackground">@color/palette_surface</item>
+        <item name="listReadLaterStroke">@color/palette_outline_strong</item>
+        <item name="listOfflineStroke">@color/palette_outline</item>
+        <item name="listDefaultStroke">@color/palette_outline</item>
+        <item name="listNumTextColor">@color/palette_muted</item>
 
-        <item name="tabIndicatorColor">@color/cobalt_100</item>
-        <item name="tabSelectedTextColor">@color/cobalt_100</item>
-        <item name="tabTextColor">@color/gray_100</item>
+        <item name="tabIndicatorColor">@color/palette_action</item>
+        <item name="tabSelectedTextColor">@color/palette_action</item>
+        <item name="tabTextColor">@color/palette_muted</item>
 
-        <item name="titleColor">@color/gold_300</item>
+        <item name="titleColor">@color/palette_action</item>
 
     </style>
 
@@ -80,7 +135,7 @@
     </style>
 
     <style name="Theme.App.SplashScreen" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/white</item>
+        <item name="windowSplashScreenBackground">@color/palette_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/sample_newsmead_logo</item>
         <item name="postSplashScreenTheme">@style/Theme.NewsMead</item>
     </style>
@@ -123,7 +178,8 @@
     <style name="ButtonSmall_HighEmphasis" parent="ts_button_large">
         <item name="android:backgroundTint">?highEmphasisColor</item>
         <item name="android:textColor">?primaryButtonTextColor</item>
-        <item name="rippleColor">?buttonRippleGold</item>
+        <item name="iconTint">?primaryButtonTextColor</item>
+        <item name="rippleColor">?primaryButtonRippleColor</item>
         <!--Padding-->
         <item name="android:paddingStart">14dp</item>
         <item name="android:paddingTop">12dp</item>
@@ -155,7 +211,8 @@
     <style name="ButtonMedium_Solid" parent="ts_button_large">
         <item name="android:backgroundTint">?highEmphasisColor</item>
         <item name="android:textColor">?primaryButtonTextColor</item>
-        <item name="rippleColor">?buttonRippleGold</item>
+        <item name="iconTint">?primaryButtonTextColor</item>
+        <item name="rippleColor">?primaryButtonRippleColor</item>
         <!--Padding-->
         <item name="android:paddingTop">14dp</item>
         <item name="android:paddingBottom">14dp</item>
@@ -164,6 +221,7 @@
     <style name="ButtonMedium_Text" parent="ButtonMedium_Solid">
         <item name="android:backgroundTint">?midBackground</item>
         <item name="android:textColor">?highTextEmphasis</item>
+        <item name="iconTint">?highTextEmphasis</item>
         <item name="rippleColor">?buttonRippleGray</item>
     </style>
 

@@ -14,9 +14,9 @@
         android:ems="10"
         android:hint="@string/new_list_name"
         android:inputType="text"
-        android:textColorHighlight="@color/cobalt_100"
-        android:textColorHint="@color/gray_100"
-        android:textColorLink="@color/cobalt_100"
+        android:textColorHighlight="@color/palette_soft"
+        android:textColorHint="@color/palette_muted"
+        android:textColorLink="@color/palette_action"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
