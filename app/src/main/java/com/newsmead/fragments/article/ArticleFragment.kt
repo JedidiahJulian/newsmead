@@ -31,6 +31,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bumptech.glide.Glide
+import com.bumptech.glide.request.target.Target
 import com.newsmead.R
 import com.newsmead.activities.GazeTestActivity
 import com.newsmead.activities.ReadingValidationActivity
@@ -558,7 +559,16 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                     // This exact packaged text must survive feed refreshes and cached Room content.
                     displayedBody = article.body
                     binding.tvArticleText.text = displayedBody
-                    binding.ivArticleFullImage.visibility = View.GONE
+                    if (!article.imageURL.isNullOrBlank()) {
+                        binding.ivArticleFullImage.visibility = View.VISIBLE
+                        // Bundled study photos retain their complete original pixels; the
+                        // existing zoom view handles fitting them to the reading layout.
+                        Glide.with(this@ArticleFragment).load(article.imageURL)
+                            .override(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL).dontTransform()
+                            .error(R.drawable.sample_article_image).into(binding.ivArticleFullImage)
+                    } else {
+                        binding.ivArticleFullImage.visibility = View.GONE
+                    }
                 } else if (offlineArticle?.articleBody?.isNotEmpty() == true) {
                     // Offline article
                     displayedBody = offlineArticle.articleBody

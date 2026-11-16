@@ -1,0 +1,65 @@
+{
+  "selection_date": "2026-11-16",
+  "purpose": "User-selected reading materials for the initial formative study; not validated matched comparison passages.",
+  "catalog_path": "app/src/main/assets/study_articles.json",
+  "body_snapshot_date": "2026-11-16",
+  "text_policy": "Exact reviewed English body with in-body headings as separate plain-text paragraphs. HTML layout/whitespace normalized; title, byline, publication date, photo captions, terminal reporter credits and page footer excluded from the body. No translation, paraphrase or truncation; user-supplied original source images bundled as offline study assets.",
+  "word_count_method": "Whitespace tokens after replacing en/em dashes with spaces; hyphenated words count once. Includes in-body headings; excludes title/byline/date/captions/credits/footer.",
+  "read_time_basis": "Badge rounds UP to whole minutes at 150 body words/minute. This is a text-reading planning estimate, not a participant target or a validated rate for Filipino adults aged 45+; excludes photo viewing, pauses, scrolling and questions.",
+  "combined_body_words": 1099,
+  "estimated_combined_minutes_at_150_wpm": 7.326666666666667,
+  "rights_note": "PIA source pages state: All content is in the public domain unless otherwise stated. No separate restriction was identified for these story bodies. Image files were supplied by the study owner and are bundled byte-for-byte unchanged; image A retains its visible Provincial Government of La Union photo credit.",
+  "identity_note": "Prior fabricated samples had local-study-v1:1 and local-study-v1:2. New IDs identify the selected body snapshots so old recordings are not relabelled as these stories. A/B order in the catalog does not prescribe session order. Adding owner-supplied photos keeps the body IDs unchanged; retain the APK hash and presentation revision to distinguish this presentation from the prior text-only build.",
+  "validation_limit": "Both original photos loaded as local-asset saved-list thumbnails and full reader images on S21 and A56; complete bodies/headlines and final-line visibility also passed. Camera was blocked and calibrations preserved. These native UI checks do not establish comprehension, comfort, matched difficulty or gaze accuracy. Evidence: output/formative-article-catalog-2026-11-16/phones/summary.json.",
+  "articles": [
+    {
+      "label": "A",
+      "article_id": "formative-2026-11-16-a-la-union-trade-fair",
+      "exported_news_id": "local-study-v1:formative-2026-11-16-a-la-union-trade-fair",
+      "title": "From small towns to big markets: La Union trade fair turns silver",
+      "source": "Philippine Information Agency",
+      "author": "Kathlene Joyce C. Ramones",
+      "publication_date": "2026-11-06",
+      "source_url": "https://pia.gov.ph/news/from-small-towns-to-big-markets-la-union-trade-fair-turns-silver-2/",
+      "body_words": 700,
+      "in_body_headings": 3,
+      "body_sha256_utf8": "b4614ac2f573665b2ced821367682cee6c36ab4a2ef1c57eb6325f58d011026e",
+      "estimated_minutes_at_150_wpm": 4.666666666666667,
+      "read_time_badge": "5 min read",
+      "image_asset": {
+        "catalog_uri": "file:///android_asset/study_images/la_union_trade_fair.png",
+        "source_input_filename": "codex-clipboard-601c635f-9555-4d9f-b216-e6e977dbf956.png",
+        "sha256": "088c3c20b12e14a782ae8520d709ad9d1458be8302fa1350aaab0db7ba046873",
+        "dimensions_px": {
+          "width": 1024,
+          "height": 819
+        }
+      }
+    },
+    {
+      "label": "B",
+      "article_id": "formative-2026-11-16-b-bohol-recycling",
+      "exported_news_id": "local-study-v1:formative-2026-11-16-b-bohol-recycling",
+      "title": "Bohol town trades rice for plastic waste as LGUs turn trash into building materials",
+      "source": "Philippine Information Agency",
+      "author": "Rey Anthony Chiu",
+      "publication_date": "2026-11-13",
+      "source_url": "https://pia.gov.ph/news/bohol-town-trades-rice-for-plastic-waste-as-lgus-turn-trash-into-building-materials/",
+      "body_words": 399,
+      "in_body_headings": 2,
+      "body_sha256_utf8": "5a2b9a3130362af853f7e0d68d45ea8640942f7b71046302356305b16ef4fd87",
+      "estimated_minutes_at_150_wpm": 2.66,
+      "read_time_badge": "3 min read",
+      "image_asset": {
+        "catalog_uri": "file:///android_asset/study_images/bohol_recycling.png",
+        "source_input_filename": "codex-clipboard-0ff9bef4-1562-4721-9a60-12e6ede73688.png",
+        "sha256": "6b42e8ba2885d14de42e009c44fe7b0060f13a23d6bcbef63543a1d38e354de1",
+        "dimensions_px": {
+          "width": 567,
+          "height": 362
+        }
+      }
+    }
+  ],
+  "presentation_revision": "2026-11-16-owner-photos-v1"
+}

@@ -1,4 +1,4 @@
-# Agent context — updated 2026-11-15
+# Agent context — updated 2026-11-16
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,66 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-11-16 original A + B photos added; both phones verified:**
+Owner supplied missing A La Union collage and B recycling photo. Original PNG
+bytes are bundled under `app/src/main/assets/study_images/`; catalog uses local
+`file:///android_asset/` URIs, so the existing saved cards load without a photo
+network request. Packaged reader now shows its optional image in the existing
+ZoomImageView, retaining original resolution/aspect; null/blank image still hides.
+Bodies, word counts and article IDs unchanged. Provenance JSON records photo
+hashes/dimensions and presentation revision `2026-11-16-owner-photos-v1`; preserve
+the new APK hash to distinguish this from earlier text-only exposures.
+All4catalog JVM checks and main/test APK builds pass. Both S21 and A56 received
+the data-preserving update; installed main/test hashes verified. Each passed
+2camera-blocked UI tests, now requiring actual successful thumbnail/full-photo
+loads and original bitmap dimensions, plus exact text/headlines and final-line
+visibility. Saved list and both reader screenshots visually checked on both.
+Photos are correct and complete, with existing themes retained. Calibration
+hashes, camera-access durations and restored camera modes verified unchanged.
+No human reading, camera collection or gaze-accuracy validation. Evidence:
+`output/formative-article-catalog-2026-11-16/phones/article-images-v3/summary.json`;
+APK asset integrity in `images-v3/packaging.json`. Latest main APK SHA256
+`9ef22a11839484ce809678266a4fbfb99381c388a9b4c351872c588bd77ead64`.
+
+**2026-11-16 corrected A + B reader test passes on both phones:**
+Owner requested fixing the failed test and ensuring it passes. The fixture now
+waits for stable screen pixels, uses the existing screen-coordinate helper for
+viewport/footer checks, collapses the toolbar through native nested pre-scroll,
+and reveals the article's last line rather than the end of following links and
+recommendations. Both full-line bounds must remain within the unobscured reading
+viewport with stable scroll geometry. Focused review caught the coordinate-frame
+mismatch; remedy confirmed, no remaining material findings. No production change.
+`assembleDebugAndroidTest` passes. One corrected run on each SM-G991B/S21 and
+SM-A566B/A56 passed both Saved-list navigation/recreation and actual list-to-reader
+checks (2tests/phone,4total). A and B each preserve exact complete text, untruncated
+headlines, source/read-time, native body layout and visible final line above the
+controls. All8 start/end screenshots visually reviewed at existing device settings.
+Both phones retain the selected-catalog main APK; installed main/test hashes
+verified. Camera app-op ignored throughout reader checks, restored after force-stop;
+camera-access durations and calibration hashes unchanged. No study run, calibration
+or participant collection started. This proves bounded UI/software behavior, not
+human comfort, comprehension, matched difficulty or gaze accuracy. Evidence:
+`output/formative-article-catalog-2026-11-16/phones/summary.json`; corrected run in
+`phones/settled-scroll-v2/`. Initial failed logs/screenshots preserved under original
+per-phone paths and `phones/initial-failure-summary.json`.
+
+**2026-11-16 initial formative A + B selected and packaged:**
+Owner selected A (PIA La Union trade fair, November6, 700 words) and B (PIA Bohol
+recycling, November13, 399 words), replacing the two setup samples in
+`app/src/main/assets/study_articles.json`. Exact reviewed bodies/headings are
+preserved; source/byline/date/URL and new semantic IDs distinguish these snapshots
+from old sample IDs1/2. Provenance and body hashes are in
+`docs/formative-articles-2026-11-16.json`; six-candidate analysis remains in
+`docs/formative-article-options-2026-11-16.md`. Total1,099words; read-time badges
+round up at150wpm (5/3minutes), a planning assumption, not a participant target
+or norm for Filipino adults aged45+. This selection does not freeze session order
+or validate matched comparison difficulty. Thesis, forms and devices unchanged.
+Participant familiarity/comfort and physical-phone rendering remain unverified.
+Do not treat descriptive text counts or software checks as human validation.
+All4catalog JVM tests and normal debug APK build pass; built APK asset bytes
+match the selected source catalog. No install or device/camera test performed.
+Receipt: `output/formative-article-catalog-2026-11-16/receipt.json`.
 
 **2026-11-15 bookmark retains confirmed source after highlight has already faded:**
 Owner confirms V8 normal lookaway now works on A56, then asks about looking away

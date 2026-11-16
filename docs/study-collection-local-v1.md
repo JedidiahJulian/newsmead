@@ -15,13 +15,22 @@ participant exclusions or changes to baseline/metric algorithms.
 ## Researcher workflow
 
 For the account-free `initial-demo` build, **Saved -> Testing articles** opens
-the packaged `study_articles.json` catalog without Firebase lists or login. These
-two current entries are setup samples, not approved comparison texts. Their IDs
+the packaged `study_articles.json` catalog without Firebase lists or login. On
+2026-11-16 the owner selected A (La Union trade fair, 700 words) and B (Bohol
+recycling, 399 words) for the initial formative round, replacing the two setup
+samples. Source, byline, date and URL are retained in the asset; exact body hashes
+and IDs are recorded in `docs/formative-articles-2026-11-16.json`. Their new IDs
 are namespaced `local-study-v1:<article_id>`; the ordinary reader uses the exact
 packaged body rather than Room's account cache or URL extraction. The live feed
-still uses its existing network route. Select/preserve the final English texts
-and questions before participant comparison. Edit the bundled asset and rebuild
-to distribute the same selected texts to other testing phones.
+still uses its existing network route. These formative materials are not validated
+matched comparison passages; select the later comparison texts and questions
+separately. Rebuild and update testing phones to distribute these selected texts.
+
+The owner's original A/B photos are bundled under `assets/study_images/` and shown
+in the saved cards and existing reader zoom view without fetching those photos.
+Photo hashes and presentation revision are recorded with the provenance; body
+text/IDs are unchanged. Keep the APK hash with session records to distinguish the
+photo-enabled presentation from the earlier text-only build.
 
 The single `accountFreeStudyBuild` switch in `app/build.gradle.kts` controls the
 login bypass, local Saved UI, account preload/history guards and telemetry policy.

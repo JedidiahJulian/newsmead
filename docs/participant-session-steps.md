@@ -35,7 +35,10 @@ deliberate preview displays before data-use permission is confirmed.
    reading. Record task start/end, pauses, completion, technical problems and
    actual/reported aid exposure. Do not ask for a particular gaze pattern, a
    deliberate loss of place, concurrent thinking aloud, or reading until an aid
-   appears. The two bundled articles remain setup samples, not final study texts.
+   appears. The bundled formative texts are the owner-selected A (La Union trade
+   fair) and B (Bohol recycling), totaling 1,099 body words. Exact source snapshots
+   and IDs are in `docs/formative-articles-2026-11-16.json`. Catalog order does not
+   prescribe participant order or a two-condition comparison.
 3. Leave the article and Stop run. Ask **questions 1-5**, recording written notes about
    natural reading before any preview. This checkpoint does not use interview
    audio under the current post-session-only audio permission.
@@ -90,9 +93,9 @@ than reading every prompt mechanically.
   with their comprehension questions and scoring key. Choose the condition/article
   order in advance, following the approved counterbalancing procedure.
   The account-free build provides **Saved -> Testing articles** independently of
-  feed refreshes. Its two bundled articles are setup samples, not yet selected
-  participant-testing materials. Replace them with the agreed exact texts before
-  relying on this list for comparison tasks; no shared Firebase account is needed.
+  feed refreshes. Its two bundled articles are selected for the initial formative
+  round, not validated matched comparison texts. Select the later comparison
+  materials and questions separately; no shared Firebase account is needed.
 - Have the actual selected usability survey and interview questions ready. The
   thesis describes these activities but does not establish a finalized survey
   instrument by naming them. Do not invent a combined reading/MD score.

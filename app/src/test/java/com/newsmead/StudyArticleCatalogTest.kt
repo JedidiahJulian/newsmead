@@ -7,6 +7,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.security.MessageDigest
 
 class StudyArticleCatalogTest {
     @Test
@@ -52,15 +53,60 @@ class StudyArticleCatalogTest {
     }
 
     @Test
-    fun bundledCatalogHasTwoLoadableSamples() {
+    fun bundledCatalogPreservesSelectedFormativeSnapshots() {
         val asset = sequenceOf(
             File("app/src/main/assets/study_articles.json"),
             File("src/main/assets/study_articles.json")
         ).firstOrNull { it.isFile } ?: error("Could not locate study_articles.json from ${File(".").absolutePath}")
 
-        val samples = StudyArticleCatalog.parse(asset.readText())
-        assertEquals(2, samples.size)
-        assertTrue(samples.all(StudyArticleCatalog::contains))
+        val articles = StudyArticleCatalog.parse(asset.readText(Charsets.UTF_8))
+        assertEquals(2, articles.size)
+        assertTrue(articles.all(StudyArticleCatalog::contains))
+        assertEquals(
+            listOf(
+                "${StudyArticleCatalog.ID_PREFIX}formative-2026-11-16-a-la-union-trade-fair",
+                "${StudyArticleCatalog.ID_PREFIX}formative-2026-11-16-b-bohol-recycling",
+            ),
+            articles.map { it.newsId },
+        )
+        assertEquals(listOf("2026-11-06", "2026-11-13"), articles.map { it.date })
+        assertEquals(listOf("5 min read", "3 min read"), articles.map { it.readTime })
+        assertTrue(articles.all { it.source == "Philippine Information Agency" && it.language == "English" })
+        assertEquals(
+            listOf(
+                "https://pia.gov.ph/news/from-small-towns-to-big-markets-la-union-trade-fair-turns-silver-2/",
+                "https://pia.gov.ph/news/bohol-town-trades-rice-for-plastic-waste-as-lgus-turn-trash-into-building-materials/",
+            ),
+            articles.map { it.url },
+        )
+        val imageUris = listOf(
+            "file:///android_asset/study_images/la_union_trade_fair.png",
+            "file:///android_asset/study_images/bohol_recycling.png",
+        )
+        val imageHashes = listOf(
+            "088c3c20b12e14a782ae8520d709ad9d1458be8302fa1350aaab0db7ba046873",
+            "6b42e8ba2885d14de42e009c44fe7b0060f13a23d6bcbef63543a1d38e354de1",
+        )
+        assertEquals(imageUris, articles.map { it.imageURL })
+        assertEquals(imageHashes, imageUris.map { uri ->
+            val image = File(asset.parentFile, uri.removePrefix("file:///android_asset/"))
+            assertTrue("Missing bundled image asset: $image", image.isFile)
+            MessageDigest.getInstance("SHA-256")
+                .digest(image.readBytes())
+                .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        })
+        // Freeze the selected bodies, including headings and punctuation, for session traceability.
+        assertEquals(
+            listOf(
+                "b4614ac2f573665b2ced821367682cee6c36ab4a2ef1c57eb6325f58d011026e",
+                "5a2b9a3130362af853f7e0d68d45ea8640942f7b71046302356305b16ef4fd87",
+            ),
+            articles.map { article ->
+                MessageDigest.getInstance("SHA-256")
+                    .digest(article.body.toByteArray(Charsets.UTF_8))
+                    .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+            },
+        )
     }
 
     private fun assertRejected(json: String) {
