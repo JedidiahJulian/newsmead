@@ -1144,7 +1144,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             footerScrollBehavior = ArticleFooterScrollBehavior(
                 binding.nsvArticleText,
                 binding.bottomAppBar,
-                isAutoScrolling = { articleAutoScroll?.isMoving == true },
+                isAutoScrolling = {
+                    articleAutoScroll?.let { it.enabled && !it.pausedByReader } == true
+                },
             )
         }
     }
@@ -1680,6 +1682,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             return
         }
         stopArticleDemo("replaced")
+        articleAutoScroll?.pauseByReader("article_demo")
         footerScrollBehavior?.show()
         demoCameraSuppressed = true
         resumeGazeAfterStop = false
@@ -1789,11 +1792,13 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             },
             onJournal = { event, at, detail -> readingAidRuntime?.autoScrollEvent(event, at, detail) },
             onState = { enabled, paused ->
-                binding.btnArticleAutoScrollPause.visibility = if (enabled) View.VISIBLE else View.GONE
-                binding.btnArticleAutoScrollPause.setText(if (paused) R.string.article_auto_scroll_resume
-                    else R.string.article_auto_scroll_pause)
+                binding.btnArticleAutoScrollPause.bindAutoScrollState(enabled, paused)
+                if (!enabled || paused) footerScrollBehavior?.show()
             },
-            prepareViewport = { binding.articleHeaderAppBar.setExpanded(false, true) })
+            prepareViewport = {
+                binding.articleHeaderAppBar.setExpanded(false, true)
+                footerScrollBehavior?.prepareForAutoScroll()
+            })
         binding.nsvArticleText.onUserTouch = { event ->
             if (event.actionMasked == MotionEvent.ACTION_DOWN)
                 articleAutoScroll?.pauseByReader("manual_touch")

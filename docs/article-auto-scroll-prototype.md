@@ -1,5 +1,51 @@
 # Optional article auto-scroll
 
+## Footer controls during auto-scroll — 2026-11-17
+
+The owner requests hiding the footer so downward gaze can remain on the article,
+and explicitly chooses Pause to reveal the controls. Ordinary article auto-scroll
+now prepares both header and footer before accepting settled navigation input.
+The footer's negative bottom margin reclaims its layout space; the existing
+floating Pause button remains accessible. Upper-gaze braking, blinking and
+delivery silence stop movement without restoring the footer or changing the
+viewport. Explicit reader pause (including article touch) or disabling auto-scroll
+shows the footer; Resume prepares it again. Starting the render-only demo also
+explicitly pauses navigation before showing its controls. Manual footer scrolling
+and the separate frozen shared-baseline reader remain unchanged.
+
+Preparation handles an unmeasured footer before first layout. Pause/show and view
+detach cancel a pending hide; the delayed callback also checks the current armed
+state. The existing geometry settling and capture floors cover the preparation
+animation. V4 speed, age limits, coordinate stream, model and calibration are
+unchanged. Evidence for this UI change is kept separately in
+`output/auto-scroll-footer-2026-11-17/`.
+
+Both debug APKs build and all20 policy checks pass. Focused source review has no
+actionable findings. Under the owner's continuing A56 update/test authorization,
+data-preserving app/test installs have verified hashes and one camera-free run
+passes all16 attached checks: five new footer cases, eight navigation cases and
+three existing header/manual-footer cases. The checks cover actual scrolling at
+the former footer center, persistent hiding through upper gaze/blinks/silence,
+Pause/Resume/disable, no layout gap and deferred-hide cancellation before first
+layout. Camera access was UID-blocked, then restored; the calibration hash and
+camera-access duration are unchanged. Supplied coordinates verify UI/navigation,
+not live gaze accuracy or comfort. See `summary.json`, `build-and-policy.log`,
+`device-check.json` and `native.log` in the evidence directory.
+
+### Circular pause/resume control — 2026-11-17
+
+The owner's supplied design replaces the text pill with an icon-only control at
+the same bottom-end position. Both states have a44dp honey circle (#F5E9BD) inside
+a48dp touch target, a24dp dark-gold (#80620D) pause/play icon and flat elevation.
+Only the icon and accessible action/tooltip change. The shared presentation
+binder retains the existing footer/controller callbacks; Pause still reveals the
+footer and Resume prepares it before motion. Fixed colors match the reference
+in both appearances. Both APKs build;20 policy checks and16 camera-free A56
+checks pass. Actual component renders were visually inspected and pixel-checked
+for both states; calibration, camera UID mode and camera-access duration are
+preserved. Evidence: `output/auto-scroll-button-2026-11-17/summary.json`,
+`visual-check.json`, `button-running.png`, `button-paused.png` and `native.log`.
+
 ## Current V4 tracker-latency compatibility — 2026-11-17
 
 After the header correction, the owner still reports hesitation, apparent
@@ -143,6 +189,9 @@ assessment. Speed is not a measure of reading capability or comprehension.
 - The master aids switch disables auto-scroll.
 - While enabled, **Pause auto-scroll / Resume auto-scroll** stays available.
   Touching article content pauses until explicit Resume.
+- The ordinary reader hides its footer during auto mode, including gaze stops
+  and temporary input loss. Explicit Pause shows the footer; Resume hides it
+  before movement. The floating Pause/Resume button remains available.
 - Menus, lookup offers/definition panels, Read Aloud, diagnostic recording,
   lifecycle pause and real text/viewport reflow stop motion and discard input.
 - Ordinary translation from the controller's own scrolling does not invalidate

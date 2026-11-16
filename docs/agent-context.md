@@ -12,6 +12,38 @@ protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
 
+**2026-11-17 auto-scroll circular button matches owner reference; A56 updated:**
+Text pill replaced by fixed44dp honey (#F5E9BD) circle in48dp touch bounds,
+24dp dark-gold (#80620D) pause/play icon, flat elevation, same bottom-end anchor.
+Only icon/action description/tooltip changes; shared binder used by reader and
+fixture, preserving Pause-reveals-footer and Resume-prepares behavior. Both
+APKs build;20 policy and16 camera-free A56 checks pass. Native component images
+visually inspected and sizes/colors pixel-checked. Calibration/camera mode and
+access duration preserved; no live capture, staging or commit. S21 untouched.
+Evidence: `output/auto-scroll-button-2026-11-17/summary.json` and
+`visual-check.json`; component PNGs in the same directory.
+
+**2026-11-17 auto-scroll footer stays hidden until explicit pause; A56 passes:**
+Owner requests hiding footer so downward gaze lands on text and explicitly
+chooses Tap Pause to show controls, rejecting restoration on every gaze stop.
+Ordinary reader prepares header/footer before navigation; negative footer margin
+reclaims its space. Armed mode is enabled&&!pausedByReader, so upper-gaze braking,
+blink and delivery silence do not restore the footer. Existing floating Pause
+shows it, Resume hides before fresh settled motion, disable restores; article
+touch also remains an explicit pause. Render-only demo explicitly pauses before
+showing controls. Unmeasured-footer preparation defers to first layout and is
+cancelled by show/detach or a no-longer-armed predicate. Manual footer behavior,
+separate frozen reader, V4 navigation rules/model/calibration unchanged.
+Both APKs build, all20 policy checks pass, focused review clean. Continuing
+owner-approved A56 data-preserving installs have verified hashes; one camera-free
+run passes16 attached checks (5new footer,8navigation,3header/manual footer).
+Former-footer center drives real scrolling, no blank gap; upper stops/missing
+input keep footer hidden; Pause/Resume/disable and first-layout cancellations
+pass. Camera UID restored; calibration hash and camera-access duration unchanged.
+No live capture, staging or commit; S21 untouched. Human live feel unverified.
+Evidence: `output/auto-scroll-footer-2026-11-17/summary.json` and `native.log`;
+contract: `docs/article-auto-scroll-prototype.md`.
+
 **2026-11-17 auto-scroll V4 matches ordinary tracker expiry; A56 checks pass:**
 Owner still reports hesitation/edge-only response/slow variable movement after
 the V3 header fix and asks to reconsider older model restrictions, delegating the

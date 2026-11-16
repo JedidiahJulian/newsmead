@@ -432,15 +432,15 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnArticleAutoScrollPause"
-            style="@style/ButtonSmall_LowEmphasis"
-            android:layout_width="wrap_content"
+            style="@style/ArticleAutoScrollButton"
+            android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_gravity="bottom|end"
             android:layout_marginEnd="16dp"
             android:layout_marginBottom="16dp"
-            android:translationZ="12dp"
             android:visibility="gone"
-            android:text="@string/article_auto_scroll_pause" />
+            android:contentDescription="@string/article_auto_scroll_pause"
+            app:icon="@drawable/ic_auto_scroll_pause" />
 
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
 

@@ -12,6 +12,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.newsmead.activities.ScanpathReplayActivity
 import com.newsmead.databinding.FragmentArticleBinding
 import com.newsmead.fragments.article.ArticleTypography
+import com.newsmead.fragments.article.ArticleFooterScrollBehavior
+import com.newsmead.fragments.article.bindAutoScrollState
 import com.newsmead.gaze.getVisibleRectOnScreen
 import com.newsmead.gaze.mgazenet.MgazeNetGazeProvider
 import com.newsmead.gaze.physicalDisplaySize
@@ -118,7 +120,10 @@ class ArticleAutoScrollAttachedLayoutTest {
 /** Shared attached fixture; all callbacks and mutable collections belong to the UI thread.
  * Only bounded latches are awaited on the instrumentation thread.
  */
-internal class AutoScrollAttachedFixture(private val prepareHeader: Boolean = false) : Closeable {
+internal class AutoScrollAttachedFixture(
+    private val prepareHeader: Boolean = false,
+    private val prepareFooter: Boolean = false,
+) : Closeable {
     data class Boundary(val start: Boolean, val timeMs: Double, val detail: JSONObject)
     private val scenario = ActivityScenario.launch(ScanpathReplayActivity::class.java)
     private val handler = Handler(Looper.getMainLooper())
@@ -134,6 +139,8 @@ internal class AutoScrollAttachedFixture(private val prepareHeader: Boolean = fa
     val viewportEvents = mutableListOf<String>()
     val preparationSeenBeforeState = mutableListOf<Boolean>()
     val headerBottomAtStarts = mutableListOf<Float>()
+    val originalFooterRect = Rect()
+    private var footerBehavior: ArticleFooterScrollBehavior? = null
     var screenHeight = 0
         private set
     private var ordinal = 0L
@@ -170,12 +177,14 @@ internal class AutoScrollAttachedFixture(private val prepareHeader: Boolean = fa
                     onJournal = { kind, _, detail -> journals += kind to detail },
                     onState = { enabled, paused ->
                         if (enabled && !paused) preparationSeenBeforeState += viewportEvents.lastOrNull() == "prepare"
-                        if (prepareHeader) binding.btnArticleAutoScrollPause.visibility =
-                            if (enabled) android.view.View.VISIBLE else android.view.View.GONE
+                        if (prepareFooter && (!enabled || paused)) footerBehavior?.show()
+                        if (prepareHeader || prepareFooter)
+                            binding.btnArticleAutoScrollPause.bindAutoScrollState(enabled, paused)
                     },
                     prepareViewport = {
                         viewportEvents += "prepare"
                         if (prepareHeader) binding.articleHeaderAppBar.setExpanded(false, true)
+                        if (prepareFooter) footerBehavior?.prepareForAutoScroll()
                     })
                 binding.nsvArticleText.onUserTouch = { event ->
                     if (event.actionMasked == MotionEvent.ACTION_DOWN) controller.pauseByReader("manual_touch")
@@ -190,7 +199,19 @@ internal class AutoScrollAttachedFixture(private val prepareHeader: Boolean = fa
             }
             onMain { binding.nsvArticleText.scrollTo(0, binding.tvArticleText.top) }
             awaitDraw()
-            onMain { controller.setEnabled(true) }
+            onMain {
+                if (prepareFooter) {
+                    footerBehavior = ArticleFooterScrollBehavior(binding.nsvArticleText, binding.bottomAppBar) {
+                        controller.enabled && !controller.pausedByReader
+                    }
+                    binding.btnArticleAutoScrollPause.setOnClickListener {
+                        if (controller.pausedByReader) controller.resumeByReader()
+                        else controller.pauseByReader()
+                    }
+                }
+                assertTrue(binding.bottomAppBar.getVisibleRectOnScreen(originalFooterRect))
+                controller.setEnabled(true)
+            }
             awaitDraw()
             awaitDraw()
             waitPosted(200)
@@ -303,6 +324,7 @@ internal class AutoScrollAttachedFixture(private val prepareHeader: Boolean = fa
                     }
                 }
                 if (::controller.isInitialized) controller.close()
+                footerBehavior?.detach()
             }
         } finally { scenario.close() }
     }
