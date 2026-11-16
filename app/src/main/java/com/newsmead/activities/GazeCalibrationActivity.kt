@@ -285,8 +285,7 @@ class GazeCalibrationActivity : AppCompatActivity() {
             if (verification == 0) "Near-centre repeat" else "Validation $verification of 5"
         binding.statusText.text = ""
         binding.calibrationView.onNextTargetDraw { if (active) checkStart = MgazeNetCameraSource.now() }
-        val cueMs = if (comparisonSpec == null) 700L else 1800L
-        binding.calibrationView.showTarget(local.x, local.y, cueMs)
+        binding.calibrationView.showTarget(local.x, local.y, 1800L)
     }
     private fun observeCheck(frame: MgazeNetCameraSource.Frame) {
         if (verification !in 0..5 || !MgazeNetPostFitTiming.accepts(checkStart, frame.captureMs, frame.outputMs,

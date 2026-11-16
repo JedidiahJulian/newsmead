@@ -2,9 +2,9 @@ package com.newsmead.gaze.mgazenet
 
 /** Post-fit validation uses capture time; output may arrive shortly after the last capture. */
 object MgazeNetPostFitTiming {
-    const val SETTLE_MS = 1_200.0
-    const val CAPTURE_END_MS = 3_200.0
-    const val EXTENDED_CAPTURE_END_MS = 7_200.0
+    const val SETTLE_MS = 3_000.0
+    const val CAPTURE_END_MS = 7_000.0
+    const val EXTENDED_CAPTURE_END_MS = 11_000.0
     const val COMPARISON_SETTLE_MS = 3_000.0
     const val COMPARISON_CAPTURE_END_MS = 5_500.0
     const val OUTPUT_GRACE_MS = 250.0
