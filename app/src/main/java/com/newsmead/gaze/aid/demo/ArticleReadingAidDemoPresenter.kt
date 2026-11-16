@@ -33,7 +33,7 @@ internal class ArticleReadingAidDemoPresenter(
     private val renderWord: (ReadingAidAction?) -> Unit,
     private val onStatus: (String) -> Unit,
     private val onStopped: (String) -> Unit,
-    private val guideStyle: ReadingGuideStyle = ReadingGuideStyle.LINE,
+    private val guideStyle: ReadingGuideStyle = ReadingGuideStyle.THREE_LINE,
     private val focusStyle: ReadingFocusStyle = ReadingFocusStyle.FADE_TEXT,
 ) {
     private val handler = Handler(Looper.getMainLooper())

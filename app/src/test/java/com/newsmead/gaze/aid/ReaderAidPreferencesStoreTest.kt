@@ -17,4 +17,10 @@ class ReaderAidPreferencesStoreTest {
         assertEquals(ReadingAidsMode.AUTO,
             ReaderAidPreferencesStore.decodeMode(null, null, ReadingAidsMode.AUTO))
     }
+
+    @Test fun defaultsSelectThreeLineGuideAndVisibleGazeCursor() {
+        val defaults = ReaderAidPreferences()
+        assertEquals(ReadingGuideStyle.THREE_LINE, defaults.guideStyle)
+        assertEquals(false, defaults.hideGazeCursor)
+    }
 }

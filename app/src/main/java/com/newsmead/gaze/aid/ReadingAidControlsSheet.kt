@@ -17,7 +17,8 @@ import com.newsmead.R
 object ReadingAidControlsSheet {
     fun show(context: Context, preferences: ReaderAidPreferences,
         onChanged: (ReaderAidPreferences) -> Unit, onDismiss: () -> Unit = {},
-        supportsAutoScroll: Boolean = false, autoScrollStatusLabel: String? = null): BottomSheetDialog {
+        supportsAutoScroll: Boolean = false, autoScrollStatusLabel: String? = null,
+        supportsHideGazeCursor: Boolean = false): BottomSheetDialog {
         val dialog = BottomSheetDialog(context)
         var prefs = preferences
         fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
@@ -104,6 +105,10 @@ object ReadingAidControlsSheet {
             text(R.string.reading_aid_menu_auto_scroll_help)
             if (autoScrollStatusLabel != null) text(R.string.reading_aid_menu_auto_scroll_status).text =
                 context.getString(R.string.reading_aid_menu_auto_scroll_status, autoScrollStatusLabel)
+        }
+        if (supportsHideGazeCursor) {
+            toggle(R.id.readingAidMenuHideGazeCursor, R.string.reading_aid_menu_hide_gaze_cursor,
+                prefs.hideGazeCursor, child = false) { prefs.copy(hideGazeCursor = it) }
         }
         val advanced = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         MaterialButton(context).apply {

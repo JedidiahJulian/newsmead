@@ -26,7 +26,8 @@ object ReaderAidPreferencesStore {
             wordDefinition = storage.getBoolean("reading_aids_word_definition", defaults.wordDefinition),
             guideStyle = enumValue(storage.getString("reading_aids_guide_style", null), defaults.guideStyle),
             focusStyle = enumValue(storage.getString("reading_aids_focus_style", null), defaults.focusStyle),
-            autoScroll = storage.getBoolean("reading_aids_auto_scroll", defaults.autoScroll)
+            autoScroll = storage.getBoolean("reading_aids_auto_scroll", defaults.autoScroll),
+            hideGazeCursor = storage.getBoolean("reading_aids_hide_gaze_cursor", defaults.hideGazeCursor)
         )
         if (!storage.contains(KEY_MODE) && storage.contains(LEGACY_KEY_ENABLED)) save(storage, value)
         return value
@@ -57,6 +58,7 @@ object ReaderAidPreferencesStore {
             .putString("reading_aids_guide_style", value.guideStyle.name)
             .putString("reading_aids_focus_style", value.focusStyle.name)
             .putBoolean("reading_aids_auto_scroll", value.autoScroll)
+            .putBoolean("reading_aids_hide_gaze_cursor", value.hideGazeCursor)
             .apply()
     }
 }

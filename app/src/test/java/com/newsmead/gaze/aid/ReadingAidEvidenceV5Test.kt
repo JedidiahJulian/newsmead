@@ -100,7 +100,9 @@ class ReadingAidEvidenceV5Test {
     }
 
     @Test fun ordinaryReadingGetsOneLineWithoutScanpathEventAndHasLossGrace() {
-        val s = Session(); s.hold(5, 1800)
+        val s = Session(ReadingAidPolicy(ReadingAidPolicyConfig.evidenceAlignedPrototype(),
+            ReaderAidPreferences(guideStyle = ReadingGuideStyle.LINE)))
+        s.hold(5, 1800)
         val guide = s.action(ReadingAidType.CURRENT_LINE)!!
         val e = guide.guideEvidence!!
         assertEquals(4, e.firstLine); assertEquals(6, e.lastLine)
@@ -118,7 +120,8 @@ class ReadingAidEvidenceV5Test {
     }
 
     @Test fun measuredUncertaintyEnablesOneRowAndPairwiseSeparateSearch() {
-        val s = Session()
+        val s = Session(ReadingAidPolicy(ReadingAidPolicyConfig.evidenceAlignedPrototype(),
+            ReaderAidPreferences(guideStyle = ReadingGuideStyle.LINE)))
         val u = ReadingLocationUncertainty(2.0, 2.0, "synthetic_measured_fixture_not_phone_validation")
         listOf(5, 7, 6).forEach { line -> repeat(12) { s.sample(line, uncertainty = u) } }
         val guide = s.action(ReadingAidType.CURRENT_LINE)!!
@@ -346,7 +349,7 @@ class ReadingAidEvidenceV5Test {
 
     @Test fun guideOpacityHonoursReaderCapAndGeometryChangeInvalidatesAllAnchors() {
         val s = Session(ReadingAidPolicy(ReadingAidPolicyConfig.evidenceAlignedPrototype(),
-            ReaderAidPreferences(maxStrength = .5)))
+            ReaderAidPreferences(maxStrength = .5, guideStyle = ReadingGuideStyle.LINE)))
         s.hold(4, 1800)
         assertEquals(.095, s.action(ReadingAidType.CURRENT_LINE)!!.guideEvidence!!.opacity, .0001)
         val c = s.latest!!

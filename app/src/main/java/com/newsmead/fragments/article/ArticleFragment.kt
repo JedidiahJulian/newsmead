@@ -201,7 +201,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private var lastPreDrawAidTickNs = 0L
     private val scanpathGeometryListener = ViewTreeObserver.OnPreDrawListener {
         studyVisit?.let { visit ->
-            visit.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to StudyConfig.GAZE_DEBUG_VISUALS), binding.nsvArticleText)
+            visit.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to (StudyConfig.GAZE_DEBUG_VISUALS && !aidPreferences.hideGazeCursor)), binding.nsvArticleText)
             visit.exclude("tts", ::textToSpeech.isInitialized && textToSpeech.isSpeaking)
         }
         articleAutoScroll?.onPreDraw()
@@ -1250,6 +1250,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         overlay.bringToFront()
         overlay.translationZ = 1000f
         overlay.setDebugVisualsEnabled(StudyConfig.GAZE_DEBUG_VISUALS)
+        overlay.setCursorVisible(!aidPreferences.hideGazeCursor)
         if (scanpathAidsEnabled) {
             val aidOverlay = ReadingAidOverlayView(requireContext(), lineStartMarkerInGutter = true)
             (binding.root as ViewGroup).addView(aidOverlay, ConstraintLayout.LayoutParams(0, 0).apply {
@@ -1501,11 +1502,11 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 put("usage_clock", "separate_session_relative_elapsed_ms")
                 put("source", StudyJson.value(articleForUsage?.source))
                 put("article_url", StudyJson.value(articleForUsage?.url))
-                put("diagnostic_dot", StudyConfig.GAZE_DEBUG_VISUALS)
+                put("diagnostic_dot", StudyConfig.GAZE_DEBUG_VISUALS && !aidPreferences.hideGazeCursor)
             })
         recording?.let { studyArticleReading.opened(it.id) }
         studyVisit = recording
-        recording?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to StudyConfig.GAZE_DEBUG_VISUALS), binding.nsvArticleText)
+        recording?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to (StudyConfig.GAZE_DEBUG_VISUALS && !aidPreferences.hideGazeCursor)), binding.nsvArticleText)
         recording?.baseline(activeMahalanobisBaseline)
         recording?.coordinateReference(sharedReference)
         val providerEpoch = recording?.providerStarted(activeBaselineFingerprint)
@@ -1848,10 +1849,12 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 ReaderAidPreferencesStore.save(requireContext(), preferences)
                 if (readingAidRuntime === runtime) runtime?.updatePreferences(preferences)
                 articleAutoScroll?.setEnabled(preferences.enabled && preferences.autoScroll)
+                gazeOverlay?.setCursorVisible(!preferences.hideGazeCursor)
             }, onDismiss = {
                 readingAidControls = null
                 closeReaderControls("aids")
-            }, supportsAutoScroll = scanpathAidsEnabled, autoScrollStatusLabel = autoStatus)
+            }, supportsAutoScroll = scanpathAidsEnabled, autoScrollStatusLabel = autoStatus,
+            supportsHideGazeCursor = StudyConfig.GAZE_DEBUG_VISUALS)
     }
 
     private fun openReaderControls(tag: String): Boolean {

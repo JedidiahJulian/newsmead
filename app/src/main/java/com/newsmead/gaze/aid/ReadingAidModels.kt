@@ -131,9 +131,10 @@ data class ReaderAidPreferences(
     val maxStrength: Double = 1.0,
     val manualStrength: Double = 0.5,
     val wordDefinition: Boolean = true,
-    val guideStyle: ReadingGuideStyle = ReadingGuideStyle.LINE,
+    val guideStyle: ReadingGuideStyle = ReadingGuideStyle.THREE_LINE,
     val focusStyle: ReadingFocusStyle = ReadingFocusStyle.FADE_TEXT,
-    val autoScroll: Boolean = false
+    val autoScroll: Boolean = false,
+    val hideGazeCursor: Boolean = false
 ) {
     val enabled: Boolean get() = mode != ReadingAidsMode.OFF
     init { require(maxStrength.isFinite() && maxStrength in 0.0..1.0 && manualStrength.isFinite() && manualStrength in 0.0..1.0) }

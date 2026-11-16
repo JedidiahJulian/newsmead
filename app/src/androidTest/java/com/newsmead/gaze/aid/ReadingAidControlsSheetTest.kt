@@ -22,11 +22,16 @@ class ReadingAidControlsSheetTest {
                 var value = ReaderAidPreferences(focusRegion = false, wordDefinition = false)
                 val menu = ReadingAidControlsSheet.show(activity, value, { value = it })
                 try {
+                    val line = menu.findViewById<MaterialRadioButton>(R.id.readingAidMenuLine)!!
                     val three = menu.findViewById<MaterialRadioButton>(R.id.readingAidMenuThreeLine)!!
+                    assertEquals(ReadingGuideStyle.THREE_LINE, value.guideStyle)
+                    assertTrue(three.isChecked)
+                    line.performClick()
+                    assertEquals(ReadingGuideStyle.LINE, value.guideStyle)
                     three.performClick()
                     assertEquals(ReadingGuideStyle.THREE_LINE, value.guideStyle)
                     assertTrue(three.isChecked)
-                    assertFalse(menu.findViewById<MaterialRadioButton>(R.id.readingAidMenuLine)!!.isChecked)
+                    assertFalse(line.isChecked)
                     assertFalse(menu.findViewById<MaterialRadioButton>(R.id.readingAidMenuSentence)!!.isChecked)
                     val guide = menu.findViewById<SwitchMaterial>(R.id.readingAidMenuGuide)!!
                     guide.performClick()
@@ -133,6 +138,56 @@ class ReadingAidControlsSheetTest {
                     assertTrue(reopened.findViewById<MaterialRadioButton>(R.id.readingAidMenuFocusDark)!!.isChecked)
                     assertFalse(reopened.findViewById<MaterialRadioButton>(R.id.readingAidMenuFocusFade)!!.isChecked)
                 } finally { reopened.dismiss() }
+            }
+        }
+    }
+
+    @Test fun hideGazeCursorToggleWorksAcrossModesAndControlsOverlayVisibility() {
+        ActivityScenario.launch(ScanpathReplayActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                var value = ReaderAidPreferences()
+                val withoutOption = ReadingAidControlsSheet.show(activity, value, { value = it })
+                try {
+                    assertNull(withoutOption.findViewById<android.view.View>(R.id.readingAidMenuHideGazeCursor))
+                } finally { withoutOption.dismiss() }
+
+                val menu = ReadingAidControlsSheet.show(activity, value, { value = it },
+                    supportsHideGazeCursor = true)
+                try {
+                    val hideCursor = menu.findViewById<SwitchMaterial>(R.id.readingAidMenuHideGazeCursor)!!
+                    assertFalse(hideCursor.isChecked)
+                    menu.findViewById<MaterialRadioButton>(R.id.readingAidModeOff)!!.performClick()
+                    assertTrue("Hide gaze cursor stays enabled even when aids are off", hideCursor.isEnabled)
+                    hideCursor.performClick()
+                    assertTrue(value.hideGazeCursor)
+                    assertTrue(hideCursor.isChecked)
+                } finally { menu.dismiss() }
+
+                val reopened = ReadingAidControlsSheet.show(activity, value, { value = it },
+                    supportsHideGazeCursor = true)
+                try {
+                    assertTrue(reopened.findViewById<SwitchMaterial>(R.id.readingAidMenuHideGazeCursor)!!.isChecked)
+                } finally { reopened.dismiss() }
+
+                val overlay = com.newsmead.gaze.GazeOverlayView(activity).apply {
+                    setCursorStyle(com.newsmead.gaze.GazeOverlayView.CursorStyle.DOT)
+                    setDebugVisualsEnabled(true)
+                    setGazeScreen(100f, 100f)
+                    layout(0, 0, 200, 200)
+                }
+                val visibleBmp = android.graphics.Bitmap.createBitmap(200, 200, android.graphics.Bitmap.Config.ARGB_8888)
+                overlay.draw(android.graphics.Canvas(visibleBmp))
+                assertTrue("Visible cursor draws pixels", visibleBmp.getPixel(100, 100) != 0)
+
+                overlay.setCursorVisible(false)
+                val hiddenBmp = android.graphics.Bitmap.createBitmap(200, 200, android.graphics.Bitmap.Config.ARGB_8888)
+                overlay.draw(android.graphics.Canvas(hiddenBmp))
+                assertEquals("Hidden cursor draws no cursor pixels", 0, hiddenBmp.getPixel(100, 100))
+
+                overlay.setCursorVisible(true)
+                val restoredBmp = android.graphics.Bitmap.createBitmap(200, 200, android.graphics.Bitmap.Config.ARGB_8888)
+                overlay.draw(android.graphics.Canvas(restoredBmp))
+                assertTrue("Restored cursor draws pixels again", restoredBmp.getPixel(100, 100) != 0)
             }
         }
     }

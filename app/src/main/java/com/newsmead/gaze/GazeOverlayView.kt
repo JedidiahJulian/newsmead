@@ -130,7 +130,7 @@ class GazeOverlayView @JvmOverloads constructor(
         }
         // Participant reading hides the diagnostic dot. Keep its latest position
         // without scheduling an otherwise empty draw for every camera result.
-        if (debugVisualsEnabled || dotOnly || scaffoldOpacity > 0f) postInvalidateOnAnimation()
+        if ((debugVisualsEnabled && cursorVisible) || dotOnly || scaffoldOpacity > 0f) postInvalidateOnAnimation()
     }
 
     /** Clear only the debug gaze dot or fade out the gaze region when input is unavailable/stale. */
@@ -140,13 +140,25 @@ class GazeOverlayView @JvmOverloads constructor(
         if (cursorStyle == CursorStyle.REGION) {
             regionVisual.clear()
         }
-        if (debugVisualsEnabled || dotOnly || scaffoldOpacity > 0f) postInvalidateOnAnimation()
+        if ((debugVisualsEnabled && cursorVisible) || dotOnly || scaffoldOpacity > 0f) postInvalidateOnAnimation()
     }
 
     fun setDebugVisualsEnabled(enabled: Boolean) {
         if (debugVisualsEnabled == enabled) return
         debugVisualsEnabled = enabled
         if (!enabled && cursorStyle == CursorStyle.REGION) {
+            regionVisual.reset()
+        }
+        postInvalidateOnAnimation()
+    }
+
+    private var cursorVisible = true
+
+    /** Toggle visibility of the gaze cursor independently of the FPS readout. */
+    fun setCursorVisible(visible: Boolean) {
+        if (cursorVisible == visible) return
+        cursorVisible = visible
+        if (!visible && cursorStyle == CursorStyle.REGION) {
             regionVisual.reset()
         }
         postInvalidateOnAnimation()
@@ -216,6 +228,7 @@ class GazeOverlayView @JvmOverloads constructor(
         if (!dotOnly) captionText?.let { canvas.drawText(it, 24f, 104f, captionPaint) }
         if (!debugVisualsEnabled && !dotOnly) return
         if (!dotOnly) fpsText?.let { canvas.drawText(it, 24f, 60f, fpsPaint) }
+        if (!cursorVisible && !dotOnly) return
         if (cursorStyle == CursorStyle.REGION) {
             drawRegion(canvas)
             return
