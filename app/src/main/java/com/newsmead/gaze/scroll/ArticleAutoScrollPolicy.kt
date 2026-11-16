@@ -1,5 +1,6 @@
 package com.newsmead.gaze.scroll
 
+import com.newsmead.gaze.mgazenet.MgazeNetOutputGate
 import kotlin.math.min
 
 /** Experimental navigation settings, not validated reading or accuracy thresholds.
@@ -14,7 +15,7 @@ class ArticleAutoScrollPolicy(val config: Config = Config()) {
         val maxSpeedScreenFractionPerSecond: Double = .06,
         val responseMs: Double = 180.0,
         val maxSampleGapMs: Double = 150.0,
-        val maxOutputAgeMs: Double = 250.0,
+        val maxOutputAgeMs: Double = MgazeNetOutputGate.EXPIRY_MS,
         val maxFrameDeltaMs: Double = 50.0,
     ) {
         init {
@@ -191,6 +192,6 @@ class ArticleAutoScrollPolicy(val config: Config = Config()) {
     }
 
     companion object {
-        const val VERSION = "ARTICLE_AUTO_SCROLL_TRIAL_V3"
+        const val VERSION = "ARTICLE_AUTO_SCROLL_TRIAL_V4"
     }
 }

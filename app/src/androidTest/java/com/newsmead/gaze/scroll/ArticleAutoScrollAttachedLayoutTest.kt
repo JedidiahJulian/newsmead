@@ -51,19 +51,20 @@ class ArticleAutoScrollAttachedLayoutTest {
                 assertEquals("auto_scroll_motion", f.controller.exclusion(f.nowMs()))
                 assertEquals(f.originalText, f.binding.tvArticleText.text.toString())
                 val config = f.controller.configuration()
-                assertEquals("ARTICLE_AUTO_SCROLL_TRIAL_V3", config.getString("version"))
+                assertEquals("ARTICLE_AUTO_SCROLL_TRIAL_V4", config.getString("version"))
                 assertTrue(config.getBoolean("trial_settings"))
                 assertEquals(.30, config.getDouble("start_screen_fraction"), 0.0)
                 assertEquals(.60, config.getDouble("full_speed_screen_fraction"), 0.0)
                 assertEquals(.06, config.getDouble("max_speed_screen_fraction_per_second"), 0.0)
                 assertEquals(180.0, config.getDouble("response_ms"), 0.0)
                 assertEquals(150.0, config.getDouble("max_sample_gap_ms"), 0.0)
-                assertEquals(250.0, config.getDouble("max_output_age_ms"), 0.0)
+                assertEquals(500.0, config.getDouble("max_output_age_ms"), 0.0)
+                assertEquals("ordinary_tracker_operational_expiry", config.getString("capture_age_basis"))
                 assertEquals(50.0, config.getDouble("max_frame_delta_ms"), 0.0)
                 assertTrue(f.journals.any { it.first == "setting" &&
-                    it.second.getString("version") == "ARTICLE_AUTO_SCROLL_TRIAL_V3" })
+                    it.second.getString("version") == "ARTICLE_AUTO_SCROLL_TRIAL_V4" })
                 val detail = f.boundaries.first { it.start }.detail
-                assertEquals("ARTICLE_AUTO_SCROLL_TRIAL_V3", detail.getString("policy"))
+                assertEquals("ARTICLE_AUTO_SCROLL_TRIAL_V4", detail.getString("policy"))
                 assertTrue(detail.getDouble("source_capture_ms") <= detail.getDouble("source_delivery_ms"))
                 assertFalse(detail.keys().asSequence().any { it.startsWith("source_line") })
             }
@@ -117,7 +118,7 @@ class ArticleAutoScrollAttachedLayoutTest {
 /** Shared attached fixture; all callbacks and mutable collections belong to the UI thread.
  * Only bounded latches are awaited on the instrumentation thread.
  */
-internal class AutoScrollAttachedFixture : Closeable {
+internal class AutoScrollAttachedFixture(private val prepareHeader: Boolean = false) : Closeable {
     data class Boundary(val start: Boolean, val timeMs: Double, val detail: JSONObject)
     private val scenario = ActivityScenario.launch(ScanpathReplayActivity::class.java)
     private val handler = Handler(Looper.getMainLooper())
@@ -130,6 +131,9 @@ internal class AutoScrollAttachedFixture : Closeable {
     val journals = mutableListOf<Pair<String, JSONObject>>()
     val scrollChanges = mutableListOf<Pair<Double, Int>>()
     val captureTimes = mutableListOf<Double>()
+    val viewportEvents = mutableListOf<String>()
+    val preparationSeenBeforeState = mutableListOf<Boolean>()
+    val headerBottomAtStarts = mutableListOf<Float>()
     var screenHeight = 0
         private set
     private var ordinal = 0L
@@ -156,9 +160,23 @@ internal class AutoScrollAttachedFixture : Closeable {
                 controller = ArticleAutoScrollController(binding.tvArticleText, binding.nsvArticleText,
                     binding.bottomAppBar, binding.articleAutoScrollTail,
                     blocked = { blockedReason },
-                    onBoundary = { active, time, detail -> boundaries += Boundary(active, time, detail) },
+                    onBoundary = { active, time, detail ->
+                        boundaries += Boundary(active, time, detail)
+                        if (active) {
+                            viewportEvents += "start"
+                            headerBottomAtStarts += binding.articleHeaderAppBar.y + binding.articleHeaderAppBar.height
+                        }
+                    },
                     onJournal = { kind, _, detail -> journals += kind to detail },
-                    onState = { _, _ -> })
+                    onState = { enabled, paused ->
+                        if (enabled && !paused) preparationSeenBeforeState += viewportEvents.lastOrNull() == "prepare"
+                        if (prepareHeader) binding.btnArticleAutoScrollPause.visibility =
+                            if (enabled) android.view.View.VISIBLE else android.view.View.GONE
+                    },
+                    prepareViewport = {
+                        viewportEvents += "prepare"
+                        if (prepareHeader) binding.articleHeaderAppBar.setExpanded(false, true)
+                    })
                 binding.nsvArticleText.onUserTouch = { event ->
                     if (event.actionMasked == MotionEvent.ACTION_DOWN) controller.pauseByReader("manual_touch")
                 }
@@ -167,6 +185,9 @@ internal class AutoScrollAttachedFixture : Closeable {
                 listenerAdded = true
             }
             awaitDraw()
+            if (prepareHeader) onMain {
+                assertTrue("Fixture must begin with an expanded header", binding.articleHeaderAppBar.y >= 0f)
+            }
             onMain { binding.nsvArticleText.scrollTo(0, binding.tvArticleText.top) }
             awaitDraw()
             onMain { controller.setEnabled(true) }
@@ -218,7 +239,9 @@ internal class AutoScrollAttachedFixture : Closeable {
         return visible.exactCenterX() to y.toFloat()
     }
 
-    fun feed(durationMs: Long, fraction: Double, captureLagMs: Double = 80.0) {
+    fun feed(durationMs: Long, fraction: Double, captureLagMs: Double = 80.0,
+             deliveryIntervalMs: Long = 40L) {
+        require(deliveryIntervalMs > 0)
         val finished = CountDownLatch(1)
         onMain {
             check(feedTask == null)
@@ -232,7 +255,7 @@ internal class AutoScrollAttachedFixture : Closeable {
                     }
                     // A lagged real source must catch up after a settling/control boundary.
                     emit(fraction, captureMs = nowMs() - captureLagMs)
-                    handler.postDelayed(this, 40)
+                    handler.postDelayed(this, deliveryIntervalMs)
                 }
             }
             feedTask = task

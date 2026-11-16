@@ -1,5 +1,7 @@
 package com.newsmead.gaze.scroll
 
+import com.newsmead.gaze.mgazenet.MgazeNetOutputGate
+import kotlin.math.floor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -28,7 +30,9 @@ class ArticleAutoScrollPolicyTest {
             assertEquals(expected, policy.status.targetSpeedPxPerSecond, 1e-9)
             assertEquals(0.0, policy.status.speedPxPerSecond, 0.0)
         }
-        assertEquals("ARTICLE_AUTO_SCROLL_TRIAL_V3", ArticleAutoScrollPolicy.Config().version)
+        assertEquals("ARTICLE_AUTO_SCROLL_TRIAL_V4", ArticleAutoScrollPolicy.Config().version)
+        assertEquals(MgazeNetOutputGate.EXPIRY_MS,
+            ArticleAutoScrollPolicy.Config().maxOutputAgeMs, 0.0)
     }
 
     @Test fun firstFrameUsesAcceptanceBaselineAndMovesImmediatelyWithoutDwell() {
@@ -156,20 +160,126 @@ class ArticleAutoScrollPolicyTest {
         assertTrue(policy.advance(310.0, body).deltaPx > 0)
     }
 
-    @Test fun deliveryAndCaptureFreshnessBoundariesAreInclusiveAndTimersCannotRunForever() {
+    @Test fun deliveryFreshnessBoundaryIsInclusiveAndTimersCannotRunForever() {
         val policy = ArticleAutoScrollPolicy()
         assertTrue(sample(policy))
         assertTrue(policy.advance(260.0, body).active) // delivery age exactly 150
         assertEquals("stale", policy.advance(260.001, body).reason)
         assertEquals(0.0, policy.advance(1000.0, body).deltaPx, 0.0)
         assertEquals(0.0, policy.advance(2000.0, body).deltaPx, 0.0)
-        val delayed = ArticleAutoScrollPolicy()
-        assertTrue(sample(delayed, delivery = 200.0, now = 350.0)) // capture age 250
-        assertEquals("stale", delayed.advance(350.001, body).reason)
-        val tooOld = ArticleAutoScrollPolicy()
-        assertFalse(sample(tooOld, delivery = 200.0, now = 350.001))
-        assertEquals("stale", tooOld.status.reason)
         assertFalse(sample(ArticleAutoScrollPolicy(), now = 260.001))
+    }
+
+    @Test fun captureFreshnessBoundaryIsInclusiveWhileDeliveryRemainsFresh() {
+        val delayed = ArticleAutoScrollPolicy()
+        assertTrue(sample(delayed, delivery = 500.0, now = 600.0)) // capture age exactly 500
+        assertTrue(delayed.advance(600.0, body).active)
+        assertEquals("stale", delayed.advance(600.001, body).reason)
+        val tooOld = ArticleAutoScrollPolicy()
+        assertFalse(sample(tooOld, delivery = 500.0, now = 600.001))
+        assertEquals("stale", tooOld.status.reason)
+    }
+
+    @Test fun expiredCaptureCannotBridgeSpeedEvenWhenDeliveryAndNewCaptureRemainFresh() {
+        val policy = ArticleAutoScrollPolicy()
+        assertTrue(sample(policy, capture = 100.0, delivery = 500.0))
+        assertTrue(policy.advance(510.0, body).speedPxPerSecond > 0.0)
+        // Both gaps are below 150ms; only the previous capture has expired.
+        assertTrue(sample(policy, capture = 200.0, delivery = 601.0))
+        assertEquals(0.0, policy.status.speedPxPerSecond, 0.0)
+        assertEquals(0.0, policy.advance(601.0, body).deltaPx, 0.0)
+        val restarted = policy.advance(611.0, body)
+        assertEquals(60.0 * 10 / 180, restarted.speedPxPerSecond, 1e-9)
+        assertEquals(200.0, restarted.sourceCaptureTimeMs!!, 0.0)
+        assertEquals(601.0, restarted.sourceDeliveryTimeMs!!, 0.0)
+    }
+
+    private data class SyntheticMotion(
+        val distance: Double, val integerPixels: Int, val finalSpeed: Double,
+        val staleFrames: Int, val starts: Int, val cancellations: Int,
+    )
+
+    /** Causal synthetic timing, not a device recording or human reading result. */
+    private fun syntheticMotion(lagMs: Double, y: Double,
+                                config: ArticleAutoScrollPolicy.Config = ArticleAutoScrollPolicy.Config()
+    ): SyntheticMotion {
+        val policy = ArticleAutoScrollPolicy(config)
+        // False sorts before true: a delivery at a frame boundary is accepted first.
+        val events = ((0..36).map { (1000.0 + it * 55.0) to false } +
+            (1..120).map { (1000.0 + it * (1000.0 / 60.0)) to true })
+            .sortedWith(compareBy<Pair<Double, Boolean>> { it.first }.thenBy { it.second })
+        var distance = 0.0
+        var fraction = 0.0
+        var pixels = 0
+        var stale = 0
+        var starts = 0
+        var cancellations = 0
+        var moving = false
+        for ((now, isFrame) in events) {
+            if (!isFrame) {
+                assertTrue(sample(policy, capture = now - lagMs, delivery = now, y = y))
+                continue
+            }
+            val frame = policy.advance(now, body)
+            frame.sourceCaptureTimeMs?.let { capture ->
+                val delivery = frame.sourceDeliveryTimeMs!!
+                assertTrue(capture <= delivery && delivery <= now)
+                assertEquals(lagMs, delivery - capture, 1e-9)
+            }
+            distance += frame.deltaPx
+            // Match controller integer accumulation and stopMotion's remainder reset.
+            fraction += frame.deltaPx
+            val delta = floor(fraction).toInt()
+            fraction -= delta
+            pixels += delta
+            if (delta > 0 && !moving) { starts++; moving = true }
+            if (!frame.active) {
+                if (frame.reason == "stale") stale++
+                fraction = 0.0
+                if (moving) { cancellations++; moving = false }
+            }
+        }
+        return SyntheticMotion(distance, pixels, policy.status.speedPxPerSecond,
+            stale, starts, cancellations)
+    }
+
+    @Test fun syntheticOrdinaryLatencyKeepsSpeedAndFractionalMotionAcrossCoordinateDeliveries() {
+        for ((y, expectedSpeed, expectedPixels) in listOf(
+            Triple(350.0, 10.0, 19), Triple(500.0, 40.0, 77), Triple(650.0, 60.0, 114))) {
+            val lowLag = syntheticMotion(80.0, y)
+            for (lag in listOf(220.0, 232.0)) {
+                val motion = syntheticMotion(lag, y)
+                assertEquals(expectedSpeed, motion.finalSpeed, 1e-9)
+                assertEquals(lowLag.distance, motion.distance, 1e-9)
+                assertEquals(expectedPixels, motion.integerPixels)
+                assertEquals(0, motion.staleFrames)
+                assertEquals(1, motion.starts)
+                assertEquals(0, motion.cancellations)
+                // Explicit legacy limit reproduces the former expiry/reset cycle.
+                val legacy = syntheticMotion(lag, y,
+                    ArticleAutoScrollPolicy.Config(maxOutputAgeMs = 250.0))
+                assertTrue(legacy.staleFrames >= 30)
+                assertTrue(legacy.distance < motion.distance * .25)
+                assertEquals(0, legacy.integerPixels)
+                assertEquals(0, legacy.starts)
+            }
+        }
+    }
+
+    @Test fun ordinaryLatencyDoesNotExtendTheDeliverySilenceStop() {
+        for (lag in listOf(220.0, 232.0)) {
+            val policy = ArticleAutoScrollPolicy()
+            for (delivery in 1000..1220 step 55) {
+                assertTrue(sample(policy, capture = delivery - lag, delivery = delivery.toDouble()))
+                policy.advance(delivery.toDouble(), body)
+            }
+            assertTrue(policy.advance(1370.0, body).active) // Last delivery + 150ms.
+            val stopped = policy.advance(1370.001, body)
+            assertEquals("stale", stopped.reason)
+            assertEquals(0.0, stopped.deltaPx, 0.0)
+            assertFalse(stopped.active)
+            assertNull(stopped.sourceCaptureTimeMs)
+        }
     }
 
     @Test fun invalidClocksHardStopAndEqualNowIsAllowedButCaptureAndDeliveryMustIncrease() {

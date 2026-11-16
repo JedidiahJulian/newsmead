@@ -30,6 +30,7 @@ internal class ArticleAutoScrollController(
     private val onState: (Boolean, Boolean) -> Unit,
     private val clock: () -> Double = { SystemClock.elapsedRealtimeNanos() / 1e6 },
     private val screenHeight: () -> Int = { if (body.display != null) body.physicalDisplaySize().y else 0 },
+    private val prepareViewport: () -> Unit = {},
 ) {
     private val policy = ArticleAutoScrollPolicy()
     private data class ViewGeometry(
@@ -84,6 +85,9 @@ internal class ArticleAutoScrollController(
         updateTail()
         status(if (enabled) "waiting_lower" else "disabled")
         onJournal("setting", clock(), configuration().put("enabled", enabled))
+        // Prepare navigation chrome before the first motion boundary. Any resulting
+        // layout change still passes through the normal geometry/fresh-capture gate.
+        if (enabled) prepareViewport()
         onState(enabled, pausedByReader)
     }
 
@@ -102,6 +106,7 @@ internal class ArticleAutoScrollController(
         pausedByReader = false
         halt("waiting_lower")
         onJournal("resumed", clock(), JSONObject())
+        prepareViewport()
         onState(enabled, pausedByReader)
     }
 
@@ -274,6 +279,7 @@ internal class ArticleAutoScrollController(
         .put("response_ms", policy.config.responseMs)
         .put("max_sample_gap_ms", policy.config.maxSampleGapMs)
         .put("max_output_age_ms", policy.config.maxOutputAgeMs)
+        .put("capture_age_basis", "ordinary_tracker_operational_expiry")
         .put("max_frame_delta_ms", policy.config.maxFrameDeltaMs)
         .put("settle_ms", ArticleScanpathSession.GEOMETRY_SETTLE_MS).put("trial_settings", true)
 

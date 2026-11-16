@@ -1,4 +1,4 @@
-# Agent context — updated 2026-11-16
+# Agent context — updated 2026-11-17
 
 This is a routing note, not a new research protocol. Recheck source and newer
 dated evidence before continuing. It summarizes the project's recent tasks and
@@ -11,6 +11,44 @@ project skills were retired at the user's request. This note and the measurement
 protocol remain authoritative for NewsMead-specific decisions and tools.
 
 ## Objective and current direction
+
+**2026-11-17 auto-scroll V4 matches ordinary tracker expiry; A56 checks pass:**
+Owner still reports hesitation/edge-only response/slow variable movement after
+the V3 header fix and asks to reconsider older model restrictions, delegating the
+interaction recommendation. Retain gaze-height speed control; fix the timing
+mismatch. V4 references ordinary `MgazeNetOutputGate.EXPIRY_MS`500ms capture
+expiry instead of scroll-only250ms. At causal synthetic220/232ms lag with55ms
+deliveries, the old limit repeatedly expired support and discarded subpixel
+motion; actual Kotlin regressions reproduce this and preserve continuous V4
+motion at35/50/65% heights. Engineering simulation, not live-cause attribution
+or accuracy/comfort validation. Independent150ms delivery stop, ordering, missing
+gaze/controls/reflow guards,30–60% ramp,6%/s maximum and model/calibration stay
+unchanged; shared-baseline650ms is not adopted for navigation. Exports nameV4
+and the age basis. All20 policy JVM tests and both APK builds pass, including
+frozen protocol-manifest verification. Focused review has no implementation
+findings; stale V3 contract/checkpoint corrected. Continuing owner-approved
+data-preserving A56 updates have verified installed hashes; one camera-free run
+passes all8 attached checks, including220ms-lag middle motion, silence stop,
+232ms-lag recovery and upper braking. Camera UID mode restored, calibration hash
+and camera-access duration unchanged. No new live capture, staging or commit;
+S21 untouched. Evidence: `output/auto-scroll-freshness-2026-11-17/summary.json`;
+current contract: `docs/article-auto-scroll-prototype.md`.
+
+**2026-11-17 auto-scroll startup interruption corrected; A56 checks pass:**
+Owner reports hesitant/bursty scrolling, apparent edge-only response and variable
+speed. Header collapse formerly began on the first motion boundary, changing the
+viewport during navigation and triggering the controller's real-layout stop.
+The controller now prepares the header on enable/explicit resume, before state
+notification and fresh settled input. Duplicate enable remains a no-op; V3
+30–60% speed ramp, 150ms delivery/250ms capture limits and motion exclusions stay
+unchanged. All16 policy JVM checks pass and both debug APKs build. Focused review
+has no actionable findings. Owner-approved data-preserving A56 app/test updates
+have verified installed hashes; one camera-free run passes all7 attached checks.
+Camera access was UID-blocked, then restored; calibration hash is unchanged.
+No camera collection, calibration change, staging or commit. Live tracking quality
+and all perceived-speed symptoms remain unverified; S21 was not updated.
+Evidence: `output/auto-scroll-startup-2026-11-17/summary.json`;
+contract: `docs/article-auto-scroll-prototype.md`.
 
 **2026-11-16 original A + B photos added; both phones verified:**
 Owner supplied missing A La Union collage and B recycling photo. Original PNG

@@ -1781,7 +1781,6 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 else -> null
             } },
             onBoundary = { moving, at, detail ->
-                if (moving) binding.articleHeaderAppBar.setExpanded(false, true)
                 scanpathSession?.autoScrollMotion(moving, detail.optString("reason"))
                 mahalanobisReadingSession?.autoScrollMotion(moving, detail.optString("reason"))
                 readingAidRuntime?.autoScrollBoundary(moving, at, detail)
@@ -1793,7 +1792,8 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 binding.btnArticleAutoScrollPause.visibility = if (enabled) View.VISIBLE else View.GONE
                 binding.btnArticleAutoScrollPause.setText(if (paused) R.string.article_auto_scroll_resume
                     else R.string.article_auto_scroll_pause)
-            })
+            },
+            prepareViewport = { binding.articleHeaderAppBar.setExpanded(false, true) })
         binding.nsvArticleText.onUserTouch = { event ->
             if (event.actionMasked == MotionEvent.ACTION_DOWN)
                 articleAutoScroll?.pauseByReader("manual_touch")

@@ -1,6 +1,66 @@
 # Optional article auto-scroll
 
-## Current V3 region adjustment — 2026-10-17
+## Current V4 tracker-latency compatibility — 2026-11-17
+
+After the header correction, the owner still reports hesitation, apparent
+edge-only response and slow/unpredictable speed, and asks whether older model
+restrictions remain appropriate. The recommended interaction retains the
+gaze-height speed ramp and explicit pause/resume. The timing contract changes:
+V4 uses the ordinary tracker's existing 500ms operational capture expiry, directly
+referencing `MgazeNetOutputGate.EXPIRY_MS`, instead of the former 250ms scroll
+limit. The independent 150ms delivery-silence stop remains. This does not change
+the model, calibration, raw/display coordinates, gaze accuracy or shared-baseline
+650ms allowance. Missing/invalid input, controls, lookup, real reflow and document
+bounds still stop navigation. Existing frame/acceleration/speed limits remain.
+
+The mismatch can prevent motion even with valid coordinates: a causal synthetic
+220ms capture lag and 55ms delivery cadence outlast the old sample's remaining
+30ms support. Repeated expiry also discards fractional pixels in the controller.
+The new JVM regressions cover 220/232ms lag at upper-middle, middle and lower
+gaze heights; attached tests exercise delayed middle input, silence, recovery and
+upper braking. These are supplied engineering timings, not recordings or proof
+that timing caused every observed symptom. The larger allowance accepts older
+positions; matching the provider is an operational choice, not an accuracy or
+human-benefit threshold. V4 and `capture_age_basis` identify the changed contract
+in exports. All20 actual Kotlin policy tests pass and both debug APKs build;
+the frozen comparison-manifest check also passes. Focused implementation review
+has no actionable findings; its stale-contract finding is corrected here.
+Under the owner's continuing A56 update/test authorization, both installed APK
+hashes match the new builds and one camera-free run passes all8 attached checks.
+The added case supplies 220ms-lag middle gaze every55ms, verifies sustained actual
+scroll travel without repeated expiry, then checks silence stop, 232ms-lag
+recovery and upper braking. Camera access was UID-blocked, then restored;
+the calibration hash and camera-access duration are unchanged. S21 is untouched.
+Live gaze quality and user comfort remain unverified. Evidence is kept separately
+in `output/auto-scroll-freshness-2026-11-17/summary.json`, `build-and-policy.log`,
+`native.log` and `device-check.json`; the earlier startup checks below remain
+V3 evidence. The standalone timing probe is a Python transcription; the copied
+JUnit XML and native log establish which actual Kotlin/controller checks ran.
+
+## Startup layout correction — 2026-11-17
+
+The owner reports hesitation, inconsistent speed and apparent edge-only response.
+Source review found that the first motion boundary started an animated header
+collapse, which changed the viewport after scrolling had already begun. The
+controller then correctly stopped for a layout change and discarded pending input.
+Header preparation now runs when enabling or explicitly resuming auto-scroll;
+normal geometry settling and fresh-capture checks run before movement starts.
+Repeated enable calls remain a no-op. The V3 speed ramp, coordinate stream,
+capture/delivery freshness limits and measurement exclusions are unchanged.
+
+All 16 policy JVM tests pass and both debug APKs build. Focused source review has
+no actionable findings. With the owner's task-specific approval, both APKs were
+replace-installed on the A56 and their installed hashes verified. One bounded
+camera-free run passed all seven attached/controller checks, including animated
+preparation, sustained middle/lower gaze motion, resume, genuine reflow rejection,
+missing-input stops and lookup blocking. Camera access was blocked at UID scope;
+the original setting and saved calibration hash were verified afterward. No
+camera collection or human gaze validation ran. This fixes a confirmed startup
+interruption, not proof that all live tracking or perceived-speed symptoms are
+resolved. Evidence: `output/auto-scroll-startup-2026-11-17/summary.json`,
+`build-and-policy.log`, `device-check.json` and `native.log`.
+
+## Earlier V3 region adjustment — 2026-10-17
 
 The owner widens the ramp to 30%–60% so the target at 50% is slower: 4% of
 physical-screen height per second, two-thirds of the existing 6%/s maximum.
@@ -44,7 +104,7 @@ The selected coordinate stream remains the same calibrated, smoothed physical
 screen point used by the orange dot. There is no line/word assignment, fixation
 classification, inferred reading speed, 700 ms dwell, rearm or cooldown in V3.
 
-## Exact trial behavior
+## Current V4 trial behavior
 
 These are engineering trial settings, not validated reading thresholds or
 Athena's proprietary algorithm.
@@ -69,7 +129,7 @@ brakes to zero; a fresh lower point can start again immediately.
 Movement requires the point to remain inside the actual clipped article body,
 with a usable stop region in the viewport. Headers, images and controls do not
 become eligible just because their Y position is low. A fresh source capture must
-be no older than250 ms and delivery no older than150 ms. Invalid/unavailable gaze
+be no older than500 ms and delivery no older than150 ms. Invalid/unavailable gaze
 hard-stops motion; if callbacks cease, the next animation frame stops after that
 delivery-age limit. New eligible input can resume without a dwell.
 
@@ -89,7 +149,7 @@ assessment. Speed is not a measure of reading capability or comprehension.
   its next gaze update. External scroll or layout changes require fresh capture
   support after the150 ms layout settling guard.
 - Delayed captures discarded by that guard do not advance its input floor;
-  otherwise a causal but delayed camera stream could be starved indefinitely.
+otherwise a causal but delayed camera stream could be starved indefinitely.
 - Only forward document motion is automatic; manual navigation remains available.
 - Enabled-only tail space equal to70% of physical-screen height follows the
   article so final content can reach the upper area. Actual scroll range bounds
@@ -98,7 +158,7 @@ assessment. Speed is not a measure of reading capability or comprehension.
   Their shared menu hides the article-only option.
 
 The menu describes the last navigation status before opening. Start/end and
-deduplicated status events are journaled with the V3 configuration, source
+deduplicated status events are journaled with the V4 configuration, source
 capture/delivery, selected coordinate stream, target speed and actual scroll
 positions. Export still uses the explicit Save aid trace action.
 
@@ -153,7 +213,7 @@ The owner's intermittent upper-screen accuracy advantage remains unmeasured.
 Software checks cannot establish human accuracy, comfort, comprehension or
 reduced distraction.
 
-## Source and validation
+## Earlier V3 source and validation
 
 Policy/controller: gaze/scroll/ArticleAutoScrollPolicy.kt and
 ArticleAutoScrollController.kt. Integration: ArticleFragment.kt and
