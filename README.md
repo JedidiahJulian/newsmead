@@ -6,6 +6,23 @@ This README is written as a manual and study guide for understanding the impleme
 
 Supporting documentation lives in [docs/](docs/README.md). Start there for the thesis memory, gaze implementation guide, RSI guide, adaptive visual-scaffolding guide, session setup, progress notes, and implementation specs.
 
+## First build on a new computer
+
+The model and native runtime files under `mgazenet-benchmark/vendor/` are ignored
+by Git. From the repository root, download the pinned files before building:
+
+```powershell
+python tools/gaze/mgazenet/fetch_vendor.py
+.\gradlew.bat :app:assembleDebug
+```
+
+This requires Python 3 and internet access; no extra Python packages are needed.
+On Windows, use `py -3` instead of `python` if that is your Python launcher.
+The script prepares both ARM architectures required by `:app:verifyVendor` and
+does not install or launch an app. After it succeeds, run the app normally from
+Android Studio on a supported ARM device. The downloaded binaries do not need
+to be committed.
+
 ## Current Status
 
 The current implementation is a working prototype, not a finalized clinical or production-grade eye tracker.

@@ -1,4 +1,4 @@
-"""Explicit, hash-pinned downloads for the isolated Android harness; no installs.
+"""Explicit, hash-pinned downloads for NewsMead and its Android harness; no installs.
 
 Only writes mgazenet-benchmark/vendor. Never executes downloaded code, opens a
 camera, invokes ADB, or downloads a participant dataset. Standard library only.
@@ -40,12 +40,15 @@ def main():
     model = fetch(model_url, MODEL_SHA)
     archive_url = "https://github.com/alibaba/MNN/releases/download/3.6.1/mnn_3.6.1_android_armv7_armv8_cpu_opencl_vulkan.zip"
     archive = zipfile.ZipFile(io.BytesIO(fetch(archive_url, MNN_ZIP_SHA)))
-    prefix = "mnn_3.6.1_android_armv7_armv8_cpu_opencl_vulkan/arm64-v8a/"
+    prefix = "mnn_3.6.1_android_armv7_armv8_cpu_opencl_vulkan/"
     # CPU Session JNI. Do not bundle GPU, audio, LLM, or MNN's OpenCV substitute.
     libraries = ["libMNN.so", "libmnncore.so", "libc++_shared.so"]
     write("assets/base.mnn", model)
-    for name in libraries:
-        write("jniLibs/arm64-v8a/" + name, archive.read(prefix + name))
+    # NewsMead's debug build verifies and packages both ARM architectures.
+    # Fetch both on a clean checkout, even though the isolated harness is arm64-only.
+    for abi in ("arm64-v8a", "armeabi-v7a"):
+        for name in libraries:
+            write("jniLibs/" + abi + "/" + name, archive.read(prefix + abi + "/" + name))
     landmark = ROOT / "app/src/main/assets/face_landmarker.task"
     data = landmark.read_bytes()
     if hashlib.sha256(data).hexdigest() != LANDMARK_SHA:
