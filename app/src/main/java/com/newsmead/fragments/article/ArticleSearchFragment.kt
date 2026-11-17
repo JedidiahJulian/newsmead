@@ -119,7 +119,7 @@ class ArticleSearchFragment : Fragment(), clickListener {
                 Analytics.search(searchQuery.length, language, it.size)
                 ResearchSession.search(searchQuery.length, language, it.size)
 
-                if(FirebaseHelper.isNetworkAvailable(requireContext())) {
+                if(FirebaseHelper.isNetworkAvailable(context ?: return@loadArticleData)) {
                     // Stop the shimmer
                     binding.shimmerSearch.stopShimmer()
                     binding.shimmerSearch.visibility = View.GONE

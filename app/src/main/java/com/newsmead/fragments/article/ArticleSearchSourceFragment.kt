@@ -79,7 +79,7 @@ class ArticleSearchSourceFragment: Fragment(), clickListener {
 
         lifecycleScope.launch {
             DataHelper.loadArticleData(context, source = DataHelper.reverseSourceNameMap(args.sourceName)) {
-                if(FirebaseHelper.isNetworkAvailable(requireContext())) {
+                if(FirebaseHelper.isNetworkAvailable(context ?: return@loadArticleData)) {
                     // Stop the shimmer
                     binding.shimmerSearchSource.stopShimmer()
                     binding.shimmerSearchSource.visibility = View.GONE

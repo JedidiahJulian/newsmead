@@ -73,7 +73,7 @@ class ArticleCategoryFragment : Fragment(), clickListener {
         // Add API here
         lifecycleScope.launch {
             DataHelper.loadArticleData(context, category=args.categoryName.lowercase()) {
-                if(FirebaseHelper.isNetworkAvailable(requireContext())){
+                if(FirebaseHelper.isNetworkAvailable(context ?: return@loadArticleData)){
                     // Stop the shimmer
                     binding.shimmerCategory.stopShimmer()
                     binding.shimmerCategory.visibility = View.GONE
