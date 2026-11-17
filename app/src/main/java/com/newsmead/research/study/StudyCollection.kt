@@ -26,6 +26,7 @@ import java.util.zip.ZipOutputStream
 
 /** Explicit researcher-controlled run. No network, automatic capture, or active-model restoration. */
 object StudyCollection {
+    const val EXPORT_WARNINGS = "com.newsmead.study.EXPORT_WARNINGS"
     data class Run(val participant: String, val condition: String, val phase: String, val id: String,
         val installation: String, val clockDomain: String)
     data class DeleteResult(val deletedPackages: Int, val deletedReceipts: Int, val freedBytes: Long)
@@ -106,10 +107,15 @@ object StudyCollection {
         val root = root(context)
         StudyRecordingCatalog.validatePaths(root)
         StudyPackageWriter.recover(root)
-        val selection = recordingIds?.let { StudyRecordingCatalog.select(StudyRecordingCatalog.load(root), it) }
+        val selection = StudyRecordingCatalog.forExport(StudyRecordingCatalog.load(root), recordingIds)
         val packages = root.listFiles()?.filter { it.isDirectory && File(it, "manifest.json").isFile &&
-            (selection == null || it.name in selection.packageIds) } ?: emptyList()
-        if (packages.isEmpty()) return null
+            it.name in selection.packageIds } ?: emptyList()
+        if (packages.isEmpty()) {
+            check(selection.warnings.isEmpty()) {
+                "No recoverable packages to transfer. Original files were retained.\n" + selection.warnings.joinToString("\n")
+            }
+            return null
+        }
         val staging = File(context.cacheDir, "research-export").apply { mkdirs() }
         val zip = File(staging, "study_${UUID.randomUUID()}.zip")
         ZipOutputStream(zip.outputStream()).use { output ->
@@ -125,7 +131,7 @@ object StudyCollection {
                 sessionIds.add(session)
                 val entry = StudyJson.obj("package_id" to manifest.getString("package_id"),
                     "session_id" to session, "manifest_sha256" to sha(manifestFile))
-                if (selection != null) entry.put("included_reference", directory.name in selection.includedReferenceIds)
+                if (recordingIds != null) entry.put("included_reference", directory.name in selection.includedReferenceIds)
                 inventory.put(entry)
                 val chunks = manifest.getJSONArray("chunks")
                 val names = (0 until chunks.length()).map { chunks.getJSONObject(it).getString("file") } + "manifest.json"
@@ -156,13 +162,15 @@ object StudyCollection {
             output.putNextEntry(ZipEntry("study_export_manifest.json"))
             val exportManifest = StudyJson.obj("schema_version" to "newsmead_study_export_v1", "packages" to inventory,
                 "late_receipts" to receipts)
-            if (selection != null) exportManifest.put("selection_warnings", JSONArray(selection.warnings))
+            exportManifest.put("selection_warnings", JSONArray(selection.warnings))
             output.write(exportManifest.toString().toByteArray(Charsets.UTF_8)); output.closeEntry()
         }
         val uri = FileProvider.getUriForFile(context, context.packageName + ".research.fileprovider", zip)
         return Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
             type = "application/zip"; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }, "Transfer study packages")
+        }, "Transfer study packages").apply {
+            putExtra(EXPORT_WARNINGS, selection.warnings.joinToString("\n"))
+        }
         } finally { maintenanceGate.release(); maintenance = false }
     }
 
@@ -260,6 +268,7 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
     val id = UUID.randomUUID().toString()
     private val handler = Handler(Looper.getMainLooper())
     private val started = now()
+    private val coordinateCoverageMonitor = if (phase == "reading_baseline") StudyCoordinateCoverage(started) else null
     val startMs: Double get() = started
     val endMs: Double? get() = logicalEnd
     val packageId: String get() = writer.packageDirectory.name
@@ -305,8 +314,20 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
             "device_model" to Build.MODEL, "android_sdk" to Build.VERSION.SDK_INT,
             "metadata" to metadata), started)
     }
-    fun record(kind: String, payload: JSONObject, atMs: Double? = null) {
-        if (!sealed) runCatching { writer.record(kind, payload, atMs) }.onFailure { instrumentationFailure() }
+    fun record(kind: String, payload: JSONObject, atMs: Double? = null): Boolean {
+        if (sealed) {
+            coordinateCoverageMonitor?.unavailable("recording_rejected_row")
+            return false
+        }
+        return runCatching {
+            writer.record(kind, payload, atMs).also { accepted ->
+                if (!accepted) coordinateCoverageMonitor?.unavailable("recording_rejected_row")
+            }
+        }.getOrElse {
+            coordinateCoverageMonitor?.unavailable("recording_failure")
+            instrumentationFailure()
+            false
+        }
     }
     fun recordValue(kind: String, value: Any?, atMs: Double? = null) {
         runCatching { record(kind, StudyJson.obj("value" to value), atMs) }.onFailure { instrumentationFailure() }
@@ -327,7 +348,7 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
     }
     fun metadata(epoch: String, values: Map<String, Any?>) {
         val json = StudyJson.value(values) as JSONObject; providerMetadata[epoch] = json
-        acquisitionIds[epoch] = StudyJson.hash(json.toString())
+        acquisitionIds[epoch] = StudyAcquisitionContext.id(json)
         record("provider_metadata", StudyJson.obj("provider_epoch_id" to epoch, "metadata" to json), now())
     }
     fun presentation(body: TextView, extra: JSONObject = JSONObject(), readingViewport: View? = null) {
@@ -379,6 +400,7 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
         if (sealed) return
         val effective = maxOf(atMs, now())
         val next = timeline.change(effective, allowed, presentationId, presentation)
+        coordinateCoverageMonitor?.boundary(effective, reason)
         record("boundary", StudyJson.obj("at_ms" to effective, "source_at_ms" to atMs,
             "time_basis" to "collector_observed_transition_not_earlier_than_native_event",
             "reason" to reason, "context_epoch_id" to next.epoch, "context_allowed" to next.allowed), effective)
@@ -399,14 +421,16 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
                 (state.settings.optString("coordinate_presentation_id").takeIf { it.isNotBlank() } ?: state.presentationId),
             "clock_domain_id" to run.clockDomain, "screen_width_px" to screenWidth, "screen_height_px" to screenHeight,
             "rotation_degrees" to rotationDegrees, "coordinate_stream" to "calibrated_raw_v1") else null
-        record("gaze_observation", StudyJson.obj("provider_epoch_id" to epoch, "delivery_id" to o.deliveryId,
+        val payload = StudyJson.obj("provider_epoch_id" to epoch, "delivery_id" to o.deliveryId,
             "capture_ms" to o.captureMs, "delivery_ms" to o.outputMs, "delivery_elapsed_ns" to o.deliveryElapsedNs,
             "reason" to o.reason, "raw_x_px" to o.rawX, "raw_y_px" to o.rawY,
             "selected_x_px" to o.x, "selected_y_px" to o.y, "timeout_watchdog" to o.timeoutWatchdog,
             "arrivals" to o.arrivals, "busy_drops" to o.busyDrops, "blink_filter_applied" to o.blinkFilterApplied,
             "left_eye_aspect" to o.leftEyeAspect, "right_eye_aspect" to o.rightEyeAspect,
             "coordinate_context" to coordinateContext, "context_epoch_id" to (state?.epoch ?: "context_unavailable"),
-            "context_allowed" to (state?.allowed == true), "presentation_settings" to state?.settings), at)
+            "context_allowed" to (state?.allowed == true), "presentation_settings" to state?.settings)
+        record("gaze_observation", payload, at)
+        coordinateCoverageMonitor?.observation(payload)
         if (o.reason == "stopped") { pending.remove(epoch); if (logicalEnd != null && pending.isEmpty() && pendingResults == 0) seal() }
     }
     fun baseline(profile: ParticipantReadingBaseline.Entry?) = record("rdf_reference", StudyJson.obj(
@@ -452,6 +476,10 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
     }
     fun resumed() { exclude("aid_runtime_suspended", false) }
     fun health() = writer.health()
+    fun coordinateCoverage(atMs: Double = now()): StudyCoordinateCoverage.Snapshot? {
+        coordinateCoverageMonitor?.recordingHealth(writer.health().getLong("lost_records"), writer.failure)
+        return coordinateCoverageMonitor?.snapshot(minOf(atMs, logicalEnd ?: atMs))
+    }
     fun beginResult() { pendingResults++ }
     fun endResult() { pendingResults = (pendingResults - 1).coerceAtLeast(0)
         if (logicalEnd != null && pending.isEmpty() && pendingResults == 0) seal() }

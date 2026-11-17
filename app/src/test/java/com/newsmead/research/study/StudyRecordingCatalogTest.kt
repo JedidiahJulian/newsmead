@@ -48,6 +48,42 @@ class StudyRecordingCatalogTest {
         .put("baseline_attempt_id", "attempt").put("participant_id", "p")
         .put("installation_id", "phone").put("calibration_id", "cal").put("clock_domain_id", "clock")
 
+    @Test fun allAndSelectedExportsKeepIntactPackagesDespiteAnOldEmptyRecoveryManifest() {
+        val root = root()
+        fixture(root, "intact", "visit")
+        val broken = File(root, "old_empty_recovery").apply { mkdirs() }
+        val bytes = JSONObject().put("schema_version", StudyPackageWriter.SCHEMA)
+            .put("package_id", broken.name).put("identity", JSONObject())
+            .put("status", "recovered_incomplete").put("content_complete", false)
+            .put("record_count", 0).put("chunks", JSONArray()).toString()
+        val original = File(broken, "manifest.json").apply { writeText(bytes) }
+        val catalog = StudyRecordingCatalog.load(root)
+        assertEquals(1, catalog.recordings.size)
+        assertTrue(catalog.warnings.single().contains(broken.name))
+        for (ids in listOf(null, setOf(catalog.recordings.single().id))) {
+            val plan = StudyRecordingCatalog.forExport(catalog, ids)
+            assertEquals(setOf("intact"), plan.packageIds)
+            assertTrue(plan.warnings.any { it.contains(broken.name) })
+        }
+        assertEquals(bytes, original.readText())
+    }
+
+    @Test fun unrecoverableOriginalsAreVisibleAsWarningsButNeverExportedAsPackages() {
+        val root = root()
+        fixture(root, "intact", "visit")
+        val broken = File(root, "truncated_start").apply { mkdirs() }
+        val original = File(broken, "chunk_00001.jsonl.gz.partial")
+            .apply { writeBytes(byteArrayOf(0x1f, 0x8b.toByte())) }
+        val bytes = original.readBytes()
+        assertTrue(StudyPackageWriter.recover(root).isEmpty())
+        val catalog = StudyRecordingCatalog.load(root)
+        val plan = StudyRecordingCatalog.forExport(catalog)
+        assertEquals(setOf("intact"), plan.packageIds)
+        assertTrue(plan.warnings.single().contains(broken.name))
+        assertArrayEquals(bytes, original.readBytes())
+        assertFalse(File(broken, "manifest.json").exists())
+    }
+
     @Test fun jointSourceIsIncludedWithoutAnRdfProfileAndBothDependenciesDeduplicate() {
         val root = root()
         fixture(root, "joint", phase = "reading_baseline", attempt = "attempt")

@@ -55,6 +55,7 @@ object StudyRecordingCatalog {
                 val directory = directory(root, candidate.name)
                 val manifest = file(directory, "manifest.json")
                 if (manifest.isFile) packages.add(read(directory, manifest))
+                else warnings.add("Package ${candidate.name}: no recoverable manifest; original files retained.")
             }.onFailure { warnings.add("Package ${candidate.name}: metadata unavailable (${it.message}).") }
         }
         val groups = packages.groupBy { p ->
@@ -64,6 +65,14 @@ object StudyRecordingCatalog {
         }.map { (key, values) -> Recording(hash(org.json.JSONArray(key).toString()), values.sortedBy { it.startedUtcMs ?: Long.MAX_VALUE }) }
             .sortedByDescending { it.startedUtcMs ?: Long.MIN_VALUE }
         return Catalog(groups, warnings)
+    }
+
+    /** Both export modes use readable package metadata; unusable originals remain on disk. */
+    fun forExport(catalog: Catalog, recordingIds: Set<String>? = null): Selection {
+        if (recordingIds == null) return Selection(
+            catalog.recordings.flatMap { it.packages }.map { it.id }.toSet(), emptySet(), catalog.warnings)
+        val selected = select(catalog, recordingIds)
+        return selected.copy(warnings = (catalog.warnings + selected.warnings).distinct())
     }
 
     fun select(catalog: Catalog, recordingIds: Set<String>): Selection {

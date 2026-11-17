@@ -1533,7 +1533,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             }) }
         readingAidRuntime = aids
         articleAutoScroll?.let { auto -> aids?.autoScrollEvent("configuration",
-            SystemClock.elapsedRealtimeNanos() / 1e6, auto.configuration().put("enabled", auto.enabled)) }
+            SystemClock.elapsedRealtimeNanos() / 1e6, auto.configuration().put("enabled", auto.enabled)
+                .put("paused_by_reader", auto.pausedByReader).put("is_moving", auto.isMoving)
+                .put("status_reason", auto.statusReason).put("scroll_y", binding.nsvArticleText.scrollY)) }
         val liveScanpath = ArticleScanpathSession(binding.tvArticleText,
             coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED,
             motionCompensatedAids = true,

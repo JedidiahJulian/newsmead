@@ -94,6 +94,8 @@ class StudyCollectionActivity : AppCompatActivity() {
                 val result = runCatching { StudyCollection.export(applicationContext) }
                 runOnUiThread { result.onSuccess { intent -> if (intent != null) {
                     status.text = "Original packages remain on the phone. Verify the received copy with the study importer."
+                    intent.getStringExtra(StudyCollection.EXPORT_WARNINGS)?.takeIf { it.isNotBlank() }
+                        ?.let { status.append("\n$it") }
                     startActivity(intent)
                 } else status.text = "No completed or recovered packages to transfer." }
                     .onFailure { status.text = it.message ?: "Transfer preparation failed." } }
@@ -117,7 +119,12 @@ class StudyCollectionActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (!isFinishing && !isDestroyed) result.onSuccess { intent ->
                             if (intent == null) status.text = "No selected packages remain. Refresh the list."
-                            else { status.text = "Selected originals remain on the phone. Verify the received copy with the study importer."; startActivity(intent) }
+                            else {
+                                status.text = "Selected originals remain on the phone. Verify the received copy with the study importer."
+                                intent.getStringExtra(StudyCollection.EXPORT_WARNINGS)?.takeIf { it.isNotBlank() }
+                                    ?.let { status.append("\n$it") }
+                                startActivity(intent)
+                            }
                         }.onFailure { status.text = it.message ?: "Transfer preparation failed." }
                     }
                 }

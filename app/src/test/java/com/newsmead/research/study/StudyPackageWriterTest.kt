@@ -106,6 +106,26 @@ class StudyPackageWriterTest {
         assertTrue(StudyPackageWriter.recover(root).isEmpty())
     }
 
+    @Test fun recoveryWithoutOneCompleteValidRowKeepsOriginalsWithoutPublishingAPackage() {
+        val cases = listOf(
+            "empty_plain" to ("jsonl.partial" to byteArrayOf()),
+            "truncated_json" to ("jsonl.partial" to "{\"schema_version\":".toByteArray()),
+            "invalid_row" to ("jsonl.partial" to "{}\n".toByteArray()),
+            "empty_gzip" to ("jsonl.gz.partial" to byteArrayOf()),
+            "truncated_gzip_header" to ("jsonl.gz.partial" to byteArrayOf(0x1f, 0x8b.toByte())),
+        )
+        for ((label, input) in cases) {
+            val storage = root()
+            val directory = File(storage, label).apply { mkdirs() }
+            val original = File(directory, "chunk_00001.${input.first}").apply { writeBytes(input.second) }
+            assertTrue(label, StudyPackageWriter.recover(storage).isEmpty())
+            assertFalse(label, File(directory, "manifest.json").exists())
+            assertFalse(label, File(directory, "recovered_00001.jsonl").exists())
+            assertArrayEquals(label, input.second, original.readBytes())
+            assertTrue(label, StudyPackageWriter.recover(storage).isEmpty())
+        }
+    }
+
     @Test fun rejectedPayloadAndClockDoNotLeaveSequenceGaps() {
         val callerThread = Thread.currentThread()
         var throwClock = false

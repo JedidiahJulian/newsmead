@@ -155,16 +155,18 @@ class StudyCollectionDeviceTest {
             lateinit var epoch: String
             lateinit var body: TextView
             var capture = 0.0
+            var firstTextSizePx = 0.0
+            var secondTextSizePx = 0.0
             scenario.onActivity { activity ->
                 start(); visit = open(); epoch = visit.providerStarted("synthetic-calibration")
                 visit.metadata(epoch, mapOf("model_sha256" to "synthetic-model"))
                 body = TextView(activity).apply { text = BODY; textSize = 20f }; activity.setContentView(body)
             }
             instrumentation.waitForIdleSync()
-            main { visit.presentation(body); capture = StudyVisit.now() }
+            main { firstTextSizePx = body.textSize.toDouble(); visit.presentation(body); capture = StudyVisit.now() }
             // Separate main-loop turns keep the earlier capture strictly before the next boundary.
             main {
-                body.textSize = 25f; visit.presentation(body)
+                body.textSize = 25f; secondTextSizePx = body.textSize.toDouble(); visit.presentation(body)
                 assertFalse(StudyCaptureContext.presentationBoundary("invalid_sample"))
                 assertFalse(StudyCaptureContext.presentationBoundary("non_monotonic_capture"))
                 if (StudyCaptureContext.presentationBoundary("invalid_sample")) visit.boundary("invalid_sample")
@@ -175,8 +177,10 @@ class StudyCollectionDeviceTest {
             val rows = closedRows(visit, true)
             val observations = rows.filter { it.kind() == "gaze_observation" && it.payload().getString("reason") == "coordinate" }
             val first = observations[0].payload(); val second = observations[1].payload()
-            assertEquals(20.0 * context.resources.displayMetrics.scaledDensity,
+            assertEquals(firstTextSizePx,
                 first.getJSONObject("presentation_settings").getDouble("text_size_px"), 0.1)
+            assertEquals(secondTextSizePx,
+                second.getJSONObject("presentation_settings").getDouble("text_size_px"), 0.1)
             assertNotEquals(first.getString("context_epoch_id"), second.getString("context_epoch_id"))
             assertNotEquals(first.getJSONObject("coordinate_context").getString("presentation_id"), second.getJSONObject("coordinate_context").getString("presentation_id"))
             assertFalse(rows.any { it.kind() == "boundary" && it.payload().optString("reason") == "invalid_sample" })
@@ -249,6 +253,51 @@ class StudyCollectionDeviceTest {
         assertEquals(prefix, retained.readText())
         verifyManifest(directory)
         exportReceipt("valid_prefix_recovery")
+    }
+
+    @Test fun transferAllKeepsIntactPackagesWhenAnInterruptedRecordingHasNoRecoverableRows() {
+        lateinit var visit: StudyVisit
+        main { start(); visit = open(); StudyCollection.stop() }
+        closedRows(visit, true)
+        val root = StudyCollection.root(context)
+        val empty = File(root, "synthetic_empty_${UUID.randomUUID()}").apply { mkdirs() }
+        val original = File(empty, "chunk_00001.jsonl.gz.partial")
+            .apply { writeBytes(byteArrayOf(0x1f, 0x8b.toByte())) }
+        val originalBytes = original.readBytes()
+        val legacy = File(root, "synthetic_old_empty_${UUID.randomUUID()}").apply { mkdirs() }
+        val oldManifest = File(legacy, "manifest.json")
+        val oldBytes = JSONObject().put("schema_version", StudyPackageWriter.SCHEMA)
+            .put("package_id", legacy.name).put("identity", JSONObject())
+            .put("status", "recovered_incomplete").put("content_complete", false)
+            .put("record_count", 0).put("chunks", JSONArray()).toString().toByteArray(Charsets.UTF_8)
+        oldManifest.writeBytes(oldBytes)
+        val entries = exportReceipt("empty_prefix_with_intact_recording")
+        val inventory = JSONObject(String(requireNotNull(entries["study_export_manifest.json"]), Charsets.UTF_8))
+        val packages = inventory.getJSONArray("packages")
+        assertEquals(1, packages.length())
+        assertEquals(visit.packageId, packages.getJSONObject(0).getString("package_id"))
+        val warnings = inventory.getJSONArray("selection_warnings").toString()
+        assertTrue(warnings.contains(empty.name)); assertTrue(warnings.contains(legacy.name))
+        assertFalse(entries.keys.any { it.startsWith("${empty.name}/") || it.startsWith("${legacy.name}/") })
+        assertFalse(File(empty, "manifest.json").exists())
+        assertArrayEquals(originalBytes, original.readBytes())
+        assertArrayEquals(oldBytes, oldManifest.readBytes())
+    }
+
+    @Test fun transferWithOnlyAnUnrecoverableStartReportsWhyAndRetainsIt() {
+        val directory = File(StudyCollection.root(context), "synthetic_empty_only_${UUID.randomUUID()}")
+            .apply { mkdirs() }
+        val original = File(directory, "chunk_00001.jsonl.partial").apply { writeText("{\"truncated\":") }
+        val bytes = original.readBytes()
+        try {
+            StudyCollection.export(context)
+            fail("An unusable-only export must explain why there is no transferable package")
+        } catch (expected: IllegalStateException) {
+            assertTrue(expected.message.orEmpty().contains("Original files were retained"))
+            assertTrue(expected.message.orEmpty().contains(directory.name))
+        }
+        assertArrayEquals(bytes, original.readBytes())
+        assertFalse(File(directory, "manifest.json").exists())
     }
 
     private fun start() = StudyCollection.start(context, "synthetic-device", "transport-only", "reading")

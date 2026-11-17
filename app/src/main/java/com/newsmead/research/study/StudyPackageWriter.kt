@@ -270,6 +270,9 @@ class StudyPackageWriter(
                         .put("record_count", rows).put("first_seq", first).put("last_seq", last))
                     count += rows
                 }
+                // A crash before the first valid complete row has no recoverable identity.
+                // Keep its original bytes, but do not publish an unusable package manifest.
+                if (count == 0L) continue
                 publish(directory, JSONObject().put("schema_version", SCHEMA).put("package_id", directory.name)
                     .put("identity", identity).put("status", "recovered_incomplete").put("content_complete", false)
                     .put("unknown_tail", true).put("end_elapsed_ms", JSONObject.NULL).put("chunks", chunks)

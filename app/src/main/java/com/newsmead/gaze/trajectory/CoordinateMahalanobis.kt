@@ -233,6 +233,18 @@ object CoordinateMahalanobis {
         return FactorResult(Status.READY, cov, ridge, condition, scale, LowerFactor(l00, l10, l11))
     }
 
+    /** Eligibility and trapezoid coverage only; does not fit or certify a reference. */
+    fun referenceStats(
+        context: Context, observations: List<Observation>, startMs: Double, endMs: Double,
+        config: Config = Config(), boundaries: List<Boundary> = emptyList()
+    ): Stats {
+        bounds(startMs, endMs)
+        val validator = Validator(context, config)
+        val statuses = observations.map { validator.accept(it) }
+        val (weights, intervals) = weights(observations, statuses, startMs, endMs, config, boundaries)
+        return stats(statuses, weights, intervals)
+    }
+
     fun fitReference(
         referenceId: String, context: Context, observations: List<Observation>,
         startMs: Double, endMs: Double, config: Config = Config(),

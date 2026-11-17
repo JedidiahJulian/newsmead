@@ -32,8 +32,29 @@ Press **Start**, dismiss the instructions and read naturally, scrolling by hand.
 The existing R/D/F pipeline/collector receive the selected smoothed stream;
 original provider observations are saved before mapping/exclusions, including
 calibrated raw screen x/y, capture/delivery time and unavailable observations.
-The footer shows valid R/D/F windows and covered time without resizing the
-reading viewport. Press **Finish** to freeze R/D/F and complete the raw reference.
+The footer shows **R/D/F window coverage** and **usable gaze time** separately,
+without resizing the reading viewport. The capture finishes automatically once
+both existing 60-second coverage minimums, the existing 30 retained R/D/F windows,
+and the existing three weighted coordinate points have been reached. Usable gaze
+time uses the coordinate instrument's raw-stream eligibility, capture-time
+bounds, context/provider continuity, boundaries, 250 ms maximum gap and 500 ms
+maximum delivery age. Elapsed time and R/D/F window coverage cannot substitute
+for it. Displayed times are floored to tenths, so a value below 60 cannot round up
+to an apparently completed target.
+
+**Stop** remains available throughout capture. It retains the early recording
+without marking it as a completed reference; use Start for a new attempt.
+Automatic completion freezes R/D/F and completes the raw reference. Check the
+saved result before opening an article. The final coordinate minimum and known
+writer-loss state are checked again after camera shutdown. Data minimums alone
+do not establish successful coordinate fitting or tracking accuracy.
+
+The live coordinate preview reuses the existing Kotlin coordinate validator and
+interval weighting. It buffers at most 20,000 observations and 4,096 boundaries;
+missing/changing reference context, rejected recording rows, known writer loss,
+or resource/preview failures prevent automatic completion. Preview limits never
+drop recording rows. The strict offline fit and its covariance, loss and source
+checks remain authoritative. Neither fitting gate nor timing default is relaxed.
 
 These outcomes remain independent:
 
@@ -91,6 +112,21 @@ Coordinate analysis retains its independent 500 ms default. Samples that R/D/F
 can receive may therefore be unavailable to the coordinate instrument; missing
 scores remain null, while available zero remains zero. Legacy article acquisition
 keeps its default when no active matching shared link exists.
+
+For new captures, `study-acquisition-v1:<sha256>` identifies provider settings
+using canonical metadata. Known per-session thread identities, membership
+diagnostics, counters, timings and close telemetry are excluded only inside the
+`performance_hints` and `mnn_execution` snapshots. Requested/applied activation
+state, status, thread counts, backend/runtime, model, preprocessing, camera/FPS,
+smoothing, output age and unknown controls remain compatibility-sensitive. Full
+provider metadata is still recorded unchanged. Existing ZIPs and their acquisition
+identities are never upgraded or overridden to obtain scores.
+
+The acquisition fix does not resolve a changed reading viewport. In particular,
+hiding article controls can enlarge the reading area relative to the baseline's
+visible footer. A reference that fits successfully can still be incompatible with
+that later layout. Such coordinate scores remain unavailable under this contract;
+successful R/D/F fitting and package integrity do not waive this check.
 
 `article_reading_surface_v1` explicitly hashes the physical scroll-container
 viewport, column width/padding, font resource/style, font size/scaling/spacing and

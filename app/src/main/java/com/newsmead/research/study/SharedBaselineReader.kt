@@ -71,8 +71,13 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
         override fun run() {
             if (!running) return
             collectTick()
-            progress.text = "R/D/F: $validVectors/${config.minimumRetainedWindows}\nCovered: ${collector.coveredDurationMs / 1000}/${config.minimumBaselineDurationMs / 1000}s\nRaw ref: recording"
-            binding.btnArticleReadingAids.contentDescription = "Finish baseline. $validVectors of $vectors valid R/D/F windows; ${collector.coveredDurationMs / 1000} seconds covered."
+            val state = currentProgress()
+            progress.text = state.footer
+            binding.btnArticleReadingAids.contentDescription = "Stop baseline early. ${state.detail} Recording finishes automatically when the minimum data is collected."
+            if (state.minimumsMet) {
+                finish(true, "shared_baseline_finished")
+                return
+            }
             handler.postDelayed(this, config.updateIntervalMs)
         }
     }
@@ -114,7 +119,7 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
         }
         binding.btnArticleReadingAids.text = "Start"
         binding.btnArticleReadingAids.contentDescription = "Start shared reading baseline"
-        binding.btnArticleReadingAids.setOnClickListener { if (running) finish(true, "shared_baseline_finished") else instructions() }
+        binding.btnArticleReadingAids.setOnClickListener { if (running) finish(false, "shared_baseline_stopped_early") else instructions() }
         binding.btnRunGazeTest.setOnClickListener { instructions() }
         binding.root.viewTreeObserver.addOnPreDrawListener(preDraw)
         binding.root.doOnPreDraw {
@@ -128,7 +133,7 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
         val run = StudyCollection.run
         val ready = run != null && run.phase == "reading"
         dialog = AlertDialog.Builder(context).setTitle("Before baseline reading")
-            .setMessage(if (ready) "For the reader:\nPlease read this passage as you normally would and scroll when needed. You may ask for a break or stop at any time.\n\nFor the researcher:\nParticipant code: ${run!!.participant}\nUse this person's saved calibration. This is a separate setup reading with visual aids off. Wait for at least ${config.minimumBaselineDurationMs / 1000} seconds covered and ${config.minimumRetainedWindows} valid windows, then tap Finish and check the result.\n\nR/D/F is the behaviour reference. The coordinate reference is recorded now and fitted after transfer; recording it does not mean that fit is ready.\n\n$lastResult"
+            .setMessage(if (ready) "For the reader:\nPlease read this passage as you normally would and scroll when needed. It will finish automatically when enough usable data has been collected. You may ask for a break or tap Stop at any time.\n\nFor the researcher:\nParticipant code: ${run!!.participant}\nUse this person's saved calibration. This is a separate setup reading with visual aids off. The footer shows R/D/F window coverage and usable gaze time separately. Both must reach their minimums, with at least ${config.minimumRetainedWindows} valid R/D/F windows, before automatic completion. Elapsed time alone is not enough.\n\nCheck the saved result before opening an article. Reaching the data minimums does not confirm a successful coordinate fit; that is checked after transfer. Stopping early saves the recording but does not complete the baseline.\n\n$lastResult"
                 else "Start a Reading run in Study recording first. Enter the participant code and condition, choose Reading, and tap Start run. Then return here and use Start.")
             .setNegativeButton(android.R.string.cancel, null)
             .apply { if (ready) setPositiveButton("Start") { _, _ -> startRequested = true } }
@@ -202,7 +207,8 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
         }
         camera.onFailure = { reason -> if (provider === camera) { message(reason); finish(false, "provider_failed") } }
         camera.setOnGaze { _, _ -> }
-        binding.btnArticleReadingAids.text = "Finish"
+        binding.btnArticleReadingAids.text = "Stop"
+        binding.btnArticleReadingAids.contentDescription = "Stop baseline early"
         binding.btnRunGazeTest.isEnabled = false
         fragment.activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         handler.post(tick)
@@ -220,6 +226,10 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
         }
     }
 
+    private fun currentProgress(atMs: Double = StudyVisit.now()) = SharedBaselineProgress(
+        collector.coveredDurationMs, config.minimumBaselineDurationMs,
+        collector.baselineVectors.size, config.minimumRetainedWindows, visit?.coordinateCoverage(atMs))
+
     fun interrupt(reason: String) {
         dialog?.dismiss()
         if (running) finish(false, reason)
@@ -229,6 +239,8 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
         if (!running || stopping) return
         collectTick()
         running = false; stopping = true
+        binding.btnArticleReadingAids.isEnabled = false
+        progress.text = "Saving baseline\nPlease wait"
         handler.removeCallbacks(tick)
         val recording = visit ?: return
         recording.beginResult()
@@ -240,34 +252,56 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
         val complete = {
             var rdfReady = false
             var coordinateRecorded = false
+            var coordinateMinimumMet = false
+            var coordinateCoverage: StudyCoordinateCoverage.Snapshot? = null
             try {
-                val valid = requestedCompletion && recording.acceptsResults && ParticipantReadingBaseline.isCurrentSession(attemptId) &&
+                val end = recording.endMs!!
+                coordinateCoverage = recording.coordinateCoverage(end)
+                coordinateMinimumMet = coordinateCoverage?.minimumDataReady == true
+                val valid = requestedCompletion && coordinateMinimumMet && recording.acceptsResults && ParticipantReadingBaseline.isCurrentSession(attemptId) &&
                     MgazeNetCalibrationStore(context).fingerprint() == fingerprint && StudyCollection.run?.id == recording.run.id
                 val fit = if (valid) collector.freeze() else null
-                if (fit != null) recording.record("rdf_baseline_fit", StudyJson.obj("fit" to fit,
+                val fitRecorded = fit != null && recording.record("rdf_baseline_fit", StudyJson.obj("fit" to fit,
                     "baseline_attempt_id" to attemptId, "baseline_participant_code" to person, "config" to config), StudyVisit.now())
                 val profile = fit?.profile
-                rdfReady = profile != null
-                coordinateRecorded = valid
-                if (valid && profile != null) ParticipantReadingBaseline.freeze(
-                    ParticipantReadingBaseline.Entry(person, attemptId, fingerprint, profile))
-                else if (valid) ParticipantReadingBaseline.markInvalid(attemptId, fingerprint)
-                else ParticipantReadingBaseline.abandonCollecting(attemptId, fingerprint)
-                val end = recording.endMs!!
-                recording.record("shared_baseline_result", StudyJson.obj("baseline_attempt_id" to attemptId,
-                    "completed" to valid, "coordinate_reference_status" to if (valid) SharedReadingBaseline.PENDING else "INTERRUPTED",
+                val completed = valid && fitRecorded && recording.coordinateCoverage(end)?.minimumDataReady == true
+                val resultRecorded = recording.record("shared_baseline_result", StudyJson.obj("baseline_attempt_id" to attemptId,
+                    "completed" to completed, "coordinate_reference_status" to if (completed) SharedReadingBaseline.PENDING else "INTERRUPTED",
                     "rdf_status" to (fit?.status?.name ?: "INTERRUPTED"), "start_ms" to recording.startMs, "end_ms" to end), StudyVisit.now())
-                if (valid) SharedReadingBaseline.recorded(SharedReadingBaseline.Entry(recording.packageId, recording.id,
+                // Result writes can themselves be rejected; publish only after their acceptance
+                // and a fresh loss/coverage check, never from the earlier preview alone.
+                coordinateCoverage = recording.coordinateCoverage(end)
+                coordinateMinimumMet = coordinateCoverage?.minimumDataReady == true
+                coordinateRecorded = completed && resultRecorded && coordinateMinimumMet && recording.acceptsResults
+                rdfReady = coordinateRecorded && profile != null
+                if (coordinateRecorded && profile != null) ParticipantReadingBaseline.freeze(
+                    ParticipantReadingBaseline.Entry(person, attemptId, fingerprint, profile))
+                else if (coordinateRecorded) ParticipantReadingBaseline.markInvalid(attemptId, fingerprint)
+                else ParticipantReadingBaseline.abandonCollecting(attemptId, fingerprint)
+                if (coordinateRecorded) SharedReadingBaseline.recorded(SharedReadingBaseline.Entry(recording.packageId, recording.id,
                     attemptId, person, recording.run.installation, fingerprint, recording.run.clockDomain, recording.startMs, end))
-                lastResult = if (valid) {
-                    "Baseline recording saved. Behaviour reference (R/D/F): ${fit!!.status}. Coordinate reference: recorded, to be checked after transfer. " +
-                        if (rdfReady) "Return Home and open the assigned article when ready." else "R/D/F is not ready. Check the setup before another baseline attempt."
-                } else "Baseline interrupted. Check the setup and use Start for a new attempt."
+                lastResult = if (coordinateRecorded) {
+                    "Baseline recording saved. Behaviour reference (R/D/F): ${if (rdfReady) "ready" else "not ready"}. " +
+                        (coordinateCoverage?.takeIf { it.issue == null }?.let {
+                            "Usable gaze time: ${SharedBaselineProgress.seconds(it.coveredMs)} of ${SharedBaselineProgress.seconds(it.requiredMs)} seconds. "
+                        } ?: "Usable gaze time could not be confirmed. ") +
+                        "The coordinate fit still needs checking after transfer. " +
+                        if (rdfReady && coordinateMinimumMet) "Return Home and open the assigned article when ready."
+                        else "Collect a new baseline before opening the assigned article."
+                } else if (reason == "shared_baseline_stopped_early")
+                    "Baseline stopped early. The recording was retained, but no completed reference was activated. Use Start for a new attempt."
+                else "Baseline interrupted. Check the setup and use Start for a new attempt."
             } finally {
                 recording.endResult(); provider = null; visit = null; stopping = false
                 if (!closed) {
                     binding.btnArticleReadingAids.text = "Start"
-                    progress.text = "R/D/F: ${if (rdfReady) "ready" else "not ready"}\nRaw ref: ${if (coordinateRecorded) "fit pending" else "interrupted"}"
+                    binding.btnArticleReadingAids.contentDescription = "Start shared reading baseline"
+                    binding.btnArticleReadingAids.isEnabled = true
+                    progress.text = "R/D/F: ${if (rdfReady) "ready" else "not ready"}\n" +
+                        (coordinateCoverage?.takeIf { coordinateRecorded && it.issue == null }?.let {
+                            "Gaze: ${SharedBaselineProgress.seconds(it.coveredMs)}/${SharedBaselineProgress.seconds(it.requiredMs)} s\n"
+                        } ?: "Gaze: ${if (coordinateRecorded) "check setup" else "interrupted"}\n") +
+                        if (coordinateRecorded && rdfReady && coordinateMinimumMet) "Fit pending" else "Repeat baseline"
                     binding.btnRunGazeTest.isEnabled = true
                     message(lastResult)
                 }
