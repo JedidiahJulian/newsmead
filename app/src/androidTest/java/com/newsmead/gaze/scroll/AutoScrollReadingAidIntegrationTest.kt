@@ -146,7 +146,57 @@ class AutoScrollReadingAidIntegrationTest {
 }
 
 /** All mutable state and runtime calls belong to main; only bounded waits run off main. */
-private class AutoScrollAidFixture(preferences: ReaderAidPreferences) : Closeable {
+class ManualScrollReadingAidIntegrationTest {
+    @Test fun guidesRetargetDuringManualDragAndFollowingFling() {
+        AutoScrollAidFixture(ReaderAidPreferences(autoScroll = false, wordDefinition = false,
+            focusRegion = false), manualMode = true).use { f ->
+            f.beginManualGesture()
+            f.manualFollow(850, f.a)
+            f.onMain { f.assertManualRendered(ReadingAidType.CURRENT_LINE, f.a) }
+            f.manualFollow(850, f.b)
+            f.onMain { f.assertManualRendered(ReadingAidType.CURRENT_LINE, f.b) }
+            f.captureManualUi("retargeted-line")
+            f.onMain {
+                f.runtime.updatePreferences(f.runtime.preferences.copy(guideStyle = ReadingGuideStyle.SENTENCE))
+            }
+            f.manualFollow(850, f.c)
+            f.onMain { f.assertManualRendered(ReadingAidType.CURRENT_SENTENCE, f.c) }
+            f.endManualGesture()
+            f.manualFollow(850, f.a)
+            f.onMain {
+                f.assertManualRendered(ReadingAidType.CURRENT_SENTENCE, f.a)
+                f.assertOriginalText()
+                assertFalse("Manual navigation must not enable automatic scrolling", f.controller.enabled)
+            }
+        }
+    }
+
+    @Test fun manualWordPursuitRetainsEvidenceButMovingGeometryClearsLookupOffer() {
+        AutoScrollAidFixture(ReaderAidPreferences(autoScroll = false, lineGuide = false,
+            focusRegion = false), manualMode = true).use { f ->
+            f.beginManualGesture()
+            f.manualFollow(2300, f.a)
+            f.awaitDraw()
+            f.onMain {
+                f.assertManualRendered(ReadingAidType.WORD_DEFINITION, f.a)
+                assertTrue(f.prefixes.any { it.wordStartUtf16 == f.a.start &&
+                    it.durationMs >= f.runtime.config.definitionMinObservedMs })
+                // Unlike automatic navigation, a finger drag does not stop when an
+                // offer appears. Keep the existing click-safety gate: moving its
+                // source clears the offer, while the word evidence remains valid.
+                assertTrue(f.offerEvents.contains("cleared:article_layout_changed"))
+                assertFalse(f.popup.isOfferShowing)
+                assertFalse(f.popup.isShowing)
+                assertEquals(0, f.lookupRequests)
+                f.assertStableTarget(f.a)
+                f.assertOriginalText()
+            }
+        }
+    }
+}
+
+private class AutoScrollAidFixture(preferences: ReaderAidPreferences,
+    private val manualMode: Boolean = false) : Closeable {
     data class Target(val line: Int, val start: Int, val end: Int, val x: Double, val y: Double)
     data class Frame(val atMs: Double, val geometry: ScanpathGeometry)
     data class Render(val action: ReadingAidAction, val drawn: Boolean, val moving: Boolean, val reason: String)
@@ -248,6 +298,7 @@ private class AutoScrollAidFixture(preferences: ReaderAidPreferences) : Closeabl
                     })
                 session = ArticleScanpathSession(binding.tvArticleText, config = runtime.scanpathConfig,
                     coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED, motionCompensatedAids = true,
+                    manualScrollAids = manualMode,
                     onGeometry = { generation, geometry ->
                         displayGeometry = geometry
                         runtime.geometry(generation, geometry)
@@ -279,7 +330,7 @@ private class AutoScrollAidFixture(preferences: ReaderAidPreferences) : Closeabl
             awaitDraw()
             onMain { binding.nsvArticleText.scrollTo(0, binding.tvArticleText.top) }
             awaitDraw()
-            onMain { controller.setEnabled(true) }
+            onMain { controller.setEnabled(!manualMode) }
             awaitDraw()
             delay(350)
             onMain {
@@ -359,6 +410,42 @@ private class AutoScrollAidFixture(preferences: ReaderAidPreferences) : Closeabl
 
     fun follow(durationMs: Long, target: Target) = phase(durationMs) { emit(target, false) }
     fun missing(durationMs: Long) = phase(durationMs) { emit(null, true) }
+
+    fun beginManualGesture() = onMain { session.manualScrollGesture(true) }
+    fun endManualGesture() = onMain { session.manualScrollGesture(false) }
+    fun manualFollow(durationMs: Long, target: Target) = phase(durationMs) {
+        // Explicitly supplied reader gesture and incremental translations; no camera,
+        // provider, automatic controller or framework input injector drives this fixture.
+        binding.nsvArticleText.scrollBy(0, 2)
+        session.checkGeometry()
+        rememberFrame()
+        emit(target, false)
+    }
+
+    fun assertManualRendered(type: ReadingAidType, target: Target) {
+        assertTrue("Manual fixture did not move the attached text", scrollPositions.distinct().size >= 3)
+        assertFalse(controller.isMoving)
+        assertTrue("No fresh eligible target during manual motion; ${focusDiagnostics()}",
+            samples.lastOrNull { it.eligible }?.line == target.line)
+        assertTrue("$type did not retarget to line ${target.line}; ${focusDiagnostics()}",
+            runtime.activeActions().any { it.aidType == type && it.anchor.line == target.line })
+        assertTrue("$type has no draw at its new target", renders.any {
+            it.action.aidType == type && it.action.anchor.line == target.line && it.drawn })
+    }
+
+    fun captureManualUi(label: String) {
+        check(manualMode)
+        val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+        val target = java.io.File(instrumentation.targetContext.cacheDir,
+            "manual-scroll-aid-ui-$label-${java.util.UUID.randomUUID()}.png")
+        val bitmap = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
+        try {
+            target.outputStream().use { assertTrue(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
+        } finally { bitmap.recycle() }
+        instrumentation.sendStatus(2, android.os.Bundle().apply {
+            putString("manual_aid_ui_png", target.absolutePath)
+        })
+    }
 
     private fun phase(durationMs: Long, emit: () -> Unit) {
         val finished = CountDownLatch(1)

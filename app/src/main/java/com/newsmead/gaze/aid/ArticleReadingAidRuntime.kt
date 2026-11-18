@@ -379,6 +379,10 @@ class ArticleReadingAidRuntime(
         checkMain()
         if (!closed) trace.record("auto_scroll_$event", atMs, detail)
     }
+    fun manualScrollEvent(event: String, atMs: Double, detail: JSONObject) {
+        checkMain()
+        if (!closed) trace.record("manual_scroll_$event", atMs, detail)
+    }
     private fun renderedFontDp(): Double =
         body.textSize.toDouble() / body.resources.displayMetrics.density.toDouble()
 

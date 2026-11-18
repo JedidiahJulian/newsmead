@@ -1517,7 +1517,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         val studyPolicyObserver: ((String, Double, Map<String, Any?>) -> Unit)? = recording?.let { it::auditEvent }
         val aids = readingAidOverlay?.let { ArticleReadingAidRuntime(binding.tvArticleText,
             binding.readingAidWordDock, it, config = ReadingAidPolicyConfig.evidenceAlignedPrototype()
-                .copy(conditionId = "SMOOTHED_ARTICLE_CONTENT_AIDS_V11"),
+                .copy(conditionId = "SMOOTHED_ARTICLE_CONTENT_AIDS_V12"),
             preferences = aidPreferences, definitionPopup = definitionPopup,
             coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED, blinkFilterEnabled = true,
             motionCompensatedAids = true,
@@ -1532,6 +1532,10 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 mahalanobisReadingSession?.setConsultation(active, at, reason)
             }) }
         readingAidRuntime = aids
+        aids?.manualScrollEvent("configuration", StudyVisit.now(), StudyJson.obj(
+            "version" to "live_manual_scroll_aids_v1", "enabled" to true,
+            "authorization" to "reader_touch_and_continuous_fling",
+            "stationary_rdf_motion_compensated" to false))
         articleAutoScroll?.let { auto -> aids?.autoScrollEvent("configuration",
             SystemClock.elapsedRealtimeNanos() / 1e6, auto.configuration().put("enabled", auto.enabled)
                 .put("paused_by_reader", auto.pausedByReader).put("is_moving", auto.isMoving)
@@ -1539,6 +1543,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         val liveScanpath = ArticleScanpathSession(binding.tvArticleText,
             coordinateStream = ScanpathCoordinateStream.ARTICLE_SMOOTHED,
             motionCompensatedAids = true,
+            manualScrollAids = true,
             config = aids?.scanpathConfig ?: com.newsmead.gaze.scanpath.ScanpathConfig(),
             onEvent = { generation, event ->
             recording?.record("scanpath_output", StudyJson.obj("producer" to "pattern", "generation" to generation, "output" to event), event.evidenceAvailableMs)
@@ -1802,8 +1807,21 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 footerScrollBehavior?.prepareForAutoScroll()
             })
         binding.nsvArticleText.onUserTouch = { event ->
-            if (event.actionMasked == MotionEvent.ACTION_DOWN)
-                articleAutoScroll?.pauseByReader("manual_touch")
+            when {
+                event.pointerCount > 1 || event.actionMasked == MotionEvent.ACTION_CANCEL -> {
+                    scanpathSession?.manualScrollGesture(false, cancelled = true)
+                    readingAidRuntime?.manualScrollEvent("gesture_cancelled", StudyVisit.now(), StudyJson.obj())
+                }
+                event.actionMasked == MotionEvent.ACTION_DOWN -> {
+                    articleAutoScroll?.pauseByReader("manual_touch")
+                    scanpathSession?.manualScrollGesture(true)
+                    readingAidRuntime?.manualScrollEvent("gesture_start", StudyVisit.now(), StudyJson.obj())
+                }
+                event.actionMasked == MotionEvent.ACTION_UP -> {
+                    scanpathSession?.manualScrollGesture(false)
+                    readingAidRuntime?.manualScrollEvent("gesture_end", StudyVisit.now(), StudyJson.obj())
+                }
+            }
         }
         binding.btnArticleAutoScrollPause.setOnClickListener {
             articleAutoScroll?.let { if (it.pausedByReader) it.resumeByReader() else it.pauseByReader() }

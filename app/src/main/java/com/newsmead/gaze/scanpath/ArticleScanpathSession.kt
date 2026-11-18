@@ -25,6 +25,8 @@ class ArticleScanpathSession(
     val coordinateStream: ScanpathCoordinateStream = ScanpathCoordinateStream.CALIBRATED_RAW,
     /** Live aid prototype only; frozen Pilot/Replay retain the default screen-frame adapter. */
     val motionCompensatedAids: Boolean = false,
+    /** Explicit live gesture route only; frozen Pilot/Replay keep their original boundaries. */
+    val manualScrollAids: Boolean = false,
 ) {
     var generation: Int = 0
         private set
@@ -42,6 +44,7 @@ class ArticleScanpathSession(
     private var geometryChangedMs = Double.POSITIVE_INFINITY
     private val geometryTimeline = ScanpathGeometryTimeline()
     private var controlledAutoScroll = false
+    private val manualScroll = ManualScrollAidGate(GEOMETRY_SETTLE_MS)
     private var hasLayoutSignature = false
     private var sigWidth = 0
     private var sigHeight = 0
@@ -71,6 +74,7 @@ class ArticleScanpathSession(
 
     init {
         require(!motionCompensatedAids || coordinateStream == ScanpathCoordinateStream.ARTICLE_SMOOTHED)
+        require(!manualScrollAids || motionCompensatedAids)
         textView.addTextChangedListener(textWatcher)
     }
 
@@ -94,6 +98,7 @@ class ArticleScanpathSession(
         bodySource = textView.text
         bodyDirty = false
         if (currentBody != body || textView.textLocale != locale) {
+            manualScroll.reset()
             onGeometry(generation, null)
             dispatchEngine { engine.boundary("text_changed", now) }
             generation++
@@ -110,6 +115,7 @@ class ArticleScanpathSession(
         }
         val current = geometryReader.read(textView)
         if (current == null) {
+            manualScroll.reset()
             onGeometry(generation, null)
             if (geometry != null) dispatchEngine { engine.boundary("layout_unavailable", now) }
             geometry = null
@@ -121,14 +127,21 @@ class ArticleScanpathSession(
         val sameLayout = !motionCompensatedAids || matchesLayoutSignature(textView)
         if (motionCompensatedAids) updateLayoutSignature(textView)
         if (current == geometry && sameLayout) {
+            if (manualScrollAids) manualScroll.observe(now, translated = false)
             if (motionCompensatedAids) snapshotId?.let { geometryTimeline.record(now, current.forEngine(it)) }
             return
         }
         val previous = geometry
-        val translation = motionCompensatedAids && controlledAutoScroll && sameLayout && previous != null &&
+        val compatibleTranslation = motionCompensatedAids && sameLayout && previous != null &&
             current.originX == previous.originX && current.lines == previous.lines &&
             current.lineHeightPx == previous.lineHeightPx && current.direction == previous.direction &&
             current.visible.left == previous.visible.left && current.visible.right == previous.visible.right
+        val manualTranslation = if (manualScrollAids && !controlledAutoScroll)
+            manualScroll.observe(now, translated = previous != null && current.originY != previous.originY,
+                compatible = compatibleTranslation && current.direction != ScanpathTextDirection.UNKNOWN)
+            else ManualScrollAidGate.Translation.UNCONTROLLED
+        val translation = compatibleTranslation && (controlledAutoScroll ||
+            manualTranslation == ManualScrollAidGate.Translation.CONTINUING)
         geometry = current
         if (translation && snapshotId != null) {
             val display = current.forEngine(snapshotId!!)
@@ -155,11 +168,13 @@ class ArticleScanpathSession(
         checkMainThread()
         if (closed || !active || !motionCompensatedAids) return
         if (moving) {
+            cancelManualScroll("auto_scroll_start")
             checkGeometry()
             controlledAutoScroll = true
         } else {
             // An external move/reflow must never be smuggled through the final self-scroll snapshot.
             if (reason in listOf("external_scroll", "reading_layout_changed")) {
+                manualScroll.reset()
                 controlledAutoScroll = false
                 onGeometry(generation, null)
                 dispatchEngine { engine.boundary("uncontrolled_scroll", elapsedMs()) }
@@ -171,6 +186,24 @@ class ArticleScanpathSession(
             checkGeometry()
             controlledAutoScroll = false
         }
+    }
+
+    /** Observe the live article's single-pointer gesture without consuming it or pausing aids. */
+    fun manualScrollGesture(active: Boolean, cancelled: Boolean = false) {
+        checkMainThread()
+        if (closed || !this.active || !manualScrollAids || controlledAutoScroll) return
+        if (cancelled) cancelManualScroll("manual_scroll_cancelled")
+        else manualScroll.gesture(active, elapsedMs())
+    }
+
+    private fun cancelManualScroll(reason: String, emitBoundary: Boolean = true) {
+        if (!manualScroll.reset()) return
+        onGeometry(generation, null)
+        if (emitBoundary) dispatchEngine { engine.boundary(reason, elapsedMs()) }
+        geometry = null
+        snapshotId = null
+        geometryTimeline.clear()
+        geometryChangedMs = Double.POSITIVE_INFINITY
     }
 
     fun record(observation: MgazeNetGazeProvider.Observation) {
@@ -247,6 +280,7 @@ class ArticleScanpathSession(
 
     fun boundary(reason: String) {
         checkMainThread()
+        cancelManualScroll(reason, emitBoundary = false)
         if (!closed && active) dispatchEngine { engine.boundary(reason, elapsedMs()) }
     }
 
@@ -254,6 +288,14 @@ class ArticleScanpathSession(
         checkMainThread()
         if (closed) return
         consultation.change(value, atMs)
+        // The queued consultation boundary supplies the capture floor even inside callbacks.
+        // Cancel provenance immediately, without recursively dispatching another boundary.
+        if (manualScroll.reset()) {
+            geometry = null
+            snapshotId = null
+            geometryTimeline.clear()
+            geometryChangedMs = Double.POSITIVE_INFINITY
+        }
         pendingConsultationBoundaries.addLast("definition_${if (value) "opened" else "closed"}:$reason" to atMs)
         if (engineDispatchDepth == 0) dispatchEngine { Unit }
     }
