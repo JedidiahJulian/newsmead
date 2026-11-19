@@ -4,6 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.OutputStream
+import java.io.OutputStreamWriter
 import java.io.ByteArrayOutputStream
 import java.security.DigestOutputStream
 import java.util.zip.GZIPOutputStream
@@ -62,10 +63,17 @@ class StudyPackageWriter(
         Thread({ drain() }, "study-package-writer").start()
     }
 
-    fun record(kind: String, payload: JSONObject, sourceMs: Double? = null): Boolean = synchronized(lock) {
+    fun record(kind: String, payload: JSONObject, sourceMs: Double? = null): Boolean =
+        recordInternal(kind, payload, sourceMs, copyPayload = true)
+
+    /** Caller transfers an already-validated, immutable JSONObject constructed solely for this record. */
+    internal fun recordOwned(kind: String, payload: JSONObject, sourceMs: Double? = null): Boolean =
+        recordInternal(kind, payload, sourceMs, copyPayload = false)
+
+    private fun recordInternal(kind: String, payload: JSONObject, sourceMs: Double?, copyPayload: Boolean): Boolean = synchronized(lock) {
         if (finishing || failure != null) { rejectedAfterFinish++; return false }
         // Invalid caller data or a failing clock must not consume an observation sequence.
-        val snapshot = copyJson(payload) as JSONObject
+        val snapshot = if (copyPayload) copyJson(payload) as JSONObject else payload
         val recordedMs = clock()
         val seq = nextSeq + 1
         val record = envelope(kind, snapshot, seq, recordedMs, sourceMs)
@@ -112,6 +120,13 @@ class StudyPackageWriter(
             put("recorded_elapsed_ms", finite(at)); put("source_elapsed_ms", finite(source)); put("payload", payload)
         }
 
+    private class ReusableUtf8Buffer : ByteArrayOutputStream(4096) {
+        override fun reset() {
+            super.reset()
+            if (buf.size > MAX_RETAINED_LINE_BYTES) buf = ByteArray(4096)
+        }
+    }
+
     private fun drain() {
         var ownsDirectory = false
         var output: OutputStream? = null
@@ -120,6 +135,8 @@ class StudyPackageWriter(
         var chunkRecords = 0L; var bytes = 0L; var firstSeq = 0L; var lastSeq = 0L
         var digest = MessageDigest.getInstance("SHA-256")
         var openedNs = System.nanoTime(); var flushNs = openedNs
+        val lineBuffer = ReusableUtf8Buffer()
+        val lineWriter = OutputStreamWriter(lineBuffer, Charsets.UTF_8)
         fun flush() { output?.flush(); flushedThrough = lastSeq; flushNs = System.nanoTime() }
         fun closeChunk() {
             if (output == null) return
@@ -133,8 +150,12 @@ class StudyPackageWriter(
                 })
         }
         fun write(record: JSONObject) {
-            val data = (record.toString() + "\n").toByteArray(Charsets.UTF_8)
-            if (output != null && (bytes + data.size > maxChunkBytes || System.nanoTime() - openedNs >= CHUNK_NS)) closeChunk()
+            lineBuffer.reset()
+            lineWriter.write(record.toString())
+            lineWriter.write(10)
+            lineWriter.flush()
+            val recordBytes = lineBuffer.size().toLong()
+            if (output != null && (bytes + recordBytes > maxChunkBytes || System.nanoTime() - openedNs >= CHUNK_NS)) closeChunk()
             if (output == null) {
                 partial = checkedChild(packageDirectory, ("chunk_%05d.jsonl" + if (compressChunks) ".gz.partial" else ".partial").format(java.util.Locale.US, chunks.length() + 1))
                 digest = MessageDigest.getInstance("SHA-256")
@@ -143,7 +164,7 @@ class StudyPackageWriter(
                 bytes = 0; chunkRecords = 0; openedNs = System.nanoTime()
                 firstSeq = record.getLong("seq")
             }
-            output!!.write(data); bytes += data.size; chunkRecords++; written++
+            lineBuffer.writeTo(output!!); bytes += recordBytes; chunkRecords++; written++
             lastSeq = record.getLong("seq")
         }
         try {
@@ -178,7 +199,11 @@ class StudyPackageWriter(
             try { if (ownsDirectory) checkedChild(packageDirectory, "failure.json").writeText(JSONObject().put("status", "failed")
                 .put("failure", failure).toString()) } catch (_: Exception) { }
             notifyState("failed")
-        } finally { done.countDown() }
+        } finally {
+            try { lineWriter.close() } catch (_: Exception) { }
+            lineBuffer.reset()
+            done.countDown()
+        }
     }
 
     private fun notifyState(state: String) { try { onState(state) } catch (_: Exception) { } }
@@ -187,7 +212,9 @@ class StudyPackageWriter(
         const val SCHEMA = "newsmead_study_v1"
         private const val FLUSH_NS = 1_000_000_000L
         private const val CHUNK_NS = 60_000_000_000L
+        private const val MAX_RETAINED_LINE_BYTES = 262_144
         private val IDENTITY_KEYS = listOf("study_id", "participant_id", "installation_id", "run_id", "session_id", "clock_domain_id")
+        internal fun copyJsonObject(source: JSONObject): JSONObject = copyJson(source) as JSONObject
         private fun finite(value: Double?): Any = value?.takeIf { it.isFinite() } ?: JSONObject.NULL
         private fun copyJson(value: Any?): Any = when (value) {
             null, JSONObject.NULL -> JSONObject.NULL

@@ -21,6 +21,7 @@
 #-renamesourcefileattribute SourceFile
 # JNI names are the pinned MNN ABI.
 -keep class com.taobao.android.mnn.MNNNetNative { *; }
+-keep class com.newsmead.gaze.mgazenet.MnnCpuPrecisionNative { *; }
 
 # StudyJson snapshots numerical gaze value objects by their declared field names.
 # Preserve that schema and its allowlisted class names in minified study builds.

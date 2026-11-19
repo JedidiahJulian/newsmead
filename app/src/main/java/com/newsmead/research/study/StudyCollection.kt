@@ -285,11 +285,44 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
     private var presentationId: String? = null
     private var calibration: String? = null
     private var currentBodyHash: String? = null
-    private var lastPresentationSignature: List<Any?>? = null
+    private val tmpVisibleRect = Rect()
+    private val tmpViewportRect = Rect()
+    private val tmpRootLocation = IntArray(2)
+    private var hasPresentationSignature = false
+    private var lastLayout: android.text.Layout? = null
+    private var lastTextSize = 0f
+    private var lastWidth = 0
+    private var lastTextScaleX = 0f
+    private var lastLetterSpacing = 0f
+    private var lastLineSpacingExtra = 0f
+    private var lastLineSpacingMultiplier = 0f
+    private var lastTypeface: android.graphics.Typeface? = null
+    private var lastTextColor = 0
+    private var lastTextLocale: java.util.Locale? = null
+    private var lastFontScale = 0f
+    private var lastVisL = 0
+    private var lastVisT = 0
+    private var lastVisR = 0
+    private var lastVisB = 0
+    private var lastVpL = 0
+    private var lastVpT = 0
+    private var lastVpR = 0
+    private var lastVpB = 0
+    private var lastExtraRef: JSONObject? = null
+    private var lastExtraStr: String? = null
     private var lastTextSource: CharSequence? = null
     private var aidSettings = JSONObject()
     private val providerMetadata = mutableMapOf<String, JSONObject>()
     private val acquisitionIds = mutableMapOf<String, String>()
+    private var ccEpoch: String? = null
+    private var ccPresentationId: String? = null
+    private var ccCalibration: String? = null
+    private var ccModelId: String? = null
+    private var ccAcquisitionId: String? = null
+    private var ccScreenWidth = 0
+    private var ccScreenHeight = 0
+    private var ccRotation = 0
+    private var ccJson: JSONObject? = null
     private data class Presentation(val id: String, val firstMs: Double, var lastMs: Double, var actionId: String,
         var target: String)
     private val presentations = mutableMapOf<String, Presentation>()
@@ -314,14 +347,21 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
             "device_model" to Build.MODEL, "android_sdk" to Build.VERSION.SDK_INT,
             "metadata" to metadata), started)
     }
-    fun record(kind: String, payload: JSONObject, atMs: Double? = null): Boolean {
+    fun record(kind: String, payload: JSONObject, atMs: Double? = null): Boolean =
+        recordInternal(kind, payload, atMs, owned = false)
+
+    internal fun recordOwned(kind: String, payload: JSONObject, atMs: Double? = null): Boolean =
+        recordInternal(kind, payload, atMs, owned = true)
+
+    private fun recordInternal(kind: String, payload: JSONObject, atMs: Double?, owned: Boolean): Boolean {
         if (sealed) {
             coordinateCoverageMonitor?.unavailable("recording_rejected_row")
             return false
         }
         return runCatching {
-            writer.record(kind, payload, atMs).also { accepted ->
-                if (!accepted) coordinateCoverageMonitor?.unavailable("recording_rejected_row")
+            val accepted = if (owned) writer.recordOwned(kind, payload, atMs) else writer.record(kind, payload, atMs)
+            accepted.also {
+                if (!it) coordinateCoverageMonitor?.unavailable("recording_rejected_row")
             }
         }.getOrElse {
             coordinateCoverageMonitor?.unavailable("recording_failure")
@@ -351,29 +391,63 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
         acquisitionIds[epoch] = StudyAcquisitionContext.id(json)
         record("provider_metadata", StudyJson.obj("provider_epoch_id" to epoch, "metadata" to json), now())
     }
-    fun presentation(body: TextView, extra: JSONObject = JSONObject(), readingViewport: View? = null) {
+    fun presentation(body: TextView, extra: JSONObject = EMPTY_EXTRA, readingViewport: View? = null) {
         if (logicalEnd != null) return
-        val visible = Rect(); body.getVisibleRectOnScreen(visible)
-        val viewport = Rect()
+        val visible = tmpVisibleRect; visible.setEmpty(); body.getVisibleRectOnScreen(visible, tmpRootLocation)
+        val viewport = tmpViewportRect; viewport.setEmpty()
         if (sharedSurface) {
             require(readingViewport != null) { "Shared baseline requires the actual article reading viewport" }
-            readingViewport.getVisibleRectOnScreen(viewport)
+            readingViewport.getVisibleRectOnScreen(viewport, tmpRootLocation)
         }
-        val signature = listOf(body.layout, body.textSize, body.width, body.textScaleX, body.letterSpacing,
-            body.lineSpacingExtra, body.lineSpacingMultiplier, body.typeface, body.currentTextColor,
-            body.textLocale, body.resources.configuration.fontScale, visible.left, visible.top, visible.right,
-            visible.bottom, viewport.left, viewport.top, viewport.right, viewport.bottom, extra.toString())
-        if (signature == lastPresentationSignature && body.text === lastTextSource) return
-        lastPresentationSignature = signature
-        val value = StudyJson.obj("text_size_px" to body.textSize, "column_width_px" to (body.layout?.width ?: body.width),
+        val layout = body.layout
+        val textSize = body.textSize
+        val width = body.width
+        val textScaleX = body.textScaleX
+        val letterSpacing = body.letterSpacing
+        val lineSpacingExtra = body.lineSpacingExtra
+        val lineSpacingMultiplier = body.lineSpacingMultiplier
+        val typeface = body.typeface
+        val textColor = body.currentTextColor
+        val textLocale = body.textLocale
+        val fontScale = body.resources.configuration.fontScale
+        val textSource = body.text
+        val extraUnchanged = hasPresentationSignature && (extra === lastExtraRef || (lastExtraStr == "{}" && extra.length() == 0))
+        val extraString = if (extraUnchanged) lastExtraStr!! else extra.toString()
+        if (hasPresentationSignature &&
+            textSource === lastTextSource &&
+            layout == lastLayout &&
+            textSize == lastTextSize &&
+            width == lastWidth &&
+            textScaleX == lastTextScaleX &&
+            letterSpacing == lastLetterSpacing &&
+            lineSpacingExtra == lastLineSpacingExtra &&
+            lineSpacingMultiplier == lastLineSpacingMultiplier &&
+            typeface == lastTypeface &&
+            textColor == lastTextColor &&
+            textLocale == lastTextLocale &&
+            fontScale == lastFontScale &&
+            visible.left == lastVisL && visible.top == lastVisT && visible.right == lastVisR && visible.bottom == lastVisB &&
+            viewport.left == lastVpL && viewport.top == lastVpT && viewport.right == lastVpR && viewport.bottom == lastVpB &&
+            (extraUnchanged || extraString == lastExtraStr)
+        ) return
+        hasPresentationSignature = true
+        lastLayout = layout; lastTextSize = textSize; lastWidth = width
+        lastTextScaleX = textScaleX; lastLetterSpacing = letterSpacing
+        lastLineSpacingExtra = lineSpacingExtra; lastLineSpacingMultiplier = lineSpacingMultiplier
+        lastTypeface = typeface; lastTextColor = textColor; lastTextLocale = textLocale; lastFontScale = fontScale
+        lastVisL = visible.left; lastVisT = visible.top; lastVisR = visible.right; lastVisB = visible.bottom
+        lastVpL = viewport.left; lastVpT = viewport.top; lastVpR = viewport.right; lastVpB = viewport.bottom
+        lastExtraRef = extra; lastExtraStr = extraString
+        val copiedExtra = StudyPackageWriter.copyJsonObject(extra)
+        val value = StudyJson.obj("text_size_px" to textSize, "column_width_px" to (layout?.width ?: width),
             "signature_version" to "physical_viewport_typography_v1",
             "viewport_rect_screen_px" to listOf(visible.left,visible.top,visible.right,visible.bottom),
-            "density" to body.resources.displayMetrics.density, "font_scale" to body.resources.configuration.fontScale,
-            "line_spacing_extra_px" to body.lineSpacingExtra, "line_spacing_multiplier" to body.lineSpacingMultiplier,
-            "text_scale_x" to body.textScaleX, "letter_spacing" to body.letterSpacing,
-            "typeface_style" to body.typeface.style, "typeface_descriptor" to body.typeface.toString(),
-            "language" to body.textLocale.toLanguageTag(),
-            "text_color" to body.currentTextColor, "settings" to extra, "aid_preferences" to aidSettings)
+            "density" to body.resources.displayMetrics.density, "font_scale" to fontScale,
+            "line_spacing_extra_px" to lineSpacingExtra, "line_spacing_multiplier" to lineSpacingMultiplier,
+            "text_scale_x" to textScaleX, "letter_spacing" to letterSpacing,
+            "typeface_style" to typeface.style, "typeface_descriptor" to typeface.toString(),
+            "language" to textLocale.toLanguageTag(),
+            "text_color" to textColor, "settings" to copiedExtra, "aid_preferences" to aidSettings)
         if (sharedSurface) {
             value.put("reading_viewport_screen_px", StudyJson.value(listOf(viewport.left, viewport.top, viewport.right, viewport.bottom)))
             value.put("body_padding_px", StudyJson.value(listOf(body.totalPaddingLeft, body.totalPaddingTop,
@@ -386,14 +460,14 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
         val hash = StudyJson.hash(value.toString())
         if (hash != presentationId) {
             presentation = value; presentationId = hash; boundary("presentation_changed")
-            record("configuration", StudyJson.obj("producer" to "presentation", "presentation_id" to hash, "settings" to value), now())
+            recordOwned("configuration", StudyJson.obj("producer" to "presentation", "presentation_id" to hash, "settings" to value), now())
         }
-        lastTextSource = body.text
-        val text = body.text.toString(); val textHash = StudyJson.hash(text)
+        lastTextSource = textSource
+        val text = textSource.toString(); val textHash = StudyJson.hash(text)
         if (textHash != currentBodyHash) {
             currentBodyHash = textHash; boundary("text_changed")
-            record("text_snapshot", StudyJson.obj("body_text" to text, "body_sha256" to textHash,
-                "language" to body.textLocale.toLanguageTag()), now())
+            recordOwned("text_snapshot", StudyJson.obj("body_text" to text, "body_sha256" to textHash,
+                "language" to textLocale.toLanguageTag()), now())
         }
     }
     fun boundary(reason: String, allowed: Boolean? = null, atMs: Double = now()) {
@@ -401,7 +475,7 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
         val effective = maxOf(atMs, now())
         val next = timeline.change(effective, allowed, presentationId, presentation)
         coordinateCoverageMonitor?.boundary(effective, reason)
-        record("boundary", StudyJson.obj("at_ms" to effective, "source_at_ms" to atMs,
+        recordOwned("boundary", StudyJson.obj("at_ms" to effective, "source_at_ms" to atMs,
             "time_basis" to "collector_observed_transition_not_earlier_than_native_event",
             "reason" to reason, "context_epoch_id" to next.epoch, "context_allowed" to next.allowed), effective)
     }
@@ -409,18 +483,44 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
         val changed = if (active) excluded.add(reason) else excluded.remove(reason)
         if (changed) boundary(reason + if (active) "_start" else "_end", excluded.isEmpty() && logicalEnd == null)
     }
+    private fun coordinateContextFor(
+        epoch: String,
+        presentationId: String,
+        calibration: String,
+        modelId: String,
+        acquisitionId: String?,
+        screenWidth: Int,
+        screenHeight: Int,
+        rotationDegrees: Int,
+    ): JSONObject {
+        val existing = ccJson
+        if (existing != null && ccEpoch == epoch && ccPresentationId == presentationId &&
+            ccCalibration == calibration && ccModelId == modelId && ccAcquisitionId == acquisitionId &&
+            ccScreenWidth == screenWidth && ccScreenHeight == screenHeight && ccRotation == rotationDegrees
+        ) return existing
+        return StudyJson.obj(
+            "participant_id" to run.participant, "installation_id" to run.installation, "calibration_id" to calibration,
+            "model_id" to modelId, "acquisition_id" to acquisitionId, "presentation_id" to presentationId,
+            "clock_domain_id" to run.clockDomain, "screen_width_px" to screenWidth, "screen_height_px" to screenHeight,
+            "rotation_degrees" to rotationDegrees, "coordinate_stream" to "calibrated_raw_v1",
+        ).also {
+            ccEpoch = epoch; ccPresentationId = presentationId; ccCalibration = calibration
+            ccModelId = modelId; ccAcquisitionId = acquisitionId; ccScreenWidth = screenWidth
+            ccScreenHeight = screenHeight; ccRotation = rotationDegrees; ccJson = it
+        }
+    }
     fun observation(epoch: String, o: MgazeNetGazeProvider.Observation, screenWidth: Int, screenHeight: Int, rotationDegrees: Int) {
         if (sealed) { if (o.reason == "stopped") lateReceipt(epoch, o); return }
         val at = o.captureMs?.takeIf { it.isFinite() } ?: o.outputMs
         val state = timeline.at(at)
         val meta = providerMetadata[epoch]
-        val coordinateContext = if (meta != null && state?.presentationId != null && calibration != null) StudyJson.obj(
-            "participant_id" to run.participant, "installation_id" to run.installation, "calibration_id" to calibration,
-            "model_id" to meta.optString("model_sha256", "unknown"),
-            "acquisition_id" to acquisitionIds[epoch], "presentation_id" to
-                (state.settings.optString("coordinate_presentation_id").takeIf { it.isNotBlank() } ?: state.presentationId),
-            "clock_domain_id" to run.clockDomain, "screen_width_px" to screenWidth, "screen_height_px" to screenHeight,
-            "rotation_degrees" to rotationDegrees, "coordinate_stream" to "calibrated_raw_v1") else null
+        val activeCalibration = calibration
+        val coordinateContext = if (meta != null && state?.presentationId != null && activeCalibration != null) {
+            val effectivePresentationId = state.settings.optString("coordinate_presentation_id").takeIf { it.isNotBlank() } ?: state.presentationId
+            coordinateContextFor(epoch, effectivePresentationId, activeCalibration,
+                meta.optString("model_sha256", "unknown"), acquisitionIds[epoch],
+                screenWidth, screenHeight, rotationDegrees)
+        } else null
         val payload = StudyJson.obj("provider_epoch_id" to epoch, "delivery_id" to o.deliveryId,
             "capture_ms" to o.captureMs, "delivery_ms" to o.outputMs, "delivery_elapsed_ns" to o.deliveryElapsedNs,
             "reason" to o.reason, "raw_x_px" to o.rawX, "raw_y_px" to o.rawY,
@@ -429,7 +529,7 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
             "left_eye_aspect" to o.leftEyeAspect, "right_eye_aspect" to o.rightEyeAspect,
             "coordinate_context" to coordinateContext, "context_epoch_id" to (state?.epoch ?: "context_unavailable"),
             "context_allowed" to (state?.allowed == true), "presentation_settings" to state?.settings)
-        record("gaze_observation", payload, at)
+        recordOwned("gaze_observation", payload, at)
         coordinateCoverageMonitor?.observation(payload)
         if (o.reason == "stopped") { pending.remove(epoch); if (logicalEnd != null && pending.isEmpty() && pendingResults == 0) seal() }
     }
@@ -440,12 +540,14 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
     fun runtimeEvent(kind: String, atMs: Double, detail: JSONObject) {
         record(if (kind == "support_revision") kind else "aid_runtime_$kind", detail, atMs)
         if (kind == "preferences" || kind == "started") {
-            val settings = if (kind == "preferences") detail else detail.optJSONObject("preferences") ?: JSONObject()
+            val settings = StudyPackageWriter.copyJsonObject(
+                if (kind == "preferences") detail else detail.optJSONObject("preferences") ?: JSONObject()
+            )
             aidSettings = settings
-            presentation = JSONObject(presentation.toString()).put("aid_preferences", settings)
+            presentation = StudyPackageWriter.copyJsonObject(presentation).put("aid_preferences", settings)
             presentationId = StudyJson.hash(presentation.toString())
-            lastPresentationSignature = null
-            record("configuration", StudyJson.obj("producer" to "presentation", "presentation_id" to presentationId,
+            hasPresentationSignature = false
+            recordOwned("configuration", StudyJson.obj("producer" to "presentation", "presentation_id" to presentationId,
                 "settings" to presentation), atMs)
             boundary("aid_preferences_changed", atMs = atMs)
         }
@@ -465,7 +567,7 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
         val previous = presentations[channel]
         val value = if (drawn) previous ?: Presentation(UUID.randomUUID().toString(),atMs,atMs,action.id,target)
             .also { presentations[channel] = it } else previous
-        record("aid_presentation", StudyJson.obj("presentation_id" to value?.id, "channel" to channel,
+        recordOwned("aid_presentation", StudyJson.obj("presentation_id" to value?.id, "channel" to channel,
             "action_id" to action.id, "drawn_proxy" to drawn, "reason" to reason,
             "first_draw_ms" to value?.firstMs, "last_draw_ms" to if (drawn) atMs else value?.lastMs,
             "verified_visibility" to false, "action" to action), atMs)
@@ -511,6 +613,7 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
     }
     companion object {
         const val CLOSE_TIMEOUT_MS = 3000L
+        private val EMPTY_EXTRA = JSONObject()
         fun now(): Double = SystemClock.elapsedRealtimeNanos() / 1e6
     }
 }

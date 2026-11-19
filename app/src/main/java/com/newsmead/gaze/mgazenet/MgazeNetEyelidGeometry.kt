@@ -8,7 +8,7 @@ object MgazeNetEyelidGeometry {
     data class Sample(val leftAspect: Double, val rightAspect: Double)
 
     fun from(x: DoubleArray, y: DoubleArray, width: Int, height: Int): Sample? {
-        if (width <= 0 || height <= 0 || x.size != 478 || y.size != 478) return null
+        if (width <= 0 || height <= 0 || x.size != y.size || (x.size != 468 && x.size != 478)) return null
         fun aspect(cornerA: Int, cornerB: Int, upper: Int, lower: Int): Double? {
             val indices = intArrayOf(cornerA, cornerB, upper, lower)
             if (indices.any { !x[it].isFinite() || !y[it].isFinite() }) return null

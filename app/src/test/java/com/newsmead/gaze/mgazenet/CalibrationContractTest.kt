@@ -6,7 +6,7 @@ import org.junit.Test
 
 class CalibrationContractTest {
     private fun identity() = CalibrationIdentity("a".repeat(64),1080,2340,0,
-        GazeCoordinateFrame(0,101,1080,2239),"640x480:270:GPU")
+        GazeCoordinateFrame(0,101,1080,2239),"640x480:270:CPU_compact")
     private fun rejected(action: () -> Unit) { try { action(); fail("Incompatible artifact accepted") } catch (_: Exception) {} }
     private fun posture(centerX: Double = .5) = MgazeNetPostureGate.Sample(
         centerX,.48,.4,.52,.5,.38,.55,1.0,
@@ -46,12 +46,21 @@ class CalibrationContractTest {
         assertEquals(864f,MgazeNetAccuracyProtocol.target(frame,8).x,.001f)
         assertEquals(1892.2f,MgazeNetAccuracyProtocol.target(frame,8).y,.001f)
     }
-    @Test fun twoThreadIdentityRejectsPreviousFourThreadCalibration() {
+    @Test fun twoThreadIdentityRejectsPreviousLocalizerAndPrecisionCalibrations() {
         val current = identity().canonical()
-        assertTrue(current.contains("MNN3.6.1_CPU2_normal"))
+        assertTrue(current.contains("CompactFace468_TFLite2.14_CPU2_BlazeFace.5_roi1.5_pres.5"))
+        assertTrue(current.contains("MNN3.6.1_CPU2_low"))
         assertTrue(current.contains("cue600_onsetsettle800"))
+        assertTrue(current.contains(CalibrationIdentity.LOCALIZER))
         assertEquals(identity(), CalibrationIdentity.parse(current))
-        rejected { CalibrationIdentity.parse(current.replace("MNN3.6.1_CPU2_normal", "MNN3.6.1_CPU4_normal")) }
+        for (legacyAcq in listOf("640x480:270:GPU", "640x480:270:CPU_initialization_fallback")) {
+            val id = identity().copy(acquisition = legacyAcq)
+            assertEquals(id, CalibrationIdentity.parse(id.canonical()))
+        }
+        rejected { CalibrationIdentity.parse(current.replace("CompactFace468_TFLite2.14_CPU2_BlazeFace.5_roi1.5_pres.5", "Tasks0.10.29_VIDEO_1face_.1_.1_.5_GPU_initCPU")) }
+        rejected { CalibrationIdentity.parse(current.replace(CalibrationIdentity.LOCALIZER, CalibrationIdentity.LEGACY_LOCALIZER)) }
+        rejected { CalibrationIdentity.parse(current.replace("MNN3.6.1_CPU2_low", "MNN3.6.1_CPU2_normal")) }
+        rejected { CalibrationIdentity.parse(current.replace("MNN3.6.1_CPU2_low", "MNN3.6.1_CPU4_normal")) }
         rejected { CalibrationIdentity.parse(current.replace("cue600_onsetsettle800", "cue1200_onsetsettle1500")) }
     }
     @Test fun bundleRejectsLegacyPartialCorruptAndWrongDevice() {

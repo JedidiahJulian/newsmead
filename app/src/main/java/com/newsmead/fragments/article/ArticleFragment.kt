@@ -103,6 +103,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
     private lateinit var adapter: ArticleSimplifiedAdapter
     private lateinit var savedLists: ArrayList<SavedList>
     private lateinit var textToSpeech: TextToSpeech
+    @Volatile private var ttsSpeaking = false
     private var isTranslated = false
     // Body currently shown; translate's revert restores it.
     private var displayedBody = ""
@@ -200,10 +201,20 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         get() = StudyConfig.SCANPATH_READING_AIDS && !StudyConfig.GAZE_TOUCH_VALIDATION
     private val scanpathCounts = mutableMapOf<String, Int>()
     private var lastPreDrawAidTickNs = 0L
+    private var cachedPresentationDiagnosticDot: Boolean? = null
+    private var cachedPresentationExtra: org.json.JSONObject = StudyJson.obj("diagnostic_dot" to false)
+    private fun currentPresentationExtra(): org.json.JSONObject {
+        val dot = StudyConfig.GAZE_DEBUG_VISUALS && !aidPreferences.hideGazeCursor
+        if (dot != cachedPresentationDiagnosticDot) {
+            cachedPresentationDiagnosticDot = dot
+            cachedPresentationExtra = StudyJson.obj("diagnostic_dot" to dot)
+        }
+        return cachedPresentationExtra
+    }
     private val scanpathGeometryListener = ViewTreeObserver.OnPreDrawListener {
         studyVisit?.let { visit ->
-            visit.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to (StudyConfig.GAZE_DEBUG_VISUALS && !aidPreferences.hideGazeCursor)), binding.nsvArticleText)
-            visit.exclude("tts", ::textToSpeech.isInitialized && textToSpeech.isSpeaking)
+            visit.presentation(binding.tvArticleText, currentPresentationExtra(), binding.nsvArticleText)
+            visit.exclude("tts", ttsSpeaking)
         }
         articleAutoScroll?.onPreDraw()
         scanpathSession?.checkGeometry()
@@ -360,6 +371,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             binding.btnReadAloudArticle.isClickable = false
             if (textToSpeech.isSpeaking && binding.btnReadAloudArticle.text == "Stop") {
                 binding.btnReadAloudArticle.text = "Read Aloud"
+                ttsSpeaking = false
                 textToSpeech.stop()
                 logReadAloud(started = false)
             } else {
@@ -384,6 +396,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 binding.btnReadAloudArticle.isEnabled = false
                 binding.btnReadAloudArticle.isClickable = false
                 binding.btnReadAloudArticle.text = "Read Aloud"
+                ttsSpeaking = false
                 textToSpeech.stop()
                 binding.btnReadAloudArticle.isEnabled = true
                 binding.btnReadAloudArticle.isClickable = true
@@ -665,6 +678,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
 
             textToSpeech.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(p0: String?) {
+                    ttsSpeaking = true
                     // Change the Read Aloud button to "Stop" when TTS starts speaking
                     Handler(Looper.getMainLooper()).post {
                         binding.btnReadAloudArticle.text = "Stop"
@@ -673,6 +687,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 }
 
                 override fun onDone(utteranceId: String) {
+                    ttsSpeaking = false
                     // Enable the Read Aloud button after the TTS is done speaking
                     Handler(Looper.getMainLooper()).post {
                         binding.btnReadAloudArticle.text = "Read Aloud"
@@ -682,11 +697,17 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                     }
                 }
 
+                override fun onStop(utteranceId: String?, interrupted: Boolean) {
+                    ttsSpeaking = false
+                }
+
                 @Deprecated("Deprecated in API level 21")
                 override fun onError(p0: String?){
+                    ttsSpeaking = false
                 }
 
                 override fun onError(utteranceId: String?, errorCode: Int) {
+                    ttsSpeaking = false
                     // Show toast message when TTS encounters an error
                     Handler(Looper.getMainLooper()).post {
                         Toast.makeText(context, "Read Aloud failed (${errorCode})", Toast.LENGTH_SHORT).show()
@@ -786,6 +807,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         definitionPopup?.close()
         definitionPopup = null
         if (::textToSpeech.isInitialized) {
+            ttsSpeaking = false
             textToSpeech.stop()
             textToSpeech.shutdown()
         }
@@ -1043,6 +1065,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         updateTextSizeControls()
         binding.btnArticleReadingAids.isEnabled = false
         scanpathSession?.boundary("diagnostic_mode_changed")
+        ttsSpeaking = false
         textToSpeech.stop()
         binding.btnReadAloudArticle.isEnabled = false
         scaffoldDemoHandler.removeCallbacksAndMessages(null)
@@ -1135,7 +1158,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             textToSpeech.setLanguage(Locale("fil", "PH"))
             textToSpeech.voice = textToSpeech.voices.find { it.name.contains("fil-ph-x-fie-local") }
         }
-        textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, TextToSpeech.ACTION_TTS_QUEUE_PROCESSING_COMPLETED)
+        ttsSpeaking = textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, TextToSpeech.ACTION_TTS_QUEUE_PROCESSING_COMPLETED) == TextToSpeech.SUCCESS
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -1500,7 +1523,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             })
         recording?.let { studyArticleReading.opened(it.id) }
         studyVisit = recording
-        recording?.presentation(binding.tvArticleText, StudyJson.obj("diagnostic_dot" to (StudyConfig.GAZE_DEBUG_VISUALS && !aidPreferences.hideGazeCursor)), binding.nsvArticleText)
+        recording?.presentation(binding.tvArticleText, currentPresentationExtra(), binding.nsvArticleText)
         recording?.baseline(activeMahalanobisBaseline)
         recording?.coordinateReference(sharedReference)
         val providerEpoch = recording?.providerStarted(activeBaselineFingerprint)
@@ -1616,8 +1639,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 })
                 if (mahalanobisReadingSession === liveReadingFeatures) {
                     liveReadingFeatures.record(when {
-                        controlsExcluded || readingMeasurement != null ||
-                            (::textToSpeech.isInitialized && textToSpeech.isSpeaking) ->
+                        controlsExcluded || readingMeasurement != null || ttsSpeaking ->
                             observation.copy(reason = "reader_controls")
                         autoScrollExclusion != null -> observation.copy(reason = autoScrollExclusion)
                         else -> observation
@@ -1787,7 +1809,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
                 demoCameraSuppressed -> "article_demo"
                 definitionPopup?.isShowing == true -> "definition_open"
                 definitionPopup?.isOfferShowing == true -> "lookup_offer"
-                ::textToSpeech.isInitialized && textToSpeech.isSpeaking -> "read_aloud"
+                ttsSpeaking -> "read_aloud"
                 else -> null
             } },
             onBoundary = { moving, at, detail ->

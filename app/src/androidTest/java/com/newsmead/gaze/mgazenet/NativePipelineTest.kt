@@ -156,6 +156,47 @@ class NativePipelineTest {
             assertFalse(next.isRecycled)
         }
     }
+    @Test fun uprightMatAndBitmapPreprocessingMatchAcrossRotationsAndPaddedStride() {
+        val width = 18
+        val height = 14
+        val stride = width * 4 + 12
+        val raw = ByteArray(stride * height)
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val offset = y * stride + x * 4
+                raw[offset] = ((x * 13 + y * 7) and 255).toByte()
+                raw[offset + 1] = ((x * 5 + y * 19 + 11) and 255).toByte()
+                raw[offset + 2] = ((x * 23 + y * 3 + 47) and 255).toByte()
+                raw[offset + 3] = 255.toByte()
+            }
+        }
+        val box = GazeGeometry.Box(1, 2, 10, 9)
+        val crops = GazeGeometry.Crops(box, GazeGeometry.Box(2, 3, 5, 4), GazeGeometry.Box(7, 4, 5, 4), 50.0, 50.0)
+        CameraFrames().use { frames ->
+            Preprocessor().use { prep ->
+                for (rotation in listOf(0, 90, 180, 270)) {
+                    val bitmap = frames.copyRgba(ByteBuffer.wrap(raw), width, height, stride, rotation)
+                    val matInputs = prep.prepare(frames.uprightMat, crops).let {
+                        Preprocessor.Inputs(it.face.copyOf(), it.left.copyOf(), it.right.copyOf(), it.rect.copyOf())
+                    }
+                    val bitmapInputs = prep.prepare(bitmap, crops).let {
+                        Preprocessor.Inputs(it.face.copyOf(), it.left.copyOf(), it.right.copyOf(), it.rect.copyOf())
+                    }
+                    val rgbInputs = prep.prepare(frames.rgb(bitmap), crops).let {
+                        Preprocessor.Inputs(it.face.copyOf(), it.left.copyOf(), it.right.copyOf(), it.rect.copyOf())
+                    }
+                    assertArrayEquals("face rotation=$rotation", bitmapInputs.face, matInputs.face, 0f)
+                    assertArrayEquals("left rotation=$rotation", bitmapInputs.left, matInputs.left, 0f)
+                    assertArrayEquals("right rotation=$rotation", bitmapInputs.right, matInputs.right, 0f)
+                    assertArrayEquals("rect rotation=$rotation", bitmapInputs.rect, matInputs.rect, 0f)
+                    assertArrayEquals("rgb face rotation=$rotation", rgbInputs.face, matInputs.face, 0f)
+                    assertArrayEquals("rgb left rotation=$rotation", rgbInputs.left, matInputs.left, 0f)
+                    assertArrayEquals("rgb right rotation=$rotation", rgbInputs.right, matInputs.right, 0f)
+                    assertArrayEquals("rgb rect rotation=$rotation", rgbInputs.rect, matInputs.rect, 0f)
+                }
+            }
+        }
+    }
     @Test fun externallyRecycledUprightBitmapIsRecreatedBeforeTheNextFrame() {
         val raw = byteArrayOf(10,5,7,-1,20,5,7,-1)
         CameraFrames().use { frames ->
@@ -167,12 +208,102 @@ class NativePipelineTest {
             assertEquals(listOf(10,20),(0..1).map { frames.rgb(second).rgb[it*3].toInt() and 255 })
         }
     }
+    @Test fun copyRgbaToMatAndUprightBitmapMatchLegacyPathAndRecoverFromRecycle() {
+        val width = 18
+        val height = 14
+        val stride = width * 4 + 12
+        val raw = ByteArray(stride * height)
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val offset = y * stride + x * 4
+                raw[offset] = ((x * 11 + y * 13) and 255).toByte()
+                raw[offset + 1] = ((x * 7 + y * 5 + 3) and 255).toByte()
+                raw[offset + 2] = ((x * 17 + y * 19 + 29) and 255).toByte()
+                raw[offset + 3] = 255.toByte()
+            }
+        }
+        val box = GazeGeometry.Box(1, 2, 10, 9)
+        val crops = GazeGeometry.Crops(box, GazeGeometry.Box(2, 3, 5, 4), GazeGeometry.Box(7, 4, 5, 4), 50.0, 50.0)
+        CameraFrames().use { matFrames ->
+            CameraFrames().use { legacyFrames ->
+                Preprocessor().use { prep ->
+                    for (rotation in listOf(0, 90, 180, 270)) {
+                        val mat = matFrames.copyRgbaToMat(ByteBuffer.wrap(raw), width, height, stride, rotation)
+                        val legacyBitmap = legacyFrames.copyRgba(ByteBuffer.wrap(raw), width, height, stride, rotation)
+                        assertEquals(legacyBitmap.width, mat.cols())
+                        assertEquals(legacyBitmap.height, mat.rows())
+                        val lazyBitmap = matFrames.uprightBitmap()
+                        val matRgb = matFrames.rgb(lazyBitmap).rgb
+                        val legacyRgb = legacyFrames.rgb(legacyBitmap).rgb
+                        assertArrayEquals("rgb bytes rotation=$rotation", legacyRgb, matRgb)
+                        val matInputs = prep.prepare(matFrames.uprightMat, crops).let {
+                            Preprocessor.Inputs(it.face.copyOf(), it.left.copyOf(), it.right.copyOf(), it.rect.copyOf())
+                        }
+                        val legacyInputs = prep.prepare(legacyBitmap, crops).let {
+                            Preprocessor.Inputs(it.face.copyOf(), it.left.copyOf(), it.right.copyOf(), it.rect.copyOf())
+                        }
+                        assertArrayEquals("face rotation=$rotation", legacyInputs.face, matInputs.face, 0f)
+                        assertArrayEquals("left rotation=$rotation", legacyInputs.left, matInputs.left, 0f)
+                        assertArrayEquals("right rotation=$rotation", legacyInputs.right, matInputs.right, 0f)
+                        assertArrayEquals("rect rotation=$rotation", legacyInputs.rect, matInputs.rect, 0f)
+                        lazyBitmap.recycle()
+                        val recovered = matFrames.uprightBitmap()
+                        assertFalse(recovered.isRecycled)
+                        assertArrayEquals("recovered rgb rotation=$rotation", legacyRgb, matFrames.rgb(recovered).rgb)
+                    }
+                }
+            }
+        }
+    }
+    @Test fun compactFaceLocalizerRejectsNonFaceAndRunsTrackedPassCleanly() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val width = 480
+        val height = 640
+        val raw = ByteArray(width * height * 4)
+        for (i in 0 until width * height) {
+            raw[i * 4] = ((i * 7) and 255).toByte()
+            raw[i * 4 + 1] = ((i * 13 + 31) and 255).toByte()
+            raw[i * 4 + 2] = ((i * 29 + 97) and 255).toByte()
+            raw[i * 4 + 3] = 255.toByte()
+        }
+        val normX = DoubleArray(CompactFaceLocalizerGeometry.FACE_LANDMARK_COUNT)
+        val normY = DoubleArray(CompactFaceLocalizerGeometry.FACE_LANDMARK_COUNT)
+        CameraFrames().use { frames ->
+            val mat = frames.copyRgbaToMat(ByteBuffer.wrap(raw), width, height, width * 4, 0)
+            CompactFaceLocalizer(context).use { localizer ->
+                val result = localizer.detect(mat, { frames.uprightBitmap() }, normX, normY)
+                assertFalse(result.found)
+                assertTrue(result.detectorRan)
+                // Previous BlazeFace MPImage.close() recycles uprightBitmap(); next call must recover cleanly.
+                val second = localizer.detect(mat, { frames.uprightBitmap() }, normX, normY)
+                assertFalse(second.found)
+                assertTrue(second.detectorRan)
+                val recycled = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888).apply { recycle() }
+                try {
+                    localizer.benchmarkDetectorPass(recycled)
+                    fail("Expected recycled bitmap to be rejected before FaceDetector JNI")
+                } catch (_: IllegalArgumentException) {
+                }
+                val presence = localizer.benchmarkTrackedPass(
+                    mat,
+                    CompactFaceLocalizerGeometry.FaceCrop(240f, 320f, 220f, 0f),
+                    normX,
+                    normY,
+                )
+                assertTrue(presence.isFinite() && presence in 0f..1f)
+                assertTrue(normX.all { it.isFinite() })
+                assertTrue(normY.all { it.isFinite() })
+            }
+        }
+    }
     @Test fun modelHas258StableFeaturesAndRejectsBadInputBeforeJni() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         Preprocessor().use { prep -> MnnEstimator(context).use { model ->
             assertEquals("CPU", model.executionBackend)
+            assertEquals(MnnEstimator.Precision.LOW, model.precision)
             assertEquals(MnnEstimator.RUNTIME, model.runtimeDescription)
             assertEquals(2, model.performanceHintsSnapshot()["requested_session_threads"])
+            assertTrue((model.executionSnapshot()["actual_main_backend"] as? Int) in listOf(0, 13))
             val f = SyntheticFixtures.images().first(); val p = prep.prepare(f.frame,f.crops)
             val a = model.infer(p); assertEquals(258,a.size); assertTrue(a.all { it.isFinite() })
             assertArrayEquals(a, model.infer(p), 1e-5f)

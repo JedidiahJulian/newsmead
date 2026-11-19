@@ -92,6 +92,21 @@ android {
                 "proguard-rules.pro"
             )
         }
+        create("studyOptimized") {
+            initWith(getByName("release"))
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            ndk {
+                abiFilters.clear()
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
+                mappingFileUploadEnabled = false
+            }
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -109,6 +124,7 @@ android {
         // Remove eager Crashlytics registration before SDK startup, including retained-data upgrades.
         sourceSets["debug"].manifest.srcFile("src/accountFree/AndroidManifest.xml")
         sourceSets["release"].manifest.srcFile("src/accountFree/AndroidManifest.xml")
+        sourceSets["studyOptimized"].manifest.srcFile("src/accountFree/AndroidManifest.xml")
     }
     // Explicit debug GPU diagnostics only; normal builds need no native toolchain.
     if (providers.gradleProperty("newsmeadMnnGpuProbe").orNull == "true") {
@@ -259,6 +275,8 @@ tasks.register("verifyMgazeNetDebugApk") {
     doLast {
         val pins = mapOf(
             "assets/base.mnn" to "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96",
+            "assets/blaze_face_short_range.tflite" to "b4578f35940bf5a1a655214a1cce5cab13eba73c1297cd78e1a04c2380b0152f",
+            "assets/face_landmark.tflite" to "1055cb9d4a9ca8b8c688902a3a5194311138ba256bcc94e336d8373a5f30c814",
             "assets/face_landmarker.task" to "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
             "lib/arm64-v8a/libMNN.so" to "c91fb9e65ef45477406583cf374978c61713318893f6af473aecdafed4c17f60",
             "lib/arm64-v8a/libmnncore.so" to "075cbfac452b1a4b601a5e9d74134b800cf13e34a998aee3d1367571c2007bd9",

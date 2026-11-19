@@ -34,15 +34,25 @@ class Preprocessor : AutoCloseable {
         return prepareSource(frame.width, frame.height, crops)
     }
 
-    /** Bitmap path used by the camera pipeline; converts only the 3 clipped ROIs to RGB. */
+    /** Direct Mat path used by the camera pipeline; skips copying Bitmap back into a Mat. */
+    internal fun prepare(rgbaMat: Mat, crops: GazeGeometry.Crops): Inputs {
+        require(!rgbaMat.empty() && rgbaMat.type() == CvType.CV_8UC4 && rgbaMat.cols() > 0 && rgbaMat.rows() > 0)
+        return prepareFromRgbaMat(rgbaMat, crops)
+    }
+
+    /** Bitmap path used by callers/tests; converts only the 3 clipped ROIs to RGB. */
     fun prepare(bitmap: Bitmap, crops: GazeGeometry.Crops): Inputs {
         require(!bitmap.isRecycled && bitmap.width > 0 && bitmap.height > 0)
         Utils.bitmapToMat(bitmap, rgba)
-        val w = bitmap.width
-        val h = bitmap.height
-        patchFromRgba(w, h, crops.face, 224, false, face, faceBytes)
-        patchFromRgba(w, h, crops.left, 112, false, left, eyeBytes)
-        patchFromRgba(w, h, crops.right, 112, true, right, eyeBytes)
+        return prepareFromRgbaMat(rgba, crops)
+    }
+
+    private fun prepareFromRgbaMat(rgbaMat: Mat, crops: GazeGeometry.Crops): Inputs {
+        val w = rgbaMat.cols()
+        val h = rgbaMat.rows()
+        patchFromRgbaMat(rgbaMat, w, h, crops.face, 224, false, face, faceBytes)
+        patchFromRgbaMat(rgbaMat, w, h, crops.left, 112, false, left, eyeBytes)
+        patchFromRgbaMat(rgbaMat, w, h, crops.right, 112, true, right, eyeBytes)
         return Inputs(face, left, right, crops.rectangles(w, h, rect))
     }
 
@@ -53,7 +63,8 @@ class Preprocessor : AutoCloseable {
         return Inputs(face, left, right, crops.rectangles(width, height, rect))
     }
 
-    private fun patchFromRgba(
+    private fun patchFromRgbaMat(
+        rgbaMat: Mat,
         width: Int,
         height: Int,
         box: GazeGeometry.Box,
@@ -63,7 +74,7 @@ class Preprocessor : AutoCloseable {
         bytes: ByteArray,
     ) {
         val b = requireNotNull(GazeGeometry.clip(box, width, height)) { "Invalid crop" }
-        val rgbaRoi = rgba.submat(b.y, b.y + b.height, b.x, b.x + b.width)
+        val rgbaRoi = rgbaMat.submat(b.y, b.y + b.height, b.x, b.x + b.width)
         try {
             Imgproc.cvtColor(rgbaRoi, roiRgb, Imgproc.COLOR_RGBA2RGB)
             Imgproc.resize(roiRgb, resized, targetSize(edge), 0.0, 0.0, Imgproc.INTER_LINEAR)

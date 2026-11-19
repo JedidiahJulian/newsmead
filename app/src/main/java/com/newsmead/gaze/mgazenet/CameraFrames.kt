@@ -1,76 +1,91 @@
 package com.newsmead.gaze.mgazenet
 
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Matrix
-import android.graphics.Paint
-import android.graphics.RectF
 import androidx.camera.core.ImageProxy
+import org.opencv.core.Core
+import org.opencv.core.CvType
+import org.opencv.core.Mat
 import java.nio.ByteBuffer
 
 /** Upright RGB without selfie mirroring. Media image wrappers may consume the returned bitmap. */
 class CameraFrames : AutoCloseable {
-    private var row: Bitmap? = null
+    private var srcMat: Mat? = null
+    private var rotatedMat: Mat? = null
+    private var currentUprightMat: Mat? = null
     private var upright: Bitmap? = null
+    private var lastRotation = 0
     private var pixels = IntArray(0)
     private var rgb = ByteArray(0)
     private var rgba = ByteArray(0)
-    private val matrix = Matrix()
-    private val paint = Paint()
-    private val canvas = Canvas()
-    private val bounds = RectF()
+    private var uprightRgba = ByteArray(0)
+
+    internal val uprightMat: Mat
+        get() = checkNotNull(currentUprightMat) { "No upright frame available" }
 
     fun copy(image: ImageProxy): Bitmap {
+        copyMat(image)
+        return uprightBitmap()
+    }
+
+    internal fun copyMat(image: ImageProxy): Mat {
         val plane = image.planes[0]
         require(plane.pixelStride == 4)
-        return copyRgba(plane.buffer, image.width, image.height, plane.rowStride, image.imageInfo.rotationDegrees)
+        return copyRgbaToMat(plane.buffer, image.width, image.height, plane.rowStride, image.imageInfo.rotationDegrees)
     }
 
     internal fun copyRgba(input: ByteBuffer, width: Int, height: Int, stride: Int, rotation: Int): Bitmap {
+        copyRgbaToMat(input, width, height, stride, rotation)
+        return uprightBitmap()
+    }
+
+    internal fun copyRgbaToMat(input: ByteBuffer, width: Int, height: Int, stride: Int, rotation: Int): Mat {
         require(width > 0 && height > 0 && stride >= width * 4 &&
             (rotation == 0 || rotation == 90 || rotation == 180 || rotation == 270))
-        if (row?.width != width || row?.height != height) {
-            row?.recycle(); row = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        }
+        val byteCount = width * height * 4
+        if (rgba.size != byteCount) rgba = ByteArray(byteCount)
         val buffer = input.duplicate()
         if (stride == width * 4) {
-            // CameraX RGBA and Android ARGB_8888 have the same byte layout in
-            // bitmap memory. Let the native bitmap copy replace two Kotlin loops.
             buffer.position(0)
-            buffer.limit(width * height * 4)
-            row!!.copyPixelsFromBuffer(buffer)
+            buffer.get(rgba, 0, byteCount)
         } else {
             // Last row may omit stride padding; copy only valid RGBA pixels explicitly.
-            if (pixels.size != width * height) pixels = IntArray(width * height)
-            if (rgba.size != width * height * 4) rgba = ByteArray(width * height * 4)
+            val rowBytes = width * 4
             for (y in 0 until height) {
                 buffer.position(y * stride)
-                buffer.get(rgba, y * width * 4, width * 4)
+                buffer.get(rgba, y * rowBytes, rowBytes)
             }
-            for (i in pixels.indices) {
-                val r = rgba[i * 4].toInt() and 255
-                val g = rgba[i * 4 + 1].toInt() and 255
-                val b = rgba[i * 4 + 2].toInt() and 255
-                val a = rgba[i * 4 + 3].toInt() and 255
-                pixels[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
-            }
-            row!!.setPixels(pixels, 0, width, 0, 0, width, height)
         }
-        matrix.reset(); matrix.postRotate(rotation.toFloat())
-        bounds.set(0f, 0f, width.toFloat(), height.toFloat())
-        matrix.mapRect(bounds)
-        val w = bounds.width().toInt(); val h = bounds.height().toInt()
+        val src = srcMat ?: Mat().also { srcMat = it }
+        src.create(height, width, CvType.CV_8UC4)
+        src.put(0, 0, rgba)
+        val rotated = when (rotation) {
+            0 -> src
+            90 -> (rotatedMat ?: Mat().also { rotatedMat = it }).also { Core.rotate(src, it, Core.ROTATE_90_CLOCKWISE) }
+            180 -> (rotatedMat ?: Mat().also { rotatedMat = it }).also { Core.rotate(src, it, Core.ROTATE_180) }
+            else -> (rotatedMat ?: Mat().also { rotatedMat = it }).also { Core.rotate(src, it, Core.ROTATE_90_COUNTERCLOCKWISE) }
+        }
+        currentUprightMat = rotated
+        lastRotation = rotation
+        return rotated
+    }
+
+    internal fun uprightBitmap(): Bitmap {
+        val rotated = uprightMat
+        val w = rotated.cols()
+        val h = rotated.rows()
         if (upright == null || upright!!.isRecycled || upright!!.width != w || upright!!.height != h) {
             if (upright?.isRecycled == false) upright?.recycle()
             upright = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         }
-        canvas.setBitmap(upright)
-        canvas.apply {
-            save(); translate(-bounds.left, -bounds.top); concat(this@CameraFrames.matrix)
-            clipRect(0, 0, width, height)
-            drawBitmap(row!!, 0f, 0f, paint); restore()
+        val uprightByteCount = w * h * 4
+        val bitmapBytes = if (lastRotation == 0) {
+            rgba
+        } else {
+            if (uprightRgba.size != uprightByteCount) uprightRgba = ByteArray(uprightByteCount)
+            rotated.get(0, 0, uprightRgba)
+            uprightRgba
         }
-        canvas.setBitmap(null)
+        upright!!.copyPixelsFromBuffer(ByteBuffer.wrap(bitmapBytes, 0, uprightByteCount))
         return upright!!
     }
 
@@ -88,8 +103,11 @@ class CameraFrames : AutoCloseable {
     }
 
     override fun close() {
-        canvas.setBitmap(null); pixels.fill(0); rgb.fill(0); rgba.fill(0); row?.recycle()
+        pixels.fill(0); rgb.fill(0); rgba.fill(0); uprightRgba.fill(0)
+        currentUprightMat = null
+        srcMat?.release(); srcMat = null
+        rotatedMat?.release(); rotatedMat = null
         if (upright?.isRecycled == false) upright?.recycle()
-        row = null; upright = null
+        upright = null
     }
 }

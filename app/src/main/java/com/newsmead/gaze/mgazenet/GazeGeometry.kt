@@ -29,9 +29,10 @@ object GazeGeometry {
     }
 
     fun crops(landmarks: List<Landmark>, width: Int, height: Int): Crops? {
-        if (landmarks.size != LANDMARK_COUNT) return null
-        val x = DoubleArray(LANDMARK_COUNT)
-        val y = DoubleArray(LANDMARK_COUNT)
+        val count = landmarks.size
+        if (!isSupportedLandmarkCount(count)) return null
+        val x = DoubleArray(count)
+        val y = DoubleArray(count)
         landmarks.forEachIndexed { index, landmark ->
             x[index] = landmark.x
             y[index] = landmark.y
@@ -39,8 +40,11 @@ object GazeGeometry {
         return crops(x, y, width, height)
     }
 
-    fun crops(x: DoubleArray, y: DoubleArray, width: Int, height: Int): Crops? =
-        crops(x, y, width, height, DoubleArray(LANDMARK_COUNT), DoubleArray(LANDMARK_COUNT))
+    fun crops(x: DoubleArray, y: DoubleArray, width: Int, height: Int): Crops? {
+        val count = x.size
+        if (y.size != count || !isSupportedLandmarkCount(count)) return null
+        return crops(x, y, width, height, DoubleArray(count), DoubleArray(count))
+    }
 
     internal fun crops(
         x: DoubleArray,
@@ -50,15 +54,16 @@ object GazeGeometry {
         px: DoubleArray,
         py: DoubleArray,
     ): Crops? {
-        if (width <= 0 || height <= 0 || x.size != LANDMARK_COUNT || y.size != LANDMARK_COUNT ||
-            px.size != LANDMARK_COUNT || py.size != LANDMARK_COUNT
+        val count = x.size
+        if (width <= 0 || height <= 0 || !isSupportedLandmarkCount(count) ||
+            y.size != count || px.size != count || py.size != count
         ) return null
         // np.round uses ties-to-even; roundToInt is not equivalent.
         var minX = Double.POSITIVE_INFINITY
         var maxX = Double.NEGATIVE_INFINITY
         var minY = Double.POSITIVE_INFINITY
         var maxY = Double.NEGATIVE_INFINITY
-        for (index in 0 until LANDMARK_COUNT) {
+        for (index in 0 until count) {
             val normalizedX = x[index]
             val normalizedY = y[index]
             if (!normalizedX.isFinite() || !normalizedY.isFinite()) return null
@@ -118,7 +123,10 @@ object GazeGeometry {
         return box.copy(width = minOf(box.width, width - box.x), height = minOf(box.height, height - box.y))
     }
 
-    private const val LANDMARK_COUNT = 478
+    private fun isSupportedLandmarkCount(count: Int) = count == LANDMARK_COUNT_468 || count == LANDMARK_COUNT_478
+
+    private const val LANDMARK_COUNT_468 = 468
+    private const val LANDMARK_COUNT_478 = 478
     private val MOUTH_INDICES = intArrayOf(61, 91, 14, 178, 402, 324, 95)
     private val LEFT_EYE_CONTOUR = intArrayOf(33,246,161,160,159,158,157,173,133,155,154,153,145,144,163,7,33)
     private val RIGHT_EYE_CONTOUR = intArrayOf(362,388,384,385,386,387,388,466,263,249,380,373,374,380,381,382,362)

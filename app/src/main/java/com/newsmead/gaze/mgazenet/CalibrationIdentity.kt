@@ -14,7 +14,7 @@ data class CalibrationIdentity(
         require(viewport.width > 0 && viewport.height > 0 && viewport.originX >= 0 && viewport.originY >= 0)
         require(viewport.originX.toLong() + viewport.width <= screenWidth &&
             viewport.originY.toLong() + viewport.height <= screenHeight)
-        require(acquisition == "unbound" || acquisition.matches(Regex("[1-9][0-9]*x[1-9][0-9]*:(0|90|180|270):(GPU|CPU_initialization_fallback)")))
+        require(acquisition == "unbound" || acquisition.matches(Regex("[1-9][0-9]*x[1-9][0-9]*:(0|90|180|270):(GPU|CPU_initialization_fallback|CPU_compact)")))
     }
     val targets get() = TARGET_FRACTIONS.map { (x, y) ->
         viewport.toScreen(x * viewport.width, y * viewport.height)
@@ -27,8 +27,10 @@ data class CalibrationIdentity(
     companion object {
         const val VERSION = "newsmead_mgazenet_calibration_v2"
         const val MODEL = "2f96b95275fe6d7b79e98df3237ebb96e15ef5522c96968f08167da7e1954a96"
-        const val LOCALIZER = "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
-        const val PIPELINE = "Tasks0.10.29_VIDEO_1face_.1_.1_.5_GPU_initCPU;640x480_requested_RGBA_upright_unmirrored;GF1.0.2_crops_RGB_linear_uint8_NCHW_rightflip;MNN3.6.1_CPU${MnnEstimator.DEFAULT_CPU_THREADS}_normal;GF1.0.2_13point_9x5order_phone10to90_cue600_onsetsettle800_45rows_post500_area>10;no_filter_no_correction_v2"
+        const val DETECTOR = "b4578f35940bf5a1a655214a1cce5cab13eba73c1297cd78e1a04c2380b0152f"
+        const val LOCALIZER = "1055cb9d4a9ca8b8c688902a3a5194311138ba256bcc94e336d8373a5f30c814"
+        const val LEGACY_LOCALIZER = "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
+        const val PIPELINE = "CompactFace468_TFLite2.14_CPU2_BlazeFace.5_roi1.5_pres.5;640x480_requested_RGBA_upright_unmirrored;GF1.0.2_crops_RGB_linear_uint8_NCHW_rightflip;MNN3.6.1_CPU${MnnEstimator.DEFAULT_CPU_THREADS}_${MnnEstimator.DEFAULT_CPU_PRECISION_TOKEN};GF1.0.2_13point_9x5order_phone10to90_cue600_onsetsettle800_45rows_post500_area>10;no_filter_no_correction_v2"
         const val SVR = "OpenCV4.11.0_EPS_SVR_RBF_C1_gamma.005_P.001_MAX_ITER10000_epsilon.0001"
         const val COORDINATES = "screen_px_v1;labels=physical_px/physical_display;full_calibration_viewport"
         const val FIT_TARGET_COUNT = 13

@@ -67,6 +67,13 @@ class MgazeNetEyelidGeometryTest {
         }
         // Geometry consumes selected points only.
         assertNotNull(MgazeNetEyelidGeometry.from(x.copyOf().also { it[0] = Double.NaN }, y, 640, 480))
+        // 467/469 mismatch rejected; 468 matches 478 identically.
+        assertNull(MgazeNetEyelidGeometry.from(x.copyOf(467), y.copyOf(467), 640, 480))
+        assertNull(MgazeNetEyelidGeometry.from(x.copyOf(469), y.copyOf(469), 640, 480))
+        assertEquals(
+            MgazeNetEyelidGeometry.from(x, y, 640, 480),
+            MgazeNetEyelidGeometry.from(x.copyOf(468), y.copyOf(468), 640, 480),
+        )
     }
 
     @Test fun rejectsEitherDegenerateCornerAxisAndArithmeticOverflow() {

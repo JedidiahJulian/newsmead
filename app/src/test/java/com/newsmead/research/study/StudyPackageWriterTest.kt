@@ -250,4 +250,51 @@ class StudyPackageWriterTest {
         }
     }
 
+    @Test fun reusableUtf8WriterMatchesDirectEncodingAndRecordOwnedPreservesSeqAndLosses() {
+        val root = root()
+        val id = identity()
+        val w = StudyPackageWriter(root, id, { 12.5 }, maxChunkBytes = 1024, compressChunks = false)
+        val trickyText = "café 中文 😀 \u2028\u2029 \" \\ \b\t\n\u0000 high:\uD800 low:\uDC00 "
+        val records = listOf(
+            JSONObject().put("text", trickyText),
+            JSONObject().put("text", "x".repeat(270_000)),
+            JSONObject().put("text", trickyText).put("n", 42),
+        )
+        records.forEachIndexed { idx, p -> assertTrue(w.recordOwned("utf8_check", p, 100.0 + idx)) }
+        w.finish("done", 110.0)
+        assertTrue(w.awaitClosed(5000)); assertNull(w.failure)
+        val m = manifest(w)
+        assertTrue(m.getBoolean("content_complete"))
+        val chunks = m.getJSONArray("chunks")
+        assertTrue(chunks.length() >= 2)
+        val allDecoded = mutableListOf<JSONObject>()
+        for (i in 0 until chunks.length()) {
+            val c = chunks.getJSONObject(i)
+            val rawBytes = File(w.packageDirectory, c.getString("file")).readBytes()
+            val text = rawBytes.toString(Charsets.UTF_8)
+            val lines = text.trimEnd('\n').split('\n')
+            val parsed = lines.map { JSONObject(it) }
+            val expectedBytes = parsed.joinToString("") { it.toString() + "\n" }.toByteArray(Charsets.UTF_8)
+            assertArrayEquals("Chunk $i exact UTF-8 bytes", expectedBytes, rawBytes)
+            allDecoded += parsed
+        }
+        assertEquals((0L until allDecoded.size.toLong()).toList(), allDecoded.map { it.getLong("seq") })
+        assertEquals(3, allDecoded.count { it.getString("kind") == "utf8_check" })
+
+        val gate = CountDownLatch(1); val entered = CountDownLatch(1)
+        val wOverflow = StudyPackageWriter(root(), id, { 1.0 }, queueCapacity = 1,
+            onState = { if (it == "recording") { entered.countDown(); gate.await(5, TimeUnit.SECONDS) } })
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+        assertTrue(wOverflow.recordOwned("one", JSONObject().put("v", 1), 1.0))
+        assertFalse(wOverflow.recordOwned("two", JSONObject().put("v", 2), 2.0))
+        assertFalse(wOverflow.recordOwned("three", JSONObject().put("v", 3), 3.0))
+        wOverflow.finish("done", 4.0); gate.countDown(); assertTrue(wOverflow.awaitClosed(5000))
+        val overflowManifest = manifest(wOverflow)
+        assertFalse(overflowManifest.getBoolean("content_complete"))
+        val loss = overflowManifest.getJSONArray("losses").getJSONObject(0)
+        assertEquals(2L, loss.getLong("count"))
+        assertEquals(2L, loss.getLong("first_seq"))
+        assertEquals(3L, loss.getLong("last_seq"))
+    }
+
 }

@@ -33,12 +33,26 @@ class GazeGeometryTest {
         assertEquals(GazeGeometry.crops(points(), 100, 100), GazeGeometry.crops(p, 100, 100))
     }
     @Test fun malformedLandmarksAreRejected() {
-        assertNull(GazeGeometry.crops(points().take(468), 100, 100))
+        assertNull(GazeGeometry.crops(points().take(467), 100, 100))
+        assertNull(GazeGeometry.crops(points() + GazeGeometry.Landmark(.5, .5), 100, 100))
         assertNull(GazeGeometry.crops(points(), 0, 100))
         val p = points(); p[0] = GazeGeometry.Landmark(Double.NaN, .2)
         assertNull(GazeGeometry.crops(p, 100, 100))
         p[0] = GazeGeometry.Landmark(1e9, .2)
         assertNull(GazeGeometry.crops(p, 100, 100))
+    }
+    @Test fun compact468LandmarksMatch478WhenIrisIndicesAreInsideFaceBounds() {
+        val full = points()
+        val compact = full.take(468)
+        assertEquals(GazeGeometry.crops(full, 100, 100), GazeGeometry.crops(compact, 100, 100))
+        val fullX = DoubleArray(478) { full[it].x }
+        val fullY = DoubleArray(478) { full[it].y }
+        val compactX = fullX.copyOf(468)
+        val compactY = fullY.copyOf(468)
+        assertEquals(
+            GazeGeometry.crops(fullX, fullY, 100, 100),
+            GazeGeometry.crops(compactX, compactY, 100, 100, DoubleArray(468), DoubleArray(468)),
+        )
     }
     @Test fun eyesTouchingBorderAreRejected() {
         val p = points(); p[33] = GazeGeometry.Landmark(.04, .4)
