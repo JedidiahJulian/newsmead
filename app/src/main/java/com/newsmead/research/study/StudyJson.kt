@@ -8,9 +8,13 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** Numerical snapshots only. Never accepts Views, images, camera frames or arbitrary app objects. */
 object StudyJson {
-    private data class JsonField(val field: java.lang.reflect.Field, val name: String)
+    internal data class JsonField(val field: java.lang.reflect.Field, val name: String)
     private val fields = ConcurrentHashMap<Class<*>, List<JsonField>>()
     private val camelBoundary = Regex("([a-z0-9])([A-Z])")
+    internal fun fieldsFor(type: Class<*>): List<JsonField> = fields.getOrPut(type) {
+        type.declaredFields.filter { !Modifier.isStatic(it.modifiers) && !it.isSynthetic }
+            .map { field -> field.isAccessible = true; JsonField(field, snake(field.name)) }
+    }
     fun obj(vararg values: Pair<String, Any?>): JSONObject = JSONObject().apply {
         values.forEach { (key, item) -> put(key, value(item)) }
     }
@@ -32,10 +36,7 @@ object StudyJson {
         else -> {
             require(input.javaClass.name.startsWith("com.newsmead.gaze.")) { "Unsupported study value ${input.javaClass.name}" }
             JSONObject().apply {
-                fields.getOrPut(input.javaClass) {
-                    input.javaClass.declaredFields.filter { !Modifier.isStatic(it.modifiers) && !it.isSynthetic }
-                        .map { field -> field.isAccessible = true; JsonField(field, snake(field.name)) }
-                }.forEach { member -> put(member.name, value(member.field.get(input))) }
+                fieldsFor(input.javaClass).forEach { member -> put(member.name, value(member.field.get(input))) }
             }
         }
     }

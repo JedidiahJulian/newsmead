@@ -154,14 +154,14 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         override fun run() {
             val pipeline = readingFeatures ?: return
             val tickAt = SystemClock.elapsedRealtime()
-            studyVisit?.record("rdf_schedule_tick", StudyJson.obj("tick_ms" to tickAt), tickAt.toDouble())
+            studyVisit?.recordOwned("rdf_schedule_tick", StudyJson.obj("tick_ms" to tickAt), tickAt.toDouble())
             pipeline.tick(tickAt)?.let { vector ->
                 val current = ParticipantReadingBaseline.current(activeBaselineFingerprint)
                 val activeProfile = current?.profile.takeIf { current === activeMahalanobisBaseline }
                 val scorer = if (activeProfile != null) mahalanobisScorer else MahalanobisScorer(null)
                 val score = scorer?.score(vector)
                 latestMahalanobisScore = score
-                studyVisit?.record("rdf_tick", StudyJson.obj("tick_ms" to tickAt, "feature_vector" to vector,
+                studyVisit?.recordOwned("rdf_tick", StudyJson.obj("tick_ms" to tickAt, "feature_vector" to vector,
                     "score" to score, "baseline_status" to ParticipantReadingBaseline.status(activeBaselineFingerprint),
                     "baseline_attempt_id" to activeMahalanobisBaseline?.sessionId,
                     "baseline_participant_code" to activeMahalanobisBaseline?.participantCode,
@@ -1536,7 +1536,7 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
         latestMahalanobisDebugSnapshot = null
         mahalanobisLineCount = 0
         scanpathCounts.clear()
-        val studyTraceObserver: ((String, Double, org.json.JSONObject) -> Unit)? = recording?.let { it::runtimeEvent }
+        val studyTraceObserver: ((String, Double, org.json.JSONObject) -> Unit)? = recording?.let { it::runtimeEventOwned }
         val studyPolicyObserver: ((String, Double, Map<String, Any?>) -> Unit)? = recording?.let { it::auditEvent }
         val aids = readingAidOverlay?.let { ArticleReadingAidRuntime(binding.tvArticleText,
             binding.readingAidWordDock, it, config = ReadingAidPolicyConfig.evidenceAlignedPrototype()
@@ -1546,7 +1546,9 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             motionCompensatedAids = true,
             onTraceRecord = studyTraceObserver,
             onPolicyAudit = studyPolicyObserver,
-            onDecision = { decision -> recording?.record("aid_decision", StudyJson.obj("decision" to decision), decision.nowMs) },
+            onDecision = { decision -> recording?.recordStream("aid_decision", decision.nowMs) { w ->
+                w.beginObject(); w.field("decision", decision, first = true); w.endObject()
+            } },
             onRenderReceipt = { action, drawn, reason, at -> recording?.aidRender(action, drawn, reason, at) },
             onConsultationChanged = { active, at, reason ->
                 recording?.exclude("definition_consultation", active)
@@ -1569,37 +1571,62 @@ class ArticleFragment() : Fragment(), clickListener, TextToSpeech.OnInitListener
             manualScrollAids = true,
             config = aids?.scanpathConfig ?: com.newsmead.gaze.scanpath.ScanpathConfig(),
             onEvent = { generation, event ->
-            recording?.record("scanpath_output", StudyJson.obj("producer" to "pattern", "generation" to generation, "output" to event), event.evidenceAvailableMs)
+            recording?.recordStream("scanpath_output", event.evidenceAvailableMs) { w ->
+                w.beginObject(); w.fieldString("producer", "pattern", first = true)
+                w.fieldInt("generation", generation); w.field("output", event); w.endObject()
+            }
             scanpathCounts[event.patternId] = (scanpathCounts[event.patternId] ?: 0) + 1
             aids?.event(generation, event)
         }, onGeometry = { generation, geometry ->
-                recording?.record("layout_snapshot", StudyJson.obj("producer" to "scanpath", "generation" to generation, "geometry" to geometry), StudyVisit.now())
+                recording?.recordStream("layout_snapshot", StudyVisit.now()) { w ->
+                    w.beginObject(); w.fieldString("producer", "scanpath", first = true)
+                    w.fieldInt("generation", generation); w.field("geometry", geometry); w.endObject()
+                }
                 recording?.boundary("scanpath_geometry"); aids?.geometry(generation, geometry) },
             onInput = { generation, sample ->
-                recording?.record("scanpath_input", StudyJson.obj("generation" to generation, "sample" to sample), sample.captureMs)
+                recording?.recordStream("scanpath_input", sample.captureMs) { w ->
+                    w.beginObject(); w.fieldInt("generation", generation, first = true)
+                    w.field("sample", sample); w.endObject()
+                }
                 aids?.input(generation, sample) },
-            onAcceptance = { generation, sample, accepted -> recording?.record("scanpath_acceptance", StudyJson.obj(
-                "generation" to generation, "capture_ms" to sample.captureMs, "accepted" to accepted), sample.captureMs) },
+            onAcceptance = { generation, sample, accepted -> recording?.recordStream("scanpath_acceptance", sample.captureMs) { w ->
+                w.beginObject(); w.fieldInt("generation", generation, first = true)
+                w.fieldDoubleOrNull("capture_ms", sample.captureMs); w.fieldBoolean("accepted", accepted); w.endObject()
+            } },
             onCandidate = { generation, candidate ->
-                recording?.record("scanpath_output", StudyJson.obj("producer" to "candidate", "generation" to generation, "output" to candidate), StudyVisit.now())
+                recording?.recordStream("scanpath_output", StudyVisit.now()) { w ->
+                    w.beginObject(); w.fieldString("producer", "candidate", first = true)
+                    w.fieldInt("generation", generation); w.field("output", candidate); w.endObject()
+                }
                 aids?.candidate(generation, candidate) },
             onFixation = { generation, fixation ->
-                recording?.record("scanpath_output", StudyJson.obj("producer" to "fixation_screen_projection", "generation" to generation, "output" to fixation), fixation.evidenceAvailableMs)
+                recording?.recordStream("scanpath_output", fixation.evidenceAvailableMs) { w ->
+                    w.beginObject(); w.fieldString("producer", "fixation_screen_projection", first = true)
+                    w.fieldInt("generation", generation); w.field("output", fixation); w.endObject()
+                }
                 aids?.fixation(generation, fixation) })
         scanpathSession = liveScanpath
         val liveReadingFeatures = ArticleReadingSession(binding.tvArticleText,
             coordinateStream = ReadingCoordinateStream.ARTICLE_SMOOTHED,
             motionCompensatedAids = false,
             onGeometry = { generation, geometry -> mahalanobisLineCount = geometry?.lines?.size ?: 0
-                recording?.record("layout_snapshot", StudyJson.obj("producer" to "rdf", "generation" to generation, "geometry" to geometry), StudyVisit.now()) },
+                recording?.recordStream("layout_snapshot", StudyVisit.now()) { w ->
+                    w.beginObject(); w.fieldString("producer", "rdf", first = true)
+                    w.fieldInt("generation", generation); w.field("geometry", geometry); w.endObject()
+                } },
             onInput = { generation, sample ->
-                recording?.record("rdf_input", StudyJson.obj("generation" to generation, "sample" to sample), sample.captureMs)
+                recording?.recordStream("rdf_input", sample.captureMs) { w ->
+                    w.beginObject(); w.fieldInt("generation", generation, first = true)
+                    w.field("sample", sample); w.endObject()
+                }
                 sample.captureMs?.takeIf { it.isFinite() && it >= 0 && it < Long.MAX_VALUE.toDouble() }
                     ?.let { capture -> readingFeatures?.sample(sample.line, mahalanobisLineCount,
                         sample.eligible, capture.toLong()) }
             },
             onBoundary = { reason ->
-                recording?.record("rdf_boundary", StudyJson.obj("reason" to reason), StudyVisit.now())
+                recording?.recordStream("rdf_boundary", StudyVisit.now()) { w ->
+                    w.beginObject(); w.fieldString("reason", reason, first = true); w.endObject()
+                }
                 if (com.newsmead.research.study.StudyCaptureContext.presentationBoundary(reason)) recording?.boundary(reason)
                 when (reason) {
                     "invalid_sample", "non_monotonic_capture" -> Unit

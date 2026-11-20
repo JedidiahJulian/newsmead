@@ -353,6 +353,23 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
     internal fun recordOwned(kind: String, payload: JSONObject, atMs: Double? = null): Boolean =
         recordInternal(kind, payload, atMs, owned = true)
 
+    internal fun recordStream(kind: String, atMs: Double? = null, writePayload: (StudyJsonWriter) -> Unit): Boolean {
+        if (sealed) {
+            coordinateCoverageMonitor?.unavailable("recording_rejected_row")
+            return false
+        }
+        return runCatching {
+            val accepted = writer.recordStream(kind, atMs, writePayload)
+            accepted.also {
+                if (!it) coordinateCoverageMonitor?.unavailable("recording_rejected_row")
+            }
+        }.getOrElse {
+            coordinateCoverageMonitor?.unavailable("recording_failure")
+            instrumentationFailure()
+            false
+        }
+    }
+
     private fun recordInternal(kind: String, payload: JSONObject, atMs: Double?, owned: Boolean): Boolean {
         if (sealed) {
             coordinateCoverageMonitor?.unavailable("recording_rejected_row")
@@ -375,7 +392,9 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
     fun auditEvent(kind: String, atMs: Double, detail: Map<String, Any?>) {
         if (sealed) return
         runCatching {
-            auditEncoder.record(kind, atMs, detail) { event, payload, sourceMs -> writer.record(event, payload, sourceMs) }
+            auditEncoder.recordStream(kind, atMs, detail) { event, sourceMs, writePayload ->
+                recordStream(event, sourceMs, writePayload)
+            }
         }.onFailure { instrumentationFailure() }
     }
     private fun instrumentationFailure() {
@@ -475,9 +494,18 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
         val effective = maxOf(atMs, now())
         val next = timeline.change(effective, allowed, presentationId, presentation)
         coordinateCoverageMonitor?.boundary(effective, reason)
-        recordOwned("boundary", StudyJson.obj("at_ms" to effective, "source_at_ms" to atMs,
-            "time_basis" to "collector_observed_transition_not_earlier_than_native_event",
-            "reason" to reason, "context_epoch_id" to next.epoch, "context_allowed" to next.allowed), effective)
+        val epoch = next.epoch
+        val contextAllowed = next.allowed
+        recordStream("boundary", effective) { w ->
+            w.beginObject()
+            w.fieldDouble("at_ms", effective, first = true)
+            w.fieldDouble("source_at_ms", atMs)
+            w.fieldString("time_basis", "collector_observed_transition_not_earlier_than_native_event")
+            w.fieldString("reason", reason)
+            w.fieldString("context_epoch_id", epoch)
+            w.fieldBoolean("context_allowed", contextAllowed)
+            w.endObject()
+        }
     }
     fun exclude(reason: String, active: Boolean) {
         val changed = if (active) excluded.add(reason) else excluded.remove(reason)
@@ -521,24 +549,60 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
                 meta.optString("model_sha256", "unknown"), acquisitionIds[epoch],
                 screenWidth, screenHeight, rotationDegrees)
         } else null
-        val payload = StudyJson.obj("provider_epoch_id" to epoch, "delivery_id" to o.deliveryId,
-            "capture_ms" to o.captureMs, "delivery_ms" to o.outputMs, "delivery_elapsed_ns" to o.deliveryElapsedNs,
-            "reason" to o.reason, "raw_x_px" to o.rawX, "raw_y_px" to o.rawY,
-            "selected_x_px" to o.x, "selected_y_px" to o.y, "timeout_watchdog" to o.timeoutWatchdog,
-            "arrivals" to o.arrivals, "busy_drops" to o.busyDrops, "blink_filter_applied" to o.blinkFilterApplied,
-            "left_eye_aspect" to o.leftEyeAspect, "right_eye_aspect" to o.rightEyeAspect,
-            "coordinate_context" to coordinateContext, "context_epoch_id" to (state?.epoch ?: "context_unavailable"),
-            "context_allowed" to (state?.allowed == true), "presentation_settings" to state?.settings)
-        recordOwned("gaze_observation", payload, at)
-        coordinateCoverageMonitor?.observation(payload)
+        val monitor = coordinateCoverageMonitor
+        if (monitor == null) {
+            val contextEpochId = state?.epoch ?: "context_unavailable"
+            val contextAllowed = state?.allowed == true
+            val presentationSettings = state?.settings
+            recordStream("gaze_observation", at) { w ->
+                w.beginObject()
+                w.fieldString("provider_epoch_id", epoch, first = true)
+                w.fieldLong("delivery_id", o.deliveryId)
+                w.fieldDoubleOrNull("capture_ms", o.captureMs)
+                w.fieldDouble("delivery_ms", o.outputMs)
+                w.fieldLong("delivery_elapsed_ns", o.deliveryElapsedNs)
+                w.fieldString("reason", o.reason)
+                w.fieldFloatOrNull("raw_x_px", o.rawX)
+                w.fieldFloatOrNull("raw_y_px", o.rawY)
+                w.fieldFloatOrNull("selected_x_px", o.x)
+                w.fieldFloatOrNull("selected_y_px", o.y)
+                w.fieldBoolean("timeout_watchdog", o.timeoutWatchdog)
+                w.fieldLongOrNull("arrivals", o.arrivals)
+                w.fieldLongOrNull("busy_drops", o.busyDrops)
+                w.fieldBoolean("blink_filter_applied", o.blinkFilterApplied)
+                w.fieldDoubleOrNull("left_eye_aspect", o.leftEyeAspect)
+                w.fieldDoubleOrNull("right_eye_aspect", o.rightEyeAspect)
+                w.field("coordinate_context", coordinateContext)
+                w.fieldString("context_epoch_id", contextEpochId)
+                w.fieldBoolean("context_allowed", contextAllowed)
+                w.field("presentation_settings", presentationSettings)
+                w.endObject()
+            }
+        } else {
+            val payload = StudyJson.obj("provider_epoch_id" to epoch, "delivery_id" to o.deliveryId,
+                "capture_ms" to o.captureMs, "delivery_ms" to o.outputMs, "delivery_elapsed_ns" to o.deliveryElapsedNs,
+                "reason" to o.reason, "raw_x_px" to o.rawX, "raw_y_px" to o.rawY,
+                "selected_x_px" to o.x, "selected_y_px" to o.y, "timeout_watchdog" to o.timeoutWatchdog,
+                "arrivals" to o.arrivals, "busy_drops" to o.busyDrops, "blink_filter_applied" to o.blinkFilterApplied,
+                "left_eye_aspect" to o.leftEyeAspect, "right_eye_aspect" to o.rightEyeAspect,
+                "coordinate_context" to coordinateContext, "context_epoch_id" to (state?.epoch ?: "context_unavailable"),
+                "context_allowed" to (state?.allowed == true), "presentation_settings" to state?.settings)
+            recordOwned("gaze_observation", payload, at)
+            monitor.observation(payload)
+        }
         if (o.reason == "stopped") { pending.remove(epoch); if (logicalEnd != null && pending.isEmpty() && pendingResults == 0) seal() }
     }
     fun baseline(profile: ParticipantReadingBaseline.Entry?) = record("rdf_reference", StudyJson.obj(
         "reference" to profile, "participant_match" to (profile == null || profile.participantCode == run.participant)), now())
     fun coordinateReference(reference: SharedReadingBaseline.Entry?) = record("coordinate_reference",
         StudyJson.obj("reference" to reference?.fields()), now())
-    fun runtimeEvent(kind: String, atMs: Double, detail: JSONObject) {
-        record(if (kind == "support_revision") kind else "aid_runtime_$kind", detail, atMs)
+    fun runtimeEvent(kind: String, atMs: Double, detail: JSONObject) =
+        runtimeEventInternal(kind, atMs, detail, owned = false)
+    internal fun runtimeEventOwned(kind: String, atMs: Double, detail: JSONObject) =
+        runtimeEventInternal(kind, atMs, detail, owned = true)
+    private fun runtimeEventInternal(kind: String, atMs: Double, detail: JSONObject, owned: Boolean) {
+        val eventKind = if (kind == "support_revision") kind else "aid_runtime_$kind"
+        if (owned) recordOwned(eventKind, detail, atMs) else record(eventKind, detail, atMs)
         if (kind == "preferences" || kind == "started") {
             val settings = StudyPackageWriter.copyJsonObject(
                 if (kind == "preferences") detail else detail.optJSONObject("preferences") ?: JSONObject()
@@ -567,10 +631,22 @@ class StudyVisit internal constructor(private val app: Context, val run: StudyCo
         val previous = presentations[channel]
         val value = if (drawn) previous ?: Presentation(UUID.randomUUID().toString(),atMs,atMs,action.id,target)
             .also { presentations[channel] = it } else previous
-        recordOwned("aid_presentation", StudyJson.obj("presentation_id" to value?.id, "channel" to channel,
-            "action_id" to action.id, "drawn_proxy" to drawn, "reason" to reason,
-            "first_draw_ms" to value?.firstMs, "last_draw_ms" to if (drawn) atMs else value?.lastMs,
-            "verified_visibility" to false, "action" to action), atMs)
+        val presId = value?.id
+        val firstDrawMs = value?.firstMs
+        val lastDrawMs = if (drawn) atMs else value?.lastMs
+        recordStream("aid_presentation", atMs) { w ->
+            w.beginObject()
+            w.fieldString("presentation_id", presId, first = true)
+            w.fieldString("channel", channel)
+            w.fieldString("action_id", action.id)
+            w.fieldBoolean("drawn_proxy", drawn)
+            w.fieldString("reason", reason)
+            w.fieldDoubleOrNull("first_draw_ms", firstDrawMs)
+            w.fieldDoubleOrNull("last_draw_ms", lastDrawMs)
+            w.fieldBoolean("verified_visibility", false)
+            w.field("action", action)
+            w.endObject()
+        }
         if (drawn && value != null) {
             if (previous == null || value.target != target) boundary("aid_presentation_changed:$channel", atMs = atMs)
             value.lastMs = atMs; value.actionId = action.id; value.target = target

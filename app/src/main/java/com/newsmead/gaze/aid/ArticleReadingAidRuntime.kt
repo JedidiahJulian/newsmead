@@ -281,6 +281,8 @@ class ArticleReadingAidRuntime(
         checkMain()
         if (closed || suspended || consulting || generation.toLong() != context.generation) return
         trace.event(generation, value)
+        // V5 consumes fresh samples in input(); finalized scanpath events remain descriptive.
+        if (config.evidenceAlignedV5) return
         context = context.copy(nowMs = elapsedMs())
         decisions(policy.onEvent(value, latestFixation, context))
     }
@@ -289,6 +291,8 @@ class ArticleReadingAidRuntime(
         checkMain()
         if (closed || suspended || consulting || generation.toLong() != context.generation) return
         trace.candidate(generation, value)
+        // V5 consumes fresh samples in input(); candidate prefixes remain descriptive.
+        if (config.evidenceAlignedV5) return
         context = context.copy(nowMs = elapsedMs())
         decisions(policy.onObservation(value, context))
     }

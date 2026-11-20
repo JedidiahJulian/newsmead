@@ -47,6 +47,51 @@ class StudyAuditEncoder {
         sink(kind, payload, atMs)
     }
 
+    /** Stream-encode immutable audit snapshots directly on the writer thread without main-thread reflection. */
+    internal fun recordStream(kind: String, atMs: Double, detail: Map<String, Any?>,
+        sink: (String, Double, (StudyJsonWriter) -> Unit) -> Boolean) {
+        val context = detail["input_context"] as? ReadingAidContext
+        if (context == null) {
+            sink(kind, atMs) { writer -> writer.writeValue(detail) }
+            return
+        }
+        val geometry = context.geometry
+        var revision = lastRevision
+        if (geometry != null && (geometry !== lastGeometry || context.generation != lastGeneration)) {
+            revision = ++nextRevision
+            val layoutRevision = revision
+            val generation = context.generation
+            if (sink("layout_snapshot", atMs) { writer ->
+                    writer.beginObject()
+                    writer.fieldString("producer", PRODUCER, first = true)
+                    writer.fieldLong("generation", generation)
+                    writer.fieldLong("layout_revision", layoutRevision)
+                    writer.field("geometry", geometry)
+                    writer.endObject()
+                }) {
+                lastGeometry = geometry
+                lastGeneration = context.generation
+                lastRevision = revision
+            }
+        }
+        val refRevision = revision
+        sink(kind, atMs) { writer ->
+            writer.beginObject()
+            var first = true
+            for ((key, value) in detail) {
+                writer.fieldName(key, first = first)
+                first = false
+                if (key == "input_context") {
+                    writer.writeContextWithGeometryRef(context, PRODUCER, refRevision)
+                } else {
+                    writer.writeValue(value)
+                }
+            }
+            writer.fieldString("audit_payload_version", VERSION, first = first)
+            writer.endObject()
+        }
+    }
+
     companion object {
         const val VERSION = "aid_geometry_ref_v1"
         const val PRODUCER = "aid_audit"

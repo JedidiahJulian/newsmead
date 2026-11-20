@@ -39,8 +39,9 @@ class StudyPackageWriter(
     val packageDirectory = checkedChild(rootDirectory, packageId)
     private val id = packageId
     private val identityCopy = copyJson(identity) as JSONObject
+    private val identityValues: Map<String, Any> = IDENTITY_KEYS.associateWith { identityCopy.opt(it) ?: JSONObject.NULL }
     private val lock = Any()
-    private val queue = ArrayBlockingQueue<JSONObject>(queueCapacity)
+    private val queue = ArrayBlockingQueue<PendingRecord>(queueCapacity)
     private val done = CountDownLatch(1)
     private var nextSeq = 0L
     private var finishing = false
@@ -70,31 +71,45 @@ class StudyPackageWriter(
     internal fun recordOwned(kind: String, payload: JSONObject, sourceMs: Double? = null): Boolean =
         recordInternal(kind, payload, sourceMs, copyPayload = false)
 
+    /** Caller supplies a thread-safe encoder over immutable data; serialization runs on the writer thread. */
+    internal fun recordStream(kind: String, sourceMs: Double? = null,
+        writePayload: (StudyJsonWriter) -> Unit): Boolean = synchronized(lock) {
+        if (finishing || failure != null) { rejectedAfterFinish++; return false }
+        val recordedMs = clock()
+        val seq = nextSeq + 1
+        val record = PendingRecord.StreamRecord(kind, seq, recordedMs, sourceMs, writePayload)
+        nextSeq = seq
+        enqueueLocked(record, seq, sourceMs)
+    }
+
     private fun recordInternal(kind: String, payload: JSONObject, sourceMs: Double?, copyPayload: Boolean): Boolean = synchronized(lock) {
         if (finishing || failure != null) { rejectedAfterFinish++; return false }
         // Invalid caller data or a failing clock must not consume an observation sequence.
         val snapshot = if (copyPayload) copyJson(payload) as JSONObject else payload
         val recordedMs = clock()
         val seq = nextSeq + 1
-        val record = envelope(kind, snapshot, seq, recordedMs, sourceMs)
+        val record = PendingRecord.JsonRecord(kind, seq, recordedMs, sourceMs, snapshot)
         nextSeq = seq
-        if (queue.offer(record)) true else {
-            lost++
-            val last = losses.lastOrNull()
-            if (last != null && last.getLong("last_seq") == seq - 1) {
-                last.put("last_seq", seq).put("count", last.getLong("count") + 1)
-                    .put("last_source_elapsed_ms", finite(sourceMs))
-            } else if (losses.size < 256) {
-                losses.add(JSONObject().put("first_seq", seq).put("last_seq", seq).put("count", 1)
-                    .put("first_source_elapsed_ms", finite(sourceMs)).put("last_source_elapsed_ms", finite(sourceMs))
-                    .put("exact", true))
-            } else {
-                // Bounded metadata: this final range becomes an enclosing range, with exact count.
-                last!!.put("last_seq", seq).put("count", last.getLong("count") + 1)
-                    .put("last_source_elapsed_ms", finite(sourceMs)).put("exact", false)
-            }
-            false
+        enqueueLocked(record, seq, sourceMs)
+    }
+
+    private fun enqueueLocked(record: PendingRecord, seq: Long, sourceMs: Double?): Boolean {
+        if (queue.offer(record)) return true
+        lost++
+        val last = losses.lastOrNull()
+        if (last != null && last.getLong("last_seq") == seq - 1) {
+            last.put("last_seq", seq).put("count", last.getLong("count") + 1)
+                .put("last_source_elapsed_ms", finite(sourceMs))
+        } else if (losses.size < 256) {
+            losses.add(JSONObject().put("first_seq", seq).put("last_seq", seq).put("count", 1)
+                .put("first_source_elapsed_ms", finite(sourceMs)).put("last_source_elapsed_ms", finite(sourceMs))
+                .put("exact", true))
+        } else {
+            // Bounded metadata: this final range becomes an enclosing range, with exact count.
+            last!!.put("last_seq", seq).put("count", last.getLong("count") + 1)
+                .put("last_source_elapsed_ms", finite(sourceMs)).put("exact", false)
         }
+        return false
     }
 
     fun finish(reason: String, endMs: Double, unknownTail: Boolean = false) = synchronized(lock) {
@@ -112,13 +127,28 @@ class StudyPackageWriter(
             .put("state", if (failure != null) "failed" else if (done.count == 0L) "finished" else if (finishing) "closing" else "recording")
     }
 
-    private fun envelope(kind: String, payload: JSONObject, seq: Long, at: Double, source: Double?): JSONObject =
-        JSONObject().apply {
-            put("schema_version", SCHEMA); put("package_id", id)
-            for (key in IDENTITY_KEYS) put(key, identityCopy.get(key))
-            put("kind", kind); put("record_id", "$id:$seq"); put("seq", seq)
-            put("recorded_elapsed_ms", finite(at)); put("source_elapsed_ms", finite(source)); put("payload", payload)
-        }
+    private sealed class PendingRecord(
+        val kind: String,
+        val seq: Long,
+        val recordedMs: Double,
+        val sourceMs: Double?,
+    ) {
+        class JsonRecord(
+            kind: String,
+            seq: Long,
+            recordedMs: Double,
+            sourceMs: Double?,
+            val payload: JSONObject,
+        ) : PendingRecord(kind, seq, recordedMs, sourceMs)
+
+        class StreamRecord(
+            kind: String,
+            seq: Long,
+            recordedMs: Double,
+            sourceMs: Double?,
+            val writePayload: (StudyJsonWriter) -> Unit,
+        ) : PendingRecord(kind, seq, recordedMs, sourceMs)
+    }
 
     private class ReusableUtf8Buffer : ByteArrayOutputStream(4096) {
         override fun reset() {
@@ -137,6 +167,7 @@ class StudyPackageWriter(
         var openedNs = System.nanoTime(); var flushNs = openedNs
         val lineBuffer = ReusableUtf8Buffer()
         val lineWriter = OutputStreamWriter(lineBuffer, Charsets.UTF_8)
+        val jsonWriter = StudyJsonWriter(lineWriter)
         fun flush() { output?.flush(); flushedThrough = lastSeq; flushNs = System.nanoTime() }
         fun closeChunk() {
             if (output == null) return
@@ -149,9 +180,28 @@ class StudyPackageWriter(
                     if (compressChunks) put("encoding", StudyChunkIO.GZIP_ENCODING).put("uncompressed_byte_count", bytes)
                 })
         }
-        fun write(record: JSONObject) {
+        fun write(record: PendingRecord) {
             lineBuffer.reset()
-            lineWriter.write(record.toString())
+            jsonWriter.beginObject()
+            for (i in ENVELOPE_KEY_ORDER.indices) {
+                val key = ENVELOPE_KEY_ORDER[i]
+                jsonWriter.fieldName(key, first = i == 0)
+                when (key) {
+                    "schema_version" -> jsonWriter.writeString(SCHEMA)
+                    "package_id" -> jsonWriter.writeString(id)
+                    "kind" -> jsonWriter.writeString(record.kind)
+                    "record_id" -> jsonWriter.writeString("$id:${record.seq}")
+                    "seq" -> lineWriter.write(record.seq.toString())
+                    "recorded_elapsed_ms" -> jsonWriter.writeDouble(record.recordedMs)
+                    "source_elapsed_ms" -> record.sourceMs?.let(jsonWriter::writeDouble) ?: lineWriter.write("null")
+                    "payload" -> when (record) {
+                        is PendingRecord.JsonRecord -> jsonWriter.writeJsonObject(record.payload)
+                        is PendingRecord.StreamRecord -> record.writePayload(jsonWriter)
+                    }
+                    else -> jsonWriter.writeValue(identityValues[key])
+                }
+            }
+            jsonWriter.endObject()
             lineWriter.write(10)
             lineWriter.flush()
             val recordBytes = lineBuffer.size().toLong()
@@ -162,17 +212,17 @@ class StudyPackageWriter(
                 val stored = DigestOutputStream(partial!!.outputStream().buffered(), digest)
                 output = if (compressChunks) StudyBestSpeedGzipOutputStream(stored) else stored
                 bytes = 0; chunkRecords = 0; openedNs = System.nanoTime()
-                firstSeq = record.getLong("seq")
+                firstSeq = record.seq
             }
             lineBuffer.writeTo(output!!); bytes += recordBytes; chunkRecords++; written++
-            lastSeq = record.getLong("seq")
+            lastSeq = record.seq
         }
         try {
             check(!packageDirectory.exists()) { "package_exists" }
             check(packageDirectory.mkdirs()) { "package_directory_failed" }
             ownsDirectory = true
             notifyState("recording")
-            write(envelope("package_start", JSONObject().put("identity", identityCopy), 0, startedMs, null))
+            write(PendingRecord.JsonRecord("package_start", 0, startedMs, null, JSONObject().put("identity", identityCopy)))
             while (true) {
                 queue.poll(100, TimeUnit.MILLISECONDS)?.let { write(it) }
                 if (System.nanoTime() - flushNs >= FLUSH_NS) flush()
@@ -180,10 +230,11 @@ class StudyPackageWriter(
             }
             val terminal = synchronized(lock) {
                 val healthSeq = ++nextSeq
-                write(envelope("writer_health", health().put("losses", JSONArray(losses)), healthSeq, clock(), null))
-                envelope("package_end", JSONObject().put("reason", reason).put("end_elapsed_ms", finite(endMs))
-                    .put("unknown_tail", unknownTail).put("lost_records", lost)
-                    .put("post_finish_calls_outside_recording_scope", true), ++nextSeq, clock(), endMs)
+                write(PendingRecord.JsonRecord("writer_health", healthSeq, clock(), null, health().put("losses", JSONArray(losses))))
+                PendingRecord.JsonRecord("package_end", ++nextSeq, clock(), endMs,
+                    JSONObject().put("reason", reason).put("end_elapsed_ms", finite(endMs))
+                        .put("unknown_tail", unknownTail).put("lost_records", lost)
+                        .put("post_finish_calls_outside_recording_scope", true))
             }
             write(terminal); closeChunk()
             publish(packageDirectory, JSONObject().put("schema_version", SCHEMA).put("package_id", id)
@@ -214,6 +265,12 @@ class StudyPackageWriter(
         private const val CHUNK_NS = 60_000_000_000L
         private const val MAX_RETAINED_LINE_BYTES = 262_144
         private val IDENTITY_KEYS = listOf("study_id", "participant_id", "installation_id", "run_id", "session_id", "clock_domain_id")
+        private val ENVELOPE_KEY_ORDER: List<String> = JSONObject().apply {
+            put("schema_version", SCHEMA); put("package_id", "")
+            for (key in IDENTITY_KEYS) put(key, "")
+            put("kind", ""); put("record_id", ""); put("seq", 0L)
+            put("recorded_elapsed_ms", 0.0); put("source_elapsed_ms", 0.0); put("payload", JSONObject.NULL)
+        }.keys().asSequence().toList()
         internal fun copyJsonObject(source: JSONObject): JSONObject = copyJson(source) as JSONObject
         private fun finite(value: Double?): Any = value?.takeIf { it.isFinite() } ?: JSONObject.NULL
         private fun copyJson(value: Any?): Any = when (value) {

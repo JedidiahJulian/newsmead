@@ -43,11 +43,22 @@ class ReadingAidPolicy(
     private var guideSearchUntil = Double.NEGATIVE_INFINITY
     private val guideDirection = ReadingGuideDirectionTracker()
     private var lastAudit: Map<String, Any?>? = null
+    private var auditDirty = true
+    private var inBoundaryReset = false
+    private var lastAuditGeneration = Long.MIN_VALUE
+    private var lastAuditGeometryId: String? = null
     private fun audit(c: ReadingAidContext, invalidation: Boolean = false) {
         val sink = onAudit ?: return
+        if (!invalidation && !auditDirty && c.generation == lastAuditGeneration &&
+            c.geometrySnapshotId == lastAuditGeometryId) return
         val value = mapOf("generation" to c.generation, "geometry_snapshot_id" to c.geometrySnapshotId,
             "location" to location.auditSnapshot(), "bookmark" to bookmark.auditSnapshot(),
             "focus" to focus.auditSnapshot(), "before_invalidation" to invalidation)
+        if (!invalidation) {
+            auditDirty = false
+            lastAuditGeneration = c.generation
+            lastAuditGeometryId = c.geometrySnapshotId
+        }
         if (value != lastAudit) { lastAudit = value; runCatching { sink("support_revision", c.nowMs, value + ("input_context" to c)) } }
     }
 
@@ -70,6 +81,8 @@ class ReadingAidPolicy(
     fun activeActions(): List<ReadingAidAction> = active.values.sortedBy { it.aidType.name }
 
     fun updatePreferences(value: ReaderAidPreferences, context: ReadingAidContext): List<ReadingAidDecision> {
+        auditDirty = true
+        inBoundaryReset = false
         val modeChanged = value.mode != preferences.mode
         val guideChanged = value.guideStyle != preferences.guideStyle ||
             value.lineGuide != preferences.lineGuide || modeChanged
@@ -107,6 +120,8 @@ class ReadingAidPolicy(
 
     fun reset(context: ReadingAidContext, preserveCompletedFocus: Boolean = false): List<ReadingAidDecision> {
         audit(context, true)
+        auditDirty = true
+        inBoundaryReset = false
         val out = mutableListOf<ReadingAidDecision>()
         if (config.evidenceAlignedV5 && epoch?.second != context.geometrySnapshotId) focus.invalidateReread()
         val keepFocus = preserveCompletedFocus && currentGuideProfile() && epoch?.first == context.generation
@@ -119,6 +134,8 @@ class ReadingAidPolicy(
     }
 
     fun onCompatibleScroll(context: ReadingAidContext): List<ReadingAidDecision> {
+        auditDirty = true
+        inBoundaryReset = false
         if (epoch != null && epoch!!.first != context.generation) {
             return reset(context, preserveCompletedFocus = false)
         }
@@ -679,6 +696,7 @@ class ReadingAidPolicy(
         val out = mutableListOf<ReadingAidDecision>()
         val next = c.generation to c.geometrySnapshotId
         if (epoch != null && epoch != next) {
+            auditDirty = true
             val sameArticle = epoch!!.first == next.first
             focus.invalidateReread()
             if (sameArticle) focus.pause()
@@ -696,12 +714,18 @@ class ReadingAidPolicy(
             location.reset(); guideDirection.reset(); bookmark.reset()
             if (!preferences.enabled || preferences.maxStrength == 0.0 ||
                 (!preferences.adaptiveStrength && preferences.manualStrength == 0.0)) focus.reset() else focus.pause()
+            if (!inBoundaryReset || out.isNotEmpty()) {
+                auditDirty = true
+                inBoundaryReset = true
+            }
             return out
         }
+        inBoundaryReset = false
         if (preferences.mode == ReadingAidsMode.ON) {
             forceEnabledPresentations(null, c, out)
             return out
         }
+        auditDirty = true
         if (c.rawSample?.exclusion in setOf("geometry_unsettled", "scroll_geometry_unavailable", "scroll_input_stale")) {
             if (active[ReadingAidType.FOCUS_REGION]?.let { fullyVisible(it.anchor.line, c) } == true) {
                 focus.holdDuringScrollSettle(c.nowMs)
@@ -844,8 +868,10 @@ class ReadingAidPolicy(
             if (preferences.adaptiveStrength) .19 else .19 * preferences.manualStrength)
         val three = if (threeLine) ReadingLineGuideAppearance.threeLine(
             ReadingGuideDirection.BALANCED, capped, continuation) else null
+        val prior = active[type]
+        val started = prior?.guideEvidence?.presentationStartedMs ?: (c.nowMs - 1.0)
         val guide = ReadingAidGuideEvidence(line, line, "reader_selected_on_visible_anchor", false,
-            Double.MAX_VALUE, c.nowMs - 1.0, capped, entryMs = 1.0, threeLine = three)
+            Double.MAX_VALUE, started, capped, entryMs = 1.0, threeLine = three)
         clear(if (sentence) ReadingAidType.CURRENT_LINE else ReadingAidType.CURRENT_SENTENCE,
             c.nowMs, "guide_style_changed", out, false)
         choose(type, anchor(c, line), capped / .19, first, last, available,
