@@ -346,7 +346,8 @@ class ReadingBaselineActivity : AppCompatActivity() {
     private fun now() = SystemClock.elapsedRealtime()
 
     companion object {
-        // Same fixed provisional reading material as the working Mahalanobis branch.
+        // Fixed provisional reading passage long enough for continuous natural scrolling
+        // while baseline gaze and R/D/F windows finish collecting.
         internal val BASELINE_PASSAGE = """
             On quiet mornings, Lina walked to the community library before the streets became busy. She liked the wide windows, the wooden tables, and the patient rhythm of pages turning nearby. The familiar room made it easier to settle into a story without rushing.
 
@@ -355,6 +356,24 @@ class ReadingBaselineActivity : AppCompatActivity() {
             Interpreting the results required care because the buildings differed in height, wind exposure, and access to water. A plant that struggled on one roof sometimes flourished only two streets away. The researchers therefore compared repeated observations instead of trusting a single measurement.
 
             Lina reread that explanation and noticed how easily one dramatic result could hide the larger pattern. She wrote a short note in the margin, then continued to a diagram showing the temperature changes across several months. The evidence became clearer when she connected the sentences to the chart.
+
+            The next section followed a neighborhood cooperative that had turned an empty parking deck into raised beds. Soil had to be hauled up in small batches because the old concrete slab could not support heavy planters near the center. Workers placed the deepest troughs directly above the main support columns and filled the lighter frames along the edges with leafy greens.
+
+            During the first summer, a dry spell tested the irrigation plan. Rather than running sprinklers at noon, when most of the moisture evaporated before reaching the roots, the volunteers switched to brief drip cycles at dawn. Water use dropped by nearly a third while the basil and tomatoes stayed firm through the warmest afternoons.
+
+            A second group focused on how people actually used the terrace once the novelty faded. At first, only the gardeners climbed the stairs regularly, mostly to check soil moisture or trim dead stems. After benches and a shaded pergola were added near the west parapet, office workers began bringing lunch upstairs and older neighbors stopped by in the late afternoon.
+
+            Those quiet visits revealed benefits that did not fit neatly into rainfall or temperature tables. People lingered longer when there was a clear walking path around the perimeter and a corner protected from street noise. Maintenance also improved because regular visitors noticed loose hoses or wilting leaves days before the scheduled weekend crew arrived.
+
+            Further along in the report, an engineer compared two different drainage layers beneath the gravel paths. One used porous clay pellets recycled from local brickworks, while the other relied on lightweight plastic trays that trapped a shallow reserve of stormwater. Both prevented runoff from flooding the street drains below, though the clay beds stayed noticeably cooler under bare hands at midday.
+
+            When autumn winds picked up, the team discovered another practical detail. Tall trellises near the corners acted like sails and rattled in every gust, unsettling younger vines before they could grip the netting. Moving the taller frames inward behind a low wooden screen solved the problem without blocking light from the shorter beds.
+
+            By winter, the volunteers had assembled a simple seasonal checklist for any building manager hoping to start a similar project. It began with checking structural limits and roof drainage, then moved on to wind breaks, reliable water access, and a schedule simple enough for busy tenants to share without burning out.
+
+            What impressed Lina most was the tone of the final chapter. The authors openly listed the crops that failed, the sensors that drifted after heavy rain, and the budget mistakes made during the first spring. Including those setbacks made their recommendations far more trustworthy than a polished brochure filled only with harvest photos.
+
+            Outside the library windows, clouds drifted across the street and a delivery truck rumbled past the corner bakery. Lina turned back to the appendix, skimming the list of native flowers chosen to attract bees and small birds back into the concrete blocks between the avenues.
 
             By noon, the room had grown brighter and more readers had arrived. Lina closed the report, returned it to the desk, and carried the main lesson home: careful conclusions depend on consistent observations gathered under different conditions.
         """.trimIndent()
