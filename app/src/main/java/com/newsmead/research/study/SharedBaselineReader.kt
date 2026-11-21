@@ -2,6 +2,7 @@ package com.newsmead.research.study
 
 import android.Manifest
 import android.content.Context
+import android.content.res.ColorStateList
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
@@ -14,11 +15,14 @@ import android.view.WindowManager
 import android.widget.Toast
 import android.widget.TextView
 import android.widget.LinearLayout
+import android.widget.Space
 import android.view.Gravity
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.doOnPreDraw
 import androidx.fragment.app.Fragment
+import com.google.android.material.color.MaterialColors
+import com.newsmead.R
 import com.newsmead.activities.ReadingBaselineActivity
 import com.newsmead.data.StudyConfig
 import com.newsmead.databinding.FragmentArticleBinding
@@ -99,15 +103,35 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
         listOf(binding.btnReadAloudArticle, binding.btnTranslateArticle, binding.btnArticleShare,
             binding.btnSaveList, binding.btnArticleTextSmaller, binding.btnArticleTextLarger,
             binding.btnArticleClrLight, binding.btnArticleClrDark, binding.btnArticleClrSepia).forEach { it.isEnabled = false }
-        // Reuse the existing fixed-height footer area; status never resizes the reading viewport.
+        // Keep the existing fixed-height footer so baseline controls never cover the passage.
+        // Equal flexible areas on either side keep the single action centered on the screen.
         val statusArea = binding.btnArticleClrLight.parent as LinearLayout
-        statusArea.removeAllViews()
+        val actionArea = binding.btnArticleReadingAids.parent as LinearLayout
+        val footerRow = statusArea.parent as LinearLayout
+        actionArea.removeView(binding.btnArticleReadingAids)
+        footerRow.removeAllViews()
         progress = TextView(context).apply {
-            text = "Baseline\nReady to start"
-            textSize = 12f; maxLines = 3; gravity = Gravity.CENTER_VERTICAL
+            text = "R/D/F: 0/${config.minimumBaselineDurationMs / 1000} s\nGaze: 0/60 s"
+            textSize = 12f; maxLines = 2; gravity = Gravity.CENTER_VERTICAL
             setTextColor(binding.tvArticleText.currentTextColor)
         }
-        statusArea.addView(progress, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT))
+        footerRow.addView(progress, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+        binding.btnArticleReadingAids.apply {
+            icon = null
+            gravity = Gravity.CENTER
+            backgroundTintList = ColorStateList.valueOf(
+                MaterialColors.getColor(this, R.attr.highEmphasisColor)
+            )
+            setTextColor(MaterialColors.getColor(this, R.attr.primaryButtonTextColor))
+            rippleColor = ColorStateList.valueOf(
+                MaterialColors.getColor(this, R.attr.primaryButtonRippleColor)
+            )
+            cornerRadius = dp(24)
+        }
+        footerRow.addView(binding.btnArticleReadingAids, LinearLayout.LayoutParams(dp(112), dp(48)).apply {
+            gravity = Gravity.CENTER_VERTICAL
+        })
+        footerRow.addView(Space(context), LinearLayout.LayoutParams(0, 1, 1f))
         if (StudyConfig.LOCK_ARTICLE_FONT_SIZE) {
             binding.tvArticleText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, StudyConfig.ARTICLE_FONT_SIZE_DP)
             binding.llArticleBottomButtons.visibility = View.GONE
@@ -297,11 +321,10 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
                     binding.btnArticleReadingAids.text = "Start"
                     binding.btnArticleReadingAids.contentDescription = "Start shared reading baseline"
                     binding.btnArticleReadingAids.isEnabled = true
-                    progress.text = "R/D/F: ${if (rdfReady) "ready" else "not ready"}\n" +
-                        (coordinateCoverage?.takeIf { coordinateRecorded && it.issue == null }?.let {
-                            "Gaze: ${SharedBaselineProgress.seconds(it.coveredMs)}/${SharedBaselineProgress.seconds(it.requiredMs)} s\n"
-                        } ?: "Gaze: ${if (coordinateRecorded) "check setup" else "interrupted"}\n") +
-                        if (coordinateRecorded && rdfReady && coordinateMinimumMet) "Fit pending" else "Repeat baseline"
+                    progress.text = SharedBaselineProgress(
+                        collector.coveredDurationMs, config.minimumBaselineDurationMs,
+                        collector.baselineVectors.size, config.minimumRetainedWindows, coordinateCoverage
+                    ).footer
                     binding.btnRunGazeTest.isEnabled = true
                     message(lastResult)
                 }
@@ -317,6 +340,7 @@ class SharedBaselineReader(private val fragment: Fragment, private val binding: 
         if (binding.root.viewTreeObserver.isAlive) binding.root.viewTreeObserver.removeOnPreDrawListener(preDraw)
     }
     private fun message(text: String) { if (!closed) Toast.makeText(context, text, Toast.LENGTH_LONG).show() }
+    private fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
 
     companion object {
         fun arguments() = Bundle().apply {

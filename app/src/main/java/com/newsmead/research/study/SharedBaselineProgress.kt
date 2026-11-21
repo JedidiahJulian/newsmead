@@ -16,15 +16,10 @@ internal data class SharedBaselineProgress(
     private val waitingForGaze: Boolean get() = coordinate == null || coordinate.issue == "no_in_bound_observations"
 
     val footer: String get() = "R/D/F: ${seconds(rdfCoveredMs.toDouble())}/${seconds(rdfRequiredMs.toDouble())} s\n" +
-        (if (waitingForGaze) "Gaze: waiting\n"
-        else if (coordinate?.issue != null) "Gaze: unavailable\n"
-        else if (coordinate == null) "Gaze: waiting\n"
-        else "Gaze: ${seconds(coordinate.coveredMs)}/${seconds(coordinate.requiredMs)} s\n") +
-        when {
-            !waitingForGaze && coordinate?.issue != null -> "Check setup"
-            minimumsMet -> "Minimums met"
-            else -> "Keep reading"
-        }
+        (if (waitingForGaze) "Gaze: waiting"
+        else if (coordinate?.issue != null) "Gaze: unavailable"
+        else if (coordinate == null) "Gaze: waiting"
+        else "Gaze: ${seconds(coordinate.coveredMs)}/${seconds(coordinate.requiredMs)} s")
 
     val detail: String get() =
         "R/D/F coverage: ${seconds(rdfCoveredMs.toDouble())} of ${seconds(rdfRequiredMs.toDouble())} seconds; " +

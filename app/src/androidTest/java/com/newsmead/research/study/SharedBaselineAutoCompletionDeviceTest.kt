@@ -69,11 +69,11 @@ class SharedBaselineAutoCompletionDeviceTest {
                 // Sixty seconds of real collector window-union coverage cannot replace missing gaze.
                 tick(reader)
                 assertTrue(field(reader, "running") as Boolean)
-                assertEquals("R/D/F: 60/60 s\nGaze: waiting\nKeep reading", progress(reader).text.toString())
+                assertEquals("R/D/F: 60/60 s\nGaze: waiting", progress(reader).text.toString())
                 installCoverage(visit, 57_624.855821)
                 tick(reader)
                 assertTrue(field(reader, "running") as Boolean)
-                assertEquals("R/D/F: 60/60 s\nGaze: 57.6/60 s\nKeep reading", progress(reader).text.toString())
+                assertEquals("R/D/F: 60/60 s\nGaze: 57.6/60 s", progress(reader).text.toString())
             }
             instrumentation.waitForIdleSync()
             screenshot("baseline-short.png")
@@ -92,13 +92,13 @@ class SharedBaselineAutoCompletionDeviceTest {
                 val state = reader.javaClass.getDeclaredMethod("currentProgress", Double::class.javaPrimitiveType)
                     .apply { isAccessible = true }.invoke(reader, StudyVisit.now()) as SharedBaselineProgress
                 assertTrue(state.minimumsMet)
-                assertEquals("R/D/F: 60/60 s\nGaze: 60/60 s\nMinimums met", state.footer)
+                assertEquals("R/D/F: 60/60 s\nGaze: 60/60 s", state.footer)
                 tick(reader) // The production runnable makes the completion decision and calls finish().
                 assertFalse(field(reader, "running") as Boolean)
                 assertFalse(field(reader, "stopping") as Boolean)
                 assertNull(field(reader, "provider"))
                 assertEquals("Start", activity.findViewById<TextView>(R.id.btnArticleReadingAids).text.toString())
-                assertEquals("R/D/F: not ready\nGaze: interrupted\nRepeat baseline", progress(reader).text.toString())
+                assertEquals("R/D/F: 60/60 s\nGaze: 60/60 s", progress(reader).text.toString())
             }
             instrumentation.waitForIdleSync()
             screenshot("baseline-auto-stopped.png")
@@ -197,7 +197,7 @@ class SharedBaselineAutoCompletionDeviceTest {
         val screen = IntArray(2)
         view.getLocationOnScreen(screen)
         val layout = requireNotNull(view.layout)
-        assertTrue("Footer needs all three status lines", layout.lineCount >= view.text.count { it == '\n' } + 1)
+        assertTrue("Footer needs all status lines", layout.lineCount >= view.text.count { it == '\n' } + 1)
         for (line in 0 until layout.lineCount) {
             assertEquals("Ellipsized footer line $line", 0, layout.getEllipsisCount(line))
             val left = screen[0] + view.totalPaddingLeft - view.scrollX
